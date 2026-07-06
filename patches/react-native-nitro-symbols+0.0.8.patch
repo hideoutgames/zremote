@@ -1,0 +1,33 @@
+diff --git a/node_modules/react-native-nitro-symbols/ios/HybridSymbolView.swift b/node_modules/react-native-nitro-symbols/ios/HybridSymbolView.swift
+index 1724ac5..6243b83 100644
+--- a/node_modules/react-native-nitro-symbols/ios/HybridSymbolView.swift
++++ b/node_modules/react-native-nitro-symbols/ios/HybridSymbolView.swift
+@@ -38,6 +38,11 @@ class HybridSymbolView: HybridSymbolViewSpec {
+             
+             let hosting = UIHostingController(rootView: initialView)
+             hosting.view.backgroundColor = .clear
++            // Disable SwiftUI's automatic safe-area handling (including keyboard
++            // avoidance). Without this the hosting controller shifts its content
++            // up when the keyboard appears, dragging the glyph out of its
++            // clipped bounds so the icon disappears.
++            hosting.safeAreaRegions = []
+             self.controller = hosting
+         } else {
+             let legacyView = UIView()
+diff --git a/node_modules/react-native-nitro-symbols/ios/NativeSymbolSwiftUIView.swift b/node_modules/react-native-nitro-symbols/ios/NativeSymbolSwiftUIView.swift
+index 7cf8d15..1791496 100644
+--- a/node_modules/react-native-nitro-symbols/ios/NativeSymbolSwiftUIView.swift
++++ b/node_modules/react-native-nitro-symbols/ios/NativeSymbolSwiftUIView.swift
+@@ -45,7 +45,12 @@ struct NativeSymbolSwiftUIView: View {
+             .symbolRenderingMode(renderingMode)
+             .symbolVariant(variant)
+             .applyForegroundStyle(colors: colors, tintColor: tintColor)
++        // Pin the glyph to the exact box RN sized us to (pointSize), centered,
++        // and ignore the keyboard safe area so SwiftUI doesn't shift it when the
++        // keyboard appears. The controller also disables safe-area regions.
+         applyEffect(to: baseImage)
++            .frame(width: pointSize, height: pointSize, alignment: .center)
++            .ignoresSafeArea(.keyboard, edges: .all)
+     }
+     
+     @ViewBuilder

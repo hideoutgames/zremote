@@ -1,0 +1,303 @@
+import React, {useEffect, useRef, useState} from 'react';
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import {NitroImage} from 'react-native-nitro-image';
+import {MenuView, type NativeActionEvent} from '@react-native-menu/menu';
+import {Glass} from './Glass';
+import {Icon} from './Icon';
+import type {Attachment} from '../hooks/useChat';
+import {showNotImplemented} from '../notImplemented';
+import {theme} from '../theme';
+
+const RESIZE_DURATION = 150;
+const INPUT_MAX_HEIGHT = 120;
+
+// Shared duration for the attachment pill swell/shrink so the thumbnail fade
+// and the height collapse stay in lockstep.
+const THUMBS_ANIM_MS = 220;
+
+type ComposerProps = {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => void;
+  onStop: () => void;
+  streaming: boolean;
+  composerRef: React.RefObject<View | null>;
+  onLayout: (event: LayoutChangeEvent) => void;
+  attachments: Attachment[];
+  onPickPhotos: () => void;
+  onRemoveAttachment: (index: number) => void;
+};
+
+
+export const Composer = React.memo(function ({
+  value,
+  onChangeText,
+  onSend,
+  onStop,
+  streaming,
+  composerRef,
+  onLayout,
+  attachments,
+  onPickPhotos,
+  onRemoveAttachment,
+}: ComposerProps) {
+  const insets = useSafeAreaInsets();
+  const canSend = value.trim().length > 0 || attachments.length > 0;
+
+  // The thumbnail strip lives in a height-clipped container so the pill can
+  // smoothly swell/shrink as images are added/removed. 
+  const hasAttachments = attachments.length > 0;
+  const [thumbsContentHeight, setThumbsContentHeight] = useState(0);
+  const thumbsStyle = useAnimatedStyle(() => ({
+    height: withTiming(hasAttachments ? thumbsContentHeight : 0, {
+      duration: THUMBS_ANIM_MS,
+      easing: Easing.inOut(Easing.ease),
+    }),
+    opacity: withTiming(hasAttachments ? 1 : 0, {
+      duration: THUMBS_ANIM_MS,
+      easing: Easing.inOut(Easing.ease),
+    }),
+  }));
+
+
+  const [displayedAttachments, setDisplayedAttachments] = useState(attachments);
+  useEffect(() => {
+    if (attachments.length > 0) {
+      setDisplayedAttachments(attachments);
+      return;
+    }
+    const id = setTimeout(() => setDisplayedAttachments([]), THUMBS_ANIM_MS);
+    return () => clearTimeout(id);
+  }, [attachments]);
+
+  // iOS won't shrink a multiline input after it's cleared, so we pin it to one line while empty and release the pin on the next keystroke.
+  const oneLineHeightRef = useRef<number | undefined>(undefined);
+  // `inputHeight` mirrors the input's measured height to drive the pill.
+  const inputHeight = useSharedValue<number | null>(null);
+
+  const pillStyle = useAnimatedStyle(() => {
+    if (inputHeight.value == null && !hasAttachments) {
+      return {};
+    }
+    const thumbs = withTiming(hasAttachments ? thumbsContentHeight : 0, {
+      duration: THUMBS_ANIM_MS,
+      easing: Easing.inOut(Easing.ease),
+    });
+    const text = inputHeight.value ?? 0;
+    return {
+      height: Math.max(CIRCLE, PILL_VERTICAL_PADDING * 2 + thumbs + text),
+    };
+  });
+  const isEmpty = value.length === 0;
+  const collapsedHeight = isEmpty ? oneLineHeightRef.current : undefined;
+
+  // Collapse the pill smoothly when the field empties. (The input itself snaps
+  // via collapsedHeight above; the pill carries the visible animation.)
+  useEffect(() => {
+    if (isEmpty && oneLineHeightRef.current != null) {
+      inputHeight.value = withTiming(oneLineHeightRef.current, {
+        duration: RESIZE_DURATION,
+        easing: Easing.inOut(Easing.ease),
+      });
+    }
+  }, [isEmpty, inputHeight]);
+
+  const onInputLayout = (event: LayoutChangeEvent) => {
+    const measured = Math.round(event.nativeEvent.layout.height);
+    if (oneLineHeightRef.current == null) {
+      oneLineHeightRef.current = measured;
+    }
+    // While the field is empty, the isEmpty effect owns the height (one line).
+    if (value.length === 0) {
+      return;
+    }
+    inputHeight.value = withTiming(measured, {
+      duration: RESIZE_DURATION,
+      easing: Easing.inOut(Easing.ease),
+    });
+  };
+
+  
+  const onAttachAction = ({nativeEvent}: NativeActionEvent) => {
+    if (nativeEvent.event === 'photos') {
+      onPickPhotos();
+      return;
+    }
+    showNotImplemented();
+  };
+
+  return (
+    <View
+      ref={composerRef}
+      onLayout={onLayout}
+      style={[styles.container, {paddingBottom: insets.bottom + 8}]}>
+      <View style={styles.row}>
+        <MenuView
+          themeVariant="dark"
+          onPressAction={onAttachAction}
+          actions={[
+            {id: 'camera', title: 'Camera', image: 'camera', imageColor: theme.text},
+            {id: 'photos', title: 'Photos', image: 'photo', imageColor: theme.text},
+            {
+              id: 'files',
+              title: 'Files',
+              image: 'paperclip',
+              imageColor: theme.text,
+            },
+          ]}>
+          <Glass interactive style={styles.circle}>
+            <Icon name="plus" size={22} color={theme.text} />
+          </Glass>
+        </MenuView>
+
+        <Animated.View style={[styles.inputPillWrap, pillStyle]}>
+          <Glass style={styles.inputPill}>
+            <Animated.View
+              style={[styles.thumbsClip, thumbsStyle]}
+              pointerEvents={hasAttachments ? 'auto' : 'none'}>
+              <View
+                style={styles.thumbs}
+                onLayout={event =>
+                  setThumbsContentHeight(
+                    Math.ceil(event.nativeEvent.layout.height),
+                  )
+                }>
+                {displayedAttachments.map((attachment, index) => (
+                  <View key={`${attachment.uri}:${index}`} style={styles.thumbWrap}>
+                    <NitroImage
+                      image={{filePath: attachment.uri}}
+                      style={styles.thumb}
+                    />
+                    <Pressable
+                      style={styles.thumbRemove}
+                      hitSlop={8}
+                      onPress={() => onRemoveAttachment(index)}>
+                      <View style={styles.thumbRemoveBadge}>
+                        <Icon name="xmark" size={11} color="#FFFFFF" />
+                      </View>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </Animated.View>
+
+            <TextInput
+              value={value}
+              onChangeText={onChangeText}
+              onLayout={onInputLayout}
+              placeholder="Ask about Margelo"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, collapsedHeight != null && {height: collapsedHeight}]}
+              multiline
+            />
+          </Glass>
+        </Animated.View>
+
+        {/* While a reply streams, the send arrow becomes a pause button that
+            stops the stream. */}
+        <Pressable
+          onPress={streaming ? onStop : onSend}
+          disabled={!streaming && !canSend}
+          hitSlop={6}>
+          <Glass interactive style={styles.circle}>
+            <Icon
+              name={streaming ? 'stop.fill' : 'arrow.up'}
+              size={streaming ? 15 : 20}
+              color={
+                streaming || canSend ? theme.sendActive : theme.sendInactive
+              }
+            />
+          </Glass>
+        </Pressable>
+      </View>
+    </View>
+  );
+});
+
+const CIRCLE = 44;
+const PILL_VERTICAL_PADDING = 6;
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  circle: {
+    width: CIRCLE,
+    height: CIRCLE,
+    borderRadius: CIRCLE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  inputPillWrap: {
+    flex: 1,
+  },
+  inputPill: {
+    flex: 1,
+    minHeight: CIRCLE,
+    borderRadius: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: PILL_VERTICAL_PADDING,
+    overflow: 'hidden',
+  },
+  input: {
+    fontSize: 16,
+    color: theme.text,
+    paddingVertical: 4,
+    maxHeight: INPUT_MAX_HEIGHT,
+  },
+  thumbsClip: {
+    overflow: 'hidden',
+  },
+  thumbs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingTop: 2,
+    paddingBottom: 8,
+  },
+  thumbWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  thumb: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+  },
+  thumbRemove: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+  },
+  thumbRemoveBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
