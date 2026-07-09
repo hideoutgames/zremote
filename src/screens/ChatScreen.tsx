@@ -81,6 +81,13 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
 
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
 
+  // A message with an image is taller than the text cap, so capping it would
+  // push its top (where the image sits) above the anchor offset and clip it.
+  // Leave image messages uncapped so the top of the image lands at the offset.
+  const anchorHasImage =
+    anchorIndex != null &&
+    (messages[anchorIndex]?.attachments?.length ?? 0) > 0;
+
   const {contentInsetEndAdjustment, onComposerLayout: reportComposerInset} = useKeyboardChatComposerInset(listRef, composerRef);
   const {freeze, scrollMessageToEnd} = useKeyboardScrollToEnd({listRef});
 
@@ -145,7 +152,7 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
           anchorIndex != null
             ? {
                 anchorIndex,
-                anchorMaxSize: ANCHOR_MAX_SIZE,
+                anchorMaxSize: anchorHasImage ? undefined : ANCHOR_MAX_SIZE,
                 anchorOffset: insets.top + 56,
                 // Release the anchor once the reply fills the reserved space, so maintainScrollAtEnd can take over following it.
               onSizeChanged: size => {
