@@ -1,7 +1,8 @@
 import React from 'react';
-import {Image, StyleSheet} from 'react-native';
+import {StyleSheet} from 'react-native';
 import Animated, {useAnimatedStyle} from 'react-native-reanimated';
 import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller';
+import {NitroImage} from 'react-native-nitro-image';
 
 // Breathing room kept between the logo and the top of the composer when the
 // keyboard is open.
@@ -22,8 +23,8 @@ export function EmptyState({composerHeight}: {composerHeight: number}) {
     <Animated.View
       style={[styles.container, animatedStyle]}
       pointerEvents="none">
-      <Image
-        source={require('../assets/margelo-logo.png')}
+      <NitroImage
+        image={require('../assets/margelo-logo.png')}
         style={styles.logo}
         resizeMode="contain"
       />

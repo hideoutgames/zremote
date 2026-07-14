@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   type LayoutChangeEvent,
   Pressable,
@@ -73,61 +73,64 @@ export const Composer = React.memo(function ({
   }));
 
 
+  // Keep the last non-empty attachment list so the thumbnails stay mounted
+  // while the pill collapses.
   const [displayedAttachments, setDisplayedAttachments] = useState(attachments);
-  useEffect(() => {
-    if (attachments.length > 0) {
-      setDisplayedAttachments(attachments);
-      return;
-    }
-    const id = setTimeout(() => setDisplayedAttachments([]), THUMBS_ANIM_MS);
-    return () => clearTimeout(id);
-  }, [attachments]);
+  if (hasAttachments && displayedAttachments !== attachments) {
+    setDisplayedAttachments(attachments);
+  }
 
   // iOS won't shrink a multiline input after it's cleared, so we pin it to one line while empty and release the pin on the next keystroke.
-  const oneLineHeightRef = useRef<number | undefined>(undefined);
+  const [oneLineHeight, setOneLineHeight] = useState<number | undefined>(
+    undefined,
+  );
   // `inputHeight` mirrors the input's measured height to drive the pill.
   const inputHeight = useSharedValue<number | null>(null);
 
   const pillStyle = useAnimatedStyle(() => {
-    if (inputHeight.value == null && !hasAttachments) {
+    if (inputHeight.get() == null && !hasAttachments) {
       return {};
     }
     const thumbs = withTiming(hasAttachments ? thumbsContentHeight : 0, {
       duration: THUMBS_ANIM_MS,
       easing: Easing.inOut(Easing.ease),
     });
-    const text = inputHeight.value ?? 0;
+    const text = inputHeight.get() ?? 0;
     return {
       height: Math.max(CIRCLE, PILL_VERTICAL_PADDING * 2 + thumbs + text),
     };
   });
   const isEmpty = value.length === 0;
-  const collapsedHeight = isEmpty ? oneLineHeightRef.current : undefined;
+  const collapsedHeight = isEmpty ? oneLineHeight : undefined;
 
   // Collapse the pill smoothly when the field empties. (The input itself snaps
   // via collapsedHeight above; the pill carries the visible animation.)
   useEffect(() => {
-    if (isEmpty && oneLineHeightRef.current != null) {
-      inputHeight.value = withTiming(oneLineHeightRef.current, {
-        duration: RESIZE_DURATION,
-        easing: Easing.inOut(Easing.ease),
-      });
+    if (isEmpty && oneLineHeight != null) {
+      inputHeight.set(
+        withTiming(oneLineHeight, {
+          duration: RESIZE_DURATION,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      );
     }
-  }, [isEmpty, inputHeight]);
+  }, [isEmpty, inputHeight, oneLineHeight]);
 
   const onInputLayout = (event: LayoutChangeEvent) => {
     const measured = Math.round(event.nativeEvent.layout.height);
-    if (oneLineHeightRef.current == null) {
-      oneLineHeightRef.current = measured;
+    if (oneLineHeight == null) {
+      setOneLineHeight(measured);
     }
     // While the field is empty, the isEmpty effect owns the height (one line).
     if (value.length === 0) {
       return;
     }
-    inputHeight.value = withTiming(measured, {
-      duration: RESIZE_DURATION,
-      easing: Easing.inOut(Easing.ease),
-    });
+    inputHeight.set(
+      withTiming(measured, {
+        duration: RESIZE_DURATION,
+        easing: Easing.inOut(Easing.ease),
+      }),
+    );
   };
 
   

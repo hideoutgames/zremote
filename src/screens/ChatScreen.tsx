@@ -58,8 +58,6 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   const keyboardVisible = useKeyboardState(state => state.isVisible);
   const keyboardHeight = useKeyboardState(state => state.height);
   const keyboardDismissedForReplyRef = useRef(false);
-  const messagesLenRef = useRef(messages.length);
-  messagesLenRef.current = messages.length;
   const [input, setInput] = useState('');
   const {attachments, pickImages, removeAttachment, clearAttachments} = useAttachments();
   const [composerHeight, setComposerHeight] = useState(0);
@@ -103,8 +101,8 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
     if (!input.trim() && attachments.length === 0) {
       return;
     }
-    const wasEmpty = messagesLenRef.current === 0;
-    setAnchorIndex(messagesLenRef.current);
+    const wasEmpty = messages.length === 0;
+    setAnchorIndex(messages.length);
     send(input, attachments);
     setInput('');
     clearAttachments();
@@ -115,7 +113,14 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
       // Skip on the very first message: an animated scrollToEnd caused jitter on the first message.
       listRef.current?.scrollToEnd({animated: true});
     }
-  }, [input, attachments, send, scrollMessageToEnd, clearAttachments]);
+  }, [
+    input,
+    attachments,
+    send,
+    scrollMessageToEnd,
+    clearAttachments,
+    messages.length,
+  ]);
 
   
   const keyboardOffset = {opened: insets.bottom};

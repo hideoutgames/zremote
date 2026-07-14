@@ -1,13 +1,9 @@
 import React, {useCallback} from 'react';
+import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {
-  FlatList,
-  type ListRenderItem,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+  LegendList,
+  type LegendListRenderItemProps,
+} from '@legendapp/list/react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Glass} from '../components/Glass';
 import {Icon} from '../components/Icon';
@@ -39,8 +35,8 @@ export function RecentsScreen({onNewChat}: RecentsScreenProps) {
 
   // Loading a past conversation isn't built for this demo, so tapping a row
   // surfaces the not-implemented notice rather than opening a fake chat.
-  const renderRecent = useCallback<ListRenderItem<Recent>>(
-    ({item}) => (
+  const renderRecent = useCallback(
+    ({item}: LegendListRenderItemProps<Recent>) => (
       <Pressable style={styles.row} onPress={showNotImplemented}>
         <View style={styles.rowText}>
           <Text style={styles.title} numberOfLines={1}>
@@ -66,9 +62,11 @@ export function RecentsScreen({onNewChat}: RecentsScreenProps) {
         </View>
       </View>
 
-      <FlatList
+      <LegendList
         data={RECENTS}
         keyExtractor={item => item.id}
+        estimatedItemSize={66}
+        recycleItems
         ListHeaderComponent={<Text style={styles.section}>History</Text>}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}

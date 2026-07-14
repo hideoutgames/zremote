@@ -5,13 +5,8 @@ import {
   buildResponseCreate,
   parseServerEvent,
 } from '../openai/protocol';
-import {
-  useOpenAIConnection,
-  type ConnectionStatus,
-} from '../openai/useOpenAIConnection';
+import {useOpenAIConnection} from '../openai/useOpenAIConnection';
 import {searchMargeloKb} from '../rag/searchKnowledgeBase';
-
-export type {ConnectionStatus};
 
 export type MessageRole = 'user' | 'assistant';
 export type MessageStatus = 'streaming' | 'done' | 'error';
@@ -45,8 +40,6 @@ export function useChat() {
     args: string;
   } | null>(null);
   const toolCallCountRef = useRef(0);
-  // sendPayload comes from useOpenAIConnection (declared later); a ref lets the
-  // tool-call handler reach it without a hook-ordering cycle.
   const sendPayloadRef = useRef<((payload: string) => boolean) | null>(null);
 
   const appendDelta = useCallback((text: string) => {
@@ -186,7 +179,7 @@ export function useChat() {
     previousResponseIdRef.current = undefined;
   }, []);
 
-  const {connection, send: sendPayload} = useOpenAIConnection({
+  const {send: sendPayload} = useOpenAIConnection({
     onServerEvent: handleServerEvent,
     onDisconnect: handleDisconnect,
   });
@@ -252,5 +245,5 @@ export function useChat() {
     setMessages([]);
   }, []);
 
-  return {messages, connection, send, stop, newChat};
+  return {messages, send, stop, newChat};
 }
