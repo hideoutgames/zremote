@@ -1,6 +1,6 @@
 import {useCallback, useState} from 'react';
 import {launchImageLibrary} from 'react-native-image-picker';
-import {type Attachment} from './useChat';
+import {type Attachment} from '../state/chatStore';
 
 export function useAttachments(): {
   attachments: Attachment[];

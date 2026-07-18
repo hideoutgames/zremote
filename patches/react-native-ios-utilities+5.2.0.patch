@@ -1,0 +1,34 @@
+diff --git a/node_modules/react-native-ios-utilities/ios/Sources/Extensions+Helpers/RCTView+Helpers.swift b/node_modules/react-native-ios-utilities/ios/Sources/Extensions+Helpers/RCTView+Helpers.swift
+index 09be306..087a8e7 100644
+--- a/node_modules/react-native-ios-utilities/ios/Sources/Extensions+Helpers/RCTView+Helpers.swift
++++ b/node_modules/react-native-ios-utilities/ios/Sources/Extensions+Helpers/RCTView+Helpers.swift
+@@ -25,15 +25,12 @@ public extension RCTView {
+     return rootView.recursivelyFindSubview(whereType: targetType);
+   };
+   
+-  var closestParentReactContentView: RCTRootContentView? {
+-    let targetType = RCTRootContentView.self;
+-  
+-    if let match = self.recursivelyFindParentView(whereType: targetType) {
+-      return match;
+-    };
+-    
+-    guard let rootView = self.rootViewForCurrentWindow else { return nil };
+-    return rootView.recursivelyFindSubview(whereType: targetType);
++  // Patched for the bridgeless prebuilt-React build: the prebuilt React
++  // framework doesn't export the `RCTRootContentView` class symbol, so
++  // referencing it fails to link. This helper only backs a legacy
++  // touch-handler fallback the context menu never calls, so it's safe to stub.
++  var closestParentReactContentView: UIView? {
++    return nil;
+   };
+   
+   var reactTouchHandlers: [RCTTouchHandler]? {
+@@ -58,6 +55,6 @@ public extension RCTView {
+       currentView = superview;
+     };
+     
+-    return closestParentReactContentView?.reactTouchHandlers?.first;
++    return nil;
+   };
+ };

@@ -31,7 +31,6 @@ export const ReasoningSheet = React.memo(function ({
       ref={sheet}
       detents={['auto', 1]}
       maxContentHeight={620}
-      cornerRadius={28}
       grabber={true}>
       <View style={styles.header}>
         <Pressable onPress={() => sheet.current?.dismiss()} hitSlop={8}>

@@ -23,9 +23,13 @@ import {
   useKeyboardChatComposerInset,
   useKeyboardScrollToEnd,
 } from '@legendapp/list/keyboard';
-import {useChat, type Message} from '../hooks/useChat';
-import {useAttachments} from '../hooks/useAttachments';
+import {
+  useChatStore,
+  type Attachment,
+  type Message,
+} from '../state/chatStore';
 import {useHideBootSplashOnLayout} from '../hooks/useHideBootSplashOnLayout';
+import {ChatMessages} from '../components/ChatMessages';
 import {MessageBubble} from '../components/MessageBubble';
 import {
   ReasoningSheet,
@@ -52,14 +56,15 @@ type ChatScreenProps = {
 export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   const insets = useSafeAreaInsets();
   const {width: windowWidth, height: windowHeight} = useWindowDimensions();
-  const {messages, send, stop, newChat} = useChat();
+  const send = useChatStore(state => state.send);
+  const stop = useChatStore(state => state.stop);
+  const newChat = useChatStore(state => state.newChat);
+  const messagesLength = useChatStore(state => state.messages.length);
+  const isStreaming = useChatStore(state => state.isStreaming);
   useImperativeHandle(ref, () => ({newChat}), [newChat]);
-  const isStreaming = messages.some(m => m.status === 'streaming');
   const keyboardVisible = useKeyboardState(state => state.isVisible);
   const keyboardHeight = useKeyboardState(state => state.height);
   const keyboardDismissedForReplyRef = useRef(false);
-  const [input, setInput] = useState('');
-  const {attachments, pickImages, removeAttachment, clearAttachments} = useAttachments();
   const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const listRef = useRef<LegendListRef>(null);
@@ -79,12 +84,13 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
 
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
 
-  // A message with an image is taller than the text cap, so capping it would
-  // push its top (where the image sits) above the anchor offset and clip it.
-  // Leave image messages uncapped so the top of the image lands at the offset.
-  const anchorHasImage =
-    anchorIndex != null &&
-    (messages[anchorIndex]?.attachments?.length ?? 0) > 0;
+  // Image messages are taller than the text cap; leave them uncapped so the top
+  // of the image lands at the anchor offset instead of being clipped above it.
+  const anchorHasImage = useChatStore(state =>
+    anchorIndex != null
+      ? (state.messages[anchorIndex]?.attachments?.length ?? 0) > 0
+      : false,
+  );
 
   const {contentInsetEndAdjustment, onComposerLayout: reportComposerInset} = useKeyboardChatComposerInset(listRef, composerRef);
   const {freeze, scrollMessageToEnd} = useKeyboardScrollToEnd({listRef});
@@ -97,30 +103,22 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
     [reportComposerInset],
   );
 
-  const onSend = useCallback(() => {
-    if (!input.trim() && attachments.length === 0) {
-      return;
-    }
-    const wasEmpty = messages.length === 0;
-    setAnchorIndex(messages.length);
-    send(input, attachments);
-    setInput('');
-    clearAttachments();
-    keyboardDismissedForReplyRef.current = false;
-    if (Platform.OS === 'ios') {
-      scrollMessageToEnd({animated: true, closeKeyboard: false});
-    } else if (!wasEmpty) {
-      // Skip on the very first message: an animated scrollToEnd caused jitter on the first message.
-      listRef.current?.scrollToEnd({animated: true});
-    }
-  }, [
-    input,
-    attachments,
-    send,
-    scrollMessageToEnd,
-    clearAttachments,
-    messages.length,
-  ]);
+ 
+  const onSubmit = useCallback(
+    (text: string, attachments: Attachment[]) => {
+      const wasEmpty = messagesLength === 0;
+      setAnchorIndex(messagesLength);
+      send(text, attachments);
+      keyboardDismissedForReplyRef.current = false;
+      if (Platform.OS === 'ios') {
+        scrollMessageToEnd({animated: true, closeKeyboard: false});
+      } else if (!wasEmpty) {
+        // Skip on the very first message: an animated scrollToEnd caused jitter on the first message.
+        listRef.current?.scrollToEnd({animated: true});
+      }
+    },
+    [messagesLength, send, scrollMessageToEnd],
+  );
 
   
   const keyboardOffset = {opened: insets.bottom};
@@ -138,12 +136,16 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
 
   return (
     <View style={styles.container} onLayout={onContainerLayout}>
+      <ChatMessages>
+        {messages => (
       <KeyboardAwareLegendList
         ref={listRef}
         style={styles.fill}
         data={messages}
         keyExtractor={(item: Message) => item.id}
         renderItem={renderMessage}
+        // Let the bottom contentInset / anchored end-space area still catch scroll touches (RN 0.81+ hit-test bug, facebook/react-native#54123).
+        applyWorkaroundForContentInsetHitTestBug
         // Android MVCP holds the anchor in place, but must be off while streaming or it blocks the reply from auto-scrolling.
         maintainVisibleContentPosition={
           Platform.OS === 'android' && !isStreaming 
@@ -194,9 +196,11 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
           {paddingTop: insets.top + 56},
         ]}
         keyboardDismissMode="interactive"
-      />
+          />
+        )}
+      </ChatMessages>
 
-      {messages.length === 0 ? (
+      {messagesLength === 0 ? (
         <EmptyState composerHeight={composerHeight} />
       ) : null}
 
@@ -215,14 +219,9 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
         <Composer
           composerRef={composerRef}
           onLayout={onComposerLayout}
-          value={input}
-          onChangeText={setInput}
-          onSend={onSend}
+          onSubmit={onSubmit}
           onStop={stop}
           streaming={isStreaming}
-          attachments={attachments}
-          onPickPhotos={pickImages}
-          onRemoveAttachment={removeAttachment}
         />
       </KeyboardStickyView>
 

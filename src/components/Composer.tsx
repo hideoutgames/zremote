@@ -14,11 +14,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import {NitroImage} from 'react-native-nitro-image';
-import {MenuView, type NativeActionEvent} from '@react-native-menu/menu';
+import {AttachmentMenu} from './AttachmentMenu';
 import {Glass} from './Glass';
 import {Icon} from './Icon';
-import type {Attachment} from '../hooks/useChat';
-import {showNotImplemented} from '../notImplemented';
+import {useAttachments} from '../hooks/useAttachments';
+import type {Attachment} from '../state/chatStore';
 import {theme} from '../theme';
 
 const RESIZE_DURATION = 150;
@@ -29,33 +29,34 @@ const INPUT_MAX_HEIGHT = 120;
 const THUMBS_ANIM_MS = 220;
 
 type ComposerProps = {
-  value: string;
-  onChangeText: (text: string) => void;
-  onSend: () => void;
+  onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop: () => void;
   streaming: boolean;
   composerRef: React.RefObject<View | null>;
   onLayout: (event: LayoutChangeEvent) => void;
-  attachments: Attachment[];
-  onPickPhotos: () => void;
-  onRemoveAttachment: (index: number) => void;
 };
 
 
 export const Composer = React.memo(function ({
-  value,
-  onChangeText,
-  onSend,
+  onSubmit,
   onStop,
   streaming,
   composerRef,
   onLayout,
-  attachments,
-  onPickPhotos,
-  onRemoveAttachment,
 }: ComposerProps) {
   const insets = useSafeAreaInsets();
+  const [value, setValue] = useState('');
+  const {attachments, pickImages, removeAttachment, clearAttachments} = useAttachments();
   const canSend = value.trim().length > 0 || attachments.length > 0;
+
+  const onSend = () => {
+    if (!canSend) {
+      return;
+    }
+    onSubmit(value, attachments);
+    setValue('');
+    clearAttachments();
+  };
 
   // The thumbnail strip lives in a height-clipped container so the pill can
   // smoothly swell/shrink as images are added/removed. 
@@ -134,38 +135,13 @@ export const Composer = React.memo(function ({
   };
 
   
-  const onAttachAction = ({nativeEvent}: NativeActionEvent) => {
-    if (nativeEvent.event === 'photos') {
-      onPickPhotos();
-      return;
-    }
-    showNotImplemented();
-  };
-
   return (
     <View
       ref={composerRef}
       onLayout={onLayout}
       style={[styles.container, {paddingBottom: insets.bottom + 8}]}>
       <View style={styles.row}>
-        <MenuView
-          themeVariant="dark"
-          onPressAction={onAttachAction}
-          actions={[
-            {id: 'camera', title: 'Camera', image: 'camera', imageColor: theme.text},
-            {id: 'photos', title: 'Photos', image: 'photo', imageColor: theme.text},
-            {
-              id: 'files',
-              title: 'Files',
-              image: 'paperclip',
-              imageColor: theme.text,
-            },
-          ]}>
-          <Glass interactive style={styles.circle}>
-            <Icon name="plus" size={22} color={theme.text} />
-          </Glass>
-        </MenuView>
-
+        <AttachmentMenu onPickPhotos={pickImages} />
         <Animated.View style={[styles.inputPillWrap, pillStyle]}>
           <Glass style={styles.inputPill}>
             <Animated.View
@@ -187,7 +163,7 @@ export const Composer = React.memo(function ({
                     <Pressable
                       style={styles.thumbRemove}
                       hitSlop={8}
-                      onPress={() => onRemoveAttachment(index)}>
+                      onPress={() => removeAttachment(index)}>
                       <View style={styles.thumbRemoveBadge}>
                         <Icon name="xmark" size={11} color="#FFFFFF" />
                       </View>
@@ -199,7 +175,7 @@ export const Composer = React.memo(function ({
 
             <TextInput
               value={value}
-              onChangeText={onChangeText}
+              onChangeText={setValue}
               onLayout={onInputLayout}
               placeholder="Ask about Margelo"
               placeholderTextColor={theme.textSecondary}

@@ -24,6 +24,8 @@
     "react-native-edge-to-edge": "^1.8.1",
     "react-native-enriched-markdown": "^0.6.0",
     "react-native-image-picker": "^8.2.1",
+    "react-native-ios-context-menu": "^3.2.1",
+    "react-native-ios-utilities": "^5.2.0",
     "react-native-keyboard-controller": "^1.21.12",
     "react-native-nitro-fetch": "^1.4.2",
     "react-native-nitro-image": "^0.15.1",
@@ -33,10 +35,13 @@
     "react-native-nitro-web-image": "^0.15.1",
     "react-native-nitro-websockets": "^1.0.3",
     "react-native-pager-view": "^8.0.2",
+    "react-native-performance": "^6.0.0",
     "react-native-reanimated": "^4.5.0",
     "react-native-release-profiler": "^0.4.4",
     "react-native-safe-area-context": "^5.5.2",
-    "react-native-worklets": "^0.10.0"
+    "react-native-worklets": "^0.10.0",
+    "zeego": "^3.0.6",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

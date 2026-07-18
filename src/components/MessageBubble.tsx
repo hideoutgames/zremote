@@ -3,7 +3,7 @@ import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import Animated, {Easing, FadeIn, SlideInDown} from 'react-native-reanimated';
 import {NitroImage} from 'react-native-nitro-image';
 import type {SFSymbol} from 'sf-symbols-typescript';
-import type {Message} from '../hooks/useChat';
+import type {Message} from '../state/chatStore';
 import {Icon} from './Icon';
 import {ShimmerText} from './ShimmerText';
 import {theme} from '../theme';

@@ -1,4 +1,9 @@
 PODS:
+  - ComputableLayout (0.7.0):
+    - DGSwiftUtilities (~> 0.11)
+  - ContextMenuAuxiliaryPreview (0.5.2):
+    - DGSwiftUtilities (~> 0.29)
+  - DGSwiftUtilities (0.47.0)
   - FBLazyVector (0.86.0)
   - hermes-engine (250829098.0.14):
     - hermes-engine/Pre-built (= 250829098.0.14)
@@ -1640,6 +1645,62 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-ios-context-menu (3.2.1):
+    - ContextMenuAuxiliaryPreview (~> 0.5)
+    - DGSwiftUtilities
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-jsinspector
+    - React-jsinspectortracing
+    - react-native-ios-utilities
+    - React-NativeModulesApple
+    - React-RCTAppDelegate
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - react-native-ios-utilities (5.2.0):
+    - ComputableLayout (~> 0.7)
+    - DGSwiftUtilities (~> 0.46)
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-jsinspector
+    - React-jsinspectortracing
+    - React-jsitooling
+    - React-NativeModulesApple
+    - React-RCTAppDelegate
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-keyboard-controller (1.21.12):
     - hermes-engine
     - RCTRequired
@@ -1729,6 +1790,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - SwiftUIIntrospect (~> 1.0)
+    - Yoga
+  - react-native-performance (6.0.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
     - Yoga
   - react-native-release-profiler (0.4.4):
     - hermes-engine
@@ -2536,9 +2619,12 @@ DEPENDENCIES:
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - React-mutationobservernativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver`)
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
+  - react-native-ios-context-menu (from `../node_modules/react-native-ios-context-menu`)
+  - react-native-ios-utilities (from `../node_modules/react-native-ios-utilities`)
   - react-native-keyboard-controller (from `../node_modules/react-native-keyboard-controller`)
   - "react-native-menu (from `../node_modules/@react-native-menu/menu`)"
   - react-native-pager-view (from `../node_modules/react-native-pager-view`)
+  - react-native-performance (from `../node_modules/react-native-performance`)
   - react-native-release-profiler (from `../node_modules/react-native-release-profiler`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-skia (from `../node_modules/@shopify/react-native-skia`)"
@@ -2588,6 +2674,9 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - ComputableLayout
+    - ContextMenuAuxiliaryPreview
+    - DGSwiftUtilities
     - iosMath
     - SDWebImage
     - SwiftUIIntrospect
@@ -2690,12 +2779,18 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver"
   react-native-image-picker:
     :path: "../node_modules/react-native-image-picker"
+  react-native-ios-context-menu:
+    :path: "../node_modules/react-native-ios-context-menu"
+  react-native-ios-utilities:
+    :path: "../node_modules/react-native-ios-utilities"
   react-native-keyboard-controller:
     :path: "../node_modules/react-native-keyboard-controller"
   react-native-menu:
     :path: "../node_modules/@react-native-menu/menu"
   react-native-pager-view:
     :path: "../node_modules/react-native-pager-view"
+  react-native-performance:
+    :path: "../node_modules/react-native-performance"
   react-native-release-profiler:
     :path: "../node_modules/react-native-release-profiler"
   react-native-safe-area-context:
@@ -2788,6 +2883,9 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  ComputableLayout: c50faffac4ed9f8f05b0ce5e6f3a60df1f6042c8
+  ContextMenuAuxiliaryPreview: 20be0be795b783b68f8792732eed4bed9f202c1c
+  DGSwiftUtilities: 567f8d5ee618f0b7afb185b17aa45ff356315a0f
   FBLazyVector: b3e7ad108f0d882e30445c5527d774e3fd432f3d
   hermes-engine: d6f449c658e67647f36f6f8bd7e43e2289498610
   iosMath: f7a6cbadf9d836d2149c2a84c435b1effc244cba
@@ -2796,7 +2894,7 @@ SPEC CHECKSUMS:
   NitroFetchWebsockets: cdd416ee66b2e16282b2c42f8b0785f71ba0f507
   NitroImage: 2f592086cbdecbbaa1c10dd97e0cdd43b1bb0817
   NitroModules: 994eaa7fc39d1fb4b76bb61054312c9796c4a649
-  NitroSymbols: 17654ad6f4e25f84ac80a480080ebe7097754a83
+  NitroSymbols: 83a3f2b0d387c0b93954ee55fdefcde969e78702
   NitroTextDecoder: 87ccc6809d473ea811f0a36b7fe3db521ce47e0c
   NitroWebImage: ca414f829cae44174179ea0e8ff28df75f40f08e
   RCTDeprecation: 2a74a2c57675e64419bd89078efde81f7c1de90b
@@ -2837,9 +2935,12 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 2eb3f49d0d8e77b5343455eccd057010b8d38b6b
   React-mutationobservernativemodule: f0a0d5ae9b51caf7becbeabf836d716cfedb6bf2
   react-native-image-picker: 23540feacc79c63c60857f318fdfa8477c26e70a
+  react-native-ios-context-menu: eb1d70ab98aac8deb2bdc50f7d6f47079e1e368d
+  react-native-ios-utilities: a77276d1d690786de3916f4576d6660ca73d27d3
   react-native-keyboard-controller: d020283065b2bdf25f5667937e5899f08df36ff9
   react-native-menu: cef8fb263b5fbc4a748de65494fe768b7527c135
   react-native-pager-view: c9f0c94cc64041ac70f28f79527ea2ac664cf25c
+  react-native-performance: 3290079971f56838ae50f7f1d65d6e075d88b932
   react-native-release-profiler: b7d3f26e662f9bdd8612072a9613257d41eb6051
   react-native-safe-area-context: fb5c8ee9f6dd62ef710611b3d370c501f42a4ac0
   react-native-skia: c1e4d665ea585a219eb1b270d702012c1cb7521e
