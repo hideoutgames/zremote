@@ -6,7 +6,7 @@ Ask it anything. For general questions it just replies; for Margelo questions it
 
 ## How it works
 
-- **Brain** — OpenAI's Responses API, streamed over a **WebSocket** ([`react-native-nitro-websockets`](https://github.com/mrousavy/nitro)) rather than HTTP. Reply text and reasoning summaries stream token-by-token; turns are chained with `previous_response_id` so the model remembers the conversation.
+- **Brain** — OpenAI's Responses API, streamed over a **WebSocket** ([`react-native-nitro-websockets`](https://github.com/mrousavy/nitro)) rather than HTTP. The socket is prewarmed natively at app start, before the JS bundle loads, so it's already open by the first message. Reply text and reasoning summaries stream token-by-token; turns are chained with `previous_response_id` so the model remembers the conversation.
 - **Knowledge base (RAG)** — the model can call a `search_margelo_kb` tool, which queries a [Pinecone](https://www.pinecone.io/) index (integrated embedding, so raw text goes up and Pinecone embeds it server-side) over [`react-native-nitro-fetch`](https://github.com/margelo/react-native-nitro-fetch). Margelo questions are answered from the retrieved context, never from the model's memory.
 - **Rendering** — replies render as native markdown with a streaming animation and tappable links ([`react-native-enriched-markdown`](https://github.com/software-mansion-labs/react-native-enriched-markdown)). The collapsible "thought process" opens in a bottom sheet ([`react-native-true-sheet`](https://github.com/lodev09/react-native-true-sheet)).
 - **List** — a keyboard-aware [`@legendapp/list`](https://github.com/LegendApp/legend-list) with anchored end-space, for ChatGPT-style scroll and anchor behavior while a reply streams in.
@@ -55,13 +55,14 @@ src/
   theme.ts                  # dark theme + shared markdown design tokens
   markdownStyle.ts          # maps the theme onto the markdown renderer
   notImplemented.ts         # "demo only" alert for stubbed controls
+  state/
+    chatStore.ts            # zustand store: chat state, streaming, tool-call loop
   openai/
     protocol.ts             # builds Responses API requests, parses server events
-    useOpenAIConnection.ts  # WebSocket lifecycle + reconnect with backoff
+    connectionManager.ts    # module-level WebSocket lifecycle + reconnect with backoff
   rag/
     searchKnowledgeBase.ts  # Pinecone knowledge-base search (the model's tool)
   hooks/
-    useChat.ts              # chat state, streaming, and the tool-call loop
     useAttachments.ts       # image picking
     useHideBootSplashOnLayout.ts
   screens/
@@ -69,7 +70,9 @@ src/
     ChatScreen.tsx          # the conversation, list, and composer wiring
     RecentsScreen.tsx       # chat history (mocked for the UI pass)
   components/
+    ChatMessages.tsx        # subscription boundary: only re-renders on message changes
     Composer.tsx            # the input pill (grow/shrink, attachment thumbnails)
+    AttachmentMenu.tsx      # the "+" dropdown for picking attachments
     MessageBubble.tsx       # user bubble / assistant markdown + reasoning trace
     ReasoningSheet.tsx      # bottom sheet showing the thinking trace
     ShimmerText.tsx         # Skia shimmer "Thinking" label
@@ -99,6 +102,7 @@ This app stands on the shoulders of these projects (thank you to their authors):
 - [@shopify/react-native-skia](https://github.com/Shopify/react-native-skia) — Shopify
 - [@callstack/liquid-glass](https://github.com/callstack/liquid-glass) — Oskar Kwaśniewski / Callstack
 - [react-native-pager-view](https://github.com/callstack/react-native-pager-view) — Callstack
+- [zeego](https://github.com/nandorojo/zeego) — Fernando Rojo
 - [@react-native-menu/menu](https://github.com/react-native-menu/menu) — Jesse Katsumata
 - [@react-native-vector-icons/material-design-icons](https://github.com/oblador/react-native-vector-icons) — Joel Arvidsson
 - [react-native-image-picker](https://github.com/react-native-image-picker/react-native-image-picker) — community
