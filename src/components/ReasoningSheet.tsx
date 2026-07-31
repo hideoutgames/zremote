@@ -1,4 +1,4 @@
-import React, {useImperativeHandle, useRef, useState} from 'react';
+import React, {useRef} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {TrueSheet} from '@lodev09/react-native-true-sheet';
@@ -7,29 +7,25 @@ import {Icon} from './Icon';
 import {darkMarkdownStyle} from '../markdownStyle';
 import {theme} from '../theme';
 
-export type ReasoningSheetRef = {present: (reasoning: string) => void};
+type ReasoningSheetProps = {
+  reasoning: string;
+  onDismiss: () => void;
+};
 
 
 export const ReasoningSheet = React.memo(function ({
-  ref,
-}: {
-  ref?: React.Ref<ReasoningSheetRef>;
-}) {
+  reasoning,
+  onDismiss,
+}: ReasoningSheetProps) {
   const insets = useSafeAreaInsets();
   const sheet = useRef<TrueSheet>(null);
-  const [reasoning, setReasoning] = useState('');
-
-  useImperativeHandle(ref, () => ({
-    present: text => {
-      setReasoning(text);
-      sheet.current?.present();
-    },
-  }));
 
   return (
     <TrueSheet
       ref={sheet}
       detents={['auto', 1]}
+      initialDetentIndex={0}
+      onDidDismiss={onDismiss}
       maxContentHeight={620}
       grabber={true}>
       <View style={styles.header}>
@@ -74,8 +70,6 @@ const styles = StyleSheet.create({
     width: CLOSE,
     height: CLOSE,
     borderRadius: CLOSE / 2,
-    backgroundColor: theme.glassFallbackBackground,
-    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
     alignItems: 'center',
     justifyContent: 'center',

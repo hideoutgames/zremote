@@ -1,4 +1,5 @@
 import React, {
+  Suspense,
   useCallback,
   useImperativeHandle,
   useRef,
@@ -12,11 +13,7 @@ import {
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {
-  KeyboardController,
-  KeyboardStickyView,
-  useKeyboardState,
-} from 'react-native-keyboard-controller';
+import {KeyboardStickyView} from 'react-native-keyboard-controller';
 import {type LegendListRef} from '@legendapp/list/react-native';
 import {
   KeyboardAwareLegendList,
@@ -28,13 +25,9 @@ import {
   type Attachment,
   type Message,
 } from '../state/chatStore';
-import {useHideBootSplashOnLayout} from '../hooks/useHideBootSplashOnLayout';
+import BootSplash from 'react-native-bootsplash';
 import {ChatMessages} from '../components/ChatMessages';
 import {MessageBubble} from '../components/MessageBubble';
-import {
-  ReasoningSheet,
-  type ReasoningSheetRef,
-} from '../components/ReasoningSheet';
 import {Header} from '../components/Header';
 import {Composer} from '../components/Composer';
 import {EmptyState} from '../components/EmptyState';
@@ -44,6 +37,11 @@ import {theme} from '../theme';
 // Cap for the anchored user bubble's reserved size (~2 lines + padding), per
 // legend-list's AI-chat example.
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
+
+// load this lazily since we only need it when a reasoning trace is available
+const ReasoningSheet = React.lazy(() =>
+  import('../components/ReasoningSheet').then(m => ({default: m.ReasoningSheet})),
+);
 
 export type ChatScreenRef = {newChat: () => void};
 
@@ -62,17 +60,16 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   const messagesLength = useChatStore(state => state.messages.length);
   const isStreaming = useChatStore(state => state.isStreaming);
   useImperativeHandle(ref, () => ({newChat}), [newChat]);
-  const keyboardVisible = useKeyboardState(state => state.isVisible);
-  const keyboardHeight = useKeyboardState(state => state.height);
-  const keyboardDismissedForReplyRef = useRef(false);
   const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const listRef = useRef<LegendListRef>(null);
   const composerRef = useRef<View>(null);
-  const reasoningSheetRef = useRef<ReasoningSheetRef>(null);
+  const [reasoning, setReasoning] = useState<string | null>(null);
+  // Once the reply overflows the reserved space, follow the tail 
+  const [following, setFollowing] = useState(false);
 
-  const openReasoning = useCallback((reasoning: string) => {
-    reasoningSheetRef.current?.present(reasoning);
+  const openReasoning = useCallback((text: string) => {
+    setReasoning(text);
   }, []);
 
   const renderMessage = useCallback(
@@ -106,16 +103,11 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
  
   const onSubmit = useCallback(
     (text: string, attachments: Attachment[]) => {
-      const wasEmpty = messagesLength === 0;
+      const isFirstMessage = messagesLength === 0;
+      setFollowing(false);
       setAnchorIndex(messagesLength);
       send(text, attachments);
-      keyboardDismissedForReplyRef.current = false;
-      if (Platform.OS === 'ios') {
-        scrollMessageToEnd({animated: true, closeKeyboard: false});
-      } else if (!wasEmpty) {
-        // Skip on the very first message: an animated scrollToEnd caused jitter on the first message.
-        listRef.current?.scrollToEnd({animated: true});
-      }
+      scrollMessageToEnd({animated: !isFirstMessage, closeKeyboard: true});
     },
     [messagesLength, send, scrollMessageToEnd],
   );
@@ -132,10 +124,9 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
     scrollMessageToEnd({animated: true, closeKeyboard: false});
   };
 
-  const onContainerLayout = useHideBootSplashOnLayout();
-
   return (
-    <View style={styles.container} onLayout={onContainerLayout}>
+    <View style={styles.container}>
+      <BootSplash.HideOnDraw fade />
       <ChatMessages>
         {messages => (
       <KeyboardAwareLegendList
@@ -146,9 +137,8 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
         renderItem={renderMessage}
         // Let the bottom contentInset / anchored end-space area still catch scroll touches (RN 0.81+ hit-test bug, facebook/react-native#54123).
         applyWorkaroundForContentInsetHitTestBug
-        // Android MVCP holds the anchor in place, but must be off while streaming or it blocks the reply from auto-scrolling.
         maintainVisibleContentPosition={
-          Platform.OS === 'android' && !isStreaming 
+          Platform.OS !== 'android' ? undefined : anchorIndex != null && !following
         }
         keyboardLiftBehavior="whenAtEnd"
         // Match the composer's keyboard offset or a gap opens between the last message and the keyboard.
@@ -161,30 +151,16 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
                 anchorIndex,
                 anchorMaxSize: anchorHasImage ? undefined : ANCHOR_MAX_SIZE,
                 anchorOffset: insets.top + 56,
-                // Release the anchor once the reply fills the reserved space, so maintainScrollAtEnd can take over following it.
-              onSizeChanged: size => {
-                  // close the keyboard before the streaming reply's tail would slip behind it.
-                  if (
-                    !keyboardDismissedForReplyRef.current &&
-                    keyboardVisible &&
-                    keyboardHeight > 0 &&
-                    size <= keyboardHeight
-                  ) {
-                    keyboardDismissedForReplyRef.current = true;
-                    KeyboardController.dismiss();
-                  }
-                  if (size <= 0) {
-                    setAnchorIndex(undefined);
-                    listRef.current?.scrollToEnd({animated: false});
+                onSizeChanged: size => {
+                  if (size <= 0 && !following) {
+                    setFollowing(true);
                   }
                 },
               }
             : undefined
         }
         maintainScrollAtEnd={
-          anchorIndex == null 
-            ? {on: {dataChange: true}}
-            : undefined
+          following ? {on: {dataChange: true, itemLayout: true}} : undefined
         }
         // Default threshold is too tight for fast streaming and permanently stops the follow.
         maintainScrollAtEndThreshold={1}
@@ -225,7 +201,14 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
         />
       </KeyboardStickyView>
 
-      <ReasoningSheet ref={reasoningSheetRef} />
+      {reasoning != null ? (
+        <Suspense fallback={null}>
+          <ReasoningSheet
+            reasoning={reasoning}
+            onDismiss={() => setReasoning(null)}
+          />
+        </Suspense>
+      ) : null}
     </View>
   );
 }

@@ -241,6 +241,9 @@ export const useChatStore = create<ChatState>(set => {
     // previous_response_id lives only in the closed connection's cache, so drop it on disconnect.
     onDisconnect: () => {
       previousResponseId = undefined;
+      if (streamingId) {
+        finishStreaming('error');
+      }
     },
   });
 

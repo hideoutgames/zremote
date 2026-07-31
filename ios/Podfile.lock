@@ -55,7 +55,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - NitroFetchWebsockets (1.0.3):
+  - NitroFetchWebsockets (1.1.0):
     - hermes-engine
     - NitroModules
     - RCTRequired
@@ -2891,7 +2891,7 @@ SPEC CHECKSUMS:
   iosMath: f7a6cbadf9d836d2149c2a84c435b1effc244cba
   LiquidGlass: 9dd6be7ac113cae8b84f895d8a3eede578dbef98
   NitroFetch: 5b2a6fa18e1ce8781f54f92a6a15652303c0fdfd
-  NitroFetchWebsockets: cdd416ee66b2e16282b2c42f8b0785f71ba0f507
+  NitroFetchWebsockets: 3126e6ce3a40d5232c4c10c74077f7f111bb846f
   NitroImage: 2f592086cbdecbbaa1c10dd97e0cdd43b1bb0817
   NitroModules: 994eaa7fc39d1fb4b76bb61054312c9796c4a649
   NitroSymbols: 83a3f2b0d387c0b93954ee55fdefcde969e78702

@@ -33,7 +33,7 @@
     "react-native-nitro-symbols": "^0.0.8",
     "react-native-nitro-text-decoder": "^0.2.0",
     "react-native-nitro-web-image": "^0.15.1",
-    "react-native-nitro-websockets": "^1.0.3",
+    "react-native-nitro-websockets": "^1.1.0",
     "react-native-pager-view": "^8.0.2",
     "react-native-performance": "^6.0.0",
     "react-native-reanimated": "^4.5.0",

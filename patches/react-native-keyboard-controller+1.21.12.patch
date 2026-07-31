@@ -1,0 +1,62 @@
+diff --git a/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts b/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
+index 560df54..2c84299 100644
+--- a/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
++++ b/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
+@@ -229,17 +229,20 @@ function useChatKeyboard(
+       onEnd: (e) => {
+         "worklet";
+ 
+-        if (freeze.value) {
+-          return;
+-        }
+-
+         const effective = getEffectiveHeight(
+           e.height,
+           targetKeyboardHeight.value,
+           offset,
+         );
+ 
++        // Settle padding even while frozen so a freeze-coordinated dismiss
++        // doesn't leave a phantom keyboard-height dead-space (see the Android
++        // variant for the full explanation). Patched locally (patch-package).
+         padding.value = effective;
++
++        if (freeze.value) {
++          return;
++        }
+       },
+     },
+     [inverted, keyboardLiftBehavior, offset, extraContentPadding],
+diff --git a/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts b/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
+index 48178d9..e39bdd5 100644
+--- a/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
++++ b/node_modules/react-native-keyboard-controller/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
+@@ -340,18 +340,24 @@ function useChatKeyboard(
+       onEnd: (e) => {
+         "worklet";
+ 
+-        if (freeze.value) {
+-          return;
+-        }
+-
+         const effective = getEffectiveHeight(
+           e.height,
+           targetKeyboardHeight.value,
+           offset,
+         );
+ 
++        // Settle padding to the final keyboard height even while frozen. A
++        // freeze-coordinated dismiss (scrollMessageToEnd({closeKeyboard:true}))
++        // fires the keyboard-hide events while freeze is held, so bailing here
++        // before resetting padding leaves it stuck at keyboard height — a
++        // phantom bottom dead-space that only clears on a later real keyboard
++        // event. Patched locally (patch-package).
+         padding.value = effective;
+ 
++        if (freeze.value) {
++          return;
++        }
++
+         // Record actual scroll displacement so close can be symmetric
+         if (effective > 0 && offsetBeforeScroll.value !== -1) {
+           actualOpenShift.value = scroll.value - offsetBeforeScroll.value;

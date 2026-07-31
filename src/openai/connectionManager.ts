@@ -19,13 +19,29 @@ function scheduleReconnect() {
   if (reconnectTimer) {
     return;
   }
-  const delay = Math.min(1000 * 2 ** attempts, 15000);
+  const delay = Math.min(1000 * 2 ** attempts, 4000);
   attempts += 1;
   console.log('[ws] reconnecting in', delay, 'ms');
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
   }, delay);
+}
+
+
+function reconnectNow() {
+  if (
+    socket &&
+    (socket.readyState === 'OPEN' || socket.readyState === 'CONNECTING')
+  ) {
+    return;
+  }
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  attempts = 0;
+  connect();
 }
 
 function connect() {
@@ -73,7 +89,6 @@ AppState.addEventListener('change', state => {
 });
 
 export const connectionManager = {
-  
   setHandlers(next: Handlers) {
     handlers = next;
     return {
@@ -87,6 +102,8 @@ export const connectionManager = {
   },
   send(payload: string): boolean {
     if (!socket || socket.readyState !== 'OPEN') {
+      //  if socket is down - start reconnecting now so the user's retry lands fast.
+      reconnectNow();
       return false;
     }
     socket.send(payload);
