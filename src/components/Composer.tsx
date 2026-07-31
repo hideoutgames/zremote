@@ -177,6 +177,7 @@ export const Composer = React.memo(function ({
               value={value}
               onChangeText={setValue}
               onLayout={onInputLayout}
+              autoFocus
               placeholder="Ask about Margelo"
               placeholderTextColor={theme.textSecondary}
               style={[styles.input, collapsedHeight != null && {height: collapsedHeight}]}
