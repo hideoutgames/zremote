@@ -35,4 +35,17 @@ export const darkMarkdownStyle: MarkdownStyle = {
     padding: 12,
   },
   thematicBreak: {color: theme.border},
+  table: {
+    color: theme.text,
+    fontSize: bodyFontSize,
+    borderColor: theme.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    headerBackgroundColor: codeBackground,
+    headerTextColor: theme.text,
+    rowEvenBackgroundColor: 'transparent',
+    rowOddBackgroundColor: 'transparent',
+    cellPaddingHorizontal: 12,
+    cellPaddingVertical: 8,
+  },
 };

@@ -49,6 +49,7 @@ export const ReasoningSheet = React.memo(function ({
         <EnrichedMarkdownText
           markdown={reasoning}
           markdownStyle={darkMarkdownStyle}
+          flavor="github"
         />
       </ScrollView>
     </TrueSheet>

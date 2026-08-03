@@ -86,7 +86,7 @@ export type ParsedServerEvent =
   | {kind: 'reasoning'; text: string}
   | {kind: 'completed'; responseId: string}
   | {kind: 'tool_call'; callId: string; name: string; args: string}
-  | {kind: 'error'; message: string}
+  | {kind: 'error'; code?: string; message: string}
   | {kind: 'ignored'; type: string};
 
 export function parseServerEvent(raw: string): ParsedServerEvent {
@@ -160,12 +160,13 @@ export function parseServerEvent(raw: string): ParsedServerEvent {
     case 'response.failed':
     case 'error': {
       const e = event as {
-        error?: {message?: string};
-        response?: {error?: {message?: string}};
+        error?: {message?: string; code?: string};
+        response?: {error?: {message?: string; code?: string}};
         message?: string;
       };
       return {
         kind: 'error',
+        code: e.error?.code ?? e.response?.error?.code,
         message:
           e.error?.message ??
           e.response?.error?.message ??

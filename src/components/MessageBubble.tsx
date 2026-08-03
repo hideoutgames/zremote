@@ -124,6 +124,7 @@ export const MessageBubble = memo(function ({
         <EnrichedMarkdownText
           markdown={message.text}
           markdownStyle={darkMarkdownStyle}
+          flavor="github"
           streamingAnimation={message.status === 'streaming'}
           onLinkPress={({url}) => Linking.openURL(url)}
         />

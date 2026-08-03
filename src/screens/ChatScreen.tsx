@@ -65,8 +65,9 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   const listRef = useRef<LegendListRef>(null);
   const composerRef = useRef<View>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
-  // Once the reply overflows the reserved space, follow the tail 
+  // Once the reply overflows the reserved space, follow the tail
   const [following, setFollowing] = useState(false);
+  const hasOverflowedRef = useRef(false);
 
   const openReasoning = useCallback((text: string) => {
     setReasoning(text);
@@ -104,6 +105,7 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   const onSubmit = useCallback(
     (text: string, attachments: Attachment[]) => {
       const isFirstMessage = messagesLength === 0;
+      hasOverflowedRef.current = false;
       setFollowing(false);
       setAnchorIndex(messagesLength);
       send(text, attachments);
@@ -118,6 +120,18 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   // The chevron shows whenever the bottom of the conversation isn't visible.
   const onEndVisible = useCallback((visible: boolean) => {
     setShowScrollDown(!visible);
+    // Back at the bottom after a manual scroll-up: re-arm tail-follow
+    if (visible && hasOverflowedRef.current) {
+      setFollowing(true);
+    }
+  }, []);
+
+  // A manual drag while the reply streams pauses tail-follow so the user can
+  // scroll up (e.g. to read a table)
+  const onScrollBeginDrag = useCallback(() => {
+    if (hasOverflowedRef.current) {
+      setFollowing(false);
+    }
   }, []);
 
   const scrollToBottom = () => {
@@ -152,7 +166,8 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
                 anchorMaxSize: anchorHasImage ? undefined : ANCHOR_MAX_SIZE,
                 anchorOffset: insets.top + 56,
                 onSizeChanged: size => {
-                  if (size <= 0 && !following) {
+                  if (size <= 0 && !hasOverflowedRef.current) {
+                    hasOverflowedRef.current = true;
                     setFollowing(true);
                   }
                 },
@@ -167,6 +182,7 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
         estimatedItemSize={64}
         estimatedListSize={{width: windowWidth, height: windowHeight}}
         onEndVisible={onEndVisible}
+        onScrollBeginDrag={onScrollBeginDrag}
         contentContainerStyle={[
           styles.listContent,
           {paddingTop: insets.top + 56},

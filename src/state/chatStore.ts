@@ -220,9 +220,16 @@ export const useChatStore = create<ChatState>(set => {
         break;
       }
       case 'error':
-        console.warn('[openai] error event:', parsed.message);
+        console.warn('[openai] error event:', parsed.code, parsed.message);
         // A failed turn evicts previous_response_id server-side, so drop it or every following send wedges.
         previousResponseId = undefined;
+        // The 60-minute connection cap arrives as an error event (not a socket
+        // close); OpenAI expects us to open a fresh connection.
+        if (parsed.code === 'websocket_connection_limit_reached') {
+          finishStreaming('done');
+          connectionManager.forceReconnect();
+          break;
+        }
         finishStreaming('error');
         Alert.alert('Something went wrong', parsed.message);
         break;

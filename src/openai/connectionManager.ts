@@ -44,6 +44,27 @@ function reconnectNow() {
   connect();
 }
 
+// Open a fresh connection unconditionally, even if the current socket still
+// reports OPEN. Needed for OpenAI's 60-minute cap, which arrives as an error
+// event (not a close) while the socket may still be open
+function forceReconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  attempts = 0;
+  const stale = socket;
+  socket = null;
+  if (stale) {
+    stale.onclose = () => {};
+    stale.onerror = () => {};
+    stale.onmessage = () => { };
+    // open ai recommends creating a fresh connection so no need to keep this open 
+    stale.close(1000, 'client reconnect');
+  }
+  connect();
+}
+
 function connect() {
   const nextSocket = new NitroWebSocket(OPENAI_WS_URL, undefined, {
     Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -109,4 +130,7 @@ export const connectionManager = {
     socket.send(payload);
     return true;
   },
+  // Tear down the current socket and open a fresh one, even if it still reports
+  // OPEN. Used to roll over OpenAI's 60-minute connection cap silently.
+  forceReconnect,
 };
