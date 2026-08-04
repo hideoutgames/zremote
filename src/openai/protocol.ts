@@ -2,7 +2,7 @@
 // Shapes verified from:
 //   https://developers.openai.com/api/docs/guides/websocket-mode
 //   https://developers.openai.com/api/docs/guides/streaming-responses
-import {OPENAI_MODEL} from '../config';
+import { OPENAI_MODEL } from '../config';
 
 const SEARCH_TOOL = {
   type: 'function',
@@ -34,10 +34,10 @@ function buildRequest(
     type: 'response.create',
     model: OPENAI_MODEL,
     store: false,
-    reasoning: {summary: 'auto'},
+    reasoning: { summary: 'auto' },
     input,
     tools: [SEARCH_TOOL],
-    ...(previousResponseId ? {previous_response_id: previousResponseId} : {}),
+    ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
   });
 }
 
@@ -48,14 +48,14 @@ export function buildResponseCreate(
 ): string {
   const content: Array<Record<string, unknown>> = [];
   if (text) {
-    content.push({type: 'input_text', text});
+    content.push({ type: 'input_text', text });
   }
   for (const imageUrl of images) {
-    content.push({type: 'input_image', image_url: imageUrl});
+    content.push({ type: 'input_image', image_url: imageUrl });
   }
 
   return buildRequest(
-    [{type: 'message', role: 'user', content}],
+    [{ type: 'message', role: 'user', content }],
     previousResponseId,
   );
 }
@@ -69,53 +69,53 @@ export function buildFunctionCallOutput(
   previousResponseId: string,
 ): string {
   return buildRequest(
-    [{type: 'function_call_output', call_id: callId, output}],
+    [{ type: 'function_call_output', call_id: callId, output }],
     previousResponseId,
   );
 }
 
 //
 
-type ServerEvent = {type: string; [key: string]: unknown};
+type ServerEvent = { type: string; [key: string]: unknown };
 
 // A short human label shown while the assistant has no text yet, derived from
 // the response lifecycle events.
 export type ParsedServerEvent =
-  | {kind: 'status'; label: string}
-  | {kind: 'delta'; text: string}
-  | {kind: 'reasoning'; text: string}
-  | {kind: 'completed'; responseId: string}
-  | {kind: 'tool_call'; callId: string; name: string; args: string}
-  | {kind: 'error'; code?: string; message: string}
-  | {kind: 'ignored'; type: string};
+  | { kind: 'status'; label: string }
+  | { kind: 'delta'; text: string }
+  | { kind: 'reasoning'; text: string }
+  | { kind: 'completed'; responseId: string }
+  | { kind: 'tool_call'; callId: string; name: string; args: string }
+  | { kind: 'error'; code?: string; message: string }
+  | { kind: 'ignored'; type: string };
 
 export function parseServerEvent(raw: string): ParsedServerEvent {
   let event: ServerEvent;
   try {
     event = JSON.parse(raw);
   } catch {
-    return {kind: 'ignored', type: '<unparseable>'};
+    return { kind: 'ignored', type: '<unparseable>' };
   }
 
   switch (event.type) {
     // Lifecycle → "Thinking" until the first token.
     case 'response.created':
     case 'response.in_progress':
-      return {kind: 'status', label: 'Thinking'};
+      return { kind: 'status', label: 'Thinking' };
 
     // An output item started: reasoning vs. the actual reply.
     case 'response.output_item.added': {
-      const itemType = (event as {item?: {type?: string}}).item?.type;
+      const itemType = (event as { item?: { type?: string } }).item?.type;
       if (itemType === 'reasoning') {
-        return {kind: 'status', label: 'Thinking'};
+        return { kind: 'status', label: 'Thinking' };
       }
       if (itemType === 'function_call') {
-        return {kind: 'status', label: 'Searching Margelo docs'};
+        return { kind: 'status', label: 'Searching Margelo docs' };
       }
       if (itemType === 'message') {
-        return {kind: 'status', label: 'Responding'};
+        return { kind: 'status', label: 'Responding' };
       }
-      return {kind: 'ignored', type: event.type};
+      return { kind: 'ignored', type: event.type };
     }
 
     // Streamed reasoning-summary text (the shareable "thinking" trace, distinct
@@ -124,15 +124,19 @@ export function parseServerEvent(raw: string): ParsedServerEvent {
     //   https://community.openai.com/t/responses-api-streaming-the-simple-guide-to-events/1363122
     //   https://github.com/openai/openai-python/issues/2311
     case 'response.reasoning_summary_text.delta':
-      return {kind: 'reasoning', text: (event as {delta?: string}).delta ?? ''};
+      return {
+        kind: 'reasoning',
+        text: (event as { delta?: string }).delta ?? '',
+      };
 
     case 'response.output_text.delta':
-      return {kind: 'delta', text: (event as {delta?: string}).delta ?? ''};
+      return { kind: 'delta', text: (event as { delta?: string }).delta ?? '' };
 
     case 'response.completed':
       return {
         kind: 'completed',
-        responseId: (event as {response?: {id?: string}}).response?.id ?? '',
+        responseId:
+          (event as { response?: { id?: string } }).response?.id ?? '',
       };
 
     case 'response.output_item.done': {
@@ -154,14 +158,14 @@ export function parseServerEvent(raw: string): ParsedServerEvent {
           args: item.arguments ?? '',
         };
       }
-      return {kind: 'ignored', type: event.type};
+      return { kind: 'ignored', type: event.type };
     }
 
     case 'response.failed':
     case 'error': {
       const e = event as {
-        error?: {message?: string; code?: string};
-        response?: {error?: {message?: string; code?: string}};
+        error?: { message?: string; code?: string };
+        response?: { error?: { message?: string; code?: string } };
         message?: string;
       };
       return {
@@ -176,6 +180,6 @@ export function parseServerEvent(raw: string): ParsedServerEvent {
     }
 
     default:
-      return {kind: 'ignored', type: event.type};
+      return { kind: 'ignored', type: event.type };
   }
 }

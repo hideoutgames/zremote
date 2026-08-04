@@ -6,6 +6,10 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write . --ignore-unknown",
+    "format:check": "prettier --check . --ignore-unknown",
+    "react-compiler-check": "react-compiler-healthcheck",
     "start": "react-native start",
     "test": "jest",
     "postinstall": "patch-package"
@@ -63,10 +67,19 @@
     "patch-package": "^8.0.1",
     "postinstall-postinstall": "^2.1.0",
     "prettier": "2.8.8",
+    "react-compiler-healthcheck": "^1.0.0",
     "react-test-renderer": "19.2.3",
     "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "overrides": {
+    "zeego": {
+      "@react-native-menu/menu": "$@react-native-menu/menu",
+      "react-native-ios-context-menu": "$react-native-ios-context-menu",
+      "react-native-ios-utilities": "$react-native-ios-utilities"
+    },
+    "react-dom": "19.2.3"
   }
 }

@@ -1,4 +1,4 @@
-import {fetch} from 'react-native-nitro-fetch';
+import { fetch } from 'react-native-nitro-fetch';
 import {
   PINECONE_API_KEY,
   PINECONE_INDEX_HOST,
@@ -9,10 +9,9 @@ import {
 // https://docs.pinecone.io/reference/api/2025-01/data-plane/search_records
 const PINECONE_API_VERSION = '2025-01';
 
-
 const SEARCH_TIMEOUT_MS = 10000;
 
-type SearchHit = {fields?: {chunk_text?: string; title?: string}};
+type SearchHit = { fields?: { chunk_text?: string; title?: string } };
 
 // Query the Margelo knowledge base. The index uses integrated embedding, so we
 // send raw text and Pinecone embeds it server-side. Returns the top matching
@@ -35,7 +34,7 @@ export async function searchMargeloKb(
           'X-Pinecone-Api-Version': PINECONE_API_VERSION,
         },
         body: JSON.stringify({
-          query: {inputs: {text: query}, top_k: topK},
+          query: { inputs: { text: query }, top_k: topK },
           fields: ['title', 'chunk_text'],
         }),
         signal: controller.signal,
@@ -45,7 +44,7 @@ export async function searchMargeloKb(
       const body = await response.text();
       throw new Error(`Pinecone search failed (${response.status}): ${body}`);
     }
-    const data = (await response.json()) as {result?: {hits?: SearchHit[]}};
+    const data = (await response.json()) as { result?: { hits?: SearchHit[] } };
     const hits = data.result?.hits ?? [];
     return hits
       .map(hit => hit.fields?.chunk_text ?? '')

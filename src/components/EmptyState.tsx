@@ -1,8 +1,8 @@
 import React from 'react';
-import {StyleSheet} from 'react-native';
-import Animated, {useAnimatedStyle} from 'react-native-reanimated';
-import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller';
-import {NitroImage} from 'react-native-nitro-image';
+import { StyleSheet } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { NitroImage } from 'react-native-nitro-image';
 
 // Breathing room kept between the logo and the top of the composer when the
 // keyboard is open.
@@ -12,17 +12,18 @@ const LOGO_GAP = 1;
 // opens so it clears the composer. The lift tracks the measured composer height
 // so it stays correct as the composer grows (e.g. an attachment) and across
 // devices with different safe-area insets, rather than a fixed magic number.
-export function EmptyState({composerHeight}: {composerHeight: number}) {
-  const {progress} = useReanimatedKeyboardAnimation();
+export function EmptyState({ composerHeight }: { composerHeight: number }) {
+  const { progress } = useReanimatedKeyboardAnimation();
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: progress.value * -(composerHeight + LOGO_GAP)}],
+    transform: [{ translateY: progress.value * -(composerHeight + LOGO_GAP) }],
   }));
 
   return (
     <Animated.View
       style={[styles.container, animatedStyle]}
-      pointerEvents="none">
+      pointerEvents="none"
+    >
       <NitroImage
         image={require('../assets/margelo-logo.png')}
         style={styles.logo}

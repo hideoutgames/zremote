@@ -17,5 +17,6 @@ export const OPENAI_MODEL = 'gpt-5.5';
 // index uses integrated embedding (llama-text-embed-v2, 1024-dim, cosine); the
 // upsert text field is "chunk_text". See scripts/ingest-kb.mjs.
 export const PINECONE_API_KEY = 'pcsk_...';
-export const PINECONE_INDEX_HOST = 'https://<your-index>.svc.<region>.pinecone.io';
+export const PINECONE_INDEX_HOST =
+  'https://<your-index>.svc.<region>.pinecone.io';
 export const PINECONE_NAMESPACE = 'kb';

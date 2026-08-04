@@ -1,5 +1,5 @@
-import React, {useMemo} from 'react';
-import {useDerivedValue} from 'react-native-reanimated';
+import React, { useMemo } from 'react';
+import { useDerivedValue } from 'react-native-reanimated';
 import {
   Canvas,
   Text as SkiaText,
@@ -78,13 +78,15 @@ export function ShimmerText({
   align = 'center',
 }: ShimmerTextProps) {
   const font = useMemo(
-    () => matchFont({fontFamily: 'Helvetica', fontSize, fontWeight}),
+    () => matchFont({ fontFamily: 'Helvetica', fontSize, fontWeight }),
     [fontSize, fontWeight],
   );
 
-  const {lines, lineHeight, baseline, height} = useMemo(() => {
+  const { lines, lineHeight, baseline, height } = useMemo(() => {
     const fontMetrics = font.getMetrics();
-    const computedLineHeight = Math.ceil(fontMetrics.descent - fontMetrics.ascent);
+    const computedLineHeight = Math.ceil(
+      fontMetrics.descent - fontMetrics.ascent,
+    );
     const wrapped = wrapText(text, font, width, maxLines);
     return {
       lines: wrapped,
@@ -104,7 +106,7 @@ export function ShimmerText({
   const gradientEnd = useDerivedValue(() => vec(startX.value + band, 0));
 
   return (
-    <Canvas style={{width, height}}>
+    <Canvas style={{ width, height }}>
       {lines.map((line, i) => {
         const lineWidth = font.measureText(line).width;
         const x = align === 'left' ? 0 : (width - lineWidth) / 2;

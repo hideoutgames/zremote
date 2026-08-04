@@ -1,13 +1,13 @@
-import React, {type ComponentProps} from 'react';
-import {type ColorValue, type StyleProp, type ViewStyle} from 'react-native';
-import {SymbolView} from 'react-native-nitro-symbols';
-import {MaterialDesignIcons} from '@react-native-vector-icons/material-design-icons/static';
-import type {SFSymbol} from 'sf-symbols-typescript';
-import {theme} from '../theme';
+import React, { type ComponentProps } from 'react';
+import { type ColorValue, type StyleProp, type ViewStyle } from 'react-native';
+import { SymbolView } from 'react-native-nitro-symbols';
+import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
+import type { SFSymbol } from 'sf-symbols-typescript';
+import { theme } from '../theme';
 
 // Android has no SF Symbols, so SymbolView renders this fallback there (on iOS
 // the real SF Symbol shows and the fallback is never displayed). Map each SF
-// Symbol we use to the closest Material Design Icon. 
+// Symbol we use to the closest Material Design Icon.
 const SF_TO_MDI: Record<string, string> = {
   'line.3.horizontal': 'menu',
   'square.and.pencil': 'square-edit-outline',
@@ -44,7 +44,12 @@ type IconProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export function Icon({name, size = 20, color = theme.text, style}: IconProps) {
+export function Icon({
+  name,
+  size = 20,
+  color = theme.text,
+  style,
+}: IconProps) {
   const mdiName = (SF_TO_MDI[name] ?? 'help-circle-outline') as MdiName;
   return (
     <SymbolView

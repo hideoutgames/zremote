@@ -22,8 +22,8 @@ export const markdownTokens = {
   codeFontSize: 14,
   codeBackground: theme.userBubbleBackground,
   headings: {
-    1: {fontSize: 24, lineHeight: 30, fontWeight: '700'},
-    2: {fontSize: 20, lineHeight: 26, fontWeight: '700'},
-    3: {fontSize: 18, lineHeight: 24, fontWeight: '600'},
+    1: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
+    2: { fontSize: 20, lineHeight: 26, fontWeight: '700' },
+    3: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
   },
 } as const;

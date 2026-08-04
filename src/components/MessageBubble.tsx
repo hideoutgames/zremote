@@ -1,14 +1,14 @@
-import React, {memo} from 'react';
-import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
-import Animated, {Easing, FadeIn, SlideInDown} from 'react-native-reanimated';
-import {NitroImage} from 'react-native-nitro-image';
-import type {SFSymbol} from 'sf-symbols-typescript';
-import type {Message} from '../state/chatStore';
-import {Icon} from './Icon';
-import {ShimmerText} from './ShimmerText';
-import {theme} from '../theme';
-import {EnrichedMarkdownText} from 'react-native-enriched-markdown';
-import {darkMarkdownStyle} from '../markdownStyle';
+import React, { memo } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { Easing, FadeIn, SlideInDown } from 'react-native-reanimated';
+import { NitroImage } from 'react-native-nitro-image';
+import type { SFSymbol } from 'sf-symbols-typescript';
+import type { Message } from '../state/chatStore';
+import { Icon } from './Icon';
+import { ShimmerText } from './ShimmerText';
+import { theme } from '../theme';
+import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
+import { darkMarkdownStyle } from '../markdownStyle';
 
 // SF Symbols for the (currently no-op) action row beneath a finished reply.
 const ACTIONS: SFSymbol[] = [
@@ -19,7 +19,6 @@ const ACTIONS: SFSymbol[] = [
   'hand.thumbsdown', // bad response
   'arrow.clockwise', // regenerate
 ];
-
 
 const TITLE_BOLD_RE = /^(?:#+\s*)?\*\*(.+?)\*\*$/;
 const TITLE_HEADING_RE = /^#+\s+(.+)$/;
@@ -45,7 +44,6 @@ type MessageBubbleProps = {
   onOpenReasoning: (reasoning: string) => void;
 };
 
-
 export const MessageBubble = memo(function ({
   message,
   onOpenReasoning,
@@ -56,14 +54,18 @@ export const MessageBubble = memo(function ({
       // Slides up from the bottom of the screen as it's sent (ChatGPT-style).
       <Animated.View
         style={styles.userRow}
-        entering={SlideInDown.easing(Easing.out(Easing.exp)).duration(700)}>
+        entering={SlideInDown.easing(Easing.out(Easing.exp)).duration(700)}
+      >
         {message.attachments?.length ? (
           <View style={styles.userImages}>
             {message.attachments.map((uri, index) => (
               // NitroImage doesn't clip to its own borderRadius; round via a
               // wrapping View with overflow hidden (same as the composer thumbs).
               <View key={`${uri}:${index}`} style={styles.userImageWrap}>
-                <NitroImage image={{filePath: uri}} style={styles.userImage} />
+                <NitroImage
+                  image={{ filePath: uri }}
+                  style={styles.userImage}
+                />
               </View>
             ))}
           </View>
@@ -89,7 +91,8 @@ export const MessageBubble = memo(function ({
         <Pressable
           style={styles.traceRow}
           hitSlop={6}
-          onPress={() => onOpenReasoning(message.reasoning as string)}>
+          onPress={() => onOpenReasoning(message.reasoning as string)}
+        >
           <Icon name="clock" size={15} color={theme.textSecondary} />
           <Text style={styles.traceLabel} numberOfLines={1}>
             {reasoningLabel(message.reasoning as string)}
@@ -102,7 +105,8 @@ export const MessageBubble = memo(function ({
         // is still sliding up; it eases in once that has settled.
         <Animated.View
           style={styles.statusRow}
-          entering={FadeIn.delay(450).duration(300)}>
+          entering={FadeIn.delay(450).duration(300)}
+        >
           <Icon
             name={
               (message.statusLabel ?? 'Thinking') === 'Responding'
@@ -126,7 +130,7 @@ export const MessageBubble = memo(function ({
           markdownStyle={darkMarkdownStyle}
           flavor="github"
           streamingAnimation={message.status === 'streaming'}
-          onLinkPress={({url}) => Linking.openURL(url)}
+          onLinkPress={({ url }) => Linking.openURL(url)}
         />
       )}
       {message.status === 'error' ? (

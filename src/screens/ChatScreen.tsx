@@ -1,4 +1,4 @@
-import React, {Suspense, useCallback, useRef, useState} from 'react';
+import React, { Suspense, useCallback, useRef, useState } from 'react';
 import {
   type LayoutChangeEvent,
   Platform,
@@ -6,9 +6,9 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {KeyboardStickyView} from 'react-native-keyboard-controller';
-import {type LegendListRef} from '@legendapp/list/react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { type LegendListRef } from '@legendapp/list/react-native';
 import {
   KeyboardAwareLegendList,
   useKeyboardChatComposerInset,
@@ -20,13 +20,13 @@ import {
   type Message,
 } from '../state/chatStore';
 import BootSplash from 'react-native-bootsplash';
-import {ChatMessages} from '../components/ChatMessages';
-import {MessageBubble} from '../components/MessageBubble';
-import {Header} from '../components/Header';
-import {Composer} from '../components/Composer';
-import {EmptyState} from '../components/EmptyState';
-import {ScrollToBottomButton} from '../components/ScrollToBottomButton';
-import {theme} from '../theme';
+import { ChatMessages } from '../components/ChatMessages';
+import { MessageBubble } from '../components/MessageBubble';
+import { Header } from '../components/Header';
+import { Composer } from '../components/Composer';
+import { EmptyState } from '../components/EmptyState';
+import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
+import { theme } from '../theme';
 
 // Cap for the anchored user bubble's reserved size (~2 lines + padding), per
 // legend-list's AI-chat example.
@@ -34,16 +34,18 @@ const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 
 // load this lazily since we only need it when a reasoning trace is available
 const ReasoningSheet = React.lazy(() =>
-  import('../components/ReasoningSheet').then(m => ({default: m.ReasoningSheet})),
+  import('../components/ReasoningSheet').then(m => ({
+    default: m.ReasoningSheet,
+  })),
 );
 
 type ChatScreenProps = {
   onOpenRecents: () => void;
 };
 
-export function ChatScreen({onOpenRecents}: ChatScreenProps) {
+export function ChatScreen({ onOpenRecents }: ChatScreenProps) {
   const insets = useSafeAreaInsets();
-  const {width: windowWidth, height: windowHeight} = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const send = useChatStore(state => state.send);
   const stop = useChatStore(state => state.stop);
   const newChat = useChatStore(state => state.newChat);
@@ -63,7 +65,7 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
   }, []);
 
   const renderMessage = useCallback(
-    ({item}: {item: Message}) => (
+    ({ item }: { item: Message }) => (
       <MessageBubble message={item} onOpenReasoning={openReasoning} />
     ),
     [openReasoning],
@@ -79,8 +81,9 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
       : false,
   );
 
-  const {contentInsetEndAdjustment, onComposerLayout: reportComposerInset} = useKeyboardChatComposerInset(listRef, composerRef);
-  const {freeze, scrollMessageToEnd} = useKeyboardScrollToEnd({listRef});
+  const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
+    useKeyboardChatComposerInset(listRef, composerRef);
+  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -90,7 +93,6 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
     [reportComposerInset],
   );
 
- 
   const onSubmit = useCallback(
     (text: string, attachments: Attachment[]) => {
       const isFirstMessage = messagesLength === 0;
@@ -98,13 +100,12 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
       setFollowing(false);
       setAnchorIndex(messagesLength);
       send(text, attachments);
-      scrollMessageToEnd({animated: !isFirstMessage, closeKeyboard: true});
+      scrollMessageToEnd({ animated: !isFirstMessage, closeKeyboard: true });
     },
     [messagesLength, send, scrollMessageToEnd],
   );
 
-  
-  const keyboardOffset = {opened: insets.bottom};
+  const keyboardOffset = { opened: insets.bottom };
 
   // The chevron shows whenever the bottom of the conversation isn't visible.
   const onEndVisible = useCallback((visible: boolean) => {
@@ -124,7 +125,7 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
   }, []);
 
   const scrollToBottom = () => {
-    scrollMessageToEnd({animated: true, closeKeyboard: false});
+    scrollMessageToEnd({ animated: true, closeKeyboard: false });
   };
 
   return (
@@ -132,51 +133,55 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
       <BootSplash.HideOnDraw fade />
       <ChatMessages>
         {messages => (
-      <KeyboardAwareLegendList
-        ref={listRef}
-        style={styles.fill}
-        data={messages}
-        keyExtractor={(item: Message) => item.id}
-        renderItem={renderMessage}
-        // Let the bottom contentInset / anchored end-space area still catch scroll touches (RN 0.81+ hit-test bug, facebook/react-native#54123).
-        applyWorkaroundForContentInsetHitTestBug
-        maintainVisibleContentPosition={
-          Platform.OS !== 'android' ? undefined : anchorIndex != null && !following
-        }
-        keyboardLiftBehavior="whenAtEnd"
-        // Match the composer's keyboard offset or a gap opens between the last message and the keyboard.
-        keyboardOffset={insets.bottom}
-        contentInsetEndAdjustment={contentInsetEndAdjustment}
-        freeze={freeze}
-        anchoredEndSpace={
-          anchorIndex != null
-            ? {
-                anchorIndex,
-                anchorMaxSize: anchorHasImage ? undefined : ANCHOR_MAX_SIZE,
-                anchorOffset: insets.top + 56,
-                onSizeChanged: size => {
-                  if (size <= 0 && !hasOverflowedRef.current) {
-                    hasOverflowedRef.current = true;
-                    setFollowing(true);
+          <KeyboardAwareLegendList
+            ref={listRef}
+            style={styles.fill}
+            data={messages}
+            keyExtractor={(item: Message) => item.id}
+            renderItem={renderMessage}
+            // Let the bottom contentInset / anchored end-space area still catch scroll touches (RN 0.81+ hit-test bug, facebook/react-native#54123).
+            applyWorkaroundForContentInsetHitTestBug
+            maintainVisibleContentPosition={
+              Platform.OS !== 'android'
+                ? undefined
+                : anchorIndex != null && !following
+            }
+            keyboardLiftBehavior="whenAtEnd"
+            // Match the composer's keyboard offset or a gap opens between the last message and the keyboard.
+            keyboardOffset={insets.bottom}
+            contentInsetEndAdjustment={contentInsetEndAdjustment}
+            freeze={freeze}
+            anchoredEndSpace={
+              anchorIndex != null
+                ? {
+                    anchorIndex,
+                    anchorMaxSize: anchorHasImage ? undefined : ANCHOR_MAX_SIZE,
+                    anchorOffset: insets.top + 56,
+                    onSizeChanged: size => {
+                      if (size <= 0 && !hasOverflowedRef.current) {
+                        hasOverflowedRef.current = true;
+                        setFollowing(true);
+                      }
+                    },
                   }
-                },
-              }
-            : undefined
-        }
-        maintainScrollAtEnd={
-          following ? {on: {dataChange: true, itemLayout: true}} : undefined
-        }
-        // Default threshold is too tight for fast streaming and permanently stops the follow.
-        maintainScrollAtEndThreshold={1}
-        estimatedItemSize={64}
-        estimatedListSize={{width: windowWidth, height: windowHeight}}
-        onEndVisible={onEndVisible}
-        onScrollBeginDrag={onScrollBeginDrag}
-        contentContainerStyle={[
-          styles.listContent,
-          {paddingTop: insets.top + 56},
-        ]}
-        keyboardDismissMode="interactive"
+                : undefined
+            }
+            maintainScrollAtEnd={
+              following
+                ? { on: { dataChange: true, itemLayout: true } }
+                : undefined
+            }
+            // Default threshold is too tight for fast streaming and permanently stops the follow.
+            maintainScrollAtEndThreshold={1}
+            estimatedItemSize={64}
+            estimatedListSize={{ width: windowWidth, height: windowHeight }}
+            onEndVisible={onEndVisible}
+            onScrollBeginDrag={onScrollBeginDrag}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingTop: insets.top + 56 },
+            ]}
+            keyboardDismissMode="interactive"
           />
         )}
       </ChatMessages>
@@ -189,8 +194,9 @@ export function ChatScreen({onOpenRecents}: ChatScreenProps) {
 
       <KeyboardStickyView
         offset={keyboardOffset}
-        style={[styles.scrollDown, {bottom: composerHeight + 10}]}
-        pointerEvents="box-none">
+        style={[styles.scrollDown, { bottom: composerHeight + 10 }]}
+        pointerEvents="box-none"
+      >
         {showScrollDown ? (
           <ScrollToBottomButton onPress={scrollToBottom} />
         ) : null}

@@ -1,6 +1,6 @@
-import {AppState} from 'react-native';
-import {NitroWebSocket} from 'react-native-nitro-websockets';
-import {OPENAI_API_KEY, OPENAI_WS_URL} from '../config';
+import { AppState } from 'react-native';
+import { NitroWebSocket } from 'react-native-nitro-websockets';
+import { OPENAI_API_KEY, OPENAI_WS_URL } from '../config';
 
 type ServerEventHandler = (raw: string) => void;
 type DisconnectHandler = () => void;
@@ -37,7 +37,6 @@ function scheduleReconnect() {
     connect();
   }, delay);
 }
-
 
 function reconnectNow() {
   if (socket?.readyState === 'CONNECTING') {
@@ -85,11 +84,10 @@ function connect() {
     handlers?.onDisconnect();
     scheduleReconnect();
   };
-  nextSocket.onmessage = (event: {data: string}) => {
+  nextSocket.onmessage = (event: { data: string }) => {
     handlers?.onServerEvent(event.data);
   };
 }
-
 
 connect();
 

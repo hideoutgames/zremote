@@ -1,10 +1,9 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Glass} from './Glass';
-import {Icon} from './Icon';
-import {theme} from '../theme';
-
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Glass } from './Glass';
+import { Icon } from './Icon';
+import { theme } from '../theme';
 
 export const Header = React.memo(function ({
   onNewChat,
@@ -16,7 +15,7 @@ export const Header = React.memo(function ({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.row, {paddingTop: insets.top + 6}]}>
+    <View style={[styles.row, { paddingTop: insets.top + 6 }]}>
       <Pressable onPress={onOpenRecents} hitSlop={8}>
         <Glass interactive style={styles.circle}>
           <Icon name="line.3.horizontal" />

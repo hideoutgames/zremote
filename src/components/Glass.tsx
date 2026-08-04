@@ -1,10 +1,10 @@
 import React from 'react';
-import {View, type ColorValue, type ViewProps} from 'react-native';
+import { View, type ColorValue, type ViewProps } from 'react-native';
 import {
   isLiquidGlassSupported,
   LiquidGlassView,
 } from '@callstack/liquid-glass';
-import {theme} from '../theme';
+import { theme } from '../theme';
 
 type GlassProps = ViewProps & {
   // Interactive glass grows on touch and shimmers (iOS 26+ only).
@@ -30,7 +30,8 @@ export function Glass({
         colorScheme="dark"
         tintColor={tintColor}
         style={style}
-        {...rest}>
+        {...rest}
+      >
         {children}
       </LiquidGlassView>
     );
@@ -39,10 +40,11 @@ export function Glass({
   return (
     <View
       style={[
-        {backgroundColor: tintColor ?? theme.glassFallbackBackground},
+        { backgroundColor: tintColor ?? theme.glassFallbackBackground },
         style,
       ]}
-      {...rest}>
+      {...rest}
+    >
       {children}
     </View>
   );
