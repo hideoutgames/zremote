@@ -220,7 +220,7 @@ export const useChatStore = create<ChatState>(set => {
         break;
       }
       case 'error':
-        console.warn('[openai] error event:', parsed.code, parsed.message);
+        console.warn('[openai] error event:', parsed.code ?? '', parsed.message);
         // A failed turn evicts previous_response_id server-side, so drop it or every following send wedges.
         previousResponseId = undefined;
         // The 60-minute connection cap arrives as an error event (not a socket

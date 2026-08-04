@@ -40,7 +40,7 @@ export const darkMarkdownStyle: MarkdownStyle = {
     fontSize: bodyFontSize,
     borderColor: theme.border,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: 12,
     headerBackgroundColor: codeBackground,
     headerTextColor: theme.text,
     rowEvenBackgroundColor: 'transparent',

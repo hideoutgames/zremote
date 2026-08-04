@@ -15,6 +15,16 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let attempts = 0;
 let handlers: Handlers | null = null;
 
+// Clear any pending backoff timer and reset the attempt counter so the next
+// connect starts a fresh backoff sequence.
+function resetBackoff() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  attempts = 0;
+}
+
 function scheduleReconnect() {
   if (reconnectTimer) {
     return;
@@ -30,36 +40,23 @@ function scheduleReconnect() {
 
 
 function reconnectNow() {
-  if (
-    socket &&
-    (socket.readyState === 'OPEN' || socket.readyState === 'CONNECTING')
-  ) {
+  if (socket?.readyState === 'CONNECTING') {
     return;
   }
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  attempts = 0;
+  resetBackoff();
   connect();
 }
 
 // Open a fresh connection unconditionally, even if the current socket still
 // reports OPEN. Needed for OpenAI's 60-minute cap, which arrives as an error
-// event (not a close) while the socket may still be open
+// event (not a close) while the socket may still be open.
 function forceReconnect() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  attempts = 0;
+  resetBackoff();
   const stale = socket;
-  socket = null;
   if (stale) {
     stale.onclose = () => {};
     stale.onerror = () => {};
-    stale.onmessage = () => { };
-    // open ai recommends creating a fresh connection so no need to keep this open 
+    stale.onmessage = () => {};
     stale.close(1000, 'client reconnect');
   }
   connect();
@@ -100,11 +97,7 @@ connect();
 // immediately when the app returns to the foreground with no live socket.
 AppState.addEventListener('change', state => {
   if (state === 'active' && socket == null) {
-    attempts = 0;
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
+    resetBackoff();
     connect();
   }
 });

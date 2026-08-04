@@ -1,10 +1,4 @@
-import React, {
-  Suspense,
-  useCallback,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from 'react';
+import React, {Suspense, useCallback, useRef, useState} from 'react';
 import {
   type LayoutChangeEvent,
   Platform,
@@ -43,15 +37,11 @@ const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({default: m.ReasoningSheet})),
 );
 
-export type ChatScreenRef = {newChat: () => void};
-
-
 type ChatScreenProps = {
   onOpenRecents: () => void;
-  ref?: React.Ref<ChatScreenRef>;
 };
 
-export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
+export function ChatScreen({onOpenRecents}: ChatScreenProps) {
   const insets = useSafeAreaInsets();
   const {width: windowWidth, height: windowHeight} = useWindowDimensions();
   const send = useChatStore(state => state.send);
@@ -59,7 +49,6 @@ export function ChatScreen({onOpenRecents, ref}: ChatScreenProps) {
   const newChat = useChatStore(state => state.newChat);
   const messagesLength = useChatStore(state => state.messages.length);
   const isStreaming = useChatStore(state => state.isStreaming);
-  useImperativeHandle(ref, () => ({newChat}), [newChat]);
   const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const listRef = useRef<LegendListRef>(null);

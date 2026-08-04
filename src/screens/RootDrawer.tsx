@@ -7,7 +7,8 @@ import PagerView, {
 import {Freeze} from 'react-freeze';
 import {KeyboardController} from 'react-native-keyboard-controller';
 import {RecentsScreen} from './RecentsScreen';
-import {ChatScreen, type ChatScreenRef} from './ChatScreen';
+import {ChatScreen} from './ChatScreen';
+import {useChatStore} from '../state/chatStore';
 import {theme} from '../theme';
 
 const RECENTS_PAGE = 0;
@@ -15,7 +16,6 @@ const CHAT_PAGE = 1;
 
 export function RootDrawer() {
   const pagerRef = useRef<PagerView>(null);
-  const chatRef = useRef<ChatScreenRef>(null);
 
   const [activePage, setActivePage] = useState(CHAT_PAGE);
   const [isIdle, setIsIdle] = useState(true);
@@ -38,8 +38,10 @@ export function RootDrawer() {
     [],
   );
 
+  const startNewChat = useChatStore(state => state.newChat);
+
   const newChat = () => {
-    chatRef.current?.newChat();
+    startNewChat();
     goToChat();
   };
 
@@ -56,7 +58,7 @@ export function RootDrawer() {
         </View>
         <View key="chat" style={styles.page}>
           <Freeze freeze={isIdle && activePage !== CHAT_PAGE}>
-            <ChatScreen ref={chatRef} onOpenRecents={goToRecents} />
+            <ChatScreen onOpenRecents={goToRecents} />
           </Freeze>
         </View>
       </PagerView>
