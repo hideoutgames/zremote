@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, {useState} from 'react';
 import {
   type LayoutChangeEvent,
   Pressable,
@@ -6,22 +6,20 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { NitroImage } from 'react-native-nitro-image';
-import { AttachmentMenu } from './AttachmentMenu';
-import { Glass } from './Glass';
-import { Icon } from './Icon';
-import { useAttachments } from '../hooks/useAttachments';
-import type { Attachment } from '../state/chatStore';
-import { theme } from '../theme';
+import {NitroImage} from 'react-native-nitro-image';
+import {AttachmentMenu} from './AttachmentMenu';
+import {Glass} from './Glass';
+import {Icon} from './Icon';
+import {useAttachments} from '../hooks/useAttachments';
+import type {Attachment} from '../state/chatStore';
+import {theme} from '../theme';
 
-const RESIZE_DURATION = 150;
 const INPUT_MAX_HEIGHT = 120;
 
 // Shared duration for the attachment pill swell/shrink so the thumbnail fade
@@ -36,6 +34,7 @@ type ComposerProps = {
   onLayout: (event: LayoutChangeEvent) => void;
 };
 
+
 export const Composer = React.memo(function ({
   onSubmit,
   onStop,
@@ -45,8 +44,7 @@ export const Composer = React.memo(function ({
 }: ComposerProps) {
   const insets = useSafeAreaInsets();
   const [value, setValue] = useState('');
-  const { attachments, pickImages, removeAttachment, clearAttachments } =
-    useAttachments();
+  const {attachments, pickImages, removeAttachment, clearAttachments} = useAttachments();
   const canSend = value.trim().length > 0 || attachments.length > 0;
 
   const onSend = () => {
@@ -59,7 +57,7 @@ export const Composer = React.memo(function ({
   };
 
   // The thumbnail strip lives in a height-clipped container so the pill can
-  // smoothly swell/shrink as images are added/removed.
+  // smoothly swell/shrink as images are added/removed. 
   const hasAttachments = attachments.length > 0;
   const [thumbsContentHeight, setThumbsContentHeight] = useState(0);
   const thumbsStyle = useAnimatedStyle(() => ({
@@ -73,6 +71,7 @@ export const Composer = React.memo(function ({
     }),
   }));
 
+
   // Keep the last non-empty attachment list so the thumbnails stay mounted
   // while the pill collapses.
   const [displayedAttachments, setDisplayedAttachments] = useState(attachments);
@@ -80,95 +79,48 @@ export const Composer = React.memo(function ({
     setDisplayedAttachments(attachments);
   }
 
-  // iOS won't shrink a multiline input after it's cleared, so we pin it to one line while empty and release the pin on the next keystroke.
-  const [oneLineHeight, setOneLineHeight] = useState<number | undefined>(
-    undefined,
-  );
-  // `inputHeight` mirrors the input's measured height to drive the pill.
-  const inputHeight = useSharedValue<number | null>(null);
-
-  const pillStyle = useAnimatedStyle(() => {
-    if (inputHeight.get() == null && !hasAttachments) {
-      return {};
-    }
-    const thumbs = withTiming(hasAttachments ? thumbsContentHeight : 0, {
-      duration: THUMBS_ANIM_MS,
-      easing: Easing.inOut(Easing.ease),
-    });
-    const text = inputHeight.get() ?? 0;
-    return {
-      height: Math.max(CIRCLE, PILL_VERTICAL_PADDING * 2 + thumbs + text),
-    };
-  });
-  const isEmpty = value.length === 0;
-  const collapsedHeight = isEmpty ? oneLineHeight : undefined;
-
-  // Collapse the pill smoothly when the field empties. (The input itself snaps
-  // via collapsedHeight above; the pill carries the visible animation.)
-  useEffect(() => {
-    if (isEmpty && oneLineHeight != null) {
-      inputHeight.set(
-        withTiming(oneLineHeight, {
-          duration: RESIZE_DURATION,
-          easing: Easing.inOut(Easing.ease),
-        }),
-      );
-    }
-  }, [isEmpty, inputHeight, oneLineHeight]);
-
+  // iOS can retain a multiline TextInput's expanded height after clearing it.
+  // Keep its original one-line measurement, but do not use it to size the pill.
+  const [oneLineHeight, setOneLineHeight] = useState<number>();
   const onInputLayout = (event: LayoutChangeEvent) => {
     const measured = Math.round(event.nativeEvent.layout.height);
-    if (oneLineHeight == null) {
-      setOneLineHeight(measured);
-    }
-    // While the field is empty, the isEmpty effect owns the height (one line).
-    if (value.length === 0) {
-      return;
-    }
-    inputHeight.set(
-      withTiming(measured, {
-        duration: RESIZE_DURATION,
-        easing: Easing.inOut(Easing.ease),
-      }),
-    );
+    setOneLineHeight(current => current ?? measured);
   };
+  const collapsedInputStyle =
+    value.length === 0 && oneLineHeight != null
+      ? {height: oneLineHeight}
+      : undefined;
 
   return (
     <View
       ref={composerRef}
       onLayout={onLayout}
-      style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
-    >
+      style={[styles.container, {paddingBottom: insets.bottom + 8}]}>
       <View style={styles.row}>
         <AttachmentMenu onPickPhotos={pickImages} />
-        <Animated.View style={[styles.inputPillWrap, pillStyle]}>
+        <View style={styles.inputPillWrap}>
           <Glass style={styles.inputPill}>
             <Animated.View
               style={[styles.thumbsClip, thumbsStyle]}
-              pointerEvents={hasAttachments ? 'auto' : 'none'}
-            >
+              pointerEvents={hasAttachments ? 'auto' : 'none'}>
               <View
                 style={styles.thumbs}
-                onLayout={event =>
-                  setThumbsContentHeight(
-                    Math.ceil(event.nativeEvent.layout.height),
-                  )
-                }
-              >
+                onLayout={event => {
+                  const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+                  setThumbsContentHeight(current =>
+                    Math.abs(current - nextHeight) <= 1 ? current : nextHeight,
+                  );
+                }}>
                 {displayedAttachments.map((attachment, index) => (
-                  <View
-                    key={`${attachment.uri}:${index}`}
-                    style={styles.thumbWrap}
-                  >
+                  <View key={`${attachment.uri}:${index}`} style={styles.thumbWrap}>
                     <NitroImage
-                      image={{ filePath: attachment.uri }}
+                      image={{filePath: attachment.uri}}
                       style={styles.thumb}
                     />
                     <Pressable
                       style={styles.thumbRemove}
                       hitSlop={8}
-                      onPress={() => removeAttachment(index)}
-                    >
+                      onPress={() => removeAttachment(index)}>
                       <View style={styles.thumbRemoveBadge}>
                         <Icon name="xmark" size={11} color="#FFFFFF" />
                       </View>
@@ -185,22 +137,18 @@ export const Composer = React.memo(function ({
               autoFocus
               placeholder="Ask about Margelo"
               placeholderTextColor={theme.textSecondary}
-              style={[
-                styles.input,
-                collapsedHeight != null && { height: collapsedHeight },
-              ]}
+              style={[styles.input, collapsedInputStyle]}
               multiline
             />
           </Glass>
-        </Animated.View>
+        </View>
 
         {/* While a reply streams, the send arrow becomes a pause button that
             stops the stream. */}
         <Pressable
           onPress={streaming ? onStop : onSend}
           disabled={!streaming && !canSend}
-          hitSlop={6}
-        >
+          hitSlop={6}>
           <Glass interactive style={styles.circle}>
             <Icon
               name={streaming ? 'stop.fill' : 'arrow.up'}
@@ -241,7 +189,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputPill: {
-    flex: 1,
     minHeight: CIRCLE,
     borderRadius: 24,
     justifyContent: 'center',
