@@ -1,8 +1,6 @@
-<p align="right">
-  <img src="img/demo.png" alt="MargeloChat running on iPhone 16" width="280">
-</p>
+<img src="img/demo.png" alt="MargeloChat running on iPhone 16" width="280" align="right">
 
-# MargeloChat
+### MargeloChat
 
 A ChatGPT-style mobile chat app with a twist: it knows about **Margelo**. You talk to a streaming AI assistant that renders replies as live markdown, shows its reasoning, and answers any question about Margelo (the company, its people, and its open-source libraries) by searching a real knowledge base instead of guessing.
 
@@ -11,7 +9,7 @@ Ask it anything. For general questions it just replies; for Margelo questions it
 > [!NOTE]
 > Read the full blog post about building a ChatGPT-Style AI Chat App in React Native here: https://blog.margelo.com/building-native-llm-chat-app-with-rag
 
-## How it works
+### How it works
 
 - **Brain** - OpenAI's Responses API, streamed over a **WebSocket** ([`react-native-nitro-websockets`](https://github.com/mrousavy/nitro)) rather than HTTP. The socket is prewarmed natively at app start, before the JS bundle loads, so it's already open by the first message. Reply text and reasoning summaries stream token-by-token; turns are chained with `previous_response_id` so the model remembers the conversation.
 - **Knowledge base (RAG)** - the model can call a `search_margelo_kb` tool, which queries a [Pinecone](https://www.pinecone.io/) index (integrated embedding, so raw text goes up and Pinecone embeds it server-side) over [`react-native-nitro-fetch`](https://github.com/margelo/react-native-nitro-fetch). Margelo questions are answered from the retrieved context, never from the model's memory.
@@ -20,7 +18,7 @@ Ask it anything. For general questions it just replies; for Margelo questions it
 - **Look** - real Liquid Glass surfaces on iOS 26+ ([`@callstack/liquid-glass`](https://github.com/callstack/liquid-glass)) with plain fallbacks everywhere else, a Skia shimmer "Thinking" label ([`@shopify/react-native-skia`](https://github.com/Shopify/react-native-skia)), and SF Symbols that fall back to Material Design Icons on Android.
 - **Attachments** - pick images ([`react-native-image-picker`](https://github.com/react-native-image-picker/react-native-image-picker)), sent to the model as base64 data URLs and shown as thumbnails ([`react-native-nitro-image`](https://github.com/mrousavy/react-native-nitro-image)).
 
-## Requirements
+### Requirements
 
 Runs on **iOS and Android** (New Architecture). Liquid Glass needs **iOS 26+**; on older iOS and on Android those surfaces fall back to a plain rounded style.
 
@@ -29,7 +27,7 @@ Runs on **iOS and Android** (New Architecture). Liquid Glass needs **iOS 26+**; 
 
 > **Note:** this is a demo. The API keys live in the app bundle, which is fine locally but unsafe for production - anyone can extract them. For anything real, put a relay server in front and keep the keys server-side.
 
-## Setup
+### Setup
 
 ```sh
 cd app
@@ -40,7 +38,7 @@ cd ios && pod install && cd ..
 
 Open `src/config.ts` and add your OpenAI key, Pinecone key, and index host. This file is gitignored and never committed.
 
-## Run
+### Run
 
 ```sh
 cd app
@@ -60,7 +58,7 @@ npm run react-compiler-check # react-compiler healthcheck
 npm test                     # jest
 ```
 
-## Project structure
+### Project structure
 
 ```
 app/
