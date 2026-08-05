@@ -25,6 +25,7 @@ Runs on **iOS and Android** (New Architecture). Liquid Glass needs **iOS 26+**; 
 ## Setup
 
 ```sh
+cd app
 npm install
 cp src/config.example.ts src/config.ts   # then fill in your keys
 cd ios && pod install && cd ..
@@ -35,6 +36,7 @@ Open `src/config.ts` and add your OpenAI key, Pinecone key, and index host. This
 ## Run
 
 ```sh
+cd app
 npm start          # Metro
 npm run ios        # build + launch on the iOS simulator/device
 npm run android    # build + launch on the Android emulator/device
@@ -54,36 +56,37 @@ npm test                     # jest
 ## Project structure
 
 ```
-src/
-  config.ts                 # API keys (gitignored; copy from config.example.ts)
-  theme.ts                  # dark theme + shared markdown design tokens
-  markdownStyle.ts          # maps the theme onto the markdown renderer
-  notImplemented.ts         # "demo only" alert for stubbed controls
-  state/
-    chatStore.ts            # zustand store: chat state, streaming, tool-call loop
-  openai/
-    protocol.ts             # builds Responses API requests, parses server events
-    connectionManager.ts    # module-level WebSocket lifecycle + reconnect with backoff
-  rag/
-    searchKnowledgeBase.ts  # Pinecone knowledge-base search (the model's tool)
-  hooks/
-    useAttachments.ts       # image picking
-  screens/
-    RootDrawer.tsx          # pager: recents <-> chat
-    ChatScreen.tsx          # the conversation, list, and composer wiring
-    RecentsScreen.tsx       # chat history (mocked for the UI pass)
-  components/
-    ChatMessages.tsx        # subscription boundary: only re-renders on message changes
-    Composer.tsx            # the input pill (grow/shrink, attachment thumbnails)
-    AttachmentMenu.tsx      # the "+" dropdown for picking attachments
-    MessageBubble.tsx       # user bubble / assistant markdown + reasoning trace
-    ReasoningSheet.tsx      # bottom sheet showing the thinking trace
-    ShimmerText.tsx         # Skia shimmer "Thinking" label
-    Header.tsx              # top bar
-    Glass.tsx               # Liquid Glass wrapper with a plain fallback
-    Icon.tsx                # SF Symbol with a Material Design Icon fallback
-    EmptyState.tsx          # centered logo before the first message
-    ScrollToBottomButton.tsx
+app/
+  src/
+    config.ts                 # API keys (gitignored; copy from config.example.ts)
+    theme.ts                  # dark theme + shared markdown design tokens
+    markdownStyle.ts          # maps the theme onto the markdown renderer
+    notImplemented.ts         # "demo only" alert for stubbed controls
+    state/
+      chatStore.ts            # zustand store: chat state, streaming, tool-call loop
+    openai/
+      protocol.ts             # builds Responses API requests, parses server events
+      connectionManager.ts    # module-level WebSocket lifecycle + reconnect with backoff
+    rag/
+      searchKnowledgeBase.ts  # Pinecone knowledge-base search (the model's tool)
+    hooks/
+      useAttachments.ts       # image picking
+    screens/
+      RootDrawer.tsx          # pager: recents <-> chat
+      ChatScreen.tsx          # the conversation, list, and composer wiring
+      RecentsScreen.tsx       # chat history (mocked for the UI pass)
+    components/
+      ChatMessages.tsx        # subscription boundary: only re-renders on message changes
+      Composer.tsx            # the input pill (grow/shrink, attachment thumbnails)
+      AttachmentMenu.tsx      # the "+" dropdown for picking attachments
+      MessageBubble.tsx       # user bubble / assistant markdown + reasoning trace
+      ReasoningSheet.tsx      # bottom sheet showing the thinking trace
+      ShimmerText.tsx         # Skia shimmer "Thinking" label
+      Header.tsx              # top bar
+      Glass.tsx               # Liquid Glass wrapper with a plain fallback
+      Icon.tsx                # SF Symbol with a Material Design Icon fallback
+      EmptyState.tsx          # centered logo before the first message
+      ScrollToBottomButton.tsx
 ```
 
 ### Open-source libraries

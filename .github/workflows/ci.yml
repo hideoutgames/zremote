@@ -13,8 +13,8 @@ on:
       - '**/*.js'
       - '**/*.jsx'
       - '**/*.json'
-      - '.prettierrc.js'
-      - '.prettierignore'
+      - 'app/.prettierrc.js'
+      - 'app/.prettierignore'
   pull_request:
     paths:
       - '.github/workflows/ci.yml'
@@ -23,11 +23,11 @@ on:
       - '**/*.js'
       - '**/*.jsx'
       - '**/*.json'
-      - '.prettierrc.js'
-      - '.prettierignore'
+      - 'app/.prettierrc.js'
+      - 'app/.prettierignore'
 
 # One job per check so failures surface as separate status checks. Node version
-# tracks package.json "engines".
+# tracks app/package.json "engines".
 jobs:
   lint:
     name: Lint (ESLint)
@@ -38,8 +38,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
+        working-directory: app
       - run: npm run lint
+        working-directory: app
 
   format:
     name: Format (Prettier)
@@ -50,8 +53,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
+        working-directory: app
       - run: npm run format:check
+        working-directory: app
 
   typecheck:
     name: Typecheck (tsc)
@@ -62,8 +68,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
+        working-directory: app
       - run: npm run typecheck
+        working-directory: app
 
   react-compiler:
     name: React Compiler
@@ -74,5 +83,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
+        working-directory: app
       - run: npm run react-compiler-check
+        working-directory: app
