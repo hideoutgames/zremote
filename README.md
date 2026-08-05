@@ -1,5 +1,7 @@
 # MargeloChat
 
+<img src="img/demo.png" alt="MargeloChat running on iPhone 16" width="280" align="right">
+
 A ChatGPT-style mobile chat app with a twist: it knows about **Margelo**. You talk to a streaming AI assistant that renders replies as live markdown, shows its reasoning, and answers any question about Margelo (the company, its people, and its open-source libraries) by searching a real knowledge base instead of guessing.
 
 Ask it anything. For general questions it just replies; for Margelo questions it calls a retrieval tool, pulls matching facts from a vector database, and answers only from what it found.
