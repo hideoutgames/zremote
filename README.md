@@ -94,23 +94,23 @@ app/
 This app stands on the shoulders of these projects (thank you to their authors):
 
 - [react-native](https://github.com/facebook/react-native) & [react](https://github.com/facebook/react) - Meta
-- [react-native-nitro-modules](https://github.com/mrousavy/nitro) - Marc Rousavy
-- [react-native-nitro-websockets](https://github.com/mrousavy/nitro) - Marc Rousavy
-- [react-native-nitro-image](https://github.com/mrousavy/react-native-nitro-image) - Marc Rousavy
+- [react-native-nitro-modules](https://github.com/mrousavy/nitro) - Marc Rousavy / Margelo
+- [react-native-nitro-websockets](https://github.com/mrousavy/nitro) - Marc Rousavy / Margelo
+- [react-native-nitro-image](https://github.com/mrousavy/react-native-nitro-image) - Marc Rousavy / Margelo
 - [react-native-nitro-fetch](https://github.com/margelo/react-native-nitro-fetch) & [react-native-nitro-text-decoder](https://github.com/margelo/react-native-nitro-fetch) - Szymon Kapała / Margelo
-- [react-native-nitro-symbols](https://github.com/DaveyEke/react-native-nitro-symbols) - Dave Mkpa Eke ([@DaveyEke](https://github.com/DaveyEke))
+- [react-native-nitro-symbols](https://github.com/DaveyEke/react-native-nitro-symbols) - Dave Mkpa Eke / Margelo
 - [react-native-reanimated](https://github.com/software-mansion/react-native-reanimated) & [react-native-worklets](https://github.com/software-mansion/react-native-reanimated) - Software Mansion
-- [react-native-keyboard-controller](https://github.com/kirillzyusko/react-native-keyboard-controller) - Kiryl Ziusko
+- [react-native-keyboard-controller](https://github.com/kirillzyusko/react-native-keyboard-controller) - Kiryl Ziusko / Margelo
 - [@legendapp/list](https://github.com/LegendApp/legend-list) - LegendApp
-- [react-native-enriched-markdown](https://github.com/software-mansion-labs/react-native-enriched-markdown) - Software
+- [react-native-enriched-markdown](https://github.com/software-mansion-labs/react-native-enriched-markdown) - Software Mansion
 - [react-native-true-sheet](https://github.com/lodev09/react-native-true-sheet) - Jovanni Lo
 - [@shopify/react-native-skia](https://github.com/Shopify/react-native-skia) - Shopify
-- [@callstack/liquid-glass](https://github.com/callstack/liquid-glass) - Oskar Kwaśniewski / Callstack
+- [@callstack/liquid-glass](https://github.com/callstack/liquid-glass) - Callstack
 - [react-native-pager-view](https://github.com/callstack/react-native-pager-view) - Callstack
 - [zeego](https://github.com/nandorojo/zeego) - Fernando Rojo
 - [@react-native-menu/menu](https://github.com/react-native-menu/menu) - Jesse Katsumata
 - [@react-native-vector-icons/material-design-icons](https://github.com/oblador/react-native-vector-icons) - Joel Arvidsson
 - [react-native-image-picker](https://github.com/react-native-image-picker/react-native-image-picker) - community
-- [react-native-safe-area-context](https://github.com/AppAndFlow/react-native-safe-area-context) - Janic Duplessis /
+- [react-native-safe-area-context](https://github.com/AppAndFlow/react-native-safe-area-context) - Janic Duplessis
 - [react-native-bootsplash](https://github.com/zoontek/react-native-bootsplash) & [react-native-edge-to-edge](https://github.com/zoontek/react-native-edge-to-edge) - Mathieu Acthernoene
 - Vector database: [Pinecone](https://www.pinecone.io/) · Model API: [OpenAI](https://openai.com/)
