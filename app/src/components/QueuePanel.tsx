@@ -90,7 +90,11 @@ export function QueuePanel({
                 <ActivityIndicator size="small" />
               ) : actionsSupported ? (
                 <View style={styles.actions}>
-                  {canSteer && !gated ? (
+                  {canSteer &&
+                  !gated &&
+                  // The host rejects steering rows that carry attachments
+                  // (doc_host.rs: "cannot be steered mid-turn").
+                  (item.attachments?.length ?? 0) === 0 ? (
                     <Pressable
                       hitSlop={6}
                       accessibilityLabel={t('queue.steerNow')}

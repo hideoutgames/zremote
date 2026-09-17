@@ -121,6 +121,27 @@ export function ZeronApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn?.orgId, signedIn?.user.id]);
 
+  // ── Live Activities (iOS; expo-widgets) — lazily imported so the JS
+  // bundle still loads where the pod/module is absent.
+  const selectedChatRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (runtime === null || signedIn === undefined) return;
+    let unbind: (() => void) | undefined;
+    import('../liveActivity/bindLiveActivities')
+      .then(m => {
+        unbind = m.bindLiveActivities({
+          edgeUrl: cfg.edgeUrl,
+          tokenSource: auth,
+          orgId: signedIn.orgId,
+          phoneDeviceId: runtime.deviceId,
+          selectedChatId: () => selectedChatRef.current,
+        });
+      })
+      .catch(e => log.warn(`live activities unavailable: ${e}`));
+    return () => unbind?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime, signedIn?.orgId]);
+
   // ── AppState → foreground/background ──────────────────────────────────
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
@@ -136,6 +157,9 @@ export function ZeronApp() {
   const openSession = useCallback((chatId: string) => {
     setRequestedChat(chatId);
   }, []);
+  useEffect(() => {
+    selectedChatRef.current = requestedChat ?? undefined;
+  }, [requestedChat]);
 
   useEffect(() => {
     const handle = (url: string | null) => {

@@ -1,0 +1,23 @@
+{
+  "name": "zeron-dictation",
+  "version": "0.1.0",
+  "description": "On-device speech dictation (Nitro, iOS Speech framework)",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "react-native": "./index.ts",
+  "source": "./index.ts",
+  "files": [
+    "src",
+    "ios",
+    "nitrogen",
+    "nitro.json",
+    "ZeronDictation.podspec",
+    "index.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "*"
+  }
+}

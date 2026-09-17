@@ -88,3 +88,7 @@ yarn-error.log
 
 # e2e harness logs (any location)
 **/.e2e/
+
+# react-native-loro vendored FFI binary (fetched by scripts/fetch-loro-ffi.sh)
+app/modules/react-native-loro/vendor/loroFFI.xcframework/
+app/modules/react-native-loro/vendor/loroFFI.xcframework.zip

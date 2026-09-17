@@ -52,9 +52,12 @@ test('queueMessage parks a row on the doc queue', async () => {
 test('queueMessage carries attachments refs', () => {
   const { c } = make();
   c.queueMessage('look', { attachments: ['pending://u1/a.png'] });
-  expect(getSessionStore('c1').getState().queue[0].attachments).toEqual([
-    'pending://u1/a.png',
-  ]);
+  const row = getSessionStore('c1').getState().queue[0];
+  expect(row.attachments).toEqual(['pending://u1/a.png']);
+  // The host composes the attachment trailer from `attachments` during
+  // queue drain (engine doc_host.rs queued_message_prompt) — the row's
+  // `text` stays the raw editable message, no client-side trailer.
+  expect(row.text).toBe('look');
 });
 
 test('moveQueued reorders locally; bad id is a no-op', () => {

@@ -32,6 +32,7 @@ import {
 } from '../zeron/state/catalogStore';
 import { loadModels } from '../zeron/runtime/catalog';
 import { setChatConfig } from '../zeron/runtime/workspaceActions';
+import { setAutoApprove, useAutoApprove } from '../zeron/state/uiPrefs';
 import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -102,6 +103,23 @@ export function ModelPickerSheet({
   }, [catalog, models.length, runtime, deviceId, harnessId]);
 
   const live = phase === 'working' || phase === 'stopping';
+  // RunRequest.autoApprove is a per-chat RUN field (not ChatConfig) — kept
+  // in uiPrefs and applied at send time; off by default.
+  const autoApprove = useAutoApprove(chat.id);
+  const toggleAutoApprove = useCallback(() => {
+    if (autoApprove) {
+      setAutoApprove(chat.id, false);
+      return;
+    }
+    Alert.alert(t('picker.autoApproveConfirm'), undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.enable'),
+        style: 'destructive',
+        onPress: () => setAutoApprove(chat.id, true),
+      },
+    ]);
+  }, [autoApprove, chat.id]);
 
   const apply = useCallback(
     (patch: Partial<ChatConfig>) => {
@@ -339,6 +357,25 @@ export function ModelPickerSheet({
             );
           })}
         </View>
+
+        <Pressable
+          style={[styles.row, { borderColor: theme.border }]}
+          onPress={toggleAutoApprove}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: autoApprove }}
+        >
+          <Text style={[styles.rowText, { color: theme.text }]}>
+            {t('picker.autoApprove')}
+          </Text>
+          <Text
+            style={[
+              styles.rowSub,
+              { color: autoApprove ? theme.danger : theme.textSecondary },
+            ]}
+          >
+            {autoApprove ? t('common.on') : t('common.off')}
+          </Text>
+        </Pressable>
 
         <View style={styles.footer}>
           <Glass interactive style={styles.doneBtn}>

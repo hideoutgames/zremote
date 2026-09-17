@@ -45,6 +45,14 @@ jest.mock('react-native-nitro-image', () => ({
 jest.mock('react-native-nitro-websockets', () => ({
   NitroWebSocket: jest.fn(),
 }));
+jest.mock('react-native-nitro-modules', () => ({
+  NitroModules: {
+    // No native modules are linked under Jest — probing callers catch this.
+    createHybridObject: () => {
+      throw new Error('nitro hybrid object unavailable under Jest');
+    },
+  },
+}));
 jest.mock('@react-native-vector-icons/material-design-icons/static', () => ({
   MaterialDesignIcons: (props: object) =>
     require('react').createElement(require('react-native').Text, props),

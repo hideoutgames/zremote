@@ -1,0 +1,13 @@
+{
+  "cxxNamespace": ["margelo", "zremote", "loro"],
+  "ios": { "iosModuleName": "ReactNativeLoro" },
+  "android": {
+    "androidNamespace": ["loro"],
+    "androidCxxLibName": "NitroLoro"
+  },
+  "autolinking": {
+    "LoroDoc": {
+      "ios": { "language": "swift", "implementationClassName": "HybridLoroDoc" }
+    }
+  }
+}

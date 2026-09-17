@@ -1,0 +1,16 @@
+{
+  "cxxNamespace": ["margelo", "zremote", "dictation"],
+  "ios": { "iosModuleName": "ZeronDictation" },
+  "android": {
+    "androidNamespace": ["dictation"],
+    "androidCxxLibName": "ZeronDictation"
+  },
+  "autolinking": {
+    "Dictation": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridDictation"
+      }
+    }
+  }
+}

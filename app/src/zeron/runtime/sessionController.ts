@@ -360,7 +360,11 @@ export class SessionController {
       config?: Parameters<typeof buildRunCommand>[1]['config'];
       cwd?: string;
     },
-    opts: { attachments?: string[]; worktree?: WorktreeSpec } = {},
+    opts: {
+      attachments?: string[];
+      worktree?: WorktreeSpec;
+      autoApprove?: boolean;
+    } = {},
   ): string {
     const messageId = newId();
     const payload = buildRunCommand(text, chat, { ...opts, messageId });
@@ -502,7 +506,11 @@ export class SessionController {
       cwd?: string;
     },
     staged: readonly StagedAttachment[],
-    opts: { worktree?: WorktreeSpec; phase: RunPhase } = { phase: 'idle' },
+    opts: {
+      worktree?: WorktreeSpec;
+      phase: RunPhase;
+      autoApprove?: boolean;
+    } = { phase: 'idle' },
   ): Promise<SendPlan> {
     const plan = sendPlan(
       opts.phase,
@@ -539,6 +547,10 @@ export class SessionController {
           b64,
         );
       }
+      // The host composes the withAttachments trailer from the row's
+      // `attachments` at dispatch (doc_host.rs queued_message_prompt —
+      // `message-queue-clean-attachment-text-v1` even strips a client-
+      // expanded trailer), so `text` stays the raw user text.
       this.queueMessage(text, { attachments: pendingRefsFor(transfers) });
       this.spawnEscort(transfers);
       return 'queue';

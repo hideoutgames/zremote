@@ -1,0 +1,790 @@
+From 7caa0427024babb491617a19cd94a91e5a9a6231 Mon Sep 17 00:00:00 2001
+From: hideoutgames <154709155+hideoutgames@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 01:31:49 +0200
+Subject: [PATCH] edge: AASA route, PKCE code_verifier, APNs live-activity
+ producer
+
+---
+ edge/src/apple-association.ts  |  27 +++++
+ edge/src/auth-routes.ts        |   7 +-
+ edge/src/edge-patches.test.ts  |  69 +++++++++++++
+ edge/src/env.ts                |  10 ++
+ edge/src/index.ts              |  18 ++++
+ edge/src/live-activity.test.ts | 135 ++++++++++++++++++++++++
+ edge/src/live-activity.ts      | 159 +++++++++++++++++++++++++++++
+ edge/src/registry-room.ts      | 181 +++++++++++++++++++++++++++++++++
+ edge/src/workos.ts             |  12 ++-
+ 9 files changed, 614 insertions(+), 4 deletions(-)
+ create mode 100644 edge/src/apple-association.ts
+ create mode 100644 edge/src/edge-patches.test.ts
+ create mode 100644 edge/src/live-activity.test.ts
+ create mode 100644 edge/src/live-activity.ts
+
+diff --git a/edge/src/apple-association.ts b/edge/src/apple-association.ts
+new file mode 100644
+index 0000000..de1186c
+--- /dev/null
++++ b/edge/src/apple-association.ts
+@@ -0,0 +1,27 @@
++/**
++ * Apple App Site Association — public, pre-bearer universal links for the
++ * iOS client's /auth/cli/callback* path. Served only when IOS_APP_IDS is
++ * configured (comma-separated "TEAMID.bundle" ids); otherwise a plain 404.
++ */
++import type { Env } from "./env";
++
++export const appleAssociation = (env: Env): Response => {
++  const appIDs = (env.IOS_APP_IDS ?? "")
++    .split(",")
++    .map(s => s.trim())
++    .filter(s => s.length > 0);
++  if (appIDs.length === 0) {
++    return new Response(JSON.stringify({ error: "not_found" }), {
++      status: 404,
++      headers: { "content-type": "application/json" }
++    });
++  }
++  return new Response(
++    JSON.stringify({
++      applinks: {
++        details: [{ appIDs, components: [{ "/": "/auth/cli/callback*" }] }]
++      }
++    }),
++    { headers: { "content-type": "application/json" } }
++  );
++};
+diff --git a/edge/src/auth-routes.ts b/edge/src/auth-routes.ts
+index a0efc60..4d532df 100644
+--- a/edge/src/auth-routes.ts
++++ b/edge/src/auth-routes.ts
+@@ -48,10 +48,13 @@ export const handleAuthRoute = async (
+ 
+   if (parts[1] === "exchange" && parts.length === 2 && request.method === "POST") {
+     if (!apiKey) return notConfigured();
+-    const body = await bodyJson<{ code?: string }>(request);
++    const body = await bodyJson<{ code?: string; codeVerifier?: string }>(request);
+     if (typeof body?.code !== "string") return json({ error: "missing code" }, 400);
++    if (body.codeVerifier !== undefined && typeof body.codeVerifier !== "string") {
++      return json({ error: "missing code" }, 400);
++    }
+     try {
+-      return json(await exchange(env, apiKey, body.code));
++      return json(await exchange(env, apiKey, body.code, body.codeVerifier));
+     } catch (e) {
+       return authFailed(e);
+     }
+diff --git a/edge/src/edge-patches.test.ts b/edge/src/edge-patches.test.ts
+new file mode 100644
+index 0000000..02b330c
+--- /dev/null
++++ b/edge/src/edge-patches.test.ts
+@@ -0,0 +1,69 @@
++import { describe, expect, it, vi, afterEach } from "vitest";
++import { appleAssociation } from "./apple-association";
++import { exchange } from "./workos";
++import type { Env } from "./env";
++
++describe("apple-app-site-association", () => {
++  it("404s when IOS_APP_IDS is unset", () => {
++    const res = appleAssociation({} as Env);
++    expect(res.status).toBe(404);
++  });
++
++  it("serves applinks details for configured app ids", async () => {
++    const res = appleAssociation({
++      IOS_APP_IDS: "TEAM123.com.zeron.app, TEAM123.com.zeron.app-dev "
++    } as Env);
++    expect(res.status).toBe(200);
++    expect(res.headers.get("content-type")).toBe("application/json");
++    const body = (await res.json()) as {
++      applinks: { details: { appIDs: string[]; components: { "/": string }[] }[] };
++    };
++    expect(body.applinks.details[0].appIDs).toEqual([
++      "TEAM123.com.zeron.app",
++      "TEAM123.com.zeron.app-dev"
++    ]);
++    expect(body.applinks.details[0].components[0]["/"]).toBe(
++      "/auth/cli/callback*"
++    );
++  });
++});
++
++describe("workos exchange PKCE", () => {
++  afterEach(() => vi.unstubAllGlobals());
++
++  const wireOk = {
++    user: { id: "u1", email: "a@b.c", first_name: "A", last_name: "B" },
++    access_token: "at",
++    refresh_token: "rt"
++  };
++
++  it("forwards codeVerifier as code_verifier", async () => {
++    const fetchSpy = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>(
++      async () => new Response(JSON.stringify(wireOk), { status: 200 })
++    );
++    vi.stubGlobal("fetch", fetchSpy);
++    await exchange(
++      { WORKOS_CLIENT_ID: "client_x" } as Env,
++      "secret",
++      "code123",
++      "verifier-abc"
++    );
++    const body = JSON.parse(
++      (fetchSpy.mock.calls[0][1] as RequestInit).body as string
++    );
++    expect(body.code_verifier).toBe("verifier-abc");
++    expect(body.grant_type).toBe("authorization_code");
++  });
++
++  it("omits code_verifier when not provided", async () => {
++    const fetchSpy = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>(
++      async () => new Response(JSON.stringify(wireOk), { status: 200 })
++    );
++    vi.stubGlobal("fetch", fetchSpy);
++    await exchange({ WORKOS_CLIENT_ID: "c" } as Env, "secret", "code123");
++    const body = JSON.parse(
++      (fetchSpy.mock.calls[0][1] as RequestInit).body as string
++    );
++    expect("code_verifier" in body).toBe(false);
++  });
++});
+diff --git a/edge/src/env.ts b/edge/src/env.ts
+index 848b4fd..cb9fa4f 100644
+--- a/edge/src/env.ts
++++ b/edge/src/env.ts
+@@ -22,6 +22,16 @@ export interface Env {
+    * routes (code exchange, refresh, orgs). Unset ⇒ those routes answer 501,
+    * matching the old apps/server dev-mode behavior. */
+   WORKOS_API_KEY?: string;
++  /** iOS universal-link app ids ("TEAMID.bundle"), comma-separated — serves
++   * /.well-known/apple-app-site-association when set. */
++  IOS_APP_IDS?: string;
++  /** APNs Live Activity producer (all required together; unset ⇒ the
++   * producer is inert and /live-activity routes still work). */
++  APNS_ENV?: string; // "production" | "sandbox"
++  APNS_BUNDLE_ID?: string;
++  APNS_TEAM_ID?: string;
++  APNS_KEY_ID?: string;
++  APNS_P8?: string; // PKCS8 PEM private key (wrangler secret)
+ }
+ 
+ /** Header the Worker stamps on requests it forwards into DOs after verifying
+diff --git a/edge/src/index.ts b/edge/src/index.ts
+index a8e5391..31cc7f4 100644
+--- a/edge/src/index.ts
++++ b/edge/src/index.ts
+@@ -38,6 +38,7 @@
+  */
+ import { authenticate } from "./auth";
+ import { handleAuthRoute } from "./auth-routes";
++import { appleAssociation } from "./apple-association";
+ import { AUTH_USER_HEADER, ROOM_KIND_HEADER, type Env } from "./env";
+ import { SessionRoom } from "./session-room";
+ import { previewRoute } from "./preview-route";
+@@ -153,6 +154,13 @@ export default {
+       return new Response(request.method === "HEAD" ? null : object.body, { headers });
+     }
+ 
++    // ── Apple App Site Association (public, pre-bearer): universal links
++    //    for the iOS client's /auth/cli/callback* path. Only served when
++    //    IOS_APP_IDS is configured — otherwise a plain 404. ────────────────
++    if (url.pathname === "/.well-known/apple-app-site-association" && request.method === "GET") {
++      return appleAssociation(env);
++    }
++
+     // ── WorkOS auth routes (pre-bearer: exchange/refresh/callback have no
+     //    access token yet; the org routes verify the bearer themselves) ─────
+     const authRouted = await handleAuthRoute(request, env, url);
+@@ -342,6 +350,16 @@ export default {
+       if (parts[2] === "reset" && request.method === "POST") {
+         return forward(env.REGISTRY_ROOMS, room, request, auth.userId, "/reset", "");
+       }
++      // iOS Live Activity push-token registry (the APNs producer lives in
++      // the DO; see docs/HOST_EDGE_CHANGES.md). Same auth shape as every
++      // /registry/* route — the org claim was checked above and the room is
++      // the caller's own per-user registry.
++      if (
++        parts[2] === "live-activity" &&
++        (request.method === "PUT" || request.method === "DELETE")
++      ) {
++        return forward(env.REGISTRY_ROOMS, room, request, auth.userId, "/live-activity", "");
++      }
+     }
+ 
+     // ── device rooms ────────────────────────────────────────────────────────
+diff --git a/edge/src/live-activity.test.ts b/edge/src/live-activity.test.ts
+new file mode 100644
+index 0000000..e06c0dc
+--- /dev/null
++++ b/edge/src/live-activity.test.ts
+@@ -0,0 +1,135 @@
++import { describe, expect, it, vi, beforeEach } from "vitest";
++import {
++  apnsConfigured,
++  buildLiveActivityPayload,
++  resetApnsJwtCache,
++  sendLiveActivityPush,
++  APNS_HOSTS
++} from "./live-activity";
++import type { Env } from "./env";
++
++// Minimal P-256 keypair generated at test time — WebCrypto signs real JWTs.
++const envBase = {
++  APNS_TEAM_ID: "TEAM123456",
++  APNS_KEY_ID: "KEY1234567",
++  APNS_BUNDLE_ID: "com.zeron.app"
++} as unknown as Env;
++
++const props = {
++  chatId: "c1",
++  title: "Fix bug",
++  hostLabel: "mac · zeron",
++  phase: "working",
++  phaseLabel: "Working",
++  startedAt: 1_700_000_000,
++  showContext: true
++};
++
++describe("apnsConfigured", () => {
++  it("requires team+key+p8+bundle", () => {
++    expect(apnsConfigured({} as Env)).toBe(false);
++    expect(
++      apnsConfigured({ ...envBase, APNS_P8: "x" } as Env)
++    ).toBe(true);
++  });
++});
++
++describe("buildLiveActivityPayload", () => {
++  it("update carries content-state {name,props-string} + stale-date", () => {
++    const p = buildLiveActivityPayload("update", props, 1_000) as {
++      aps: Record<string, unknown>;
++    };
++    expect(p.aps.event).toBe("update");
++    expect(p.aps["stale-date"]).toBe(Math.floor(121_000 / 1000));
++    const cs = p.aps["content-state"] as { name: string; props: string };
++    expect(cs.name).toBe("ZeronSession");
++    expect(JSON.parse(cs.props).chatId).toBe("c1");
++  });
++
++  it("end carries dismissal-date now+1800s", () => {
++    const p = buildLiveActivityPayload("end", props, 1_000) as {
++      aps: Record<string, unknown>;
++    };
++    expect(p.aps.event).toBe("end");
++    expect(p.aps["dismissal-date"]).toBe(Math.floor(1_801_000 / 1000));
++    expect(p.aps["stale-date"]).toBeUndefined();
++  });
++
++  it("start carries attributes-type + attributes.url deep link", () => {
++    const p = buildLiveActivityPayload("start", props, 1_000) as {
++      aps: Record<string, unknown>;
++    };
++    expect(p.aps.event).toBe("start");
++    expect(p.aps["attributes-type"]).toBe("LiveActivityAttributes");
++    expect(
++      (p.aps.attributes as { url: string }).url
++    ).toBe("zeron://session/c1");
++  });
++});
++
++describe("sendLiveActivityPush", () => {
++  let p8: string;
++  beforeEach(async () => {
++    resetApnsJwtCache();
++    const kp = (await crypto.subtle.generateKey(
++      { name: "ECDSA", namedCurve: "P-256" },
++      true,
++      ["sign"]
++    )) as CryptoKeyPair;
++    const der = (await crypto.subtle.exportKey("pkcs8", kp.privateKey)) as ArrayBuffer;
++    p8 = `-----BEGIN PRIVATE KEY-----\n${btoa(
++      String.fromCharCode(...new Uint8Array(der))
++    )}\n-----END PRIVATE KEY-----`;
++  });
++
++  const env = () => ({ ...envBase, APNS_P8: p8 }) as Env;
++
++  it("POSTs to production with liveactivity headers, priority 5 for working", async () => {
++    const calls: { url: string; init: RequestInit }[] = [];
++    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
++      calls.push({ url: String(url), init: init as RequestInit });
++      return new Response("{}", { status: 200 });
++    });
++    const r = await sendLiveActivityPush(env(), "devtoken", "update", props, 0, fetchImpl as typeof fetch);
++    expect(r.ok).toBe(true);
++    expect(calls[0].url).toBe(`${APNS_HOSTS.production}/3/device/devtoken`);
++    const h = calls[0].init.headers as Record<string, string>;
++    expect(h["apns-push-type"]).toBe("liveactivity");
++    expect(h["apns-topic"]).toBe("com.zeron.app.push-type.liveactivity");
++    expect(h["apns-priority"]).toBe("5");
++    expect(h.authorization.startsWith("bearer ")).toBe(true);
++  });
++
++  it("priority 10 for awaitingInput; sandbox host via APNS_ENV", async () => {
++    const fetchImpl = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>(async () => new Response("{}", { status: 200 }));
++    await sendLiveActivityPush(
++      { ...env(), APNS_ENV: "sandbox" } as Env,
++      "t",
++      "update",
++      { ...props, phase: "awaitingInput" },
++      0,
++      fetchImpl as typeof fetch
++    );
++    const init = fetchImpl.mock.calls[0][1] as RequestInit;
++    expect((init.headers as Record<string, string>)["apns-priority"]).toBe("10");
++    expect(String(fetchImpl.mock.calls[0][0])).toContain("api.sandbox.push.apple.com");
++  });
++
++  it("surfaces BadDeviceToken for pruning", async () => {
++    const fetchImpl = vi.fn(
++      async () =>
++        new Response(JSON.stringify({ reason: "BadDeviceToken" }), { status: 400 })
++    );
++    const r = await sendLiveActivityPush(env(), "t", "update", props, 0, fetchImpl as typeof fetch);
++    expect(r).toEqual({ ok: false, status: 400, reason: "BadDeviceToken" });
++  });
++
++  it("caches the JWT (one key import/sign per 50min)", async () => {
++    const fetchImpl = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>(async () => new Response("{}", { status: 200 }));
++    await sendLiveActivityPush(env(), "a", "update", props, 0, fetchImpl as typeof fetch);
++    await sendLiveActivityPush(env(), "b", "update", props, 60_000, fetchImpl as typeof fetch);
++    const h1 = (fetchImpl.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
++    const h2 = (fetchImpl.mock.calls[1][1] as RequestInit).headers as Record<string, string>;
++    expect(h1.authorization).toBe(h2.authorization);
++  });
++});
+diff --git a/edge/src/live-activity.ts b/edge/src/live-activity.ts
+new file mode 100644
+index 0000000..75ad76d
+--- /dev/null
++++ b/edge/src/live-activity.ts
+@@ -0,0 +1,159 @@
++/**
++ * APNs Live Activity push producer (zremote iOS client) — ES256 JWT auth,
++ * update/end/start payloads, and the expo-widgets content-state shape
++ * (`{name, props}` — props is a JSON string decoded by the widget).
++ *
++ * Everything here is inert until APNS_TEAM_ID/APNS_KEY_ID/APNS_P8/
++ * APNS_BUNDLE_ID are configured (wrangler secrets); callers gate on
++ * `apnsConfigured`.
++ */
++import type { Env } from "./env";
++
++export const APNS_HOSTS = {
++  production: "https://api.push.apple.com",
++  sandbox: "https://api.sandbox.push.apple.com"
++} as const;
++
++export const apnsConfigured = (env: Env): boolean =>
++  env.APNS_TEAM_ID !== undefined &&
++  env.APNS_KEY_ID !== undefined &&
++  env.APNS_P8 !== undefined &&
++  env.APNS_BUNDLE_ID !== undefined;
++
++const apnsHost = (env: Env): string =>
++  APNS_HOSTS[env.APNS_ENV === "sandbox" ? "sandbox" : "production"];
++
++const b64url = (bytes: ArrayBuffer | Uint8Array | string): string => {
++  const data =
++    typeof bytes === "string"
++      ? new TextEncoder().encode(bytes)
++      : bytes instanceof Uint8Array
++        ? bytes
++        : new Uint8Array(bytes);
++  let bin = "";
++  for (const b of data) bin += String.fromCharCode(b);
++  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
++};
++
++const pemToDer = (pem: string): Uint8Array => {
++  const body = pem
++    .replace(/-----[^-]+-----/g, "")
++    .replace(/\s+/g, "");
++  const bin = atob(body);
++  const der = new Uint8Array(bin.length);
++  for (let i = 0; i < bin.length; i++) der[i] = bin.charCodeAt(i);
++  return der;
++};
++
++const JWT_TTL_MS = 50 * 60 * 1000; // Apple allows ≤60min; refresh early.
++let cachedJwt: { token: string; exp: number } | undefined;
++
++/** ES256 JWT (`kid` = APNS_KEY_ID, `iss` = APNS_TEAM_ID), cached ≤50min. */
++export const apnsJwt = async (env: Env, now = Date.now()): Promise<string> => {
++  if (cachedJwt !== undefined && cachedJwt.exp > now) return cachedJwt.token;
++  const key = await crypto.subtle.importKey(
++    "pkcs8",
++    pemToDer(env.APNS_P8 as string) as BufferSource,
++    { name: "ECDSA", namedCurve: "P-256" },
++    false,
++    ["sign"]
++  );
++  const header = b64url(JSON.stringify({ alg: "ES256", kid: env.APNS_KEY_ID }));
++  const claims = b64url(
++    JSON.stringify({ iss: env.APNS_TEAM_ID, iat: Math.floor(now / 1000) })
++  );
++  const sig = await crypto.subtle.sign(
++    { name: "ECDSA", hash: "SHA-256" },
++    key,
++    new TextEncoder().encode(`${header}.${claims}`)
++  );
++  const token = `${header}.${claims}.${b64url(sig)}`;
++  cachedJwt = { token, exp: now + JWT_TTL_MS };
++  return token;
++};
++
++/** Test hook — JWT cache is module-scoped. */
++export const resetApnsJwtCache = (): void => {
++  cachedJwt = undefined;
++};
++
++export type LiveActivityEvent = "update" | "end" | "start";
++
++export type SessionPushProps = {
++  chatId: string;
++  title: string;
++  hostLabel?: string;
++  phase: string;
++  phaseLabel: string;
++  startedAt: number;
++  showContext: boolean;
++};
++
++const contentState = (props: SessionPushProps) => ({
++  // expo-widgets decodes `{name, props}` — props is a JSON STRING.
++  name: "ZeronSession",
++  props: JSON.stringify(props)
++});
++
++const priorityFor = (phase: string): number =>
++  phase === "awaitingInput" || phase === "errored" || phase === "completed"
++    ? 10
++    : 5;
++
++export const buildLiveActivityPayload = (
++  event: LiveActivityEvent,
++  props: SessionPushProps,
++  now = Date.now()
++): Record<string, unknown> => {
++  const aps: Record<string, unknown> = {
++    timestamp: Math.floor(now / 1000),
++    event,
++    "content-state": contentState(props)
++  };
++  if (event === "update") aps["stale-date"] = Math.floor((now + 120_000) / 1000);
++  if (event === "end") {
++    aps["dismissal-date"] = Math.floor((now + 1_800_000) / 1000);
++  }
++  if (event === "start") {
++    // LiveActivityAttributes { url } — expo-widgets' attributes type name.
++    aps["attributes-type"] = "LiveActivityAttributes";
++    aps["attributes"] = { url: `zeron://session/${props.chatId}` };
++  }
++  return { aps };
++};
++
++export type ApnsResult =
++  | { ok: true }
++  | { ok: false; status: number; reason: string };
++
++/** POST one Live Activity push to APNs for a device token. */
++export const sendLiveActivityPush = async (
++  env: Env,
++  deviceToken: string,
++  event: LiveActivityEvent,
++  props: SessionPushProps,
++  now = Date.now(),
++  fetchImpl: typeof fetch = fetch
++): Promise<ApnsResult> => {
++  const jwt = await apnsJwt(env, now);
++  const res = await fetchImpl(`${apnsHost(env)}/3/device/${deviceToken}`, {
++    method: "POST",
++    headers: {
++      authorization: `bearer ${jwt}`,
++      "apns-push-type": "liveactivity",
++      "apns-topic": `${env.APNS_BUNDLE_ID}.push-type.liveactivity`,
++      "apns-priority": String(
++        event === "update" ? priorityFor(props.phase) : 10
++      )
++    },
++    body: JSON.stringify(buildLiveActivityPayload(event, props, now))
++  });
++  if (res.ok) return { ok: true };
++  let reason = "";
++  try {
++    reason = ((await res.json()) as { reason?: string }).reason ?? "";
++  } catch {
++    /* body-less error */
++  }
++  return { ok: false, status: res.status, reason };
++};
+diff --git a/edge/src/registry-room.ts b/edge/src/registry-room.ts
+index 6f0bf3c..61b627d 100644
+--- a/edge/src/registry-room.ts
++++ b/edge/src/registry-room.ts
+@@ -21,6 +21,11 @@
+  */
+ import { applyOp, validateOp, type Op, type Row } from "./registry-core";
+ import { AUTH_USER_HEADER, type Env } from "./env";
++import {
++  apnsConfigured,
++  sendLiveActivityPush,
++  type SessionPushProps
++} from "./live-activity";
+ 
+ const DAY_MS = 24 * 60 * 60 * 1000;
+ /** Tombstones older than this are purged; cursors from before the purge
+@@ -52,6 +57,9 @@ export class RegistryRoom implements DurableObject {
+   private readonly env: Env;
+   /** device → last presence beat (epoch ms). Memory-only. */
+   private readonly presence = new Map<string, number>();
++  /** chatId → last APNs 'working' push (epoch ms). Memory-only throttle —
++   * a DO hibernate simply resets the window. */
++  private readonly lastWorkingPush = new Map<string, number>();
+ 
+   constructor(ctx: DurableObjectState, env: Env) {
+     this.ctx = ctx;
+@@ -63,6 +71,11 @@ export class RegistryRoom implements DurableObject {
+     ctx.storage.sql.exec(
+       "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+     );
++    // APNs Live Activity tokens registered by the iOS client — scoped to
++    // this per-user room by construction (docs/HOST_EDGE_CHANGES.md).
++    ctx.storage.sql.exec(
++      "CREATE TABLE IF NOT EXISTS live_activity_tokens (chat_id TEXT NOT NULL, token TEXT NOT NULL, kind TEXT NOT NULL, device TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (chat_id, kind, token))"
++    );
+     // Same protocol-level keepalive as SessionRoom — and the same caveat: a
+     // pong is runtime-answered and proves nothing about this DO's health.
+     // Clients judge liveness by probe frames (crates/sync/src/registry.rs).
+@@ -237,6 +250,51 @@ export class RegistryRoom implements DurableObject {
+       return json({ batch: outcome.batch, seq: outcome.seq, applied: outcome.applied });
+     }
+ 
++    if (url.pathname === "/live-activity" && request.method === "PUT") {
++      // iOS client token registration: {chatId, token, kind, device}.
++      // `chatId: "*"` + kind "push_to_start" is the per-user start token.
++      let body: { chatId?: unknown; token?: unknown; kind?: unknown; device?: unknown };
++      try {
++        body = (await request.json()) as typeof body;
++      } catch {
++        return json({ error: "bad_request" }, 400);
++      }
++      if (
++        typeof body?.chatId !== "string" ||
++        typeof body?.token !== "string" ||
++        (body?.kind !== "activity" && body?.kind !== "push_to_start") ||
++        typeof body?.device !== "string"
++      ) {
++        return json({ error: "bad_request" }, 400);
++      }
++      this.ctx.storage.sql.exec(
++        "INSERT INTO live_activity_tokens (chat_id, token, kind, device, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(chat_id, kind, token) DO UPDATE SET device = excluded.device, updated_at = excluded.updated_at",
++        body.chatId,
++        body.token,
++        body.kind,
++        body.device,
++        Date.now()
++      );
++      return json({ ok: true });
++    }
++
++    if (url.pathname === "/live-activity" && request.method === "DELETE") {
++      let body: { chatId?: unknown; token?: unknown; kind?: unknown; device?: unknown };
++      try {
++        body = (await request.json()) as typeof body;
++      } catch {
++        return json({ error: "bad_request" }, 400);
++      }
++      if (typeof body?.token !== "string") {
++        return json({ error: "bad_request" }, 400);
++      }
++      this.ctx.storage.sql.exec(
++        "DELETE FROM live_activity_tokens WHERE token = ?",
++        body.token
++      );
++      return json({ ok: true });
++    }
++
+     if (url.pathname === "/reset" && request.method === "POST") {
+       // Operator wipe. Recovery is automatic and lossless: every client
+       // detects `state.seq < cursor` on its next hello and re-seeds the table
+@@ -375,6 +433,8 @@ export class RegistryRoom implements DurableObject {
+     // event commit together, so a mid-batch crash never persists half a batch.
+     const nextSeq = this.seq() + 1;
+     const touched = new Map<string, Row>();
++    /** sessions rows whose status field changed (chatId → prev status). */
++    const sessionStatusChanges = new Map<string, string | undefined>();
+     let applied = 0;
+     for (const op of ops) {
+       const key = `${op.kind} ${op.id}`;
+@@ -384,6 +444,13 @@ export class RegistryRoom implements DurableObject {
+       applied += 1;
+       row.seq = nextSeq;
+       touched.set(key, row);
++      if (op.kind === "sessions" && !sessionStatusChanges.has(op.id)) {
++        const prevStatus = before?.fields.status;
++        const nextStatus = row.fields.status;
++        if (prevStatus !== nextStatus) {
++          sessionStatusChanges.set(op.id, prevStatus as string | undefined);
++        }
++      }
+     }
+     if (applied > 0) {
+       for (const row of touched.values()) this.saveRow(row);
+@@ -405,9 +472,123 @@ export class RegistryRoom implements DurableObject {
+         send(socket, { t: "rows", seq, rows });
+       }
+     }
++    if (sessionStatusChanges.size > 0 && apnsConfigured(this.env)) {
++      this.ctx.waitUntil(
++        this.pushLiveActivities(sessionStatusChanges).catch(() => {})
++      );
++    }
+     return { ok: true, batch, seq, applied };
+   }
+ 
++  // ── APNs Live Activity producer (zremote iOS) ────────────────────────────
++  // Fires on `sessions` status changes only — chats title edits and other
++  // rows never push. All sends are best-effort; APNs BadDeviceToken/410
++  // prunes the token row. `working` updates throttle to 1/5s per chat
++  // (in-memory — a hibernate just resets the window).
++
++  private chatRow(id: string): Row | undefined {
++    return this.loadRow("chats", id);
++  }
++
++  private deviceRow(id: string): Row | undefined {
++    return this.loadRow("devices", id);
++  }
++
++  private async pushLiveActivities(
++    changes: Map<string, string | undefined>
++  ): Promise<void> {
++    const now = Date.now();
++    for (const [chatId, prevStatus] of changes) {
++      const row = this.loadRow("sessions", chatId);
++      if (row === undefined || row.deleted) continue;
++      const status = row.fields.status as string | undefined;
++      if (status === undefined) continue;
++
++      const chat = this.chatRow(chatId);
++      const device =
++        typeof row.fields.deviceId === "string"
++          ? this.deviceRow(row.fields.deviceId)
++          : undefined;
++      const props: SessionPushProps = {
++        chatId,
++        title: (chat?.fields.title as string | undefined) ?? "Session",
++        hostLabel:
++          device !== undefined
++            ? (device.fields.name as string | undefined)
++            : undefined,
++        phase: status,
++        phaseLabel: status,
++        startedAt:
++          typeof row.fields.startedAt === "number"
++            ? row.fields.startedAt / 1000
++            : now / 1000,
++        // Lock Screen shows title+host only when the client asked for it —
++        // the field-level flag rides in the row so background pushes respect
++        // the same privacy default (the app also gates locally).
++        showContext: row.fields.liveActivityShowContext !== false
++      };
++
++      // End event when the session returns to idle after working/
++      // awaitingInput; errored maps to 'end' too (final state, dismiss 30min).
++      const event =
++        status === "idle" &&
++        (prevStatus === "working" || prevStatus === "awaitingInput")
++          ? "end"
++          : status === "errored"
++            ? "end"
++            : "update";
++
++      // working → update throttled to 1/5s per chat.
++      if (
++        event === "update" &&
++        status === "working"
++      ) {
++        const last = this.lastWorkingPush.get(chatId) ?? 0;
++        if (now - last < 5_000) continue;
++        this.lastWorkingPush.set(chatId, now);
++      }
++
++      const activityTokens = [
++        ...this.ctx.storage.sql.exec(
++          "SELECT token FROM live_activity_tokens WHERE chat_id = ? AND kind = 'activity'",
++          chatId
++        )
++      ].map(r => r.token as string);
++
++      if (activityTokens.length === 0 && status === "working") {
++        // Push-to-start: no per-activity token — the phone may still be
++        // reachable via its user-scoped push_to_start token.
++        const startTokens = [
++          ...this.ctx.storage.sql.exec(
++            "SELECT token FROM live_activity_tokens WHERE kind = 'push_to_start'"
++          )
++        ].map(r => r.token as string);
++        for (const token of startTokens) {
++          const res = await sendLiveActivityPush(this.env, token, "start", props, now);
++          if (!res.ok) await this.pruneBadToken(token, res);
++        }
++        continue;
++      }
++
++      for (const token of activityTokens) {
++        const res = await sendLiveActivityPush(this.env, token, event, props, now);
++        if (!res.ok) await this.pruneBadToken(token, res);
++      }
++    }
++  }
++
++  private async pruneBadToken(
++    token: string,
++    res: { status: number; reason: string }
++  ): Promise<void> {
++    if (res.status === 410 || (res.status === 400 && res.reason === "BadDeviceToken")) {
++      this.ctx.storage.sql.exec(
++        "DELETE FROM live_activity_tokens WHERE token = ?",
++        token
++      );
++    }
++  }
++
+   private handlePresence(ws: WebSocket, state: SocketState, frame: Record<string, unknown>): void {
+     if (!state.ready || state.device === "") return;
+     const at = typeof frame.at === "number" ? frame.at : Date.now();
+diff --git a/edge/src/workos.ts b/edge/src/workos.ts
+index d45a468..90cd827 100644
+--- a/edge/src/workos.ts
++++ b/edge/src/workos.ts
+@@ -80,7 +80,12 @@ const post = async (apiKey: string, path: string, body: unknown): Promise<Respon
+   });
+ 
+ /** `authenticateWithCode`: WorkOS code → tokens + user. */
+-export const exchange = async (env: Env, apiKey: string, code: string): Promise<ExchangeResult> => {
++export const exchange = async (
++  env: Env,
++  apiKey: string,
++  code: string,
++  codeVerifier?: string
++): Promise<ExchangeResult> => {
+   const res = await fetch(`${API}/user_management/authenticate`, {
+     method: "POST",
+     headers: { "content-type": "application/json" },
+@@ -88,7 +93,10 @@ export const exchange = async (env: Env, apiKey: string, code: string): Promise<
+       client_id: env.WORKOS_CLIENT_ID,
+       client_secret: apiKey,
+       grant_type: "authorization_code",
+-      code
++      code,
++      // PKCE (public clients like the iOS app): forwarded verbatim when the
++      // caller supplies it — WorkOS rejects mismatches, we don't validate.
++      ...(codeVerifier !== undefined ? { code_verifier: codeVerifier } : {})
+     })
+   });
+   if (!res.ok) return failed(res);
+-- 
+2.55.0.windows.5
+

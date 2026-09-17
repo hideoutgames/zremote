@@ -298,7 +298,7 @@ describe('SessionDoc.queueCommand', () => {
         modelOptions: { x: 1 },
         cwd: '/repo',
         sandbox: 'workspace-write',
-        autoApprove: true,
+        autoApprove: false,
         resume: null,
       },
     });
@@ -318,6 +318,17 @@ describe('SessionDoc.queueCommand', () => {
     expect(r2.worktree).toEqual({ repoPath: '/r', base: 'main' });
     expect(r2.attachments).toEqual(['/a.png']);
     expect(r2.harness).toBeUndefined();
+
+    // autoApprove is opt-in per chat (uiPrefs); desktop defaults false.
+    const approving = buildRunCommand(
+      'hi',
+      { cwd: '/r' },
+      { autoApprove: true },
+    );
+    if (approving.kind !== 'run') throw new Error('expected run payload');
+    expect((approving.request as { autoApprove: boolean }).autoApprove).toBe(
+      true,
+    );
   });
 
   it('buildSteer / buildRespondInput payload shapes', () => {

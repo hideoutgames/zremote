@@ -111,6 +111,17 @@ const en = {
   'settings.offline': 'Offline',
   'settings.capabilities': 'capabilities',
   'settings.version': 'version',
+  'settings.liveActivities': 'Live Activities',
+  'settings.liveActivitiesEnabled': 'Live Activities',
+  'settings.liveActivityShowHost': 'Show host and project on Lock Screen',
+  'settings.dictation': 'Dictation',
+  'settings.dictationLanguage': 'Dictation language',
+  'settings.dictationDownload': 'Download offline model',
+  'settings.dictationInstalled': 'installed',
+  'settings.dictationDownloadable': 'downloadable',
+  'settings.dictationDownloading': 'downloading',
+  'settings.dictationUnsupported': 'unsupported on this device',
+  'settings.dictationUnavailable': 'dictation module not built',
 
   // Composer attachment menu
   'composer.camera': 'Camera',
@@ -145,6 +156,9 @@ const en = {
   'picker.sandbox.danger-full-access': 'Full access',
   'picker.dangerConfirm':
     'Full access lets the agent modify anything on the host. Enable it?',
+  'picker.autoApprove': 'Auto-approve tools',
+  'picker.autoApproveConfirm':
+    'Auto-approve lets the agent run tools on the host without asking you. Enable it?',
   'picker.agent': 'Agent',
   'picker.default': 'default',
 
@@ -163,6 +177,8 @@ const en = {
   'common.cancel': 'Cancel',
   'common.enable': 'Enable',
   'common.done': 'Done',
+  'common.on': 'On',
+  'common.off': 'Off',
 } as const;
 
 export type StringKey = keyof typeof en;

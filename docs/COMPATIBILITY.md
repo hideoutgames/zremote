@@ -83,7 +83,7 @@ the app. Decision:
 
 - A small `LoroDocPort` TypeScript interface (`app/src/zeron/doc/loroPort.ts`) covers the ~15 doc operations the client needs: import update, export updates from a version vector, export/import snapshot, oplog version vector + containment test, deep value read, local-update subscription, list `pushContainer(map)`, map set, movable list ops, commit.
 - Node (Jest, e2e scripts) uses `loro-crdt@1.13.x` (the engine pins `loro = "1.13"`).
-- iOS uses an in-repo Nitro module `react-native-loro` (`app/modules/react-native-loro`) wrapping the official `loro-swift 1.13.x` package — the same binding Zeron's own SwiftUI client uses. The Swift side is written here but **cannot be compiled or verified on Windows**; it is marked implemented-but-unverified until built on a Mac.
+- iOS uses an in-repo Nitro module `react-native-loro` (`app/modules/react-native-loro`) wrapping the official `loro-swift` package, pinned to tag **1.13.3** (revision `625f3e696fca4be3ae77de8b3404fa6753554f21`) — the same binding and version Zeron's own SwiftUI client resolves. The FFI binary (`loroFFI.xcframework`) is fetched by `app/scripts/fetch-loro-ffi.sh` and verified against sha256 `fc55bfb84753a1f0d7ed130d5b03edf3745b6e3db1d62685eeddb77598e09be2` (from `loro-swift/Package.swift` at 1.13.3). The Swift side is written here but **cannot be compiled or verified on Windows**; it is marked implemented-but-unverified until built on a Mac.
 - Android is out of scope for the Loro bridge (no Zeron Android client exists; the app targets iPhone/iPad).
 
 Everything schema-related (entries, parts, command ledger, queue rows) is

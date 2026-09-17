@@ -1,0 +1,151 @@
+// Runtime wiring: workspace/session stores → LiveActivityManager, push
+// token registration → edge registry. expo-widgets imports are confined to
+// this file so the manager + planning stay Jest-testable.
+//
+// IMPLEMENTED-BUT-UNVERIFIED on device: ActivityKit behavior needs a Mac
+// build (docs/NATIVE_MODULES.md).
+
+import { addPushToStartTokenListener, after } from 'expo-widgets';
+import { SessionActivity } from './SessionActivity';
+import type { SessionActivityProps } from './SessionActivity';
+import {
+  LiveActivityManager,
+  type LiveActivityDriver,
+  type LiveActivityHandle,
+} from './liveActivityManager';
+import {
+  registerLiveActivityToken,
+  unregisterLiveActivityToken,
+} from '../zeron/transport/liveActivityRegistry';
+import type { TokenSource } from '../zeron/transport/tokenSource';
+import { workspaceStore } from '../zeron/state/workspaceStore';
+import { getSessionStore, runPhase } from '../zeron/state/sessionStores';
+import { uiPrefsStore } from '../zeron/state/uiPrefs';
+import type { RunPhase } from '../zeron/state/sessionStores';
+import { createLog } from '../zeron/log';
+
+const log = createLog();
+
+const driver: LiveActivityDriver = {
+  start: (props, url, staleDate) =>
+    SessionActivity.start(
+      props,
+      url,
+      staleDate,
+    ) as unknown as LiveActivityHandle,
+  getInstances: () =>
+    SessionActivity.getInstances() as unknown as LiveActivityHandle[],
+  after: date => after(date),
+};
+
+const phaseFor = (phase: RunPhase): SessionActivityProps['phase'] => {
+  switch (phase) {
+    case 'awaitingInput':
+      return 'awaitingInput';
+    case 'stopping':
+      return 'stopping';
+    case 'stale':
+      return 'stale';
+    case 'errored':
+      return 'errored';
+    case 'idle':
+      // run ended → the manager ends the activity
+      return 'completed';
+    default:
+      return 'working'; // working / queuedLocally / synchronized
+  }
+};
+
+export type BindDeps = {
+  edgeUrl: string;
+  tokenSource: TokenSource;
+  orgId: string;
+  /** this phone's peer device id — binds the token at the edge. */
+  phoneDeviceId: string;
+  /** currently-selected session for the aggregate fallback. */
+  selectedChatId(): string | undefined;
+};
+
+const lastToken = new Map<string, string>();
+
+/** Returns an unbind function. Subscribes to workspace + uiPrefs so the
+ * settings toggles apply immediately (off → endAll + unregister). */
+export const bindLiveActivities = (deps: BindDeps): (() => void) => {
+  const mgr = new LiveActivityManager(driver, {
+    onPushToken: (chatId, token) => {
+      lastToken.set(chatId, token);
+      registerLiveActivityToken(deps.edgeUrl, deps.tokenSource, deps.orgId, {
+        chatId,
+        token,
+        kind: 'activity',
+        device: deps.phoneDeviceId,
+      }).catch(e => log.warn(`live-activity register: ${e}`));
+    },
+    onUnregister: chatId => {
+      const token = lastToken.get(chatId);
+      lastToken.delete(chatId);
+      if (token === undefined) return;
+      unregisterLiveActivityToken(deps.edgeUrl, deps.tokenSource, deps.orgId, {
+        chatId,
+        token,
+        kind: 'activity',
+        device: deps.phoneDeviceId,
+      }).catch(e => log.warn(`live-activity unregister: ${e}`));
+    },
+    selectedChatId: deps.selectedChatId,
+  });
+
+  // Push-to-start token: registered once per user/device (chatId '*').
+  const pushToStart = addPushToStartTokenListener(e => {
+    registerLiveActivityToken(deps.edgeUrl, deps.tokenSource, deps.orgId, {
+      chatId: '*',
+      token: e.activityPushToStartToken,
+      kind: 'push_to_start',
+      device: deps.phoneDeviceId,
+    }).catch(err => log.warn(`push-to-start register: ${err}`));
+  });
+
+  const tick = (): void => {
+    if (!uiPrefsStore.getState().liveActivitiesEnabled) {
+      mgr.endAll();
+      return;
+    }
+    const { sessions, chats, devices, spaces } = workspaceStore.getState();
+    const showContext = uiPrefsStore.getState().liveActivityShowHost;
+    const now = Date.now();
+    for (const session of Object.values(sessions)) {
+      const chat = chats.find(c => c.id === session.chatId);
+      const s = getSessionStore(session.chatId).getState();
+      const phase = phaseFor(
+        runPhase(s, session, chat, deps.phoneDeviceId, now),
+      );
+      const host = devices.find(d => d.id === session.deviceId);
+      const space =
+        chat?.spaceId !== undefined
+          ? spaces.find(sp => sp.id === chat.spaceId)
+          : undefined;
+      mgr.apply(session.chatId, {
+        chatId: session.chatId,
+        title: chat?.title ?? 'Session',
+        hostLabel:
+          showContext && host !== undefined
+            ? `${host.name}${space !== undefined ? ` · ${space.name}` : ''}`
+            : undefined,
+        phase,
+        phaseLabel: phase,
+        startedAt: (session.startedAt ?? now) / 1000,
+        showContext,
+      });
+    }
+  };
+
+  const unsub = workspaceStore.subscribe(tick);
+  const unsubPrefs = uiPrefsStore.subscribe(tick);
+  tick();
+  return () => {
+    unsub();
+    unsubPrefs();
+    pushToStart.remove();
+    mgr.endAll();
+  };
+};

@@ -519,7 +519,13 @@ export interface RunChatContext {
 export const buildRunRequest = (
   prompt: string,
   chat: RunChatContext,
-  opts: { attachments?: string[]; worktree?: WorktreeSpec } = {},
+  // autoApprove defaults to false — the desktop send path hardcodes
+  // auto_approve: false (crates/ui/src/composer.rs L6522-6523).
+  opts: {
+    attachments?: string[];
+    worktree?: WorktreeSpec;
+    autoApprove?: boolean;
+  } = {},
 ): RunRequest => ({
   prompt,
   ...(chat.config?.harness !== undefined
@@ -530,7 +536,7 @@ export const buildRunRequest = (
   modelOptions: chat.config?.modelOptions ?? {},
   cwd: chat.cwd ?? '',
   sandbox: (chat.config?.sandbox as RunRequest['sandbox']) ?? 'workspace-write',
-  autoApprove: true,
+  autoApprove: opts.autoApprove ?? false,
   resume: null,
   ...(opts.attachments !== undefined && opts.attachments.length > 0
     ? { attachments: [...opts.attachments] }
@@ -544,6 +550,7 @@ export const buildRunCommand = (
   opts: {
     attachments?: string[];
     worktree?: WorktreeSpec;
+    autoApprove?: boolean;
     messageId?: string;
   } = {},
 ): SessionCommandPayload => ({

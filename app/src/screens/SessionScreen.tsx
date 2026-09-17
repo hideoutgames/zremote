@@ -34,6 +34,7 @@ import BootSplash from 'react-native-bootsplash';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
+import { autoApproveFor } from '../zeron/state/uiPrefs';
 import {
   sessionTitle,
   hostLabel,
@@ -54,7 +55,11 @@ import { CheckoutSelector } from '../components/CheckoutSelector';
 import { QueuePanel } from '../components/QueuePanel';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
-import { dictationUnavailable } from '../zeron/native/dictation';
+import {
+  dictationUnavailable,
+  resolveDictationPort,
+} from '../zeron/native/dictation';
+import type { DictationPort } from '../zeron/native/dictation';
 import { CAP_QUEUE_ACTIONS } from '../zeron/attachments/sendPlan';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
@@ -177,7 +182,10 @@ export function SessionScreen({
       controller.sendRun(
         text,
         { config: chat?.config, cwd: chat?.cwd },
-        wt !== undefined ? { worktree: wt } : {},
+        {
+          autoApprove: autoApproveFor(chatId),
+          ...(wt !== undefined ? { worktree: wt } : {}),
+        },
       );
       if (wt !== undefined) setDraftPendingWorktree(chatId, undefined);
       setAnchorIndex(entries.length);
@@ -230,7 +238,11 @@ export function SessionScreen({
         text,
         { config: chat?.config, cwd: chat?.cwd },
         draft.attachments,
-        { worktree: draft.pendingWorktree, phase },
+        {
+          worktree: draft.pendingWorktree,
+          phase,
+          autoApprove: autoApproveFor(chatId),
+        },
       );
     },
     [
@@ -240,6 +252,7 @@ export function SessionScreen({
       draft.attachments,
       draft.pendingWorktree,
       phase,
+      chatId,
     ],
   );
 
@@ -287,6 +300,17 @@ export function SessionScreen({
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [dictation, setDictation] =
+    useState<DictationPort>(dictationUnavailable);
+  useEffect(() => {
+    let mounted = true;
+    resolveDictationPort().then(port => {
+      if (mounted) setDictation(port);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const modelLabel = `${harness?.name ?? t('picker.agent')} · ${
     chat?.config?.model ?? t('picker.default')
   }`;
@@ -464,7 +488,7 @@ export function SessionScreen({
           modelLabel={modelLabel}
           onOpenModelPicker={() => setPickerOpen(true)}
           onOpenQueue={() => setQueueOpen(true)}
-          dictation={dictationUnavailable}
+          dictation={dictation}
           onSend={doSend}
           onSteer={doSteer}
           onQueue={doQueue}

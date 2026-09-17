@@ -1,0 +1,27 @@
+{
+  "name": "react-native-loro",
+  "version": "0.1.0",
+  "description": "Nitro bridge over loro-swift 1.13.3 (Zeron session docs)",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "react-native": "./index.ts",
+  "source": "./index.ts",
+  "files": [
+    "src",
+    "ios",
+    "vendor/loro-swift",
+    "nitrogen",
+    "nitro.json",
+    "ReactNativeLoro.podspec",
+    "index.ts"
+  ],
+  "scripts": {
+    "codegen": "nitrogen"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "*"
+  }
+}

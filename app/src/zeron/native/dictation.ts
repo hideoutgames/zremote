@@ -30,3 +30,15 @@ export const dictationUnavailable: DictationPort = {
   stop: () => Promise.resolve(),
   cancel: () => Promise.resolve(),
 };
+
+/** Probe the zeron-dictation Nitro module once; falls back to
+ * `dictationUnavailable` when the pod isn't linked. */
+export const resolveDictationPort = async (): Promise<DictationPort> => {
+  try {
+    const { dictationPort } = await import('../../../modules/zeron-dictation');
+    await dictationPort.isSupported();
+    return dictationPort;
+  } catch {
+    return dictationUnavailable;
+  }
+};

@@ -50,6 +50,7 @@ import { BorderBeam } from './agentsKit/BorderBeam';
 import {
   useLiveActionPrefersSteer,
   setLiveActionPrefersSteer,
+  uiPrefsStore,
 } from '../zeron/state/uiPrefs';
 import type { HarnessDescriptor } from '../zeron/protocol/types';
 import { composerAction, harnessSteers, liveAction } from './composerAction';
@@ -215,7 +216,10 @@ export const Composer = React.memo(function ({
     }
     baseRef.current = draft.text;
     dictation
-      .start({}, dictationCb.current)
+      .start(
+        { locale: uiPrefsStore.getState().dictationLocale },
+        dictationCb.current,
+      )
       .then(() => setDictating(true))
       .catch(() => setDictating(false));
   }, [dictating, dictation, draft.text]);

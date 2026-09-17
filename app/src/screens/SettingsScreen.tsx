@@ -29,8 +29,29 @@ import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
+import {
+  setLiveActivitiesEnabled,
+  setLiveActivityShowHost,
+  useDictationLocale,
+  useLiveActivitiesEnabled,
+  useLiveActivityShowHost,
+} from '../zeron/state/uiPrefs';
+import {
+  dictationUnavailable,
+  resolveDictationPort,
+} from '../zeron/native/dictation';
+import type { DictationModelState } from '../../modules/zeron-dictation/src/Dictation.nitro';
 
 const log = createLog();
+
+const dictationStateLabel = (s: DictationModelState): string =>
+  s === 'installed'
+    ? t('settings.dictationInstalled')
+    : s === 'downloadable'
+    ? t('settings.dictationDownloadable')
+    : s === 'downloading'
+    ? t('settings.dictationDownloading')
+    : t('settings.dictationUnsupported');
 
 const AgentsPage = ({
   device,
@@ -117,6 +138,49 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const presence = useStore(workspaceStore, s => s.presence);
   const edgeUrl = appConfig().edgeUrl;
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
+  const liveActivities = useLiveActivitiesEnabled();
+  const liveActivityShowHost = useLiveActivityShowHost();
+  const dictationLocale = useDictationLocale();
+  const [dictationModelState, setDictationModelState] = useState<
+    DictationModelState | undefined
+  >(undefined);
+
+  useEffect(() => {
+    let mounted = true;
+    resolveDictationPort()
+      .then(port =>
+        port === dictationUnavailable
+          ? undefined
+          : (
+              port as typeof dictationUnavailable & {
+                modelState(l: string): Promise<DictationModelState>;
+              }
+            ).modelState(dictationLocale),
+      )
+      .then(state => {
+        if (mounted && state !== undefined) setDictationModelState(state);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [dictationLocale]);
+
+  const downloadDictationModel = useCallback(() => {
+    resolveDictationPort()
+      .then(port =>
+        (
+          port as typeof dictationUnavailable & {
+            downloadModel(
+              l: string,
+              p: (progress: number) => void,
+            ): Promise<void>;
+          }
+        ).downloadModel(dictationLocale, () => {}),
+      )
+      .then(() => setDictationModelState('installed'))
+      .catch(e => log.warn(`dictation model: ${e}`));
+  }, [dictationLocale]);
 
   const user =
     status.state === 'signedIn' || status.state === 'needsOrganization'
@@ -255,6 +319,86 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 </View>
               </Pressable>
             ))}
+
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {t('settings.liveActivities')}
+            </Text>
+            <View
+              style={[
+                styles.deviceRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.cardText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  {t('settings.liveActivitiesEnabled')}
+                </Text>
+              </View>
+              <Switch
+                value={liveActivities}
+                onValueChange={setLiveActivitiesEnabled}
+              />
+            </View>
+            <View
+              style={[
+                styles.deviceRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.cardText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  {t('settings.liveActivityShowHost')}
+                </Text>
+              </View>
+              <Switch
+                value={liveActivityShowHost}
+                onValueChange={setLiveActivityShowHost}
+              />
+            </View>
+
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {t('settings.dictation')}
+            </Text>
+            <View
+              style={[
+                styles.deviceRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.cardText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  {`${t('settings.dictationLanguage')}: ${dictationLocale}`}
+                </Text>
+                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
+                  {dictationModelState === undefined
+                    ? t('settings.dictationUnavailable')
+                    : dictationStateLabel(dictationModelState)}
+                </Text>
+              </View>
+              {dictationModelState === 'downloadable' ? (
+                <Pressable
+                  onPress={downloadDictationModel}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('settings.dictationDownload')}
+                >
+                  <Icon
+                    name="arrow.down.circle"
+                    size={20}
+                    color={theme.accent}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
           </>
         )}
       </ScrollView>
