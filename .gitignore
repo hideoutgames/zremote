@@ -87,3 +87,6 @@ app/src/config.ts
 # Expo / E2E harness artifacts
 /app/.expo
 /app/.e2e
+
+# e2e harness logs (any location)
+**/.e2e/
