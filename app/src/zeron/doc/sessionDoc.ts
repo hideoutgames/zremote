@@ -389,6 +389,60 @@ export class SessionDoc {
     return id;
   }
 
+  /** SessionQueue.swift enqueueMessage: park a message on the doc's `queue`
+   * movable list; the host decides where it goes from there. */
+  enqueueMessage(args: {
+    text: string;
+    deviceId: string;
+    nowMs: number;
+    attachments?: string[];
+    holdForTurnEnd?: boolean;
+    id?: string;
+  }): string {
+    const id = args.id ?? newId();
+    this.port.movableList('queue').pushMap({
+      id,
+      text: args.text,
+      issuedBy: args.deviceId,
+      issuedAt: args.nowMs,
+      ...(args.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
+      ...(args.attachments !== undefined && args.attachments.length > 0
+        ? { attachments: [...args.attachments] }
+        : {}),
+    });
+    this.port.commit();
+    return id;
+  }
+
+  /** SessionQueue.swift moveQueued: LoroMovableList `mov` — a pure local
+   * doc write; the host serializes it like any other update. Returns false
+   * when the id isn't in the queue. */
+  moveQueued(id: string, toIndex: number): boolean {
+    const list = this.port.movableList('queue');
+    const count = list.length();
+    // Read ids from the projected JSON (the movable-list port exposes no
+    // index getter); the projection is by list order.
+    const queue = this.project()?.queue ?? [];
+    const from = queue.findIndex(q => q.id === id);
+    if (from < 0 || count === 0) return false;
+    const target = Math.min(Math.max(toIndex, 0), count - 1);
+    if (from === target) return false;
+    list.move(from, target);
+    this.port.commit();
+    return true;
+  }
+
+  /** Apply a CONFIRMED queue removal locally (performQueueAction deletes
+   * only after the host acked — a lost reply is uncertain). */
+  removeQueuedLocal(id: string): boolean {
+    const queue = this.project()?.queue ?? [];
+    const index = queue.findIndex(q => q.id === id);
+    if (index < 0) return false;
+    this.port.movableList('queue').delete(index, 1);
+    this.port.commit();
+    return true;
+  }
+
   /** Rule 2: the composer may set `cancelled` on its own still-pending
    * entries. Returns false when the rule does not permit it. */
   cancelOwnCommand(commandId: string, deviceId: string): boolean {

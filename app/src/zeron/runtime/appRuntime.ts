@@ -20,11 +20,13 @@ import type { WsFactory } from '../transport/ws';
 import {
   bindWorkspace,
   resetWorkspace,
+  workspaceStore,
   type ConnectionState,
 } from '../state/workspaceStore';
 import { resetSessionStores } from '../state/sessionStores';
 import { resetCatalog } from '../state/catalogStore';
-import { resetDrafts } from '../state/draftStore';
+import { bindDrafts, resetDrafts } from '../state/draftStore';
+import { bindUiPrefs, unbindUiPrefs } from '../state/uiPrefs';
 import { SessionController } from './sessionController';
 
 // WorkspaceStore.swift presence/dial-gate constants.
@@ -48,6 +50,8 @@ export interface AppRuntimeDeps {
   loro: () => LoroDocPort;
   fetchImpl?: FetchImpl;
   log?: (line: string) => void;
+  /** Reads a staged attachment's bytes as base64 (expo-file-system). */
+  readFileBase64?: (uri: string) => Promise<string>;
 }
 
 export class AppRuntime {
@@ -97,6 +101,11 @@ export class AppRuntime {
       saved !== undefined
         ? safeRestore(saved, deps.deviceId)
         : new RegistryDoc(deps.deviceId);
+    // Account-scoped composer drafts + UI prefs ride the same DocDisk.
+    await bindDrafts(deps.docDisk, deps.orgId, deps.userId, deps.clock).catch(
+      () => {},
+    );
+    await bindUiPrefs(deps.docDisk, deps.orgId, deps.userId).catch(() => {});
     return new AppRuntime(deps, doc);
   }
 
@@ -224,8 +233,26 @@ export class AppRuntime {
       c = new SessionController(chatId, {
         ...this.deps,
         chatMeta: this.chatMeta(chatId),
+        relayFor: id => {
+          try {
+            return this.relayFor(id);
+          } catch {
+            return undefined;
+          }
+        },
+        readFileBase64: this.deps.readFileBase64,
+        hostCapabilities: () => {
+          const hostId = this.chatMeta(chatId)().hostDeviceId;
+          const dev = workspaceStore
+            .getState()
+            .devices.find(d => d.id === hostId);
+          return new Set(dev?.capabilities ?? []);
+        },
       });
       c.start().catch(() => {});
+      // Re-arm queued-attachment escorts left stashed by a prior launch
+      // (SessionStore.swift respawnEscorts).
+      c.respawnEscorts();
       this.controllers.set(chatId, c);
     }
     return c;
@@ -279,6 +306,7 @@ export class AppRuntime {
     resetSessionStores();
     resetCatalog();
     resetDrafts();
+    unbindUiPrefs();
   }
 }
 

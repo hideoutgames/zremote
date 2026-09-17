@@ -70,7 +70,12 @@ const en = {
   'session.stopping': 'Stopping…',
   'session.steer': 'Steer',
   'session.send': 'Send',
-  'session.attachmentsBlocked': 'Attachments upload arrives in the next build',
+  'session.attachmentsBlocked':
+    'Attachments can\u2019t be sent while the agent is working on this host — stop it or wait.',
+  'session.queue': 'Queue',
+  'session.queuePlaceholder': 'Queue a message…',
+  'session.workingHint': 'Agent is working — stop it or wait',
+  'session.cancel': 'Cancel',
   'session.failedSend': "Message wasn't accepted",
   'session.failedSend.rejected': 'rejected',
   'session.failedSend.expired': 'expired',
@@ -111,6 +116,53 @@ const en = {
   'composer.camera': 'Camera',
   'composer.photos': 'Photos',
   'composer.files': 'Files',
+  'composer.attach': 'Add attachment',
+  'composer.dictate': 'Dictate',
+  'composer.dictationUnavailable': 'Dictation unavailable on this build',
+  'composer.removeAttachment': 'Remove {name}',
+
+  // Shared message queue
+  'queue.title': 'Queued messages',
+  'queue.empty': 'Nothing queued.',
+  'queue.sendNow': 'Send now',
+  'queue.steerNow': 'Steer now',
+  'queue.remove': 'Remove',
+  'queue.holdForTurnEnd': 'Held for turn end',
+  'queue.attachments': '{count} attachment(s)',
+
+  // Model picker
+  'picker.title': 'Model',
+  'picker.agents': 'Agents',
+  'picker.models': 'Models',
+  'picker.effort': 'Effort',
+  'picker.effortUnsupported': 'This agent doesn\u2019t support effort levels.',
+  'picker.harnessLocked': 'The agent is locked once a chat has messages.',
+  'picker.unavailable': 'Unavailable on this host',
+  'picker.appliesNext': 'Changes apply to the next message.',
+  'picker.sandbox': 'Sandbox',
+  'picker.sandbox.read-only': 'Read only',
+  'picker.sandbox.workspace-write': 'Workspace write',
+  'picker.sandbox.danger-full-access': 'Full access',
+  'picker.dangerConfirm':
+    'Full access lets the agent modify anything on the host. Enable it?',
+  'picker.agent': 'Agent',
+  'picker.default': 'default',
+
+  // Checkout selector
+  'checkout.label': 'Checkout',
+  'checkout.noProject': 'No project',
+  'checkout.current': 'Current checkout ({branch})',
+  'checkout.worktree': 'worktree',
+  'checkout.newWorktree': 'New worktree from {base}…',
+  'checkout.busy': 'Stop the run to change checkout',
+  'checkout.worktreeUnsupported':
+    'This host can\u2019t create isolated worktrees — update Zeron on {host}',
+  'checkout.switchFailed': 'Couldn\u2019t switch checkout',
+  'checkout.worktreeFailed': 'Couldn\u2019t create the worktree',
+
+  'common.cancel': 'Cancel',
+  'common.enable': 'Enable',
+  'common.done': 'Done',
 } as const;
 
 export type StringKey = keyof typeof en;

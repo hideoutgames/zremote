@@ -1,32 +1,34 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import * as DropdownMenu from 'zeego/dropdown-menu';
-import { Glass } from './Glass';
 import { Icon } from './Icon';
 import { theme } from '../theme';
 import { t } from '../i18n/strings';
 
-const CIRCLE = 44;
-
 type AttachmentMenuProps = {
   onPickPhotos: () => void;
-  /** Files/camera are staged-only this stage; the alert lives in the caller. */
-  onUnavailable?: () => void;
+  onPickCamera: () => void;
+  onPickFiles: () => void;
 };
 
 export function AttachmentMenu({
   onPickPhotos,
-  onUnavailable,
+  onPickCamera,
+  onPickFiles,
 }: AttachmentMenuProps) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
-        <Glass interactive style={styles.circle}>
+        <Pressable
+          hitSlop={6}
+          style={styles.btn}
+          accessibilityLabel={t('composer.attach')}
+        >
           <Icon name="plus" size={22} color={theme.text} />
-        </Glass>
+        </Pressable>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
-        <DropdownMenu.Item key="camera" onSelect={onUnavailable ?? (() => {})}>
+        <DropdownMenu.Item key="camera" onSelect={onPickCamera}>
           <DropdownMenu.ItemTitle>
             {t('composer.camera')}
           </DropdownMenu.ItemTitle>
@@ -38,7 +40,7 @@ export function AttachmentMenu({
           </DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'photo' }} />
         </DropdownMenu.Item>
-        <DropdownMenu.Item key="files" onSelect={onUnavailable ?? (() => {})}>
+        <DropdownMenu.Item key="files" onSelect={onPickFiles}>
           <DropdownMenu.ItemTitle>{t('composer.files')}</DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'paperclip' }} />
         </DropdownMenu.Item>
@@ -48,12 +50,5 @@ export function AttachmentMenu({
 }
 
 const styles = StyleSheet.create({
-  circle: {
-    width: CIRCLE,
-    height: CIRCLE,
-    borderRadius: CIRCLE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
+  btn: { padding: 4 },
 });

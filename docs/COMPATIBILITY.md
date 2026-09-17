@@ -7,15 +7,15 @@ one of these facts changes.
 
 ## Zeron revision pinned for compatibility
 
-| | |
-| --- | --- |
-| Repository | https://github.com/zeronsh/zeron |
-| Commit | `853872d3660047b28e81f80df7744a7f6f3b4beb` |
-| Workspace version | `0.2.72` (`Cargo.toml` `[workspace.package].version`) |
-| Commit date | 2026-09-17 |
-| Production edge | `https://edge.zeron.sh` (`apps/zeron/src/main.rs` `DEFAULT_EDGE_URL`) |
-| WorkOS client id (public) | `client_01KWD0EAKZKD50YCQJNYSRE4BY` (`DEFAULT_WORKOS_CLIENT_ID`, overridable) |
-| Windows engine binary used for local e2e | `https://zeron.sh/releases/zeron-0.2.72-windows-x86_64.exe` |
+|                                          |                                                                               |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Repository                               | https://github.com/zeronsh/zeron                                              |
+| Commit                                   | `853872d3660047b28e81f80df7744a7f6f3b4beb`                                    |
+| Workspace version                        | `0.2.72` (`Cargo.toml` `[workspace.package].version`)                         |
+| Commit date                              | 2026-09-17                                                                    |
+| Production edge                          | `https://edge.zeron.sh` (`apps/zeron/src/main.rs` `DEFAULT_EDGE_URL`)         |
+| WorkOS client id (public)                | `client_01KWD0EAKZKD50YCQJNYSRE4BY` (`DEFAULT_WORKOS_CLIENT_ID`, overridable) |
+| Windows engine binary used for local e2e | `https://zeron.sh/releases/zeron-0.2.72-windows-x86_64.exe`                   |
 
 Source locations that define the wire contract this app implements (all
 relative to the pinned Zeron checkout):
@@ -29,23 +29,23 @@ relative to the pinned Zeron checkout):
 - Auth state machine: `crates/engine/src/auth.rs`
 - Existing native SwiftUI iOS client (the closest reference for mobile behaviour): `apps/ios/Zeron/**` — in particular `Sync/RegistryClient.swift`, `Sync/ChatRoomClient.swift`, `Sync/ChatFrames.swift`, `Sync/DeviceRelayClient.swift`, `Sync/SessionStore.swift`, `Sync/WorkspaceStore.swift`, `Auth/AuthClient.swift`, `Models/Entities.swift`
 
-The pinned Zeron tree is *not* vendored. Anything ported from it lives under
+The pinned Zeron tree is _not_ vendored. Anything ported from it lives under
 `app/src/zeron/**` with a header comment naming the source file. Zeron is MIT
 licensed (`LICENSE` in the pinned checkout); the notice is carried in
 `THIRD_PARTY_NOTICES.md`.
 
 ## React Native / Expo / Xcode / deployment target
 
-| Component | Version | Why |
-| --- | --- | --- |
-| React Native | `0.86.x` (fork ships 0.86.0) | Keep the fork's major/minor. Patch bumps to 0.86.3 are allowed (Hermes v1 memory regression fix that matters because the fork imports `react-native-reanimated`/`react-native-worklets`). |
-| React | `19.2.3` | Unchanged from the fork. |
-| Expo SDK | `57` | The only SDK that targets RN 0.86 (Expo's compatibility table). Installed *into* the existing bare project (`expo`, `expo-modules-core` autolinking, `expo-dev-client`), not by re-creating the app. |
-| Hermes | v1 (RN default) | Unchanged. No WebAssembly — see "Loro on device". |
-| Xcode | `26.x` (Expo 57 requires ≥ 26.4) | Needed for the iOS 26 SDK (Liquid Glass via `@callstack/liquid-glass`, `SpeechAnalyzer`). |
-| iOS deployment target | `16.4` | Already set in the fork's `Podfile` (nitro markdown requirement) and the Expo 57 minimum. Liquid Glass and `SpeechAnalyzer` are gated at runtime to iOS 26+, ActivityKit push-to-start to iOS 17.2+. Older systems get the fork's plain fallbacks. |
-| Device family | iPhone + iPad (`TARGETED_DEVICE_FAMILY = 1,2`) | Already set in the fork. |
-| Node | `>= 22.13` | Expo 57 minimum; the fork required `>= 22.11`. Local machine: Node 24.19, npm 11.17. |
+| Component             | Version                                        | Why                                                                                                                                                                                                                                                |
+| --------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| React Native          | `0.86.x` (fork ships 0.86.0)                   | Keep the fork's major/minor. Patch bumps to 0.86.3 are allowed (Hermes v1 memory regression fix that matters because the fork imports `react-native-reanimated`/`react-native-worklets`).                                                          |
+| React                 | `19.2.3`                                       | Unchanged from the fork.                                                                                                                                                                                                                           |
+| Expo SDK              | `57`                                           | The only SDK that targets RN 0.86 (Expo's compatibility table). Installed _into_ the existing bare project (`expo`, `expo-modules-core` autolinking, `expo-dev-client`), not by re-creating the app.                                               |
+| Hermes                | v1 (RN default)                                | Unchanged. No WebAssembly — see "Loro on device".                                                                                                                                                                                                  |
+| Xcode                 | `26.x` (Expo 57 requires ≥ 26.4)               | Needed for the iOS 26 SDK (Liquid Glass via `@callstack/liquid-glass`, `SpeechAnalyzer`).                                                                                                                                                          |
+| iOS deployment target | `16.4`                                         | Already set in the fork's `Podfile` (nitro markdown requirement) and the Expo 57 minimum. Liquid Glass and `SpeechAnalyzer` are gated at runtime to iOS 26+, ActivityKit push-to-start to iOS 17.2+. Older systems get the fork's plain fallbacks. |
+| Device family         | iPhone + iPad (`TARGETED_DEVICE_FAMILY = 1,2`) | Already set in the fork.                                                                                                                                                                                                                           |
+| Node                  | `>= 22.13`                                     | Expo 57 minimum; the fork required `>= 22.11`. Local machine: Node 24.19, npm 11.17.                                                                                                                                                               |
 
 Package manager stays **npm** with the committed `package-lock.json`.
 
@@ -67,7 +67,7 @@ URL scheme, Associated Domains, microphone/speech/camera/photo permissions,
 Live Activities (`expo-widgets` with `enablePushNotifications`), App Groups,
 `NSSupportsLiveActivities` — are plugins too. The generated `ios/` and
 `android/` directories are then produced by `npx expo prebuild`, and the
-committed template projects are removed from git *only after* the plugin set
+committed template projects are removed from git _only after_ the plugin set
 has been verified to reproduce every customisation above (`npx expo prebuild
 --platform ios --no-install` is runnable on Windows for that check).
 
@@ -103,7 +103,7 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
 `http://127.0.0.1:{port}/callback` and the hosted paste-code page
 `{edge}/auth/cli/callback`. The mobile flow:
 
-1. **Primary**: `ASWebAuthenticationSession` with an *https* callback
+1. **Primary**: `ASWebAuthenticationSession` with an _https_ callback
    (`{edge}/auth/cli/callback`, iOS 17.4+). This reuses the already-registered
    redirect URI; iOS intercepts the redirect before the paste page renders and
    hands `code`+`state` to the app. Requirement: the app declares
@@ -143,6 +143,10 @@ Host features that must be gated on the reported `DeviceRow.version`
 (`deviceVersionAtLeast`). A host below the floor gets an explicit block — never
 a silent fallback into a less-safe behavior.
 
-| Capability | Minimum host version | Evidence |
-| --- | --- | --- |
-| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — new-session "New worktree" checkout) | **0.2.62** | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `NewSessionSheet` (send blocked, "update Zeron on \<host\>"). |
+| Capability                                                                                                       | Minimum host version                      | Evidence                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — new-session "New worktree" checkout) | **0.2.62**                                | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `NewSessionSheet` + `CheckoutSelector` (blocked, "update Zeron on \<host\>"). |
+| Shared queue send (`queue` doc rows, composer "Queue" pill)                                                      | capability `message-queue-v1`             | `crates/rpc/src/lib.rs` `QUEUE_MESSAGE`; ComposerView.swift queue-first flow. Without it the live pill degrades to Steer-or-hidden.                                                                                                                                                                                                                                                 |
+| Queued attachments (`pending://` refs + escort uploads)                                                          | capability `message-queue-attachments-v1` | `attachments.rs`/`UploadStash.swift`; `sendPlan()` in `app/src/zeron/attachments/sendPlan.ts` falls back to legacy upload-first.                                                                                                                                                                                                                                                    |
+| Queue row actions (Send now / Steer now / Remove)                                                                | capability `message-queue-actions-v1`     | `crates/rpc/src/lib.rs` `SEND_QUEUED_MESSAGE_NOW` etc.; `QueuePanel` hides actions without it.                                                                                                                                                                                                                                                                                      |
+| Queue row editing (host-authoritative leases)                                                                    | capability `message-queue-edit-lease-v1`  | `Begin/Renew/FinishQueuedMessageEdit` RPCs — **not implemented** (documented gap: rows are read-only in `QueuePanel`).                                                                                                                                                                                                                                                              |

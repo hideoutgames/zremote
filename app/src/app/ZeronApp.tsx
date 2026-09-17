@@ -20,6 +20,7 @@ import { expoSecureStore } from '../zeron/native/expoSecureStore';
 import { appConfig } from '../zeron/native/appConfig';
 import { deviceId, deviceName } from '../zeron/native/deviceIdentity';
 import { createDocDisk } from '../zeron/native/expoDocDisk';
+import { readFileBase64 } from '../zeron/native/fileBytes';
 import { createLoroDoc } from '../zeron/native/loroPortFactory';
 import { nitroWsFactory } from '../zeron/transport/nitroWs';
 import { systemClock } from '../zeron/transport/clock';
@@ -102,6 +103,7 @@ export function ZeronApp() {
         clock: systemClock,
         docDisk: createDocDisk(),
         loro: createLoroDoc,
+        readFileBase64,
         log: line => log.info(line),
       });
       if (cancelled) {

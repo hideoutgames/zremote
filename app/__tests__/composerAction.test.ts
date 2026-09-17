@@ -50,7 +50,53 @@ test('stopping → both inert', () => {
   });
 });
 
-test('queuedLocally/synchronized behave like idle for send', () => {
-  expect(composerAction('queuedLocally', steers, true).primary).toBe('send');
-  expect(composerAction('synchronized', steers, true).primary).toBe('send');
+// ── Stage 6: cancel + live pill ─────────────────────────────────────────
+
+import { liveAction, queueSupported } from '../src/components/composerAction';
+
+test('queuedLocally → right cancel, primary disabled', () => {
+  expect(composerAction('queuedLocally', steers, true)).toEqual({
+    primary: 'disabled',
+    right: 'cancel',
+  });
+});
+
+test('synchronized → right cancel', () => {
+  expect(composerAction('synchronized', noSteer, false).right).toBe('cancel');
+});
+
+test('stopping inert (unchanged)', () => {
+  expect(composerAction('stopping', steers, true)).toEqual({
+    primary: 'disabled',
+    right: 'stopping',
+  });
+});
+
+test('live + queue support → queue by default', () => {
+  expect(liveAction('working', true, true, false)).toBe('queue');
+});
+
+test('live + queue support + steer pref + steerable → steer', () => {
+  expect(liveAction('working', true, true, true)).toBe('steer');
+});
+
+test('live + queue support + steer pref but NOT steerable → queue', () => {
+  expect(liveAction('working', true, false, true)).toBe('queue');
+});
+
+test('live + no queue support + steerable → steer', () => {
+  expect(liveAction('awaitingInput', false, true, false)).toBe('steer');
+});
+
+test('live + no queue support + not steerable → hidden', () => {
+  expect(liveAction('working', false, false, false)).toBe('hidden');
+});
+
+test('idle → live pill hidden', () => {
+  expect(liveAction('idle', true, true, true)).toBe('hidden');
+});
+
+test('queueSupported reads the capability set', () => {
+  expect(queueSupported(new Set(['message-queue-v1']))).toBe(true);
+  expect(queueSupported(new Set())).toBe(false);
 });

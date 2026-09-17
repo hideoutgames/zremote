@@ -46,6 +46,10 @@ export interface SessionState {
   /** Own commands whose Loro updates have not been acked by the room yet. */
   unsyncedCommandIds: string[];
   room: RoomState;
+  /** Queue rows with an in-flight host action (sendNow/steerNow/remove) —
+   * SessionQueue.swift queueActionsPending. */
+  queueActionsPending: Set<string>;
+  queueActionError?: string;
   lastError?: string;
   hostDeviceId?: string;
 }
@@ -59,6 +63,7 @@ const EMPTY_SESSION: SessionState = {
   failedSends: [],
   unsyncedCommandIds: [],
   room: 'idle',
+  queueActionsPending: new Set(),
 };
 
 const stores = new Map<string, StoreApi<SessionState>>();

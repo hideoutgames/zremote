@@ -1,11 +1,18 @@
-// Session composer: the fork's glass pill + thumbnail strip, wired to
-// draftStore (per-chat text survives session switches), composerAction for
-// send/steer/stop, and QuestionPanel when the agent is asking. Attachments
-// stage locally only — sending with attachments is blocked until upload
-// ships (never silently dropped).
+// Session composer — one two-tier Liquid Glass container:
+//   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
+//     renders above the lower tier inside the same glass, de-emphasizing —
+//     never unmounting — the input),
+//   lower tier: [+] attachment menu · live Queue/Steer pill ·
+//     [Agent · Model] button · mic · right circle (send/stop/stopping/cancel).
+// All decisions route through composerAction/liveAction + the draftStore;
+// attachment sends go through onSendAttachments (queued `pending://` flow or
+// legacy upload-first — never a device-local URI on the wire).
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  AppState,
   type LayoutChangeEvent,
   Pressable,
   StyleSheet,
@@ -20,20 +27,34 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { NitroImage } from 'react-native-nitro-image';
+import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { Glass } from './Glass';
 import { Icon } from './Icon';
 import { useAttachments } from '../hooks/useAttachments';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import { useDraft, setDraftText } from '../zeron/state/draftStore';
+import {
+  clearDraft,
+  removeAttachment,
+  setDraftText,
+  useDraft,
+} from '../zeron/state/draftStore';
 import {
   openInputRequest,
   useSessionState,
+  type RoomState,
   type RunPhase,
 } from '../zeron/state/sessionStores';
+import { BorderBeam } from './agentsKit/BorderBeam';
+import {
+  useLiveActionPrefersSteer,
+  setLiveActionPrefersSteer,
+} from '../zeron/state/uiPrefs';
 import type { HarnessDescriptor } from '../zeron/protocol/types';
-import { composerAction } from './composerAction';
+import { composerAction, harnessSteers, liveAction } from './composerAction';
+import type { SendPlan } from '../zeron/attachments/sendPlan';
+import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 
 const INPUT_MAX_HEIGHT = 120;
@@ -42,15 +63,30 @@ const THUMBS_ANIM_MS = 220;
 export interface ComposerProps {
   chatId: string;
   phase: RunPhase;
+  roomState: RoomState;
   harness?: HarnessDescriptor;
+  /** Host capability strings (message-queue-v1 et al). */
+  capabilities: ReadonlySet<string>;
+  /** e.g. "Claude · Opus 4.7" for the lower-tier picker button. */
+  modelLabel: string;
+  onOpenModelPicker: () => void;
+  onOpenQueue: () => void;
+  dictation: DictationPort;
   onSend: (text: string) => void;
   onSteer: (text: string) => void;
+  onQueue: (text: string) => void;
   onStop: () => void;
+  /** queuedLocally/synchronized → cancelOwnCommand on the own pending run. */
+  onCancel: () => void;
+  /** Orchestrates staged-attachment sends; resolves to the plan taken. */
+  onSendAttachments: (text: string) => Promise<SendPlan>;
   onRespondInput: (
     requestId: string,
     answers: { questionId: string; labels: string[] }[],
   ) => void;
-  onAttachmentsBlocked: () => void;
+  /** The send was refused (e.g. attachments while live without queue
+   * support) — the parent surfaces it; nothing is silently dropped. */
+  onSendBlocked: () => void;
   composerRef: React.RefObject<View | null>;
   onLayout: (event: LayoutChangeEvent) => void;
 }
@@ -58,32 +94,157 @@ export interface ComposerProps {
 export const Composer = React.memo(function ({
   chatId,
   phase,
+  roomState,
   harness,
+  capabilities,
+  modelLabel,
+  onOpenModelPicker,
+  onOpenQueue,
+  dictation,
   onSend,
   onSteer,
+  onQueue,
   onStop,
+  onCancel,
+  onSendAttachments,
   onRespondInput,
-  onAttachmentsBlocked,
+  onSendBlocked,
   composerRef,
   onLayout,
 }: ComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const draft = useDraft(chatId);
-  const { pickImages, remove } = useAttachments(chatId);
+  const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
   const session = useSessionState(chatId);
+  const prefersSteer = useLiveActionPrefersSteer();
 
   const question = openInputRequest(session.entries);
   const hasAttachments = draft.attachments.length > 0;
-  const action = composerAction(phase, harness, draft.text.trim().length > 0);
+  const hasText = draft.text.trim().length > 0;
+  const action = composerAction(phase, harness, hasText);
+  const live = liveAction(
+    phase,
+    capabilities.has('message-queue-v1'),
+    harnessSteers(harness),
+    prefersSteer,
+  );
 
-  const submit = useCallback(() => {
-    if (hasAttachments) {
-      onAttachmentsBlocked();
+  // ── Dictation ─────────────────────────────────────────────────────────
+  const [dictationSupported, setDictationSupported] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const baseRef = useRef('');
+  const selRef = useRef(0);
+  // Partials/finals splice into the draft at the caret position captured
+  // when dictation started (baseRef/selRef) — partials replace each other,
+  // the final replaces the last partial.
+  const dictationCb = useRef({
+    onPartial: (text: string) =>
+      setDraftText(
+        chatId,
+        `${baseRef.current.slice(
+          0,
+          selRef.current,
+        )}${text}${baseRef.current.slice(selRef.current)}`,
+      ),
+    onFinal: (text: string) => {
+      setDraftText(
+        chatId,
+        `${baseRef.current.slice(
+          0,
+          selRef.current,
+        )}${text}${baseRef.current.slice(selRef.current)}`,
+      );
+      setDictating(false);
+    },
+    onError: () => setDictating(false),
+  });
+  useEffect(() => {
+    dictationCb.current.onPartial = text =>
+      setDraftText(
+        chatId,
+        `${baseRef.current.slice(
+          0,
+          selRef.current,
+        )}${text}${baseRef.current.slice(selRef.current)}`,
+      );
+    dictationCb.current.onFinal = text => {
+      setDraftText(
+        chatId,
+        `${baseRef.current.slice(
+          0,
+          selRef.current,
+        )}${text}${baseRef.current.slice(selRef.current)}`,
+      );
+      setDictating(false);
+    };
+  }, [chatId]);
+
+  useEffect(() => {
+    let mounted = true;
+    dictation
+      .isSupported()
+      .then(r => {
+        if (mounted) setDictationSupported(r.supported);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [dictation]);
+
+  // Stop dictation on background / unmount (never leak the mic).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => {
+      if (s !== 'active' && dictating) {
+        dictation.stop().catch(() => {});
+        setDictating(false);
+      }
+    });
+    return () => {
+      sub.remove();
+      if (dictating) dictation.stop().catch(() => {});
+    };
+  }, [dictation, dictating]);
+
+  const toggleDictation = useCallback(() => {
+    if (dictating) {
+      dictation.stop().catch(() => {});
+      setDictating(false);
       return;
     }
+    baseRef.current = draft.text;
+    dictation
+      .start({}, dictationCb.current)
+      .then(() => setDictating(true))
+      .catch(() => setDictating(false));
+  }, [dictating, dictation, draft.text]);
+
+  const submit = useCallback(() => {
     const text = draft.text.trim();
+    if (hasAttachments) {
+      // Routes per sendPlan; 'blocked' surfaces onSendBlocked — the draft
+      // and attachments stay put (nothing silently dropped).
+      onSendAttachments(text).then(plan => {
+        if (plan === 'blocked') {
+          onSendBlocked();
+        } else if (plan !== 'direct') {
+          clearDraft(chatId);
+        }
+      });
+      return;
+    }
     if (text === '') return;
+    if (live === 'queue' && phase !== 'idle') {
+      onQueue(text);
+      setDraftText(chatId, '');
+      return;
+    }
+    if (live === 'steer' && phase !== 'idle' && text !== '') {
+      onSteer(text);
+      setDraftText(chatId, '');
+      return;
+    }
     if (action.primary === 'steer') onSteer(text);
     else if (action.primary === 'send') onSend(text);
     else return;
@@ -92,15 +253,19 @@ export const Composer = React.memo(function ({
     hasAttachments,
     draft.text,
     action.primary,
+    live,
+    phase,
     onSteer,
     onSend,
-    onAttachmentsBlocked,
+    onQueue,
+    onSendAttachments,
+    onSendBlocked,
     chatId,
   ]);
 
-  const [thumbsContentHeight, setThumbsContentHeight] = React.useState(0);
-  const thumbsStyle = useAnimatedStyle(() => ({
-    height: withTiming(hasAttachments ? thumbsContentHeight : 0, {
+  const [stripContentHeight, setStripContentHeight] = useState(0);
+  const stripStyle = useAnimatedStyle(() => ({
+    height: withTiming(hasAttachments ? stripContentHeight : 0, {
       duration: THUMBS_ANIM_MS,
       easing: Easing.inOut(Easing.ease),
     }),
@@ -111,6 +276,17 @@ export const Composer = React.memo(function ({
   }));
 
   const right = action.right;
+  const showLivePill = live !== 'hidden' && hasText;
+
+  // Beam geometry = the glass's own bounds; Reduce Motion collapses the
+  // sweep to a static ring.
+  const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => {});
+  }, []);
 
   return (
     <View
@@ -118,118 +294,320 @@ export const Composer = React.memo(function ({
       onLayout={onLayout}
       style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
     >
-      {question !== undefined ? (
-        <QuestionPanel
-          requestId={question.requestId}
-          questions={question.questions}
-          onSubmit={onRespondInput}
-        />
-      ) : null}
-
-      <View style={styles.row}>
-        <AttachmentMenu onPickPhotos={pickImages} />
-        <View style={styles.inputPillWrap}>
-          <Glass style={styles.inputPill}>
-            <Animated.View
-              style={[styles.thumbsClip, thumbsStyle]}
-              pointerEvents={hasAttachments ? 'auto' : 'none'}
+      <View
+        style={styles.glassWrap}
+        onLayout={e =>
+          setGlassSize({
+            w: e.nativeEvent.layout.width,
+            h: e.nativeEvent.layout.height,
+          })
+        }
+      >
+        <Glass style={styles.glass}>
+          {/* ── Upper tier: attachment strip + input ──────────────────── */}
+          <Animated.View
+            style={[styles.stripClip, stripStyle]}
+            pointerEvents={hasAttachments ? 'auto' : 'none'}
+          >
+            <View
+              style={styles.strip}
+              onLayout={event => {
+                const next = Math.ceil(event.nativeEvent.layout.height);
+                setStripContentHeight(cur =>
+                  Math.abs(cur - next) <= 1 ? cur : next,
+                );
+              }}
             >
-              <View
-                style={styles.thumbs}
-                onLayout={event => {
-                  const next = Math.ceil(event.nativeEvent.layout.height);
-                  setThumbsContentHeight(cur =>
-                    Math.abs(cur - next) <= 1 ? cur : next,
-                  );
-                }}
-              >
-                {draft.attachments.map(a => (
+              {draft.attachments.map(a =>
+                a.kind === 'image' ? (
                   <View key={a.id} style={styles.thumbWrap}>
                     <NitroImage
                       image={{ filePath: a.localUri }}
                       style={styles.thumb}
                     />
+                    {a.uploadState === 'uploading' ? (
+                      <ActivityIndicator
+                        style={styles.thumbProgress}
+                        size="small"
+                      />
+                    ) : null}
                     <Pressable
                       style={styles.thumbRemove}
                       hitSlop={8}
-                      onPress={() => remove(a.id)}
+                      accessibilityLabel={t(
+                        'composer.removeAttachment',
+                      ).replace('{name}', a.name)}
+                      onPress={() => removeAttachment(chatId, a.id)}
                     >
                       <View style={styles.thumbRemoveBadge}>
                         <Icon name="xmark" size={11} color="#FFFFFF" />
                       </View>
                     </Pressable>
                   </View>
-                ))}
-              </View>
-            </Animated.View>
+                ) : (
+                  <View
+                    key={a.id}
+                    style={[styles.fileChip, { borderColor: theme.border }]}
+                  >
+                    <Icon name="doc" size={14} color={theme.textSecondary} />
+                    <Text
+                      style={[styles.fileChipText, { color: theme.text }]}
+                      numberOfLines={1}
+                    >
+                      {a.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fileChipSize,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      {formatBytes(a.size)}
+                    </Text>
+                    {a.uploadState === 'uploading' ? (
+                      <ActivityIndicator size="small" />
+                    ) : null}
+                    <Pressable
+                      hitSlop={8}
+                      accessibilityLabel={t(
+                        'composer.removeAttachment',
+                      ).replace('{name}', a.name)}
+                      onPress={() => removeAttachment(chatId, a.id)}
+                    >
+                      <Icon
+                        name="xmark.circle.fill"
+                        size={16}
+                        color={theme.textSecondary}
+                      />
+                    </Pressable>
+                  </View>
+                ),
+              )}
+            </View>
+          </Animated.View>
 
-            <TextInput
-              value={draft.text}
-              onChangeText={text => setDraftText(chatId, text)}
-              placeholder={
-                action.primary === 'steer'
-                  ? t('session.steerPlaceholder')
-                  : t('session.messagePlaceholder')
-              }
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { color: theme.text }]}
-              multiline
+          {/* QuestionPanel renders above the lower tier inside the same
+            glass; the input stays mounted, de-emphasized. */}
+          {question !== undefined ? (
+            <QuestionPanel
+              requestId={question.requestId}
+              questions={question.questions}
+              onSubmit={onRespondInput}
             />
-          </Glass>
-        </View>
+          ) : null}
 
-        {action.primary === 'steer' ? (
-          <Pressable onPress={submit} hitSlop={6} style={styles.steerBtn}>
-            <Glass interactive style={styles.steerPill}>
-              <Text style={[styles.steerText, { color: theme.accent }]}>
-                {t('session.steer')}
+          <TextInput
+            value={draft.text}
+            onChangeText={text => setDraftText(chatId, text)}
+            onSelectionChange={e =>
+              (selRef.current = e.nativeEvent.selection.start)
+            }
+            placeholder={
+              live === 'queue'
+                ? t('session.queuePlaceholder')
+                : action.primary === 'steer'
+                ? t('session.steerPlaceholder')
+                : t('session.messagePlaceholder')
+            }
+            placeholderTextColor={theme.textSecondary}
+            style={[
+              styles.input,
+              { color: theme.text },
+              question !== undefined ? styles.inputDimmed : undefined,
+            ]}
+            multiline
+          />
+
+          {/* ── Hairline tier separator ────────────────────────────────── */}
+          <View style={[styles.hairline, { backgroundColor: theme.border }]} />
+
+          {/* ── Lower tier: [+] · queue/steer pill · model · mic · right ─ */}
+          <View style={styles.lowerRow}>
+            <AttachmentMenu
+              onPickPhotos={pickImages}
+              onPickCamera={pickCamera}
+              onPickFiles={pickFiles}
+            />
+
+            {showLivePill ? (
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <View
+                    style={[styles.livePill, { borderColor: theme.accent }]}
+                  >
+                    <Text
+                      style={[styles.livePillText, { color: theme.accent }]}
+                    >
+                      {live === 'queue'
+                        ? t('session.queue')
+                        : t('session.steer')}
+                    </Text>
+                  </View>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  <DropdownMenu.Item
+                    key="queue"
+                    onSelect={() => setLiveActionPrefersSteer(false)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.queue')}
+                    </DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    key="steer"
+                    onSelect={() => setLiveActionPrefersSteer(true)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.steer')}
+                    </DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            ) : null}
+
+            <Pressable
+              style={styles.modelBtn}
+              onPress={onOpenModelPicker}
+              hitSlop={4}
+            >
+              <Text
+                style={[styles.modelText, { color: theme.textSecondary }]}
+                numberOfLines={1}
+              >
+                {modelLabel}
               </Text>
-            </Glass>
-          </Pressable>
-        ) : null}
+              <Icon
+                name="chevron.up.chevron.down"
+                size={10}
+                color={theme.textSecondary}
+              />
+            </Pressable>
 
-        <Pressable
-          onPress={
-            right === 'stop' ? onStop : right === 'send' ? submit : undefined
-          }
-          disabled={
-            right === 'stopping' ||
-            (right === 'send' && action.primary !== 'send')
-          }
-          hitSlop={6}
-        >
-          <Glass interactive style={styles.circle}>
-            <Icon
-              name={
-                right === 'stop' || right === 'stopping'
-                  ? 'stop.fill'
-                  : 'arrow.up'
+            {session.queue.length > 0 ? (
+              <Pressable onPress={onOpenQueue} hitSlop={6}>
+                <Text style={[styles.queueBadge, { color: theme.accent }]}>
+                  {session.queue.length}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={toggleDictation}
+              disabled={!dictationSupported}
+              hitSlop={6}
+              accessibilityLabel={t('composer.dictate')}
+              accessibilityHint={
+                dictationSupported
+                  ? undefined
+                  : t('composer.dictationUnavailable')
               }
-              size={right === 'send' ? 20 : 15}
-              color={
+            >
+              <Icon
+                name={dictating ? 'stop.circle.fill' : 'mic'}
+                size={18}
+                color={
+                  !dictationSupported
+                    ? theme.sendInactive
+                    : dictating
+                    ? theme.danger
+                    : theme.textSecondary
+                }
+              />
+            </Pressable>
+
+            <Pressable
+              onPress={
+                right === 'stop'
+                  ? onStop
+                  : right === 'cancel'
+                  ? onCancel
+                  : right === 'send'
+                  ? submit
+                  : undefined
+              }
+              disabled={
                 right === 'stopping' ||
                 (right === 'send' && action.primary !== 'send')
-                  ? theme.sendInactive
-                  : theme.sendActive
               }
-            />
-          </Glass>
-        </Pressable>
+              hitSlop={6}
+            >
+              <Glass interactive style={styles.circle}>
+                {right === 'stopping' ? (
+                  <ActivityIndicator size="small" color={theme.textSecondary} />
+                ) : (
+                  <Icon
+                    name={
+                      right === 'stop'
+                        ? 'stop.fill'
+                        : right === 'cancel'
+                        ? 'xmark'
+                        : 'arrow.up'
+                    }
+                    size={right === 'send' ? 20 : 15}
+                    color={
+                      right === 'send' && action.primary !== 'send'
+                        ? theme.sendInactive
+                        : theme.sendActive
+                    }
+                  />
+                )}
+              </Glass>
+            </Pressable>
+          </View>
+        </Glass>
+        <BorderBeam
+          width={glassSize.w}
+          height={glassSize.h}
+          radius={28}
+          runPhase={phase}
+          roomState={roomState}
+          reduceMotion={reduceMotion}
+        />
       </View>
+
       {right === 'stopping' ? (
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
           {t('session.stopping')}
+        </Text>
+      ) : null}
+      {live === 'hidden' &&
+      (phase === 'working' || phase === 'awaitingInput') ? (
+        <Text style={[styles.hint, { color: theme.textSecondary }]}>
+          {t('session.workingHint')}
         </Text>
       ) : null}
     </View>
   );
 });
 
-const CIRCLE = 44;
+const formatBytes = (n: number): string => {
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+};
+
+const CIRCLE = 36;
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  glassWrap: { position: 'relative' },
+  glass: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    paddingTop: 8,
+  },
+  lowerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    opacity: 0.4,
+    marginHorizontal: 14,
+  },
   circle: {
     width: CIRCLE,
     height: CIRCLE,
@@ -238,36 +616,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  steerBtn: {},
-  steerPill: {
-    height: CIRCLE,
-    borderRadius: CIRCLE / 2,
+  input: {
+    fontSize: 16,
     paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    paddingTop: 2,
+    paddingBottom: 8,
+    maxHeight: INPUT_MAX_HEIGHT,
   },
-  steerText: { fontSize: 15, fontWeight: '600' },
-  inputPillWrap: { flex: 1 },
-  inputPill: {
-    minHeight: CIRCLE,
-    borderRadius: 24,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    overflow: 'hidden',
-  },
-  input: { fontSize: 16, paddingVertical: 4, maxHeight: INPUT_MAX_HEIGHT },
-  thumbsClip: { overflow: 'hidden' },
-  thumbs: {
+  inputDimmed: { opacity: 0.45 },
+  stripClip: { overflow: 'hidden' },
+  strip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingTop: 2,
+    paddingHorizontal: 12,
     paddingBottom: 8,
   },
-  thumbWrap: { width: 120, height: 120, borderRadius: 18, overflow: 'hidden' },
-  thumb: { width: 120, height: 120, borderRadius: 16 },
+  thumbWrap: { width: 96, height: 96, borderRadius: 14, overflow: 'hidden' },
+  thumb: { width: 96, height: 96, borderRadius: 12 },
+  thumbProgress: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 38,
+  },
   thumbRemove: { position: 'absolute', top: 6, right: 6 },
   thumbRemoveBadge: {
     width: 22,
@@ -277,5 +648,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  fileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    maxWidth: '100%',
+  },
+  fileChipText: { fontSize: 13, maxWidth: 140 },
+  fileChipSize: { fontSize: 11 },
+  livePill: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  livePillText: { fontSize: 12, fontWeight: '600' },
+  modelBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  modelText: { fontSize: 13 },
+  queueBadge: { fontSize: 13, fontWeight: '700' },
   hint: { fontSize: 12, textAlign: 'center' },
 });

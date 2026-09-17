@@ -27,7 +27,17 @@ import { nudgeHost } from '../transport/nudge';
 import type { TokenSource } from '../transport/tokenSource';
 import type { WsFactory } from '../transport/ws';
 import type { FetchImpl } from '../transport/edgeHttp';
-import { getSessionStore, type FailedSend } from '../state/sessionStores';
+import {
+  getSessionStore,
+  type FailedSend,
+  type RunPhase,
+} from '../state/sessionStores';
+import { updateAttachment, type StagedAttachment } from '../state/draftStore';
+import { withAttachments } from '../protocol/messages';
+import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
+import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
+import { harnessInlinesAttachments } from '../attachments/validate';
+import { sendPlan, type SendPlan } from '../attachments/sendPlan';
 
 export interface SessionControllerDeps {
   cfg: EdgeConfig;
@@ -43,7 +53,31 @@ export interface SessionControllerDeps {
   log?: (line: string) => void;
   /** Workspace lookup for host device + roomGen (connectIfReady). */
   chatMeta: () => { hostDeviceId?: string; roomGen?: number };
+  /** Host relay lookup for queue actions + attachment uploads. Optional so
+   * tests that never touch those paths needn't stub it; queue/upload
+   * methods throw when absent. */
+  relayFor?: (deviceId: string) => RelayLike | undefined;
+  /** Reads a staged file's bytes as base64 (expo-file-system on device). */
+  readFileBase64?: (uri: string) => Promise<string>;
+  /** Host capability strings for the chat's host device (workspace row). */
+  hostCapabilities?: () => ReadonlySet<string>;
 }
+
+/** Queue actions against the host — SessionQueue.swift performQueueAction.
+ * The host serializes these with delivery; a row is never deleted locally
+ * before its ACK (a lost reply is uncertain, sync reconciles). */
+export type QueueActionKind = 'sendNow' | 'steerNow' | 'remove';
+
+const QUEUE_ACTION_METHOD: Record<QueueActionKind, string> = {
+  sendNow: 'SendQueuedMessageNow',
+  steerNow: 'SteerQueuedMessageNow',
+  remove: 'RemoveQueuedMessage',
+};
+
+const queueActionAcked = (
+  reply: { sent?: boolean; removed?: boolean },
+  action: QueueActionKind,
+): boolean => (action === 'remove' ? reply.removed : reply.sent) === true;
 
 const PERSIST_DEBOUNCE_MS = 500;
 const TERMINAL_BAD = new Set([
@@ -66,6 +100,9 @@ export class SessionController {
   private persistTimer: unknown;
   /** messageId → commandId for run/steer sends (failedSend bookkeeping). */
   private commandByMessage = new Map<string, string>();
+  /** Staged-attachment ids whose in-flight upload must abort between
+   * chunks (composer ✕ during a legacy send). */
+  private abortedUploads = new Set<string>();
 
   constructor(chatId: string, deps: SessionControllerDeps) {
     this.chatId = chatId;
@@ -368,5 +405,228 @@ export class SessionController {
     const ok = this.doc.cancelOwnCommand(commandId, this.deps.deviceId);
     if (ok) this.project();
     return ok;
+  }
+
+  // ── Shared queue (SessionQueue.swift) ────────────────────────────────
+
+  /** enqueueMessage: park a message on the doc's `queue` movable list. */
+  queueMessage(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean } = {},
+  ): string {
+    const id = this.doc.enqueueMessage({
+      text,
+      deviceId: this.deps.deviceId,
+      nowMs: this.deps.clock.now(),
+      attachments: opts.attachments,
+      holdForTurnEnd: opts.holdForTurnEnd,
+    });
+    this.project();
+    this.nudge();
+    return id;
+  }
+
+  /** moveQueued: a pure local movable-list write (no RPC). */
+  moveQueued(id: string, toIndex: number): boolean {
+    const ok = this.doc.moveQueued(id, toIndex);
+    if (ok) {
+      this.project();
+      this.nudge();
+    }
+    return ok;
+  }
+
+  private hostRelay(): RelayLike {
+    const host = this.deps.chatMeta().hostDeviceId;
+    if (host === undefined) throw new Error('chat has no host device');
+    const relay = this.deps.relayFor?.(host);
+    if (relay === undefined) throw new Error('host offline');
+    return relay;
+  }
+
+  /** performQueueAction — sends the RPC, applies a CONFIRMED removal
+   * locally, and kicks the room on an unacknowledged reply. Requires the
+   * host's `message-queue-actions-v1` capability. */
+  async queueAction(id: string, action: QueueActionKind): Promise<boolean> {
+    const store = getSessionStore(this.chatId);
+    const row = store.getState().queue.find(q => q.id === id);
+    if (row === undefined) return false;
+    // deliveryGate'd rows are held for turn end — no actions.
+    if (action !== 'remove' && row.deliveryGate != null) return false;
+    store.setState(s => ({
+      queueActionsPending: new Set([...s.queueActionsPending, id]),
+      queueActionError: undefined,
+    }));
+    try {
+      const reply = await this.hostRelay().call<{
+        sent?: boolean;
+        removed?: boolean;
+      }>(QUEUE_ACTION_METHOD[action], { chatId: this.chatId, id });
+      if (!queueActionAcked(reply, action)) {
+        store.setState(() => ({
+          queueActionError:
+            'The host did not confirm the action. The message may have already left the queue.',
+        }));
+        this.kick();
+        return false;
+      }
+      if (action === 'remove') {
+        this.doc.removeQueuedLocal(id);
+        this.project();
+      }
+      return true;
+    } catch (e) {
+      store.setState(() => ({
+        queueActionError: `Couldn't complete the queue action: ${e}`,
+      }));
+      this.kick();
+      return false;
+    } finally {
+      store.setState(s => {
+        const next = new Set(s.queueActionsPending);
+        next.delete(id);
+        return { queueActionsPending: next };
+      });
+    }
+  }
+
+  // ── Attachments (ComposerView/Attachments.swift send routing) ────────
+
+  /** Route a draft's staged attachments per `sendPlan` and send. Never puts
+   * a device-local URI on the wire. Returns the plan taken; 'blocked'
+   * means the caller must surface the refusal. */
+  async sendWithAttachments(
+    text: string,
+    chat: {
+      config?: Parameters<typeof buildRunCommand>[1]['config'];
+      cwd?: string;
+    },
+    staged: readonly StagedAttachment[],
+    opts: { worktree?: WorktreeSpec; phase: RunPhase } = { phase: 'idle' },
+  ): Promise<SendPlan> {
+    const plan = sendPlan(
+      opts.phase,
+      this.deps.hostCapabilities?.() ?? new Set(),
+      staged.length > 0,
+    );
+    if (plan === 'direct') {
+      this.sendRun(text, chat, opts);
+      return 'direct';
+    }
+    if (plan === 'blocked') return 'blocked';
+
+    const readBase64 = this.deps.readFileBase64;
+    if (readBase64 === undefined)
+      throw new Error('readFileBase64 not wired on this platform');
+
+    if (plan === 'queue') {
+      // Queue-first (ComposerView.swift queued flow): the row lands with
+      // pending:// refs NOW; bytes chase it via the escort from the stash.
+      const transfers = staged.map(a => ({
+        uploadId: a.id,
+        name: a.name,
+        size: a.size,
+      }));
+      for (const t of transfers) {
+        const b64 = await readBase64(
+          staged.find(a => a.id === t.uploadId)!.localUri,
+        );
+        await this.deps.docDisk.saveUpload(
+          this.deps.orgId,
+          this.deps.userId,
+          t.uploadId,
+          { name: t.name, size: t.size, chatId: this.chatId },
+          b64,
+        );
+      }
+      this.queueMessage(text, { attachments: pendingRefsFor(transfers) });
+      this.spawnEscort(transfers);
+      return 'queue';
+    }
+
+    // Legacy: upload first, block the send until every ref resolves to a
+    // host path (progress rings on the strip).
+    const relay = this.hostRelay();
+    const paths: string[] = [];
+    for (const a of staged) {
+      updateAttachment(this.chatId, a.id, { uploadState: 'uploading' });
+      try {
+        const path = await uploadAttachmentChunked(relay, a.name, a.id, {
+          readBase64: () => readBase64(a.localUri),
+          clock: this.deps.clock,
+          isAborted: () => this.abortedUploads.has(a.id),
+          onProgress: p => updateAttachment(this.chatId, a.id, { progress: p }),
+        });
+        updateAttachment(this.chatId, a.id, {
+          uploadState: 'uploaded',
+          progress: 1,
+          remoteRef: path,
+        });
+        paths.push(path);
+      } catch (e) {
+        updateAttachment(this.chatId, a.id, { uploadState: 'failed' });
+        throw e;
+      }
+    }
+    // The prompt names the paths (withAttachments transport — what persists
+    // in the doc); run.attachments carries the refs only for harnesses that
+    // inline image blocks.
+    const body = withAttachments(text, paths);
+    const harnessId = chat.config?.harness ?? '';
+    this.sendRun(body, chat, {
+      ...opts,
+      attachments: harnessInlinesAttachments(harnessId) ? paths : undefined,
+    });
+    return 'legacy';
+  }
+
+  /** Abort an in-flight staged upload (composer ✕) — checked between
+   * chunks and before retries; deletes only the local stash. */
+  cancelUpload(attachmentId: string): void {
+    this.abortedUploads.add(attachmentId);
+    this.deps.docDisk
+      .deleteUpload(this.deps.orgId, this.deps.userId, attachmentId)
+      .catch(() => {});
+  }
+
+  /** Re-arm escorts for stashed-but-unlanded uploads on this chat
+   * (respawnEscorts — called by the runtime on session open). */
+  respawnEscorts(): void {
+    this.deps.docDisk
+      .listUploads(this.deps.orgId, this.deps.userId)
+      .then(list => {
+        const mine = list
+          .filter(u => u.chatId === this.chatId)
+          .map(u => ({ uploadId: u.uploadId, name: u.name, size: u.size }));
+        if (mine.length > 0) this.spawnEscort(mine);
+      })
+      .catch(() => {});
+  }
+
+  private spawnEscort(
+    transfers: { uploadId: string; name: string; size: number }[],
+  ): void {
+    new AttachmentEscort({
+      orgId: this.deps.orgId,
+      userId: this.deps.userId,
+      docDisk: this.deps.docDisk,
+      clock: this.deps.clock,
+      relayFor: () => this.hostRelay(),
+      nudgeHost: () => this.nudge(),
+      log: this.deps.log,
+    }).spawn(transfers);
+  }
+
+  private nudge(): void {
+    const host = this.deps.chatMeta().hostDeviceId;
+    if (host !== undefined) {
+      nudgeHost(
+        this.deps.cfg,
+        this.deps.tokenSource,
+        host,
+        this.chatId,
+        this.deps.fetchImpl,
+      ).catch(() => {});
+    }
   }
 }

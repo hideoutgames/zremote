@@ -50,6 +50,13 @@ import type { MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/Glass';
 import { Composer } from '../components/Composer';
+import { CheckoutSelector } from '../components/CheckoutSelector';
+import { QueuePanel } from '../components/QueuePanel';
+import { ModelPickerSheet } from '../components/ModelPickerSheet';
+import { TrueSheet } from '@lodev09/react-native-true-sheet';
+import { dictationUnavailable } from '../zeron/native/dictation';
+import { CAP_QUEUE_ACTIONS } from '../zeron/attachments/sendPlan';
+import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
@@ -193,13 +200,50 @@ export function SessionScreen({
     [controller],
   );
   const doStop = useCallback(() => controller?.interrupt(), [controller]);
+  const doQueue = useCallback(
+    (text: string) => controller?.queueMessage(text),
+    [controller],
+  );
+  const doCancel = useCallback(() => {
+    // Cancel the own still-pending run/steer command (queuedLocally /
+    // synchronized phases) — same rule the phase machine used to pick it.
+    const own = session.commands.find(
+      c =>
+        c.issuedBy === deviceId &&
+        (c.kind === 'run' || c.kind === 'steer') &&
+        !['applied', 'rejected', 'expired', 'superseded', 'cancelled'].includes(
+          c.status,
+        ),
+    );
+    if (own !== undefined) controller?.cancelOwnCommand(own.id);
+  }, [controller, session, deviceId]);
   const doRespond = useCallback(
     (requestId: string, answers: { questionId: string; labels: string[] }[]) =>
       controller?.respondInput(requestId, answers),
     [controller],
   );
 
-  const onAttachmentsBlocked = useCallback(() => {
+  const doSendAttachments = useCallback(
+    (text: string): Promise<SendPlan> => {
+      if (controller === undefined) return Promise.resolve('blocked');
+      return controller.sendWithAttachments(
+        text,
+        { config: chat?.config, cwd: chat?.cwd },
+        draft.attachments,
+        { worktree: draft.pendingWorktree, phase },
+      );
+    },
+    [
+      controller,
+      chat?.config,
+      chat?.cwd,
+      draft.attachments,
+      draft.pendingWorktree,
+      phase,
+    ],
+  );
+
+  const onSendBlocked = useCallback(() => {
     Alert.alert(t('session.attachmentsBlocked'));
   }, []);
 
@@ -232,6 +276,20 @@ export function SessionScreen({
       ? undefined
       : s.devices.find(d => d.id === chat.deviceId),
   );
+  const capabilities = useMemo(
+    () => new Set(host?.capabilities ?? []),
+    [host?.capabilities],
+  );
+  const space = useStore(workspaceStore, s =>
+    chat?.spaceId === undefined
+      ? undefined
+      : s.spaces.find(sp => sp.id === chat.spaceId),
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const modelLabel = `${harness?.name ?? t('picker.agent')} · ${
+    chat?.config?.model ?? t('picker.default')
+  }`;
   const keyboardOffset = { opened: insets.bottom };
   const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
     .filter(Boolean)
@@ -387,19 +445,74 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
+        {runtime !== null && chat !== undefined ? (
+          <CheckoutSelector
+            runtime={runtime}
+            chat={chat}
+            host={host}
+            phase={phase}
+            repoPath={space?.path}
+            label={subtitle !== '' ? subtitle : t('checkout.noProject')}
+          />
+        ) : null}
         <Composer
           chatId={chatId}
           phase={phase}
+          roomState={session.room}
           harness={harness}
+          capabilities={capabilities}
+          modelLabel={modelLabel}
+          onOpenModelPicker={() => setPickerOpen(true)}
+          onOpenQueue={() => setQueueOpen(true)}
+          dictation={dictationUnavailable}
           onSend={doSend}
           onSteer={doSteer}
+          onQueue={doQueue}
           onStop={doStop}
+          onCancel={doCancel}
+          onSendAttachments={doSendAttachments}
           onRespondInput={doRespond}
-          onAttachmentsBlocked={onAttachmentsBlocked}
+          onSendBlocked={onSendBlocked}
           composerRef={composerRef}
           onLayout={onComposerLayout}
         />
       </KeyboardStickyView>
+
+      {queueOpen ? (
+        <TrueSheet
+          detents={['auto', 1]}
+          initialDetentIndex={0}
+          onDidDismiss={() => setQueueOpen(false)}
+          grabber
+          backgroundColor={theme.background}
+        >
+          <View style={styles.queueSheet}>
+            <QueuePanel
+              queue={session.queue}
+              actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
+              pending={session.queueActionsPending}
+              error={session.queueActionError}
+              canSteer={
+                harness?.supportsSteering === true &&
+                harness.steeringMode === 'step-boundary'
+              }
+              onAction={(id, a) => {
+                controller?.queueAction(id, a).catch(() => {});
+              }}
+            />
+          </View>
+        </TrueSheet>
+      ) : null}
+
+      {pickerOpen && runtime !== null && chat !== undefined ? (
+        <ModelPickerSheet
+          runtime={runtime}
+          chat={chat}
+          phase={phase}
+          hasMessages={entries.length > 0}
+          onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
 
       {reasoning !== null ? (
         <Suspense fallback={null}>
@@ -463,4 +576,5 @@ const styles = StyleSheet.create({
   },
   failedText: { fontSize: 13, flex: 1 },
   failedAction: { fontSize: 13, fontWeight: '600' },
+  queueSheet: { padding: 20 },
 });

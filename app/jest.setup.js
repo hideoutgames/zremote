@@ -193,4 +193,18 @@ jest.mock('expo-linking', () => ({
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
 }));
-jest.mock('expo-file-system', () => ({}));
+jest.mock('expo-file-system', () => ({
+  File: class {
+    constructor(uri) {
+      this.uri = uri;
+    }
+    base64() {
+      return Promise.resolve('');
+    }
+  },
+  Directory: class {},
+  Paths: { document: { uri: 'file:///docs' }, cache: { uri: 'file:///cache' } },
+}));
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(() => Promise.resolve({ canceled: true })),
+}));
