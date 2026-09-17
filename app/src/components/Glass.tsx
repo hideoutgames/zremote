@@ -4,7 +4,7 @@ import {
   isLiquidGlassSupported,
   LiquidGlassView,
 } from '@callstack/liquid-glass';
-import { theme } from '../theme';
+import { useTheme } from '../theme';
 
 type GlassProps = ViewProps & {
   // Interactive glass grows on touch and shimmers (iOS 26+ only).
@@ -22,12 +22,13 @@ export function Glass({
   children,
   ...rest
 }: GlassProps) {
+  const theme = useTheme();
   if (isLiquidGlassSupported) {
     return (
       <LiquidGlassView
         interactive={interactive}
         effect="regular"
-        colorScheme="dark"
+        colorScheme={theme.scheme}
         tintColor={tintColor}
         style={style}
         {...rest}

@@ -1,0 +1,118 @@
+// en strings — every user-facing string goes through t('key'); no hardcoded
+// copy in components.
+
+const en = {
+  // Sign in / org gate
+  'signIn.title': 'Sign in to Zeron',
+  'signIn.subtitle': 'Control your Zeron sessions from anywhere.',
+  'signIn.button': 'Sign in',
+  'signIn.pasteFallback.title': 'Paste the sign-in code',
+  'signIn.pasteFallback.body':
+    'If the browser did not return here, copy the code shown after sign-in and paste it below.',
+  'signIn.pasteFallback.placeholder': 'state.code',
+  'signIn.pasteFallback.continue': 'Continue',
+  'signIn.advanced': 'Advanced',
+  'signIn.edgeUrl': 'Edge URL',
+  'signIn.error.generic': 'Sign-in failed. Try again.',
+  'orgGate.title': 'Choose an organization',
+  'orgGate.create': 'Create organization',
+  'orgGate.createPlaceholder': 'Organization name',
+  'orgGate.empty': 'No organizations yet — create one to start.',
+
+  // Home
+  'home.search': 'Search sessions',
+  'home.allSpaces': 'All spaces',
+  'home.sessions': 'Sessions',
+  'home.archived': 'Archived',
+  'home.showMore': 'Show more',
+  'home.newSession': 'New session',
+  'home.connection.connecting': 'Connecting…',
+  'home.connection.disconnected': 'Offline',
+  'home.empty': 'No sessions yet',
+  'home.row.rename': 'Rename',
+  'home.row.archive': 'Archive',
+  'home.row.unarchive': 'Unarchive',
+  'home.row.delete': 'Delete',
+  'home.row.deleteConfirm': 'Delete this session? This cannot be undone.',
+  'home.row.deleteConfirmButton': 'Delete',
+  'home.row.cancel': 'Cancel',
+
+  // New session
+  'newSession.title': 'New session',
+  'newSession.space': 'Project',
+  'newSession.noProject': 'Session without a project',
+  'newSession.host': 'Host',
+  'newSession.offline': 'offline',
+  'newSession.agent': 'Agent',
+  'newSession.agent.loading': 'Loading agents…',
+  'newSession.agent.none': 'No agents enabled on this device',
+  'newSession.model': 'Model',
+  'newSession.effort': 'Effort',
+  'newSession.checkout': 'Checkout',
+  'newSession.checkout.current': 'Current checkout',
+  'newSession.checkout.currentWorktree': 'Current worktree',
+  'newSession.checkout.newWorktree': 'New worktree',
+  'newSession.checkout.from': 'From',
+  'newSession.worktreeUnsupported':
+    "This host can't create isolated worktrees — update Zeron on the host.",
+  'newSession.create': 'Create',
+  'newSession.pickHost': 'Pick a host first',
+
+  // Session
+  'session.rename': 'Rename session',
+  'session.archive': 'Archive',
+  'session.copyId': 'Copy session id',
+  'session.back': 'Back',
+  'session.empty': 'Nothing here yet — send a message to start.',
+  'session.messagePlaceholder': 'Message',
+  'session.steerPlaceholder': 'Steer the run…',
+  'session.stop': 'Stop',
+  'session.stopping': 'Stopping…',
+  'session.steer': 'Steer',
+  'session.send': 'Send',
+  'session.attachmentsBlocked': 'Attachments upload arrives in the next build',
+  'session.failedSend': "Message wasn't accepted",
+  'session.failedSend.rejected': 'rejected',
+  'session.failedSend.expired': 'expired',
+  'session.failedSend.superseded': 'superseded',
+  'session.failedSend.cancelled': 'cancelled',
+  'session.restoreDraft': 'Restore to draft',
+  'session.showMore': 'Show more',
+  'session.showLess': 'Show less',
+  'session.reasoning': 'Thinking',
+  'session.thoughtProcess': 'Thought process',
+  'session.fullOutput': 'Show full output',
+  'session.answered': 'Answered',
+  'session.interrupted': 'Interrupted',
+  'session.submit': 'Submit',
+  'session.working': 'Working',
+  'session.queuedLocally': 'Queued',
+  'session.synchronized': 'Sent',
+  'session.stale': 'Connection lost',
+  'session.errored': 'Error',
+  'session.awaitingInput': 'Waiting for you',
+
+  // Settings
+  'settings.title': 'Settings',
+  'settings.account': 'Account',
+  'settings.organization': 'Organization',
+  'settings.signOut': 'Sign out',
+  'settings.signOutConfirm': 'Sign out of Zeron on this device?',
+  'settings.devices': 'Devices',
+  'settings.agents': 'Agents',
+  'settings.edgeUrl': 'Edge URL',
+  'settings.lastSeen': 'Last seen',
+  'settings.online': 'Online',
+  'settings.offline': 'Offline',
+  'settings.capabilities': 'capabilities',
+  'settings.version': 'version',
+
+  // Composer attachment menu
+  'composer.camera': 'Camera',
+  'composer.photos': 'Photos',
+  'composer.files': 'Files',
+} as const;
+
+export type StringKey = keyof typeof en;
+
+export const t = (key: StringKey): string => en[key];

@@ -1,26 +1,96 @@
-// Dark theme. The Margelo logo used on the empty state is the white variant.
-export const theme = {
+// Light + dark palettes. Components read the active theme via `useTheme()`
+// (driven by useColorScheme); `theme` stays exported as the dark palette for
+// non-hook call sites that can't take a hook.
+
+import { useColorScheme } from 'react-native';
+
+export interface Theme {
+  scheme: 'light' | 'dark';
+  background: string;
+  surface: string;
+  text: string;
+  textSecondary: string;
+  userBubbleBackground: string;
+  userBubbleText: string;
+  // Background used wherever liquid glass is not available.
+  glassFallbackBackground: string;
+  border: string;
+  sendActive: string;
+  sendInactive: string;
+  danger: string;
+  accent: string;
+  // Session status dots (proto/view.rs dot palette, approximated to sRGB).
+  indicatorAwaitingInput: string;
+  indicatorErrored: string;
+  indicatorWorking: string;
+  indicatorCompleted: string;
+  // Composer / cards.
+  inputBackground: string;
+  cardBackground: string;
+}
+
+export const darkTheme: Theme = {
+  scheme: 'dark',
   background: '#000000',
+  surface: '#1C1C1E',
   text: '#FFFFFF',
   textSecondary: '#8E8E93',
   userBubbleBackground: '#1C1C1E',
   userBubbleText: '#FFFFFF',
-  // Background used wherever liquid glass is not available (Android, iOS < 26).
   glassFallbackBackground: '#1C1C1E',
   border: '#2C2C2E',
   sendActive: '#FFFFFF',
   sendInactive: '#48484A',
-} as const;
+  danger: '#D7263D',
+  accent: '#0A84FF',
+  indicatorAwaitingInput: '#E5A50A',
+  indicatorErrored: '#D7263D',
+  indicatorWorking: '#0A84FF',
+  indicatorCompleted: '#30D158',
+  inputBackground: '#1C1C1E',
+  cardBackground: '#1C1C1E',
+};
 
-// Shared markdown design tokens. markdownStyle derives the EnrichedMarkdownText
-// style from these, so the chat reply and the reasoning trace share one
-// typography source and can't drift apart.
+export const lightTheme: Theme = {
+  scheme: 'light',
+  background: '#FFFFFF',
+  surface: '#F2F2F7',
+  text: '#000000',
+  textSecondary: '#6C6C70',
+  userBubbleBackground: '#E9E9EB',
+  userBubbleText: '#000000',
+  glassFallbackBackground: '#F2F2F7',
+  border: '#D1D1D6',
+  sendActive: '#000000',
+  sendInactive: '#AEAEB2',
+  danger: '#D7263D',
+  accent: '#007AFF',
+  indicatorAwaitingInput: '#C93400',
+  indicatorErrored: '#D7263D',
+  indicatorWorking: '#007AFF',
+  indicatorCompleted: '#248A3D',
+  inputBackground: '#F2F2F7',
+  cardBackground: '#F2F2F7',
+};
+
+/** Dark default for non-hook call sites (module-level styles are re-evaluated
+ * per theme in the components that matter). */
+export const theme = darkTheme;
+
+export const useTheme = (): Theme =>
+  useColorScheme() === 'light' ? lightTheme : darkTheme;
+
+export const useColorSchemeName = (): 'light' | 'dark' =>
+  useColorScheme() === 'light' ? 'light' : 'dark';
+
+// Shared markdown design tokens. markdownStyle derives the
+// EnrichedMarkdownText style from these, so the transcript and the reasoning
+// trace share one typography source.
 export const markdownTokens = {
   bodyFontSize: 16,
   bodyLineHeight: 22,
   linkColor: '#0A84FF',
   codeFontSize: 14,
-  codeBackground: theme.userBubbleBackground,
   headings: {
     1: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
     2: { fontSize: 20, lineHeight: 26, fontWeight: '700' },

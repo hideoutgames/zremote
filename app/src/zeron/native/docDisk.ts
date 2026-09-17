@@ -44,16 +44,34 @@ export const registryPath = (
   userId: string,
 ): string => join(accountDir(baseDir, orgId, userId), 'registry.json');
 
+export const draftsPath = (
+  baseDir: string,
+  orgId: string,
+  userId: string,
+): string => join(accountDir(baseDir, orgId, userId), 'drafts.json');
+
 export class DocDisk {
+  /** Per-path write queue — concurrent atomic writes to the same file would
+   * otherwise race on the shared `.tmp` name. */
+  private tails = new Map<string, Promise<void>>();
+
   constructor(
     private readonly fs: DocDiskFs,
     private readonly baseDir: string,
   ) {}
 
-  private async writeAtomic(path: string, contents: string): Promise<void> {
-    const tmp = `${path}.tmp`;
-    await this.fs.writeText(tmp, contents);
-    await this.fs.move(tmp, path);
+  private writeAtomic(path: string, contents: string): Promise<void> {
+    const tail = this.tails.get(path) ?? Promise.resolve();
+    const next = tail.then(async () => {
+      const tmp = `${path}.tmp`;
+      await this.fs.writeText(tmp, contents);
+      await this.fs.move(tmp, path);
+    });
+    this.tails.set(
+      path,
+      next.catch(() => {}),
+    );
+    return next;
   }
 
   private async readJson<T>(path: string): Promise<T | undefined> {
@@ -101,6 +119,26 @@ export class DocDisk {
 
   loadRegistry(orgId: string, userId: string): Promise<string | undefined> {
     return this.fs.readText(registryPath(this.baseDir, orgId, userId));
+  }
+
+  saveDrafts(
+    orgId: string,
+    userId: string,
+    drafts: Record<string, unknown>,
+  ): Promise<void> {
+    return this.writeAtomic(
+      draftsPath(this.baseDir, orgId, userId),
+      JSON.stringify(drafts),
+    );
+  }
+
+  loadDrafts(
+    orgId: string,
+    userId: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    return this.readJson<Record<string, unknown>>(
+      draftsPath(this.baseDir, orgId, userId),
+    );
   }
 
   async clearAccount(orgId: string, userId: string): Promise<void> {

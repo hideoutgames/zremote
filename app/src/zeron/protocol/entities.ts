@@ -142,6 +142,11 @@ export const deviceVersionAtLeast = (
   );
 };
 
+/** First host version honoring `RunRequest.worktree` (WorktreeSpec added in
+ * 0a80fc15 / PR #216; first tagged release containing it: v0.2.62 — v0.2.61
+ * does not include it). See docs/COMPATIBILITY.md "Capability gates". */
+export const MIN_VERSION_RUN_WORKTREE: [number, number, number] = [0, 2, 62];
+
 /** The wire `config` field decodes to ChatConfig with these defaults
  * (WorkspaceStore.project). */
 export const parseChatConfig = (raw: unknown): ChatConfig | undefined => {

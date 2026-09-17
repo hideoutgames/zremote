@@ -3,16 +3,21 @@ import { StyleSheet } from 'react-native';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { Glass } from './Glass';
 import { Icon } from './Icon';
-import { showNotImplemented } from '../notImplemented';
 import { theme } from '../theme';
+import { t } from '../i18n/strings';
 
 const CIRCLE = 44;
 
 type AttachmentMenuProps = {
   onPickPhotos: () => void;
+  /** Files/camera are staged-only this stage; the alert lives in the caller. */
+  onUnavailable?: () => void;
 };
 
-export function AttachmentMenu({ onPickPhotos }: AttachmentMenuProps) {
+export function AttachmentMenu({
+  onPickPhotos,
+  onUnavailable,
+}: AttachmentMenuProps) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
@@ -21,16 +26,20 @@ export function AttachmentMenu({ onPickPhotos }: AttachmentMenuProps) {
         </Glass>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
-        <DropdownMenu.Item key="camera" onSelect={showNotImplemented}>
-          <DropdownMenu.ItemTitle>Camera</DropdownMenu.ItemTitle>
+        <DropdownMenu.Item key="camera" onSelect={onUnavailable ?? (() => {})}>
+          <DropdownMenu.ItemTitle>
+            {t('composer.camera')}
+          </DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'camera' }} />
         </DropdownMenu.Item>
         <DropdownMenu.Item key="photos" onSelect={onPickPhotos}>
-          <DropdownMenu.ItemTitle>Photos</DropdownMenu.ItemTitle>
+          <DropdownMenu.ItemTitle>
+            {t('composer.photos')}
+          </DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'photo' }} />
         </DropdownMenu.Item>
-        <DropdownMenu.Item key="files" onSelect={showNotImplemented}>
-          <DropdownMenu.ItemTitle>Files</DropdownMenu.ItemTitle>
+        <DropdownMenu.Item key="files" onSelect={onUnavailable ?? (() => {})}>
+          <DropdownMenu.ItemTitle>{t('composer.files')}</DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'paperclip' }} />
         </DropdownMenu.Item>
       </DropdownMenu.Content>

@@ -1,65 +1,104 @@
-import React, {useState} from 'react';
+// Session composer: the fork's glass pill + thumbnail strip, wired to
+// draftStore (per-chat text survives session switches), composerAction for
+// send/steer/stop, and QuestionPanel when the agent is asking. Attachments
+// stage locally only — sending with attachments is blocked until upload
+// ships (never silently dropped).
+
+import React, { useCallback } from 'react';
 import {
   type LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import {NitroImage} from 'react-native-nitro-image';
-import {AttachmentMenu} from './AttachmentMenu';
-import {Glass} from './Glass';
-import {Icon} from './Icon';
-import {useAttachments} from '../hooks/useAttachments';
-import type {Attachment} from '../state/chatStore';
-import {theme} from '../theme';
+import { NitroImage } from 'react-native-nitro-image';
+import { AttachmentMenu } from './AttachmentMenu';
+import { Glass } from './Glass';
+import { Icon } from './Icon';
+import { useAttachments } from '../hooks/useAttachments';
+import { useTheme } from '../theme';
+import { t } from '../i18n/strings';
+import { useDraft, setDraftText } from '../zeron/state/draftStore';
+import {
+  openInputRequest,
+  useSessionState,
+  type RunPhase,
+} from '../zeron/state/sessionStores';
+import type { HarnessDescriptor } from '../zeron/protocol/types';
+import { composerAction } from './composerAction';
+import { QuestionPanel } from './agentsKit/QuestionPanel';
 
 const INPUT_MAX_HEIGHT = 120;
-
-// Shared duration for the attachment pill swell/shrink so the thumbnail fade
-// and the height collapse stay in lockstep.
 const THUMBS_ANIM_MS = 220;
 
-type ComposerProps = {
-  onSubmit: (text: string, attachments: Attachment[]) => void;
+export interface ComposerProps {
+  chatId: string;
+  phase: RunPhase;
+  harness?: HarnessDescriptor;
+  onSend: (text: string) => void;
+  onSteer: (text: string) => void;
   onStop: () => void;
-  streaming: boolean;
+  onRespondInput: (
+    requestId: string,
+    answers: { questionId: string; labels: string[] }[],
+  ) => void;
+  onAttachmentsBlocked: () => void;
   composerRef: React.RefObject<View | null>;
   onLayout: (event: LayoutChangeEvent) => void;
-};
-
+}
 
 export const Composer = React.memo(function ({
-  onSubmit,
+  chatId,
+  phase,
+  harness,
+  onSend,
+  onSteer,
   onStop,
-  streaming,
+  onRespondInput,
+  onAttachmentsBlocked,
   composerRef,
   onLayout,
 }: ComposerProps) {
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [value, setValue] = useState('');
-  const {attachments, pickImages, removeAttachment, clearAttachments} = useAttachments();
-  const canSend = value.trim().length > 0 || attachments.length > 0;
+  const draft = useDraft(chatId);
+  const { pickImages, remove } = useAttachments(chatId);
+  const session = useSessionState(chatId);
 
-  const onSend = () => {
-    if (!canSend) {
+  const question = openInputRequest(session.entries);
+  const hasAttachments = draft.attachments.length > 0;
+  const action = composerAction(phase, harness, draft.text.trim().length > 0);
+
+  const submit = useCallback(() => {
+    if (hasAttachments) {
+      onAttachmentsBlocked();
       return;
     }
-    onSubmit(value, attachments);
-    setValue('');
-    clearAttachments();
-  };
+    const text = draft.text.trim();
+    if (text === '') return;
+    if (action.primary === 'steer') onSteer(text);
+    else if (action.primary === 'send') onSend(text);
+    else return;
+    setDraftText(chatId, '');
+  }, [
+    hasAttachments,
+    draft.text,
+    action.primary,
+    onSteer,
+    onSend,
+    onAttachmentsBlocked,
+    chatId,
+  ]);
 
-  // The thumbnail strip lives in a height-clipped container so the pill can
-  // smoothly swell/shrink as images are added/removed. 
-  const hasAttachments = attachments.length > 0;
-  const [thumbsContentHeight, setThumbsContentHeight] = useState(0);
+  const [thumbsContentHeight, setThumbsContentHeight] = React.useState(0);
   const thumbsStyle = useAnimatedStyle(() => ({
     height: withTiming(hasAttachments ? thumbsContentHeight : 0, {
       duration: THUMBS_ANIM_MS,
@@ -71,56 +110,50 @@ export const Composer = React.memo(function ({
     }),
   }));
 
-
-  // Keep the last non-empty attachment list so the thumbnails stay mounted
-  // while the pill collapses.
-  const [displayedAttachments, setDisplayedAttachments] = useState(attachments);
-  if (hasAttachments && displayedAttachments !== attachments) {
-    setDisplayedAttachments(attachments);
-  }
-
-  // iOS can retain a multiline TextInput's expanded height after clearing it.
-  // Keep its original one-line measurement, but do not use it to size the pill.
-  const [oneLineHeight, setOneLineHeight] = useState<number>();
-  const onInputLayout = (event: LayoutChangeEvent) => {
-    const measured = Math.round(event.nativeEvent.layout.height);
-    setOneLineHeight(current => current ?? measured);
-  };
-  const collapsedInputStyle =
-    value.length === 0 && oneLineHeight != null
-      ? {height: oneLineHeight}
-      : undefined;
+  const right = action.right;
 
   return (
     <View
       ref={composerRef}
       onLayout={onLayout}
-      style={[styles.container, {paddingBottom: insets.bottom + 8}]}>
+      style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
+    >
+      {question !== undefined ? (
+        <QuestionPanel
+          requestId={question.requestId}
+          questions={question.questions}
+          onSubmit={onRespondInput}
+        />
+      ) : null}
+
       <View style={styles.row}>
         <AttachmentMenu onPickPhotos={pickImages} />
         <View style={styles.inputPillWrap}>
           <Glass style={styles.inputPill}>
             <Animated.View
               style={[styles.thumbsClip, thumbsStyle]}
-              pointerEvents={hasAttachments ? 'auto' : 'none'}>
+              pointerEvents={hasAttachments ? 'auto' : 'none'}
+            >
               <View
                 style={styles.thumbs}
                 onLayout={event => {
-                  const nextHeight = Math.ceil(event.nativeEvent.layout.height);
-                  setThumbsContentHeight(current =>
-                    Math.abs(current - nextHeight) <= 1 ? current : nextHeight,
+                  const next = Math.ceil(event.nativeEvent.layout.height);
+                  setThumbsContentHeight(cur =>
+                    Math.abs(cur - next) <= 1 ? cur : next,
                   );
-                }}>
-                {displayedAttachments.map((attachment, index) => (
-                  <View key={`${attachment.uri}:${index}`} style={styles.thumbWrap}>
+                }}
+              >
+                {draft.attachments.map(a => (
+                  <View key={a.id} style={styles.thumbWrap}>
                     <NitroImage
-                      image={{filePath: attachment.uri}}
+                      image={{ filePath: a.localUri }}
                       style={styles.thumb}
                     />
                     <Pressable
                       style={styles.thumbRemove}
                       hitSlop={8}
-                      onPress={() => removeAttachment(index)}>
+                      onPress={() => remove(a.id)}
+                    >
                       <View style={styles.thumbRemoveBadge}>
                         <Icon name="xmark" size={11} color="#FFFFFF" />
                       </View>
@@ -131,52 +164,72 @@ export const Composer = React.memo(function ({
             </Animated.View>
 
             <TextInput
-              value={value}
-              onChangeText={setValue}
-              onLayout={onInputLayout}
-              autoFocus
-              placeholder="Ask about Margelo"
+              value={draft.text}
+              onChangeText={text => setDraftText(chatId, text)}
+              placeholder={
+                action.primary === 'steer'
+                  ? t('session.steerPlaceholder')
+                  : t('session.messagePlaceholder')
+              }
               placeholderTextColor={theme.textSecondary}
-              style={[styles.input, collapsedInputStyle]}
+              style={[styles.input, { color: theme.text }]}
               multiline
             />
           </Glass>
         </View>
 
-        {/* While a reply streams, the send arrow becomes a pause button that
-            stops the stream. */}
+        {action.primary === 'steer' ? (
+          <Pressable onPress={submit} hitSlop={6} style={styles.steerBtn}>
+            <Glass interactive style={styles.steerPill}>
+              <Text style={[styles.steerText, { color: theme.accent }]}>
+                {t('session.steer')}
+              </Text>
+            </Glass>
+          </Pressable>
+        ) : null}
+
         <Pressable
-          onPress={streaming ? onStop : onSend}
-          disabled={!streaming && !canSend}
-          hitSlop={6}>
+          onPress={
+            right === 'stop' ? onStop : right === 'send' ? submit : undefined
+          }
+          disabled={
+            right === 'stopping' ||
+            (right === 'send' && action.primary !== 'send')
+          }
+          hitSlop={6}
+        >
           <Glass interactive style={styles.circle}>
             <Icon
-              name={streaming ? 'stop.fill' : 'arrow.up'}
-              size={streaming ? 15 : 20}
+              name={
+                right === 'stop' || right === 'stopping'
+                  ? 'stop.fill'
+                  : 'arrow.up'
+              }
+              size={right === 'send' ? 20 : 15}
               color={
-                streaming || canSend ? theme.sendActive : theme.sendInactive
+                right === 'stopping' ||
+                (right === 'send' && action.primary !== 'send')
+                  ? theme.sendInactive
+                  : theme.sendActive
               }
             />
           </Glass>
         </Pressable>
       </View>
+      {right === 'stopping' ? (
+        <Text style={[styles.hint, { color: theme.textSecondary }]}>
+          {t('session.stopping')}
+        </Text>
+      ) : null}
     </View>
   );
 });
 
 const CIRCLE = 44;
-const PILL_VERTICAL_PADDING = 6;
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
+  container: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   circle: {
     width: CIRCLE,
     height: CIRCLE,
@@ -185,26 +238,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  inputPillWrap: {
-    flex: 1,
+  steerBtn: {},
+  steerPill: {
+    height: CIRCLE,
+    borderRadius: CIRCLE / 2,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
+  steerText: { fontSize: 15, fontWeight: '600' },
+  inputPillWrap: { flex: 1 },
   inputPill: {
     minHeight: CIRCLE,
     borderRadius: 24,
     justifyContent: 'center',
     paddingHorizontal: 14,
-    paddingVertical: PILL_VERTICAL_PADDING,
+    paddingVertical: 6,
     overflow: 'hidden',
   },
-  input: {
-    fontSize: 16,
-    color: theme.text,
-    paddingVertical: 4,
-    maxHeight: INPUT_MAX_HEIGHT,
-  },
-  thumbsClip: {
-    overflow: 'hidden',
-  },
+  input: { fontSize: 16, paddingVertical: 4, maxHeight: INPUT_MAX_HEIGHT },
+  thumbsClip: { overflow: 'hidden' },
   thumbs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -212,22 +266,9 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
   },
-  thumbWrap: {
-    width: 120,
-    height: 120,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  thumb: {
-    width: 120,
-    height: 120,
-    borderRadius: 16,
-  },
-  thumbRemove: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-  },
+  thumbWrap: { width: 120, height: 120, borderRadius: 18, overflow: 'hidden' },
+  thumb: { width: 120, height: 120, borderRadius: 16 },
+  thumbRemove: { position: 'absolute', top: 6, right: 6 },
   thumbRemoveBadge: {
     width: 22,
     height: 22,
@@ -236,4 +277,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  hint: { fontSize: 12, textAlign: 'center' },
 });

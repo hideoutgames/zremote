@@ -1,6 +1,8 @@
 module.exports = {
-  // RN 0.86's `preset: 'react-native'` is a shim that requires the optional
-  // peer `@react-native/jest-preset`; src/zeron is pure TypeScript, so the
-  // default babel-jest transform (babel.config.js) is sufficient.
+  preset: 'react-native',
+  setupFiles: ['@shopify/react-native-skia/jestSetup.js', './jest.setup.js'],
   testPathIgnorePatterns: ['node_modules', 'ios', 'android'],
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-safe-area-context|react-native-keyboard-controller|react-native-reanimated|react-native-worklets|@shopify/react-native-skia|react-freeze|sf-symbols-typescript)/)',
+  ],
 };

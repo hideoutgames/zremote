@@ -41,8 +41,6 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
-# Demo-only secrets (OpenAI key lives here, never commit)
-app/src/config.ts
 
 # fastlane
 #

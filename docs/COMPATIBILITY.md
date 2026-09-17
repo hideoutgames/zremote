@@ -136,3 +136,13 @@ the in-repo `react-native-loro` and dictation modules, or the `expo-widgets`
 Live Activity extension. No Expo Go preview of the full app is promised; a
 limited web/Jest-runnable slice (protocol + reducers) is what runs without a
 native build.
+
+## Capability gates
+
+Host features that must be gated on the reported `DeviceRow.version`
+(`deviceVersionAtLeast`). A host below the floor gets an explicit block — never
+a silent fallback into a less-safe behavior.
+
+| Capability | Minimum host version | Evidence |
+| --- | --- | --- |
+| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — new-session "New worktree" checkout) | **0.2.62** | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `NewSessionSheet` (send blocked, "update Zeron on \<host\>"). |

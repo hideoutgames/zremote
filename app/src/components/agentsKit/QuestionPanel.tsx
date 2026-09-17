@@ -1,0 +1,142 @@
+// Ported from Agents Kit (permissive collections only):
+//   components/beautiful-ui/... approval-card — MIT © Shane Levine
+//   components/prompt-kit/question.tsx      — MIT (prompt-kit)
+// The composer's answer surface when the host's agent asks: paged questions,
+// option buttons (multiSelect toggles), Submit → the chosen labels per
+// question. The draft underneath is preserved (this panel replaces the input
+// area only while open).
+
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type {
+  UserInputAnswer,
+  UserInputQuestion,
+} from '../../zeron/protocol/types';
+import { Icon } from '../Icon';
+import { useTheme } from '../../theme';
+import { t } from '../../i18n/strings';
+
+export interface QuestionPanelProps {
+  requestId: string;
+  questions: UserInputQuestion[];
+  onSubmit: (requestId: string, answers: UserInputAnswer[]) => void;
+}
+
+export const QuestionPanel = React.memo(function ({
+  requestId,
+  questions,
+  onSubmit,
+}: QuestionPanelProps) {
+  const theme = useTheme();
+  // questionId → selected labels (multiSelect toggles, single-select replaces)
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+
+  const toggle = useMemo(
+    () => (q: UserInputQuestion, option: string) =>
+      setAnswers(prev => {
+        const cur = prev[q.id] ?? [];
+        const next = q.multiSelect
+          ? cur.includes(option)
+            ? cur.filter(o => o !== option)
+            : [...cur, option]
+          : [option];
+        return { ...prev, [q.id]: next };
+      }),
+    [],
+  );
+
+  const complete = questions.every(q => (answers[q.id]?.length ?? 0) > 0);
+
+  const submit = () => {
+    if (!complete) return;
+    onSubmit(
+      requestId,
+      questions.map(q => ({ questionId: q.id, labels: answers[q.id] })),
+    );
+  };
+
+  return (
+    <View
+      style={[
+        styles.panel,
+        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+      ]}
+    >
+      {questions.map(q => (
+        <View key={q.id} style={styles.question}>
+          <Text style={[styles.header, { color: theme.textSecondary }]}>
+            {q.header}
+          </Text>
+          <Text style={[styles.prompt, { color: theme.text }]}>
+            {q.question}
+          </Text>
+          <View style={styles.options}>
+            {q.options.map(option => {
+              const selected = answers[q.id]?.includes(option) === true;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => toggle(q, option)}
+                  style={[
+                    styles.option,
+                    { borderColor: selected ? theme.accent : theme.border },
+                    selected && { backgroundColor: theme.accent + '22' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.optionText,
+                      { color: selected ? theme.accent : theme.text },
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+      <Pressable
+        onPress={submit}
+        disabled={!complete}
+        style={[
+          styles.submit,
+          { backgroundColor: complete ? theme.accent : theme.border },
+        ]}
+      >
+        <Icon name="arrow.up" size={14} color="#FFFFFF" />
+        <Text style={styles.submitText}>{t('session.submit')}</Text>
+      </Pressable>
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  panel: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 14,
+  },
+  question: { gap: 8 },
+  header: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
+  prompt: { fontSize: 15, lineHeight: 20 },
+  options: { gap: 6 },
+  option: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  optionText: { fontSize: 14 },
+  submit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  submitText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+});
