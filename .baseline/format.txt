@@ -1,0 +1,43 @@
+
+> MargeloChat@0.0.1 format:check
+> prettier --check . --ignore-unknown
+
+Checking formatting...
+[warn] __tests__\App.test.tsx
+[warn] .eslintrc.js
+[warn] .prettierrc.js
+[warn] .watchmanconfig
+[warn] app.json
+[warn] App.tsx
+[warn] assets\bootsplash\manifest.json
+[warn] babel.config.js
+[warn] index.js
+[warn] jest.config.js
+[warn] knowledge\margelo-kb.md
+[warn] metro.config.js
+[warn] package.json
+[warn] src\components\AttachmentMenu.tsx
+[warn] src\components\ChatMessages.tsx
+[warn] src\components\Composer.tsx
+[warn] src\components\EmptyState.tsx
+[warn] src\components\Glass.tsx
+[warn] src\components\Header.tsx
+[warn] src\components\Icon.tsx
+[warn] src\components\MessageBubble.tsx
+[warn] src\components\ReasoningSheet.tsx
+[warn] src\components\ScrollToBottomButton.tsx
+[warn] src\components\ShimmerText.tsx
+[warn] src\config.example.ts
+[warn] src\hooks\useAttachments.ts
+[warn] src\markdownStyle.ts
+[warn] src\notImplemented.ts
+[warn] src\openai\connectionManager.ts
+[warn] src\openai\protocol.ts
+[warn] src\rag\searchKnowledgeBase.ts
+[warn] src\screens\ChatScreen.tsx
+[warn] src\screens\RecentsScreen.tsx
+[warn] src\screens\RootDrawer.tsx
+[warn] src\state\chatStore.ts
+[warn] src\theme.ts
+[warn] tsconfig.json
+[warn] Code style issues found in 37 files. Forgot to run Prettier?

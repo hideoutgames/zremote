@@ -1,0 +1,11 @@
+
+> MargeloChat@0.0.1 test
+> jest --ci
+
+● Validation Error:
+
+  Preset @react-native/jest-preset not found.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+

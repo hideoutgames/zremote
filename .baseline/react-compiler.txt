@@ -1,0 +1,8 @@
+
+> MargeloChat@0.0.1 react-compiler-check
+> react-compiler-healthcheck
+
+- Checking
+Successfully compiled 16 out of 16 components.
+StrictMode usage not found.
+Found no usage of incompatible libraries.
