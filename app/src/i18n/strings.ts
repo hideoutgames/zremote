@@ -3,7 +3,7 @@
 
 const en = {
   // Sign in / org gate
-  'signIn.title': 'Sign in to Zeron',
+  'signIn.title': 'Sign in to ZRemote',
   'signIn.subtitle': 'Control your Zeron sessions from anywhere.',
   'signIn.button': 'Sign in',
   'signIn.pasteFallback.title': 'Paste the sign-in code',

@@ -68,7 +68,8 @@ export interface TranscriptUpdate extends Record<string, unknown> {
 
 export class TranscriptDesync extends Error {}
 
-const utf8Len = (s: string): number => Buffer.byteLength(s, 'utf8');
+const utf8Encoder = new TextEncoder();
+const utf8Len = (s: string): number => utf8Encoder.encode(s).length;
 
 const normalizeEntry = (value: unknown): MessageEntry => {
   const e = entryFrom(value);

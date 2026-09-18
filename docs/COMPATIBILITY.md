@@ -74,6 +74,16 @@ has been verified to reproduce every customisation above (`npx expo prebuild
 We never run a destructive `prebuild --clean` over native changes that are not
 encoded in a plugin.
 
+### Branding
+
+The app icon and splash sources live in `app/assets/brand/` (`icon-1024.png`,
+`splash-logo.png`), copied from the repo-root `logos/` directory. The splash
+logo is a 109px-wide raster, so the bootsplash plugin's `logoWidth` is capped
+at 54 (2x = native resolution) until a vector or high-res logo is provided;
+`app/assets/bootsplash/*` is regenerated with `npx react-native-bootsplash
+generate --platforms ios --background 000000 --logo-width 54
+--assets-output assets/bootsplash assets/brand/splash-logo.png`.
+
 ## Loro on device
 
 Session transcripts are Loro CRDT documents (`chat2` rooms carry opaque Loro

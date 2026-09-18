@@ -25,6 +25,7 @@ if (process.env.EXPO_GO === '1') {
     '@legendapp/list/keyboard': shim('legendKeyboard.tsx'),
     'react-freeze': shim('reactFreeze.tsx'),
     'react-native-image-picker': shim('imagePicker.ts'),
+    'react-native-bootsplash': shim('bootsplash.tsx'),
     'expo-widgets': shim('expoWidgets.ts'),
     '@expo/ui/swift-ui': shim('expoUiSwiftUi.tsx'),
     '@expo/ui/swift-ui/modifiers': shim('expoUiModifiers.ts'),

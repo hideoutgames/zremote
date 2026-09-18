@@ -8,7 +8,7 @@ const edgeHost = new URL(edgeUrl).host;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Zeron',
+  name: 'ZRemote',
   slug: 'zeron-mobile',
   version: '0.1.0',
   orientation: 'default',
@@ -27,13 +27,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     infoPlist: {
       NSMicrophoneUsageDescription:
-        'Zeron uses the microphone to dictate prompts and commands to remote coding engines.',
+        'ZRemote uses the microphone to dictate prompts and commands to remote coding engines.',
       NSSpeechRecognitionUsageDescription:
-        'Zeron uses speech recognition to transcribe dictated prompts into text for remote sessions.',
+        'ZRemote uses speech recognition to transcribe dictated prompts into text for remote sessions.',
       NSCameraUsageDescription:
-        'Zeron uses the camera to attach photos to messages sent to remote coding engines.',
+        'ZRemote uses the camera to attach photos to messages sent to remote coding engines.',
       NSPhotoLibraryUsageDescription:
-        'Zeron accesses the photo library to attach images to messages sent to remote coding engines.',
+        'ZRemote accesses the photo library to attach images to messages sent to remote coding engines.',
       NSSupportsLiveActivities: true,
       NSSupportsLiveActivitiesFrequentUpdates: true,
       ITSAppUsesNonExemptEncryption: false,
@@ -53,9 +53,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'react-native-bootsplash',
       {
-        logo: './assets/brand/zeron.png',
+        logo: './assets/brand/splash-logo.png',
         background: '#000000',
-        logoWidth: 120,
+        logoWidth: 54,
         assetsOutput: './assets/bootsplash',
       },
     ],

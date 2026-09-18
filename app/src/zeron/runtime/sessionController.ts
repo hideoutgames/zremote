@@ -5,6 +5,7 @@
 // terminally-rejected sends to failedSends for draft restore.
 
 import type { DocDisk } from '../native/docDisk';
+import { base64ToBytes, bytesToBase64 } from '../util/base64';
 import type { LoroDocPort } from '../doc/loroPort';
 import {
   SessionDoc,
@@ -172,7 +173,7 @@ export class SessionController {
       .catch(() => undefined);
     if (saved !== undefined) {
       try {
-        this.port.import(Buffer.from(saved.snapshot, 'base64'));
+        this.port.import(base64ToBytes(saved.snapshot));
         this.cursor = saved.cursor;
       } catch {
         this.cursor = 0;
@@ -333,7 +334,7 @@ export class SessionController {
       this.deps.userId,
       this.chatId,
       {
-        snapshot: Buffer.from(this.port.exportSnapshot()).toString('base64'),
+        snapshot: bytesToBase64(this.port.exportSnapshot()),
         cursor: this.cursor,
       },
     );

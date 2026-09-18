@@ -13,6 +13,6 @@ test('renders SignInScreen when signed out', async () => {
     await Promise.resolve();
   });
   const texts = tree!.root.findAllByType(Text).map(n => n.props.children);
-  expect(texts).toContain('Sign in to Zeron');
+  expect(texts).toContain('Sign in to ZRemote');
   expect(authStore.getState().status.state).toBe('signedOut');
 });
