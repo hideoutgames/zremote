@@ -1,16 +1,7 @@
-// ModelPickerSheet (TrueSheet) — Agents / Models / Effort / Model options /
-// Sandbox & approvals for the session's host device. Desktop rules:
-//   - harness is LOCKED once the chat exists (crates/ui/src/pickers.rs
-//     harness_locked L770-771 — `selected_chat.is_some()`); a foreign
-//     harness pick also clears model+reasoning (pick_harness L1473-1480);
-//   - RunRequest defaults: sandbox WorkspaceWrite, auto_approve false
-//     (crates/ui/src/composer.rs send path L6522-6523);
-//   - an unavailable saved model shows "Unavailable on this host" — never
-//     auto-replaced.
-// Applying writes the whole ChatConfig via setChatConfig (LWW); while a run
-// is working/stopping selections apply to the NEXT message.
+// More-models sheet: search + models grouped by provider. Effort / Fast
+// live on the composer overlay. Sandbox and auto-approve stay here.
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -18,39 +9,39 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
-import type { Chat, ChatConfig } from '../zeron/protocol/types';
+import type { Chat, ChatConfig, Model } from '../zeron/protocol/types';
 import {
   catalogStore,
   modelsFor,
-  reasoningLevelsFor,
   selectableHarnesses,
 } from '../zeron/state/catalogStore';
 import { loadModels } from '../zeron/runtime/catalog';
 import { setChatConfig } from '../zeron/runtime/workspaceActions';
-import { setAutoApprove, useAutoApprove } from '../zeron/state/uiPrefs';
+import {
+  rememberModelPick,
+  setAutoApprove,
+  useAutoApprove,
+} from '../zeron/state/uiPrefs';
 import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
-import { EffortSlider } from './EffortSlider';
+import { HarnessMark } from './HarnessMark';
 import { revalidateSelection } from './modelPicker';
 
 export interface ModelPickerSheetProps {
   runtime: AppRuntime;
   chat: Chat;
   phase: RunPhase;
-  /** True while the chat already exists/messages — locks the harness row
-   * (desktop: `harness_locked` = selected_chat.is_some()). */
   hasMessages: boolean;
   onClose: () => void;
-  /** iPad regular width: render in a formSheet Modal instead of TrueSheet —
-   * TrueSheet has no iPad popover anchoring (`anchor` is web-only). */
   formSheet?: boolean;
 }
 
@@ -72,8 +63,9 @@ export function ModelPickerSheet({
   const insets = useSafeAreaInsets();
   const deviceId = chat.deviceId;
   const catalog = useStore(catalogStore, s => s.byDevice[deviceId]);
+  const catalogTick = catalog?.loadedAt ?? 0;
+  const [query, setQuery] = useState('');
 
-  const catalogTick = catalog?.loadedAt ?? 0; // re-derive on catalog load
   const harnesses = useMemo(
     () => selectableHarnesses(deviceId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,34 +73,44 @@ export function ModelPickerSheet({
   );
   const config = chat.config;
   const harnessId = config?.harness;
-  const models = useMemo(
+
+  useEffect(() => {
+    for (const h of harnesses) {
+      if (modelsFor(deviceId, h.id).length === 0)
+        loadModels(runtime, deviceId, h.id).catch(() => {});
+    }
+  }, [harnesses, runtime, deviceId, catalogTick]);
+
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return harnesses
+      .map(h => ({
+        harness: h,
+        models: modelsFor(deviceId, h.id).filter(m => {
+          if (q === '') return true;
+          return (
+            m.label.toLowerCase().includes(q) ||
+            m.id.toLowerCase().includes(q) ||
+            h.name.toLowerCase().includes(q)
+          );
+        }),
+      }))
+      .filter(g => g.models.length > 0 || q === '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [harnesses, deviceId, catalogTick, query]);
+
+  const currentModels = useMemo(
     () => (harnessId === undefined ? [] : modelsFor(deviceId, harnessId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deviceId, harnessId, catalogTick],
   );
-  const levels = useMemo(
-    () =>
-      harnessId === undefined
-        ? []
-        : reasoningLevelsFor(deviceId, harnessId, config?.model),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deviceId, harnessId, config?.model, catalogTick],
-  );
   const health = revalidateSelection(config, {
     selectableHarnessIds: harnesses.map(h => h.id),
-    models,
-    reasoningLevels: levels,
+    models: currentModels,
+    reasoningLevels: [],
   });
 
-  // Load the model catalog lazily on open.
-  React.useEffect(() => {
-    if (catalog !== undefined && models.length === 0 && harnessId !== undefined)
-      loadModels(runtime, deviceId, harnessId).catch(() => {});
-  }, [catalog, models.length, runtime, deviceId, harnessId]);
-
   const live = phase === 'working' || phase === 'stopping';
-  // RunRequest.autoApprove is a per-chat RUN field (not ChatConfig) — kept
-  // in uiPrefs and applied at send time; off by default.
   const autoApprove = useAutoApprove(chat.id);
   const toggleAutoApprove = useCallback(() => {
     if (autoApprove) {
@@ -134,18 +136,26 @@ export function ModelPickerSheet({
         ...patch,
       };
       setChatConfig(runtime, chat.id, next);
+      if (next.harness !== '' && next.model !== undefined)
+        rememberModelPick({ harness: next.harness, model: next.model });
     },
     [runtime, chat.id, config],
   );
 
-  const pickHarness = useCallback(
-    (id: string) => {
-      if (hasMessages) return; // harness locked mid-chat
-      // Foreign harness pick: clear the remembered model+reasoning so a
-      // stale pick can't linger (pick_harness).
-      apply({ harness: id, model: undefined, reasoning: undefined });
+  const pickModel = useCallback(
+    (harness: string, model: Model) => {
+      if (hasMessages && harness !== harnessId) return;
+      if (harness !== harnessId) {
+        apply({
+          harness,
+          model: model.id,
+          reasoning: undefined,
+        });
+        return;
+      }
+      apply({ model: model.id });
     },
-    [hasMessages, apply],
+    [apply, hasMessages, harnessId],
   );
 
   const pickSandbox = useCallback(
@@ -172,6 +182,7 @@ export function ModelPickerSheet({
         styles.content,
         { paddingBottom: insets.bottom + 24 },
       ]}
+      keyboardShouldPersistTaps="handled"
     >
       <Text style={[styles.title, { color: theme.text }]}>
         {t('picker.title')}
@@ -182,155 +193,100 @@ export function ModelPickerSheet({
         </Text>
       ) : null}
 
-      {/* Agents — locked once the chat exists. */}
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('picker.search')}
+        placeholderTextColor={theme.textSecondary}
+        style={[
+          styles.search,
+          { color: theme.text, backgroundColor: theme.inputBackground },
+        ]}
+        accessibilityLabel={t('picker.search')}
+      />
+
       <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.agents')}
+        {t('picker.active')}
       </Text>
-      {harnesses.map(h => (
-        <Pressable
-          key={h.id}
+      {config?.model !== undefined ? (
+        <View
           style={[
             styles.row,
-            { borderColor: theme.border },
-            h.id === harnessId && { borderColor: theme.accent },
-            hasMessages && styles.rowDimmed,
+            { borderColor: health.modelOk ? theme.accent : theme.danger },
           ]}
-          onPress={() => pickHarness(h.id)}
-          disabled={hasMessages}
-          accessibilityRole="button"
-          accessibilityLabel={h.name}
-          accessibilityState={{
-            selected: h.id === harnessId,
-            disabled: hasMessages,
-          }}
         >
-          <Text style={[styles.rowText, { color: theme.text }]}>{h.name}</Text>
-          {h.id === harnessId ? (
-            <Icon name="checkmark" size={14} color={theme.accent} />
-          ) : null}
-        </Pressable>
-      ))}
-      {hasMessages ? (
-        <Text style={[styles.note, { color: theme.textSecondary }]}>
-          {t('picker.harnessLocked')}
-        </Text>
-      ) : null}
-
-      {/* Models — unavailable saved selection is shown, not replaced. */}
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.models')}
-      </Text>
-      {!health.modelOk && config?.model !== undefined ? (
-        <View style={[styles.row, { borderColor: theme.danger }]}>
+          <HarnessMark harnessId={harnessId} size={18} color={theme.text} />
           <Text style={[styles.rowText, { color: theme.text }]}>
-            {config.model}
+            {currentModels.find(m => m.id === config.model)?.label ??
+              config.model}
           </Text>
-          <Text style={[styles.badge, { color: theme.danger }]}>
-            {t('picker.unavailable')}
-          </Text>
+          {health.modelOk ? (
+            <Icon name="checkmark" size={14} color={theme.accent} />
+          ) : (
+            <Text style={[styles.badge, { color: theme.danger }]}>
+              {t('picker.unavailable')}
+            </Text>
+          )}
         </View>
       ) : null}
-      {models.map(m => (
-        <Pressable
-          key={m.id}
-          style={[
-            styles.row,
-            { borderColor: theme.border },
-            m.id === config?.model && { borderColor: theme.accent },
-          ]}
-          onPress={() => apply({ model: m.id })}
-          accessibilityRole="button"
-          accessibilityLabel={m.label}
-          accessibilityState={{ selected: m.id === config?.model }}
-        >
-          <View style={styles.rowBody}>
-            <Text style={[styles.rowText, { color: theme.text }]}>
-              {m.label}
+
+      {grouped.map(({ harness: h, models }) => (
+        <View key={h.id} style={styles.group}>
+          <View
+            style={styles.groupHead}
+            accessibilityRole="header"
+            accessibilityLabel={h.name}
+          >
+            <HarnessMark harnessId={h.id} size={16} color={theme.text} />
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {h.name}
             </Text>
-            {m.description !== undefined ? (
-              <Text
-                style={[styles.rowSub, { color: theme.textSecondary }]}
-                numberOfLines={1}
-              >
-                {m.description}
-              </Text>
-            ) : null}
           </View>
-          {m.id === config?.model ? (
-            <Icon name="checkmark" size={14} color={theme.accent} />
+          {hasMessages && h.id !== harnessId ? (
+            <Text style={[styles.note, { color: theme.textSecondary }]}>
+              {t('picker.harnessLocked')}
+            </Text>
           ) : null}
-        </Pressable>
-      ))}
-
-      {/* Effort — hidden with an explanation when the harness advertises
-            no levels. */}
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.effort')}
-      </Text>
-      {levels.length === 0 ? (
-        <Text style={[styles.note, { color: theme.textSecondary }]}>
-          {t('picker.effortUnsupported')}
-        </Text>
-      ) : (
-        <EffortSlider
-          levels={levels}
-          value={config?.reasoning}
-          onChange={level => apply({ reasoning: level })}
-        />
-      )}
-
-      {/* Model options — segmented rows; untouched choices round-trip. */}
-      {(models.find(m => m.id === config?.model)?.options ?? []).map(opt => (
-        <View key={opt.id} style={styles.optGroup}>
-          <Text style={[styles.section, { color: theme.textSecondary }]}>
-            {opt.label}
-          </Text>
-          <View style={styles.segmented}>
-            {opt.choices.map(c => {
-              const selected =
-                (config?.modelOptions?.[opt.id] as string | undefined) ??
-                opt.defaultChoice;
-              return (
-                <Pressable
-                  key={c.id}
-                  style={[
-                    styles.segment,
-                    {
-                      backgroundColor:
-                        c.id === selected ? theme.accent : theme.cardBackground,
-                    },
-                  ]}
-                  onPress={() =>
-                    apply({
-                      modelOptions: {
-                        ...(config?.modelOptions ?? {}),
-                        [opt.id]: c.id,
-                      },
-                    })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={`${opt.label}: ${c.label}`}
-                  accessibilityState={{ selected: c.id === selected }}
-                >
+          {models.map(m => (
+            <Pressable
+              key={m.id}
+              style={[
+                styles.row,
+                { borderColor: theme.border },
+                m.id === config?.model &&
+                  h.id === harnessId && { borderColor: theme.accent },
+                hasMessages && h.id !== harnessId && styles.rowDimmed,
+              ]}
+              onPress={() => pickModel(h.id, m)}
+              disabled={hasMessages && h.id !== harnessId}
+              accessibilityRole="button"
+              accessibilityLabel={m.label}
+              accessibilityState={{
+                selected: m.id === config?.model && h.id === harnessId,
+                disabled: hasMessages && h.id !== harnessId,
+              }}
+            >
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowText, { color: theme.text }]}>
+                  {m.label}
+                </Text>
+                {m.description !== undefined ? (
                   <Text
-                    style={[
-                      styles.segmentText,
-                      {
-                        color:
-                          c.id === selected ? theme.sendActive : theme.text,
-                      },
-                    ]}
+                    style={[styles.rowSub, { color: theme.textSecondary }]}
+                    numberOfLines={1}
                   >
-                    {c.label}
+                    {m.description}
                   </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                ) : null}
+              </View>
+              {m.id === config?.model && h.id === harnessId ? (
+                <Icon name="checkmark" size={14} color={theme.accent} />
+              ) : null}
+            </Pressable>
+          ))}
         </View>
       ))}
 
-      {/* Sandbox / approvals — consequential choices confirm. */}
       <Text style={[styles.section, { color: theme.textSecondary }]}>
         {t('picker.sandbox')}
       </Text>
@@ -404,7 +360,6 @@ export function ModelPickerSheet({
     </ScrollView>
   );
 
-  // iPad regular width → formSheet modal (TrueSheet can't anchor popovers).
   if (formSheet === true) {
     return (
       <Modal
@@ -438,6 +393,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700' },
   section: { fontSize: 12, fontWeight: '600', marginTop: 10 },
   note: { fontSize: 12 },
+  search: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  group: { gap: 8 },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,17 +411,15 @@ const styles = StyleSheet.create({
   },
   rowDimmed: { opacity: 0.4 },
   rowBody: { flex: 1, gap: 2 },
-  rowText: { fontSize: 15 },
+  rowText: { fontSize: 15, flex: 1 },
   rowSub: { fontSize: 12 },
   badge: { fontSize: 11, fontWeight: '600' },
-  optGroup: { gap: 6 },
   segmented: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   segment: {
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  segmentText: { fontSize: 13 },
   segmentTextSmall: { fontSize: 12 },
   footer: { marginTop: 16, alignItems: 'center' },
   doneBtn: {

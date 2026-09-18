@@ -624,7 +624,24 @@ export class DemoEdge {
           stale: false,
         });
       case METHODS.WATCH_CHECKOUT_CHANGE_REQUEST:
-        streamAck(end);
+        streamItem(end, {
+          checkoutId: 'demo-checkout',
+          deviceId: HOST_LIVE,
+          cwd: demoPaths.zremote,
+          branch: typeof p.branch === 'string' ? p.branch : 'main',
+          changeRequest: {
+            provider: 'github',
+            number: 42,
+            title: 'Composer chrome overhaul',
+            url: 'https://github.com/example/zremote/pull/42',
+            state: 'open',
+            draft: true,
+            baseRef: 'main',
+            headRef: 'feature/composer',
+            body: '## Summary\n\nDemo pull request for the composer chrome.',
+          },
+          updatedAt: '2026-09-19T10:00:00Z',
+        });
         streams.set(id, () => {});
         return;
 

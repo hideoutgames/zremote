@@ -47,6 +47,7 @@ import type { ChatIndicator } from '../zeron/protocol/entities';
 import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { NewSessionSheet } from './NewSessionSheet';
+import { usePinnedChatIds } from '../zeron/state/uiPrefs';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 
@@ -262,19 +263,28 @@ export function HomeScreen({
   const devices = useStore(workspaceStore, s => s.devices);
   const connection = useStore(workspaceStore, s => s.connection);
 
+  const pinnedIds = usePinnedChatIds();
   const chats = useMemo(() => {
     const scoped =
       spaceFilter === undefined
         ? overview
         : overview.filter(c => c.spaceId === spaceFilter);
     const q = query.trim().toLowerCase();
-    if (q === '') return scoped;
-    return scoped.filter(c =>
-      `${c.title ?? ''} ${c.lastMessagePreview ?? ''}`
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [overview, spaceFilter, query]);
+    const filtered =
+      q === ''
+        ? scoped
+        : scoped.filter(c =>
+            `${c.title ?? ''} ${c.lastMessagePreview ?? ''}`
+              .toLowerCase()
+              .includes(q),
+          );
+    const pinned = new Set(pinnedIds);
+    return [...filtered].sort((a, b) => {
+      const ap = pinned.has(a.id) ? 0 : 1;
+      const bp = pinned.has(b.id) ? 0 : 1;
+      return ap - bp;
+    });
+  }, [overview, spaceFilter, query, pinnedIds]);
 
   const spaceName = useCallback(
     (id: string) => spaces.find(s => s.id === id)?.name ?? id,

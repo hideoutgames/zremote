@@ -67,6 +67,9 @@ const en = {
   // Session
   'session.rename': 'Rename session',
   'session.archive': 'Archive',
+  'session.pin': 'Pin',
+  'session.unpin': 'Unpin',
+  'session.titleMenu': 'Session actions',
   'session.copyId': 'Copy session id',
   'session.back': 'Back',
   'session.empty': 'Nothing here yet — send a message to start.',
@@ -253,6 +256,7 @@ const en = {
   'composer.plan.off': 'Turn off Plan mode',
   'composer.plan.on': 'Plan mode',
   'composer.resize': 'Resize composer',
+  'composer.dismissKeyboard': 'Dismiss keyboard',
   'session.details': 'View Details',
   'session.subagents': 'Sub-agents',
   'session.subagents.empty': 'No sub-agents in this thread.',
@@ -276,11 +280,16 @@ const en = {
   'queue.sendNow': 'Send now',
   'queue.steerNow': 'Steer now',
   'queue.remove': 'Remove',
+  'queue.reorder': 'Reorder',
   'queue.holdForTurnEnd': 'Held for turn end',
   'queue.attachments': '{count} attachment(s)',
 
   // Model picker
   'picker.title': 'Model',
+  'picker.search': 'Search',
+  'picker.active': 'Active',
+  'picker.more': 'More',
+  'picker.fastMode': 'Fast mode',
   'picker.agents': 'Agents',
   'picker.models': 'Models',
   'picker.effort': 'Effort',
@@ -302,6 +311,8 @@ const en = {
 
   // Checkout selector
   'checkout.label': 'Checkout',
+  'checkout.project': 'Project',
+  'checkout.currentHost': 'current',
   'checkout.noProject': 'No project',
   'checkout.current': 'Current checkout ({branch})',
   'checkout.worktree': 'worktree',
@@ -311,6 +322,13 @@ const en = {
     'This host can\u2019t create isolated worktrees — update Zeron on {host}',
   'checkout.switchFailed': 'Couldn\u2019t switch checkout',
   'checkout.worktreeFailed': 'Couldn\u2019t create the worktree',
+
+  'pr.view': 'View PR',
+  'pr.viewDraft': 'View PR Draft',
+  'pr.title': 'Pull request',
+  'pr.open': 'Open',
+  'pr.merged': 'Merged',
+  'pr.draft': 'Draft',
 
   'common.cancel': 'Cancel',
   'common.enable': 'Enable',

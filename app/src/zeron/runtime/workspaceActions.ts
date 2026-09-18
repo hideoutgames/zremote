@@ -6,6 +6,7 @@ import {
   buildArchivedSet,
   buildChatCheckoutSet,
   buildChatConfigSet,
+  buildChatSpaceSet,
   buildCreateChatSet,
   buildDeleteChatKeys,
   buildDeleteSpaceKeys,
@@ -89,6 +90,13 @@ export const setChatCheckout = (
   cwd: string,
   branch: string,
 ): void => write(runtime, 'chats', chatId, buildChatCheckoutSet(cwd, branch));
+
+export const setChatSpace = (
+  runtime: AppRuntime,
+  chatId: string,
+  spaceId: string,
+  cwd: string,
+): void => write(runtime, 'chats', chatId, buildChatSpaceSet(spaceId, cwd));
 
 // ── Spaces ─────────────────────────────────────────────────────────────
 

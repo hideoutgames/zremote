@@ -27,12 +27,13 @@ test('sidebar collapse persists through prefs', () => {
   expect(l.sidebarVisible).toBe(false);
 });
 
-test('inspector auto-shows at 1100pt and when toggled', () => {
-  expect(layoutFor(INSPECTOR_AUTO_WIDTH, prefs).inspectorVisible).toBe(true);
+test('inspector column is never shown — tools launch from the overflow menu', () => {
+  expect(layoutFor(INSPECTOR_AUTO_WIDTH, prefs).inspectorVisible).toBe(false);
   expect(
     layoutFor(900, { ...prefs, inspectorOpen: true }).inspectorVisible,
-  ).toBe(true);
+  ).toBe(false);
   const l = layoutFor(1400, prefs);
+  expect(l.inspectorVisible).toBe(false);
   expect(l.inspectorWidth).toBeGreaterThanOrEqual(360);
   expect(l.inspectorWidth).toBeLessThanOrEqual(480);
 });

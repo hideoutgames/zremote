@@ -13,6 +13,7 @@ import React, {
 import {
   AccessibilityInfo,
   Alert,
+  Keyboard,
   type LayoutChangeEvent,
   Platform,
   Pressable,
@@ -40,27 +41,56 @@ import { useStore } from 'zustand';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
-import { autoApproveFor, setPlanMode } from '../zeron/state/uiPrefs';
+import {
+  autoApproveFor,
+  rememberModelPick,
+  setPlanMode,
+  toggleChatPinned,
+  useChatPinned,
+  useComposerExtraHeight,
+  useRecentModels,
+} from '../zeron/state/uiPrefs';
 import {
   sessionTitle,
   hostLabel,
   checkoutLabel,
 } from '../zeron/state/sessionTruth';
-import { setChatArchived, renameChat } from '../zeron/runtime/workspaceActions';
+import {
+  setChatArchived,
+  setChatConfig,
+  renameChat,
+} from '../zeron/runtime/workspaceActions';
 import { restoreFailedSend } from '../zeron/state/draftStore';
 import { edgeFetchBytes } from '../zeron/transport/edgeHttp';
 import { blobUrl } from '../zeron/transport/edge';
-import { catalogStore } from '../zeron/state/catalogStore';
-import { loadCatalog } from '../zeron/runtime/catalog';
+import {
+  catalogStore,
+  modelsFor,
+  reasoningLevelsFor,
+  selectableHarnesses,
+} from '../zeron/state/catalogStore';
+import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
+import { recentMenuModels } from '../zeron/state/recentModels';
+import { capitalizeLevel } from '../components/effortSliderMath';
+import {
+  fastOffChoice,
+  fastOnChoice,
+  fastOptionForModel,
+  isFastEnabled,
+} from '../components/fastMode';
+import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
+import { usePrBadge } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
-import { Glass, GlassContainer } from '../components/Glass';
+import { Glass } from '../components/Glass';
 import { Composer } from '../components/Composer';
-import { CheckoutSelector } from '../components/CheckoutSelector';
+import { ComposerChromeRow } from '../components/ComposerChromeRow';
+import { EffortOverlay } from '../components/EffortOverlay';
+import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
-import { TrueSheet } from '@lodev09/react-native-true-sheet';
+import { PrSheet } from '../components/PrSheet';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -102,7 +132,6 @@ export function SessionScreen({
   leadingIcon,
   contentMaxWidth,
   leadingInsetSV,
-  onToggleInspector,
 }: {
   chatId: string;
   onBack: () => void;
@@ -113,8 +142,6 @@ export function SessionScreen({
   /** iPad: animated leading inset under the floating sidebar — applied to
    * the header and composer measure only; the transcript scrolls under. */
   leadingInsetSV?: SharedValue<number>;
-  /** iPad: shows an inspector toggle in the header. */
-  onToggleInspector?: () => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -202,13 +229,24 @@ export function SessionScreen({
   const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
     useKeyboardChatComposerInset(listRef, composerRef);
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
+  const extraHeight = useComposerExtraHeight();
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      setComposerHeight(event.nativeEvent.layout.height);
-      reportComposerInset(event);
+      const height = event.nativeEvent.layout.height;
+      setComposerHeight(height);
+      reportComposerInset({
+        ...event,
+        nativeEvent: {
+          ...event.nativeEvent,
+          layout: {
+            ...event.nativeEvent.layout,
+            height: Math.max(0, height - extraHeight),
+          },
+        },
+      });
     },
-    [reportComposerInset],
+    [reportComposerInset, extraHeight],
   );
 
   const doSend = useCallback(
@@ -314,6 +352,9 @@ export function SessionScreen({
       setChatArchived(runtime, chatId, !chat.archived);
   }, [runtime, chat, chatId]);
 
+  const pinned = useChatPinned(chatId);
+  const onPin = useCallback(() => toggleChatPinned(chatId), [chatId]);
+
   const onCopyId = useCallback(() => {
     Clipboard.setStringAsync(chatId).catch(() => {});
   }, [chatId]);
@@ -332,8 +373,12 @@ export function SessionScreen({
       ? undefined
       : s.spaces.find(sp => sp.id === chat.spaceId),
   );
+  const spaces = useStore(workspaceStore, s => s.spaces);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [effortOpen, setEffortOpen] = useState(false);
+  const [prOpen, setPrOpen] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
@@ -373,9 +418,74 @@ export function SessionScreen({
       mounted = false;
     };
   }, []);
-  const modelLabel = `${harness?.name ?? t('picker.agent')} · ${
-    chat?.config?.model ?? t('picker.default')
-  }`;
+  const recents = useRecentModels();
+  const catalogTick = catalog?.loadedAt ?? 0;
+  const catalogModels = useMemo(() => {
+    if (hostDeviceId === undefined) return [];
+    const out: { harness: string; model: string; label: string }[] = [];
+    for (const h of selectableHarnesses(hostDeviceId)) {
+      for (const m of modelsFor(hostDeviceId, h.id)) {
+        out.push({ harness: h.id, model: m.id, label: m.label });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostDeviceId, catalogTick]);
+  const currentHarness = chat?.config?.harness;
+  const currentModelId = chat?.config?.model;
+  const recentItems = useMemo(
+    () =>
+      recentMenuModels(
+        recents,
+        catalogModels,
+        currentHarness !== undefined && currentModelId !== undefined
+          ? { harness: currentHarness, model: currentModelId }
+          : undefined,
+        3,
+      ),
+    [recents, catalogModels, currentHarness, currentModelId],
+  );
+  const effortLevels =
+    hostDeviceId === undefined || chat?.config?.harness === undefined
+      ? []
+      : reasoningLevelsFor(
+          hostDeviceId,
+          chat.config.harness,
+          chat.config.model,
+        );
+  const currentModel =
+    hostDeviceId === undefined || chat?.config?.harness === undefined
+      ? undefined
+      : modelsFor(hostDeviceId, chat.config.harness).find(
+          m => m.id === chat.config?.model,
+        );
+  const fastOption = fastOptionForModel(currentModel);
+  const fastEnabled = isFastEnabled(chat?.config?.modelOptions, fastOption);
+  const modelLabel =
+    currentModel?.label ?? chat?.config?.model ?? t('picker.default');
+  const effortLabel = capitalizeLevel(
+    chat?.config?.reasoning ?? effortLevels[0] ?? t('picker.effort'),
+  );
+
+  useEffect(() => {
+    if (
+      runtime !== null &&
+      hostDeviceId !== undefined &&
+      chat?.config?.harness !== undefined &&
+      modelsFor(hostDeviceId, chat.config.harness).length === 0
+    )
+      loadModels(runtime, hostDeviceId, chat.config.harness).catch(() => {});
+  }, [runtime, hostDeviceId, chat?.config?.harness]);
+
+  useCheckoutWatches(
+    runtime,
+    chatId,
+    hostDeviceId,
+    chat?.cwd ?? space?.path,
+    chat?.branch,
+    chat?.checkoutId,
+  );
+  const prBadge = usePrBadge(chatId);
   const keyboardOffset = { opened: insets.bottom };
   const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
     .filter(Boolean)
@@ -466,48 +576,53 @@ export function SessionScreen({
             />
           </Glass>
         </Pressable>
-        <Pressable
-          style={styles.headerText}
-          onPress={onRename}
-          hitSlop={4}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.rename')}
-        >
-          <Glass style={styles.titlePill}>
-            <Text
-              style={[styles.title, { color: theme.text }]}
-              numberOfLines={1}
-            >
-              {sessionTitle(chat)}
-            </Text>
-            {subtitle !== '' ? (
-              <Text
-                style={[styles.subtitle, { color: theme.textSecondary }]}
-                numberOfLines={1}
-              >
-                {subtitle}
-              </Text>
-            ) : null}
-          </Glass>
-        </Pressable>
-        <GlassContainer spacing={8} style={styles.headerRight}>
-          {onToggleInspector !== undefined ? (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
             <Pressable
-              onPress={onToggleInspector}
-              hitSlop={8}
+              style={styles.headerText}
+              hitSlop={4}
               accessibilityRole="button"
-              accessibilityLabel={t('inspector.toggle')}
-              style={styles.headerBtn}
+              accessibilityLabel={t('session.titleMenu')}
             >
-              <Glass interactive style={styles.circle}>
-                <Icon
-                  name={'sidebar.right' as never}
-                  size={18}
-                  color={theme.text}
-                />
+              <Glass style={styles.titlePill}>
+                <Text
+                  style={[styles.title, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {sessionTitle(chat)}
+                </Text>
+                {subtitle !== '' ? (
+                  <Text
+                    style={[styles.subtitle, { color: theme.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {subtitle}
+                  </Text>
+                ) : null}
               </Glass>
             </Pressable>
-          ) : null}
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content>
+            <DropdownMenu.Item key="rename" onSelect={onRename}>
+              <DropdownMenu.ItemTitle>
+                {t('session.rename')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item key="pin" onSelect={onPin}>
+              <DropdownMenu.ItemTitle>
+                {pinned ? t('session.unpin') : t('session.pin')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item key="archive" onSelect={onArchive}>
+              <DropdownMenu.ItemTitle>
+                {chat?.archived
+                  ? t('home.row.unarchive')
+                  : t('session.archive')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
+        <View style={styles.headerRight}>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
               <Glass
@@ -576,13 +691,6 @@ export function SessionScreen({
                   {t('session.previews')}
                 </DropdownMenu.ItemTitle>
               </DropdownMenu.Item>
-              <DropdownMenu.Item key="archive" onSelect={onArchive}>
-                <DropdownMenu.ItemTitle>
-                  {chat?.archived
-                    ? t('home.row.unarchive')
-                    : t('session.archive')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
               <DropdownMenu.Item key="copy" onSelect={onCopyId}>
                 <DropdownMenu.ItemTitle>
                   {t('session.copyId')}
@@ -590,8 +698,22 @@ export function SessionScreen({
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Root>
-        </GlassContainer>
+        </View>
       </Animated.View>
+
+      {composerFocused ? (
+        <Pressable
+          style={[
+            styles.focusDim,
+            theme.scheme === 'dark'
+              ? styles.focusDimDark
+              : styles.focusDimLight,
+          ]}
+          onPress={() => Keyboard.dismiss()}
+          accessibilityRole="button"
+          accessibilityLabel={t('composer.dismissKeyboard')}
+        />
+      ) : null}
 
       <ContextUsageBar usage={session.meta.contextUsage} />
 
@@ -639,16 +761,12 @@ export function SessionScreen({
             leadingPad,
           ]}
         >
-          {runtime !== null && chat !== undefined ? (
-            <CheckoutSelector
-              runtime={runtime}
-              chat={chat}
-              host={host}
-              phase={phase}
-              repoPath={space?.path}
-              label={subtitle !== '' ? subtitle : t('checkout.noProject')}
-            />
-          ) : null}
+          <ComposerChromeRow
+            queueCount={session.queue.length}
+            onOpenQueue={() => setQueueOpen(true)}
+            pr={prBadge}
+            onOpenPr={() => setPrOpen(true)}
+          />
           <Composer
             chatId={chatId}
             phase={phase}
@@ -656,8 +774,42 @@ export function SessionScreen({
             harness={harness}
             capabilities={capabilities}
             modelLabel={modelLabel}
-            onOpenModelPicker={() => setPickerOpen(true)}
-            onOpenQueue={() => setQueueOpen(true)}
+            harnessId={chat?.config?.harness}
+            recentItems={recentItems}
+            onPickRecentModel={(h, m) => {
+              if (runtime === null || chat === undefined) return;
+              setChatConfig(runtime, chat.id, {
+                harness: h,
+                model: m,
+                modelOptions: chat.config?.modelOptions ?? {},
+                reasoning: chat.config?.reasoning,
+                sandbox: chat.config?.sandbox,
+              });
+              rememberModelPick({ harness: h, model: m });
+            }}
+            onOpenMoreModels={() => setPickerOpen(true)}
+            effortLabel={effortLabel}
+            effortSupported={effortLevels.length > 0}
+            fastEnabled={fastEnabled}
+            onOpenEffort={() => setEffortOpen(true)}
+            onFocusChange={setComposerFocused}
+            checkout={
+              runtime !== null && chat !== undefined
+                ? {
+                    runtime,
+                    chat,
+                    host,
+                    phase,
+                    repoPath: space?.path,
+                    spaces,
+                    projectLabel:
+                      space?.name ??
+                      space?.path.split(/[\\/]/).filter(Boolean).pop() ??
+                      t('checkout.noProject'),
+                    worktreeLabel: chat.branch ?? t('checkout.worktree'),
+                  }
+                : undefined
+            }
             dictation={dictation}
             onSend={doSend}
             onSteer={doSteer}
@@ -674,29 +826,72 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       {queueOpen ? (
-        <TrueSheet
-          detents={['auto', 1]}
-          initialDetentIndex={0}
-          onDidDismiss={() => setQueueOpen(false)}
-          grabber
-          backgroundColor={theme.background}
-        >
-          <View style={styles.queueSheet}>
-            <QueuePanel
-              queue={session.queue}
-              actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
-              pending={session.queueActionsPending}
-              error={session.queueActionError}
-              canSteer={
-                harness?.supportsSteering === true &&
-                harness.steeringMode === 'step-boundary'
-              }
-              onAction={(id, a) => {
-                controller?.queueAction(id, a).catch(() => {});
-              }}
-            />
-          </View>
-        </TrueSheet>
+        <GlassSheet onDismiss={() => setQueueOpen(false)}>
+          <QueuePanel
+            queue={session.queue}
+            actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
+            pending={session.queueActionsPending}
+            error={session.queueActionError}
+            canSteer={
+              harness?.supportsSteering === true &&
+              harness.steeringMode === 'step-boundary'
+            }
+            onAction={(id, a) => {
+              controller?.queueAction(id, a).catch(() => {});
+            }}
+            onMove={(id, to) => {
+              controller?.moveQueued(id, to);
+            }}
+          />
+        </GlassSheet>
+      ) : null}
+
+      {effortOpen ? (
+        <EffortOverlay
+          levels={effortLevels}
+          value={chat?.config?.reasoning}
+          onChange={level => {
+            if (runtime === null || chat === undefined) return;
+            setChatConfig(runtime, chat.id, {
+              harness: chat.config?.harness ?? '',
+              model: chat.config?.model,
+              modelOptions: chat.config?.modelOptions ?? {},
+              reasoning: level,
+              sandbox: chat.config?.sandbox,
+            });
+          }}
+          showFast={fastOption !== undefined}
+          fastEnabled={fastEnabled}
+          onToggleFast={on => {
+            if (
+              runtime === null ||
+              chat === undefined ||
+              fastOption === undefined
+            )
+              return;
+            setChatConfig(runtime, chat.id, {
+              harness: chat.config?.harness ?? '',
+              model: chat.config?.model,
+              reasoning: chat.config?.reasoning,
+              sandbox: chat.config?.sandbox,
+              modelOptions: {
+                ...(chat.config?.modelOptions ?? {}),
+                [fastOption.id]: on
+                  ? fastOnChoice(fastOption)
+                  : fastOffChoice(fastOption),
+              },
+            });
+          }}
+          onDismiss={() => setEffortOpen(false)}
+        />
+      ) : null}
+
+      {prOpen && prBadge !== undefined ? (
+        <PrSheet
+          chatId={chatId}
+          badge={prBadge}
+          onDismiss={() => setPrOpen(false)}
+        />
       ) : null}
 
       {pickerOpen && runtime !== null && chat !== undefined ? (
@@ -826,7 +1021,7 @@ export function SessionScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   fill: { flex: 1 },
-  composer: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  composer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3 },
   scrollDown: {
     position: 'absolute',
     left: 0,
@@ -845,6 +1040,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 8,
+    zIndex: 3,
   },
   measureCap: { width: '100%', alignSelf: 'center' },
   headerBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
@@ -892,4 +1088,10 @@ const styles = StyleSheet.create({
   failedText: { fontSize: 13, flex: 1 },
   failedAction: { fontSize: 13, fontWeight: '600' },
   queueSheet: { padding: 20 },
+  focusDim: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 2,
+  },
+  focusDimDark: { backgroundColor: 'rgba(0,0,0,0.45)' },
+  focusDimLight: { backgroundColor: 'rgba(0,0,0,0.28)' },
 });

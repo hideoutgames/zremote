@@ -7,6 +7,7 @@ import {
   buildArchivedSet,
   buildChatCheckoutSet,
   buildChatConfigSet,
+  buildChatSpaceSet,
   buildCreateChatSet,
   buildDeleteChatKeys,
   buildDeleteSpaceKeys,
@@ -205,6 +206,10 @@ describe('write set-shapes', () => {
     expect(buildChatCheckoutSet('/repo', 'dev')).toEqual({
       cwd: '/repo',
       branch: 'dev',
+    });
+    expect(buildChatSpaceSet('sp-9', '/code/other')).toEqual({
+      spaceId: 'sp-9',
+      cwd: '/code/other',
     });
     expect(buildChatConfigSet({ harness: 'codex', modelOptions: {} })).toEqual({
       config: { harness: 'codex', modelOptions: {} },

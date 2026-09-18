@@ -483,6 +483,34 @@ export interface CheckoutFileDiffText {
   stale: boolean;
 }
 
+// ── Change requests (entities.rs ChangeRequestState / Summary / Status) ──
+
+export type ChangeRequestState = 'open' | 'closed' | 'merged';
+
+/** Compact provider-neutral change request. `draft` / `body` / `description`
+ * are optional host extras — not in the pinned proto. */
+export interface ChangeRequestSummary {
+  provider: string;
+  number: number;
+  title: string;
+  url: string;
+  state: ChangeRequestState;
+  baseRef: string;
+  headRef: string;
+  draft?: boolean;
+  body?: string;
+  description?: string;
+}
+
+export interface CheckoutChangeRequestStatus {
+  checkoutId: string;
+  deviceId: string;
+  cwd: string;
+  branch: string;
+  changeRequest?: ChangeRequestSummary | null;
+  updatedAt: string;
+}
+
 // ── Terminals (entities.rs L866-890; engine params rpc.rs L294-332) ─────────
 
 /** `OpenTerminal` reply. */

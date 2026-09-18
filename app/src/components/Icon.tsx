@@ -66,6 +66,11 @@ const SF_TO_MDI: Record<string, string> = {
   'sidebar.right': 'page-layout-sidebar-right',
   'list.bullet.indent': 'format-list-bulleted',
   'info.circle': 'information-outline',
+  pin: 'pin-outline',
+  'pin.fill': 'pin',
+  'paperplane.fill': 'send',
+  trash: 'trash-can-outline',
+  'arrow.right.doc.on.clipboard': 'clipboard-arrow-right-outline',
 };
 
 type MdiName = ComponentProps<typeof MaterialDesignIcons>['name'];

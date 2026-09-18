@@ -1,7 +1,7 @@
 // Adaptive navigation shell (JS — the UISplitViewController-backed container
 // in modules/zeron-split-view is written but unverified, so this is what
 // ships). Compact width keeps the Home↔Session pager; regular width (≥700pt)
-// splits into Sidebar | Detail | Inspector columns.
+// splits into Sidebar | Detail. Workspace tools open from the session menu.
 //
 // selectedChatId, sidebar collapse, inspector tab and drafts all live in this
 // component (or the stores), so they survive size-class changes and rotation.
@@ -36,10 +36,6 @@ import { RootPager } from '../screens/RootPager';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SessionScreen } from '../screens/SessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { ChangesScreen } from '../screens/ChangesScreen';
-import { FilesScreen } from '../screens/FilesScreen';
-import { TerminalScreen } from '../screens/TerminalScreen';
-import { HistoryScreen } from '../screens/HistoryScreen';
 import { useTheme } from '../theme';
 import { Icon } from '../components/Icon';
 import { layoutFor, type LayoutPrefs } from './layout';
@@ -49,8 +45,6 @@ import { t } from '../i18n/strings';
  *  (docs/NATIVE_MODULES.md). When true, swap the JS columns for
  *  `ZeronSplitView` from modules/zeron-split-view. */
 export const USE_NATIVE_SPLIT_VIEW = false;
-
-type InspectorTab = 'changes' | 'files' | 'terminal' | 'history';
 
 export function AdaptiveShell({
   requestedChat,
@@ -65,14 +59,12 @@ export function AdaptiveShell({
   const [chatId, setChatId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebarCollapsed = useSidebarCollapsed();
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('changes');
 
   useEffect(() => {
     if (requestedChat !== null) setChatId(requestedChat);
   }, [requestedChat]);
 
-  const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen };
+  const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen: false };
   const layout = layoutFor(width, prefs);
 
   useEffect(() => {
@@ -84,7 +76,6 @@ export function AdaptiveShell({
     () => setSidebarCollapsed(!sidebarCollapsed),
     [sidebarCollapsed],
   );
-  const toggleInspector = useCallback(() => setInspectorOpen(v => !v), []);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
 
   // Floating sidebar slide: collapse.value 0 = visible, 1 = offscreen left.
@@ -132,7 +123,6 @@ export function AdaptiveShell({
             leadingIcon="sidebar.left"
             contentMaxWidth={layout.measureCap}
             leadingInsetSV={leadingInset}
-            onToggleInspector={toggleInspector}
           />
         ) : (
           <View style={styles.emptyDetail}>
@@ -142,75 +132,6 @@ export function AdaptiveShell({
           </View>
         )}
       </View>
-
-      {layout.inspectorVisible ? (
-        <View
-          style={[
-            styles.inspector,
-            { width: layout.inspectorWidth, borderLeftColor: theme.border },
-          ]}
-        >
-          <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
-            {(['changes', 'files', 'terminal', 'history'] as const).map(tab => {
-              const label =
-                tab === 'changes'
-                  ? t('inspector.changes')
-                  : tab === 'files'
-                  ? t('inspector.files')
-                  : tab === 'terminal'
-                  ? t('inspector.terminal')
-                  : t('inspector.history');
-              return (
-                <Pressable
-                  key={tab}
-                  onPress={() => setInspectorTab(tab)}
-                  accessibilityRole="tab"
-                  accessibilityState={{
-                    selected: inspectorTab === tab,
-                  }}
-                  style={styles.tab}
-                  hitSlop={8}
-                >
-                  <Text
-                    maxFontSizeMultiplier={1.6}
-                    style={[
-                      styles.tabLabel,
-                      {
-                        color: inspectorTab === tab ? theme.accent : theme.text,
-                      },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {inspectorTab === 'changes' && chatId !== null ? (
-            <ChangesScreen
-              chatId={chatId}
-              embedded
-              onOpenHistory={() => setInspectorTab('history')}
-            />
-          ) : null}
-          {inspectorTab === 'files' && chatId !== null ? (
-            <FilesScreen chatId={chatId} embedded />
-          ) : null}
-          {inspectorTab === 'terminal' && chatId !== null ? (
-            <TerminalScreen chatId={chatId} />
-          ) : null}
-          {inspectorTab === 'history' && chatId !== null ? (
-            <HistoryScreen chatId={chatId} />
-          ) : null}
-          {chatId === null ? (
-            <View style={styles.emptyDetail}>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                {t('inspector.noSession')}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
 
       {/* Floating glass sidebar — always mounted so collapse can animate;
           pointerEvents none while offscreen. */}

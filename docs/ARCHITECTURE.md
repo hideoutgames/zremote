@@ -85,12 +85,12 @@ window width to a plan:
 
 - **< 700pt** → `compact`: the original `RootPager` (Home ↔ Session).
 - **≥ 700pt** → `regular`: Sidebar (`HomeScreen` at 300–360pt) + Detail
-  (`SessionScreen`) + optional Inspector (360–480pt). The inspector appears
-  at ≥1100pt or when toggled from the session header; tabs are Changes /
-  Files / Terminal / History.
+  (`SessionScreen`). The iPad right inspector column is gone — Changes /
+  Files / Terminal / History open from the session overflow menu as
+  full-screen overlays (same path as iPhone).
   Transcript and composer are capped at ~720pt and centered.
 
-Selection (`chatId`), sidebar collapse, inspector tab and drafts persist
+Selection (`chatId`), sidebar collapse, and drafts persist
 across size-class changes because they live in the shell or the stores, not
 in the column tree. `SessionScreen` stays mounted while columns toggle; the
 compact pager's `Freeze` only applies when the session page is not visible.
