@@ -12,21 +12,14 @@ Pod::Spec.new do |s|
   s.source       = { :git => '' }
   s.platforms    = { :ios => '17.0' }
 
-  # Module Swift + vendored loro-swift binding sources.
-  s.source_files = 'ios/**/*.swift', 'vendor/loro-swift/Sources/Loro/**/*.swift'
-  # The FFI binary (downloaded + checksum-verified by scripts/fetch-loro-ffi.sh).
-  s.vendored_frameworks = 'vendor/loroFFI.xcframework'
-  # The Swift→C++ interop header (ReactNativeLoro-Swift.h) exposes the
-  # vendored UniFFI types, which reference the C `RustBuffer`; declare it
-  # ahead of every C/C++/ObjC++ compile unit in this pod.
-  s.prefix_header_contents = '#include <loroFFI/loroFFI.h>'
+  # Only the Nitro bridge lives here; the loro-swift binding is the separate
+  # plain-Swift pod `LoroSwift` (vendor/LoroSwift.podspec, module `Loro`).
+  s.source_files = 'ios/**/*.swift'
+  s.dependency 'LoroSwift'
 
   s.dependency 'React-Core'
   s.dependency 'NitroModules'
 
-  s.prepare_command = <<-CMD
-    bash ../../scripts/fetch-loro-ffi.sh "#{__dir__}" || exit 1
-  CMD
   # Nitrogen-generated Swift<->C++ bridge + interop build settings
   # (SWIFT_OBJC_INTEROP_MODE=objcxx, C++20). Without this the Swift target
   # cannot import NitroModules ("'functional' file not found").

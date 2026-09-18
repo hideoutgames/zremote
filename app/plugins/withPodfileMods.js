@@ -1,15 +1,19 @@
 // Local config plugin (docs/COMPATIBILITY.md "Native project strategy" #2):
 // the fork's Podfile carries `pod 'SDWebImage', :modular_headers => true`
-// for react-native-nitro-web-image. Re-encodes that customization into CNG.
+// for react-native-nitro-web-image. Re-encodes that customization into CNG,
+// and adds the loro-swift binding as its own plain-Swift pod (see
+// modules/react-native-loro/vendor/LoroSwift.podspec for why it is separate).
 const { withDangerousMod } = require('expo/config-plugins');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const LINE = "  pod 'SDWebImage', :modular_headers => true";
+const LINES = [
+  "  pod 'SDWebImage', :modular_headers => true",
+  "  pod 'LoroSwift', :path => '../modules/react-native-loro/vendor'",
+];
 
-/** Insert the SDWebImage pod inside the app target, idempotently. */
+/** Insert the extra pods inside the app target, idempotently. */
 const insert = contents => {
-  if (contents.includes("'SDWebImage'")) return contents;
   const lines = contents.split('\n');
   const idx = lines.findIndex(l => /^\s*target\s+'[^']+'\s+do\s*$/.test(l));
   if (idx === -1) {
@@ -17,7 +21,8 @@ const insert = contents => {
       'withPodfileMods: no `target ... do` line found in Podfile',
     );
   }
-  lines.splice(idx + 1, 0, LINE);
+  const missing = LINES.filter(l => !contents.includes(l.trim()));
+  lines.splice(idx + 1, 0, ...missing);
   return lines.join('\n');
 };
 

@@ -5,6 +5,7 @@
 // SessionStore.swift + SessionQueue.swift + DocDisk.swift at 853872d.
 
 import Foundation
+import Loro
 import NitroModules
 
 class HybridLoroDoc: HybridLoroDocSpec {
