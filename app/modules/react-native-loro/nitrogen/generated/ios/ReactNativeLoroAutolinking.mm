@@ -19,7 +19,7 @@
 
 + (void) load {
   using namespace margelo::nitro;
-  using namespace margelo::nitro::margelo::zremote::loro;
+  using namespace margelo::nitro::zremote::loro;
 
   HybridObjectRegistry::registerHybridObjectConstructor(
     "LoroDoc",

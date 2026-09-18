@@ -9,11 +9,11 @@
 
 // Forward declarations of C++ defined types
 // Forward declaration of `DictationModelState` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { enum class DictationModelState; }
+namespace margelo::nitro::zremote::dictation { enum class DictationModelState; }
 // Forward declaration of `DictationSupport` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { struct DictationSupport; }
+namespace margelo::nitro::zremote::dictation { struct DictationSupport; }
 // Forward declaration of `HybridDictationSpec` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { class HybridDictationSpec; }
+namespace margelo::nitro::zremote::dictation { class HybridDictationSpec; }
 
 // Forward declarations of Swift defined types
 // Forward declaration of `HybridDictationSpec_cxx` to properly resolve imports.
@@ -36,7 +36,7 @@ namespace ZeronDictation { class HybridDictationSpec_cxx; }
  * Contains specialized versions of C++ templated types so they can be accessed from Swift,
  * as well as helper functions to interact with those C++ types from Swift.
  */
-namespace margelo::nitro::margelo::zremote::dictation::bridge::swift {
+namespace margelo::nitro::zremote::dictation::bridge::swift {
 
   // pragma MARK: std::optional<std::string>
   /**
@@ -260,4 +260,4 @@ namespace margelo::nitro::margelo::zremote::dictation::bridge::swift {
     return Result<std::shared_ptr<Promise<void>>>::withError(error);
   }
 
-} // namespace margelo::nitro::margelo::zremote::dictation::bridge::swift
+} // namespace margelo::nitro::zremote::dictation::bridge::swift

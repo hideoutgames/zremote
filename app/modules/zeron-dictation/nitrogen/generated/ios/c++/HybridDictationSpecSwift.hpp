@@ -13,9 +13,9 @@
 namespace ZeronDictation { class HybridDictationSpec_cxx; }
 
 // Forward declaration of `DictationSupport` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { struct DictationSupport; }
+namespace margelo::nitro::zremote::dictation { struct DictationSupport; }
 // Forward declaration of `DictationModelState` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { enum class DictationModelState; }
+namespace margelo::nitro::zremote::dictation { enum class DictationModelState; }
 
 #include "DictationSupport.hpp"
 #include <NitroModules/Promise.hpp>
@@ -26,7 +26,7 @@ namespace margelo::nitro::margelo::zremote::dictation { enum class DictationMode
 
 #include "ZeronDictation-Swift-Cxx-Umbrella.hpp"
 
-namespace margelo::nitro::margelo::zremote::dictation {
+namespace margelo::nitro::zremote::dictation {
 
   /**
    * The C++ part of HybridDictationSpec_cxx.swift.
@@ -127,4 +127,4 @@ namespace margelo::nitro::margelo::zremote::dictation {
     ZeronDictation::HybridDictationSpec_cxx _swiftPart;
   };
 
-} // namespace margelo::nitro::margelo::zremote::dictation
+} // namespace margelo::nitro::zremote::dictation

@@ -23,7 +23,7 @@ namespace NitroModules { class ArrayBufferHolder; }
 
 #include "ReactNativeLoro-Swift-Cxx-Umbrella.hpp"
 
-namespace margelo::nitro::margelo::zremote::loro {
+namespace margelo::nitro::zremote::loro {
 
   /**
    * The C++ part of HybridLoroDocSpec_cxx.swift.
@@ -192,4 +192,4 @@ namespace margelo::nitro::margelo::zremote::loro {
     ReactNativeLoro::HybridLoroDocSpec_cxx _swiftPart;
   };
 
-} // namespace margelo::nitro::margelo::zremote::loro
+} // namespace margelo::nitro::zremote::loro

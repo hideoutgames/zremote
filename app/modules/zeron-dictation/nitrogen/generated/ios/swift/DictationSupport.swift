@@ -10,10 +10,10 @@ import NitroModules
 /**
  * Represents an instance of `DictationSupport`, backed by a C++ struct.
  */
-public typealias DictationSupport = margelo.nitro.margelo.zremote.dictation.DictationSupport
+public typealias DictationSupport = margelo.nitro.zremote.dictation.DictationSupport
 
 public extension DictationSupport {
-  private typealias bridge = margelo.nitro.margelo.zremote.dictation.bridge.swift
+  private typealias bridge = margelo.nitro.zremote.dictation.bridge.swift
 
   /**
    * Create a new instance of `DictationSupport`.

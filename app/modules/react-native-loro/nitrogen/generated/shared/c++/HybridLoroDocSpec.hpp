@@ -20,7 +20,7 @@
 #include <string>
 #include <functional>
 
-namespace margelo::nitro::margelo::zremote::loro {
+namespace margelo::nitro::zremote::loro {
 
   using namespace margelo::nitro;
 
@@ -78,4 +78,4 @@ namespace margelo::nitro::margelo::zremote::loro {
       static constexpr auto TAG = "LoroDoc";
   };
 
-} // namespace margelo::nitro::margelo::zremote::loro
+} // namespace margelo::nitro::zremote::loro

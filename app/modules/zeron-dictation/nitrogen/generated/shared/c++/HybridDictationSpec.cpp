@@ -7,7 +7,7 @@
 
 #include "HybridDictationSpec.hpp"
 
-namespace margelo::nitro::margelo::zremote::dictation {
+namespace margelo::nitro::zremote::dictation {
 
   void HybridDictationSpec::loadHybridMethods() {
     // load base methods/properties
@@ -23,4 +23,4 @@ namespace margelo::nitro::margelo::zremote::dictation {
     });
   }
 
-} // namespace margelo::nitro::margelo::zremote::dictation
+} // namespace margelo::nitro::zremote::dictation

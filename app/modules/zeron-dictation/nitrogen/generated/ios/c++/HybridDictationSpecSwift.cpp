@@ -7,5 +7,5 @@
 
 #include "HybridDictationSpecSwift.hpp"
 
-namespace margelo::nitro::margelo::zremote::dictation {
-} // namespace margelo::nitro::margelo::zremote::dictation
+namespace margelo::nitro::zremote::dictation {
+} // namespace margelo::nitro::zremote::dictation

@@ -18,11 +18,11 @@ import NitroModules
  */
 open class HybridLoroDocSpec_cxx {
   /**
-   * The Swift <> C++ bridge's namespace (`margelo::nitro::margelo::zremote::loro::bridge::swift`)
+   * The Swift <> C++ bridge's namespace (`margelo::nitro::zremote::loro::bridge::swift`)
    * from `ReactNativeLoro-Swift-Cxx-Bridge.hpp`.
    * This contains specialized C++ templates, and C++ helper functions that can be accessed from Swift.
    */
-  public typealias bridge = margelo.nitro.margelo.zremote.loro.bridge.swift
+  public typealias bridge = margelo.nitro.zremote.loro.bridge.swift
 
   /**
    * Holds an instance of the `HybridLoroDocSpec` Swift protocol.

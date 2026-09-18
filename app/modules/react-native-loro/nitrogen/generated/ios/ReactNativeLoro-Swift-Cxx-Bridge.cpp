@@ -12,7 +12,7 @@
 #include "ReactNativeLoro-Swift-Cxx-Umbrella.hpp"
 #include <NitroModules/NitroDefines.hpp>
 
-namespace margelo::nitro::margelo::zremote::loro::bridge::swift {
+namespace margelo::nitro::zremote::loro::bridge::swift {
 
   // pragma MARK: std::function<void(const std::shared_ptr<ArrayBuffer>& /* update */)>
   Func_void_std__shared_ptr_ArrayBuffer_ create_Func_void_std__shared_ptr_ArrayBuffer_(void* NON_NULL swiftClosureWrapper) noexcept {
@@ -25,10 +25,10 @@ namespace margelo::nitro::margelo::zremote::loro::bridge::swift {
   // pragma MARK: std::shared_ptr<HybridLoroDocSpec>
   std::shared_ptr<HybridLoroDocSpec> create_std__shared_ptr_HybridLoroDocSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
     ReactNativeLoro::HybridLoroDocSpec_cxx swiftPart = ReactNativeLoro::HybridLoroDocSpec_cxx::fromUnsafe(swiftUnsafePointer);
-    return std::make_shared<margelo::nitro::margelo::zremote::loro::HybridLoroDocSpecSwift>(swiftPart);
+    return std::make_shared<margelo::nitro::zremote::loro::HybridLoroDocSpecSwift>(swiftPart);
   }
   void* NON_NULL get_std__shared_ptr_HybridLoroDocSpec_(std__shared_ptr_HybridLoroDocSpec_ cppType) {
-    std::shared_ptr<margelo::nitro::margelo::zremote::loro::HybridLoroDocSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::margelo::zremote::loro::HybridLoroDocSpecSwift>(cppType);
+    std::shared_ptr<margelo::nitro::zremote::loro::HybridLoroDocSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::zremote::loro::HybridLoroDocSpecSwift>(cppType);
     #ifdef NITRO_DEBUG
     if (swiftWrapper == nullptr) [[unlikely]] {
       throw std::runtime_error("Class \"HybridLoroDocSpec\" is not implemented in Swift!");
@@ -38,4 +38,4 @@ namespace margelo::nitro::margelo::zremote::loro::bridge::swift {
     return swiftPart.toUnsafe();
   }
 
-} // namespace margelo::nitro::margelo::zremote::loro::bridge::swift
+} // namespace margelo::nitro::zremote::loro::bridge::swift

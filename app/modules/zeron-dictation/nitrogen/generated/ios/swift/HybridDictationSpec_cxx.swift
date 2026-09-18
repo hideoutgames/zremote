@@ -18,11 +18,11 @@ import NitroModules
  */
 open class HybridDictationSpec_cxx {
   /**
-   * The Swift <> C++ bridge's namespace (`margelo::nitro::margelo::zremote::dictation::bridge::swift`)
+   * The Swift <> C++ bridge's namespace (`margelo::nitro::zremote::dictation::bridge::swift`)
    * from `ZeronDictation-Swift-Cxx-Bridge.hpp`.
    * This contains specialized C++ templates, and C++ helper functions that can be accessed from Swift.
    */
-  public typealias bridge = margelo.nitro.margelo.zremote.dictation.bridge.swift
+  public typealias bridge = margelo.nitro.zremote.dictation.bridge.swift
 
   /**
    * Holds an instance of the `HybridDictationSpec` Swift protocol.

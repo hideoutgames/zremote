@@ -7,7 +7,7 @@
 
 #include "HybridLoroDocSpec.hpp"
 
-namespace margelo::nitro::margelo::zremote::loro {
+namespace margelo::nitro::zremote::loro {
 
   void HybridLoroDocSpec::loadHybridMethods() {
     // load base methods/properties
@@ -34,4 +34,4 @@ namespace margelo::nitro::margelo::zremote::loro {
     });
   }
 
-} // namespace margelo::nitro::margelo::zremote::loro
+} // namespace margelo::nitro::zremote::loro

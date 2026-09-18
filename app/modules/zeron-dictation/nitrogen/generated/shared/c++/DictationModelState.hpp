@@ -23,7 +23,7 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
-namespace margelo::nitro::margelo::zremote::dictation {
+namespace margelo::nitro::zremote::dictation {
 
   /**
    * An enum which can be represented as a JavaScript union (DictationModelState).
@@ -35,30 +35,30 @@ namespace margelo::nitro::margelo::zremote::dictation {
     UNSUPPORTED      SWIFT_NAME(unsupported) = 3,
   } CLOSED_ENUM;
 
-} // namespace margelo::nitro::margelo::zremote::dictation
+} // namespace margelo::nitro::zremote::dictation
 
 namespace margelo::nitro {
 
   // C++ DictationModelState <> JS DictationModelState (union)
   template <>
-  struct JSIConverter<margelo::nitro::margelo::zremote::dictation::DictationModelState> final {
-    static inline margelo::nitro::margelo::zremote::dictation::DictationModelState fromJSI(jsi::Runtime& runtime, const jsi::Value& arg) {
+  struct JSIConverter<margelo::nitro::zremote::dictation::DictationModelState> final {
+    static inline margelo::nitro::zremote::dictation::DictationModelState fromJSI(jsi::Runtime& runtime, const jsi::Value& arg) {
       std::string unionValue = JSIConverter<std::string>::fromJSI(runtime, arg);
       switch (hashString(unionValue.c_str(), unionValue.size())) {
-        case hashString("installed"): return margelo::nitro::margelo::zremote::dictation::DictationModelState::INSTALLED;
-        case hashString("downloadable"): return margelo::nitro::margelo::zremote::dictation::DictationModelState::DOWNLOADABLE;
-        case hashString("downloading"): return margelo::nitro::margelo::zremote::dictation::DictationModelState::DOWNLOADING;
-        case hashString("unsupported"): return margelo::nitro::margelo::zremote::dictation::DictationModelState::UNSUPPORTED;
+        case hashString("installed"): return margelo::nitro::zremote::dictation::DictationModelState::INSTALLED;
+        case hashString("downloadable"): return margelo::nitro::zremote::dictation::DictationModelState::DOWNLOADABLE;
+        case hashString("downloading"): return margelo::nitro::zremote::dictation::DictationModelState::DOWNLOADING;
+        case hashString("unsupported"): return margelo::nitro::zremote::dictation::DictationModelState::UNSUPPORTED;
         default: [[unlikely]]
           throw std::invalid_argument("Cannot convert \"" + unionValue + "\" to enum DictationModelState - invalid value!");
       }
     }
-    static inline jsi::Value toJSI(jsi::Runtime& runtime, margelo::nitro::margelo::zremote::dictation::DictationModelState arg) {
+    static inline jsi::Value toJSI(jsi::Runtime& runtime, margelo::nitro::zremote::dictation::DictationModelState arg) {
       switch (arg) {
-        case margelo::nitro::margelo::zremote::dictation::DictationModelState::INSTALLED: return JSIConverter<std::string>::toJSI(runtime, "installed");
-        case margelo::nitro::margelo::zremote::dictation::DictationModelState::DOWNLOADABLE: return JSIConverter<std::string>::toJSI(runtime, "downloadable");
-        case margelo::nitro::margelo::zremote::dictation::DictationModelState::DOWNLOADING: return JSIConverter<std::string>::toJSI(runtime, "downloading");
-        case margelo::nitro::margelo::zremote::dictation::DictationModelState::UNSUPPORTED: return JSIConverter<std::string>::toJSI(runtime, "unsupported");
+        case margelo::nitro::zremote::dictation::DictationModelState::INSTALLED: return JSIConverter<std::string>::toJSI(runtime, "installed");
+        case margelo::nitro::zremote::dictation::DictationModelState::DOWNLOADABLE: return JSIConverter<std::string>::toJSI(runtime, "downloadable");
+        case margelo::nitro::zremote::dictation::DictationModelState::DOWNLOADING: return JSIConverter<std::string>::toJSI(runtime, "downloading");
+        case margelo::nitro::zremote::dictation::DictationModelState::UNSUPPORTED: return JSIConverter<std::string>::toJSI(runtime, "unsupported");
         default: [[unlikely]]
           throw std::invalid_argument("Cannot convert DictationModelState to JS - invalid value: "
                                     + std::to_string(static_cast<int>(arg)) + "!");

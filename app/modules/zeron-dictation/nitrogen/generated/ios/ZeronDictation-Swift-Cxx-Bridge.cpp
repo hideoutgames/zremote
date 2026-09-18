@@ -12,7 +12,7 @@
 #include "ZeronDictation-Swift-Cxx-Umbrella.hpp"
 #include <NitroModules/NitroDefines.hpp>
 
-namespace margelo::nitro::margelo::zremote::dictation::bridge::swift {
+namespace margelo::nitro::zremote::dictation::bridge::swift {
 
   // pragma MARK: std::function<void(const DictationSupport& /* result */)>
   Func_void_DictationSupport create_Func_void_DictationSupport(void* NON_NULL swiftClosureWrapper) noexcept {
@@ -65,10 +65,10 @@ namespace margelo::nitro::margelo::zremote::dictation::bridge::swift {
   // pragma MARK: std::shared_ptr<HybridDictationSpec>
   std::shared_ptr<HybridDictationSpec> create_std__shared_ptr_HybridDictationSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
     ZeronDictation::HybridDictationSpec_cxx swiftPart = ZeronDictation::HybridDictationSpec_cxx::fromUnsafe(swiftUnsafePointer);
-    return std::make_shared<margelo::nitro::margelo::zremote::dictation::HybridDictationSpecSwift>(swiftPart);
+    return std::make_shared<margelo::nitro::zremote::dictation::HybridDictationSpecSwift>(swiftPart);
   }
   void* NON_NULL get_std__shared_ptr_HybridDictationSpec_(std__shared_ptr_HybridDictationSpec_ cppType) {
-    std::shared_ptr<margelo::nitro::margelo::zremote::dictation::HybridDictationSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::margelo::zremote::dictation::HybridDictationSpecSwift>(cppType);
+    std::shared_ptr<margelo::nitro::zremote::dictation::HybridDictationSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::zremote::dictation::HybridDictationSpecSwift>(cppType);
     #ifdef NITRO_DEBUG
     if (swiftWrapper == nullptr) [[unlikely]] {
       throw std::runtime_error("Class \"HybridDictationSpec\" is not implemented in Swift!");
@@ -78,4 +78,4 @@ namespace margelo::nitro::margelo::zremote::dictation::bridge::swift {
     return swiftPart.toUnsafe();
   }
 
-} // namespace margelo::nitro::margelo::zremote::dictation::bridge::swift
+} // namespace margelo::nitro::zremote::dictation::bridge::swift

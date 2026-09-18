@@ -10,7 +10,7 @@ import NitroModules
 // TODO: Use empty enums once Swift supports exporting them as namespaces
 //       See: https://github.com/swiftlang/swift/pull/83616
 public final class ZeronDictationAutolinking {
-  public typealias bridge = margelo.nitro.margelo.zremote.dictation.bridge.swift
+  public typealias bridge = margelo.nitro.zremote.dictation.bridge.swift
 
   public static func createDictation() -> bridge.std__shared_ptr_HybridDictationSpec_ {
     let hybridObject = HybridDictation()

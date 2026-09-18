@@ -8,7 +8,7 @@
 /**
  * Represents the JS union `DictationModelState`, backed by a C++ enum.
  */
-public typealias DictationModelState = margelo.nitro.margelo.zremote.dictation.DictationModelState
+public typealias DictationModelState = margelo.nitro.zremote.dictation.DictationModelState
 
 public extension DictationModelState {
   /**

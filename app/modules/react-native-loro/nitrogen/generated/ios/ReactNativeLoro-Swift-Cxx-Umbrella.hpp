@@ -9,7 +9,7 @@
 
 // Forward declarations of C++ defined types
 // Forward declaration of `HybridLoroDocSpec` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::loro { class HybridLoroDocSpec; }
+namespace margelo::nitro::zremote::loro { class HybridLoroDocSpec; }
 
 // Include C++ defined types
 #include "HybridLoroDocSpec.hpp"

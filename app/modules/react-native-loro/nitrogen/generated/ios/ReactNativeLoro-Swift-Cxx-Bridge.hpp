@@ -11,7 +11,7 @@
 // Forward declaration of `ArrayBufferHolder` to properly resolve imports.
 namespace NitroModules { class ArrayBufferHolder; }
 // Forward declaration of `HybridLoroDocSpec` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::loro { class HybridLoroDocSpec; }
+namespace margelo::nitro::zremote::loro { class HybridLoroDocSpec; }
 
 // Forward declarations of Swift defined types
 // Forward declaration of `HybridLoroDocSpec_cxx` to properly resolve imports.
@@ -32,7 +32,7 @@ namespace ReactNativeLoro { class HybridLoroDocSpec_cxx; }
  * Contains specialized versions of C++ templated types so they can be accessed from Swift,
  * as well as helper functions to interact with those C++ types from Swift.
  */
-namespace margelo::nitro::margelo::zremote::loro::bridge::swift {
+namespace margelo::nitro::zremote::loro::bridge::swift {
 
   // pragma MARK: std::optional<std::shared_ptr<ArrayBuffer>>
   /**
@@ -128,4 +128,4 @@ namespace margelo::nitro::margelo::zremote::loro::bridge::swift {
     return Result<double>::withError(error);
   }
 
-} // namespace margelo::nitro::margelo::zremote::loro::bridge::swift
+} // namespace margelo::nitro::zremote::loro::bridge::swift

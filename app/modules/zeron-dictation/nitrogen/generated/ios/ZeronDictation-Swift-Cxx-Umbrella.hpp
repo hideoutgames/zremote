@@ -9,11 +9,11 @@
 
 // Forward declarations of C++ defined types
 // Forward declaration of `DictationModelState` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { enum class DictationModelState; }
+namespace margelo::nitro::zremote::dictation { enum class DictationModelState; }
 // Forward declaration of `DictationSupport` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { struct DictationSupport; }
+namespace margelo::nitro::zremote::dictation { struct DictationSupport; }
 // Forward declaration of `HybridDictationSpec` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { class HybridDictationSpec; }
+namespace margelo::nitro::zremote::dictation { class HybridDictationSpec; }
 
 // Include C++ defined types
 #include "DictationModelState.hpp"

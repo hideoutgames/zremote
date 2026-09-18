@@ -33,7 +33,7 @@
 #include <string>
 #include <optional>
 
-namespace margelo::nitro::margelo::zremote::dictation {
+namespace margelo::nitro::zremote::dictation {
 
   /**
    * A struct which can be represented as a JavaScript object (DictationSupport).
@@ -52,22 +52,22 @@ namespace margelo::nitro::margelo::zremote::dictation {
     friend bool operator==(const DictationSupport& lhs, const DictationSupport& rhs) = default;
   };
 
-} // namespace margelo::nitro::margelo::zremote::dictation
+} // namespace margelo::nitro::zremote::dictation
 
 namespace margelo::nitro {
 
   // C++ DictationSupport <> JS DictationSupport (object)
   template <>
-  struct JSIConverter<margelo::nitro::margelo::zremote::dictation::DictationSupport> final {
-    static inline margelo::nitro::margelo::zremote::dictation::DictationSupport fromJSI(jsi::Runtime& runtime, const jsi::Value& arg) {
+  struct JSIConverter<margelo::nitro::zremote::dictation::DictationSupport> final {
+    static inline margelo::nitro::zremote::dictation::DictationSupport fromJSI(jsi::Runtime& runtime, const jsi::Value& arg) {
       jsi::Object obj = arg.asObject(runtime);
-      return margelo::nitro::margelo::zremote::dictation::DictationSupport(
+      return margelo::nitro::zremote::dictation::DictationSupport(
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "supported"))),
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "onDevice"))),
         JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "reason")))
       );
     }
-    static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::margelo::zremote::dictation::DictationSupport& arg) {
+    static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::zremote::dictation::DictationSupport& arg) {
       jsi::Object obj(runtime);
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "supported"), JSIConverter<bool>::toJSI(runtime, arg.supported));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "onDevice"), JSIConverter<bool>::toJSI(runtime, arg.onDevice));

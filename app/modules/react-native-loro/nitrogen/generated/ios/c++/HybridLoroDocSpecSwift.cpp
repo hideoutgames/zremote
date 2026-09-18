@@ -7,5 +7,5 @@
 
 #include "HybridLoroDocSpecSwift.hpp"
 
-namespace margelo::nitro::margelo::zremote::loro {
-} // namespace margelo::nitro::margelo::zremote::loro
+namespace margelo::nitro::zremote::loro {
+} // namespace margelo::nitro::zremote::loro

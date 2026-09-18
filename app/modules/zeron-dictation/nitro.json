@@ -1,5 +1,5 @@
 {
-  "cxxNamespace": ["margelo", "zremote", "dictation"],
+  "cxxNamespace": ["zremote", "dictation"],
   "ios": { "iosModuleName": "ZeronDictation" },
   "android": {
     "androidNamespace": ["dictation"],

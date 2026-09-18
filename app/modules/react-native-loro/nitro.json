@@ -1,5 +1,5 @@
 {
-  "cxxNamespace": ["margelo", "zremote", "loro"],
+  "cxxNamespace": ["zremote", "loro"],
   "ios": { "iosModuleName": "ReactNativeLoro" },
   "android": {
     "androidNamespace": ["loro"],

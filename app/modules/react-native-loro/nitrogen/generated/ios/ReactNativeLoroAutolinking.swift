@@ -10,7 +10,7 @@ import NitroModules
 // TODO: Use empty enums once Swift supports exporting them as namespaces
 //       See: https://github.com/swiftlang/swift/pull/83616
 public final class ReactNativeLoroAutolinking {
-  public typealias bridge = margelo.nitro.margelo.zremote.loro.bridge.swift
+  public typealias bridge = margelo.nitro.zremote.loro.bridge.swift
 
   public static func createLoroDoc() -> bridge.std__shared_ptr_HybridLoroDocSpec_ {
     let hybridObject = HybridLoroDoc()

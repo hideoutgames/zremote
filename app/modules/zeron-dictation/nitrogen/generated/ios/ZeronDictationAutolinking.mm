@@ -19,7 +19,7 @@
 
 + (void) load {
   using namespace margelo::nitro;
-  using namespace margelo::nitro::margelo::zremote::dictation;
+  using namespace margelo::nitro::zremote::dictation;
 
   HybridObjectRegistry::registerHybridObjectConstructor(
     "Dictation",

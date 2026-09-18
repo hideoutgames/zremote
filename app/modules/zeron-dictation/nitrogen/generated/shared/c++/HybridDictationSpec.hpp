@@ -14,9 +14,9 @@
 #endif
 
 // Forward declaration of `DictationSupport` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { struct DictationSupport; }
+namespace margelo::nitro::zremote::dictation { struct DictationSupport; }
 // Forward declaration of `DictationModelState` to properly resolve imports.
-namespace margelo::nitro::margelo::zremote::dictation { enum class DictationModelState; }
+namespace margelo::nitro::zremote::dictation { enum class DictationModelState; }
 
 #include "DictationSupport.hpp"
 #include <NitroModules/Promise.hpp>
@@ -25,7 +25,7 @@ namespace margelo::nitro::margelo::zremote::dictation { enum class DictationMode
 #include <functional>
 #include <optional>
 
-namespace margelo::nitro::margelo::zremote::dictation {
+namespace margelo::nitro::zremote::dictation {
 
   using namespace margelo::nitro;
 
@@ -72,4 +72,4 @@ namespace margelo::nitro::margelo::zremote::dictation {
       static constexpr auto TAG = "Dictation";
   };
 
-} // namespace margelo::nitro::margelo::zremote::dictation
+} // namespace margelo::nitro::zremote::dictation

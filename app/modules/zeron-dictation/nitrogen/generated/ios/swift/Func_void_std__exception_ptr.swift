@@ -12,7 +12,7 @@ import NitroModules
  * This class can be used from C++, e.g. to wrap the Swift closure as a `std::function`.
  */
 public final class Func_void_std__exception_ptr {
-  public typealias bridge = margelo.nitro.margelo.zremote.dictation.bridge.swift
+  public typealias bridge = margelo.nitro.zremote.dictation.bridge.swift
 
   private let closure: (_ error: Error) -> Void
 
