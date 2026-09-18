@@ -21,6 +21,6 @@ Pod::Spec.new do |s|
   s.dependency 'NitroModules'
 
   s.prepare_command = <<-CMD
-    ../../scripts/fetch-loro-ffi.sh "#{__dir__}" || exit 1
+    bash ../../scripts/fetch-loro-ffi.sh "#{__dir__}" || exit 1
   CMD
 end
