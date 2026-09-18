@@ -49,8 +49,11 @@ jobs:
 
       - uses: ruby/setup-ruby@v1
         with:
-          bundler-cache: true
+          ruby-version: "3.3"
           working-directory: app
+
+      - name: Install CocoaPods + xcpretty
+        run: bundle install
 
       - name: Expo prebuild (unsigned placeholder bundle id)
         env:
