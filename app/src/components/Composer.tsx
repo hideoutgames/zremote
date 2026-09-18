@@ -1,9 +1,10 @@
 // Session composer — one two-tier Liquid Glass container:
+//   above: Liquid Glass "Queue: N" chip when messages are parked,
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
-//   lower tier: [+] attachment menu · live Queue/Steer pill ·
-//     model menu · effort overlay · mic · right circle
+//   lower tier: [+] attachment menu · horizontally scrolling live/model/
+//     effort pills · context ring · VoicePill · right circle
 //     (send/stop/stopping/cancel).
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
@@ -15,6 +16,7 @@ import {
   AppState,
   type LayoutChangeEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -62,6 +64,7 @@ import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { ContextUsageBar } from './agentsKit/ContextUsageBar';
 import { EffortOverlay } from './EffortOverlay';
 import { ProviderMark } from './ProviderMark';
+import { VoicePill } from './VoicePill';
 import {
   capitalizeEffort,
   composerShowsEffort,
@@ -348,6 +351,25 @@ export const Composer = React.memo(function ({
       onLayout={onLayout}
       style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
     >
+      {session.queue.length > 0 ? (
+        <Pressable
+          onPress={onOpenQueue}
+          accessibilityRole="button"
+          accessibilityLabel={t('queue.badge').replace(
+            '{count}',
+            String(session.queue.length),
+          )}
+        >
+          <Glass interactive effect="clear" style={styles.queueChip}>
+            <Text style={[styles.queueChipText, { color: theme.text }]}>
+              {t('queue.badge').replace(
+                '{count}',
+                String(session.queue.length),
+              )}
+            </Text>
+          </Glass>
+        </Pressable>
+      ) : null}
       <View
         style={styles.glassWrap}
         onLayout={e =>
@@ -483,7 +505,7 @@ export const Composer = React.memo(function ({
             // modifier gap is documented in docs/ARCHITECTURE.md.
           />
 
-          {/* ── Lower tier: [+] · queue/steer pill · model · mic · right ─
+          {/* ── Lower tier: [+] · scrolling pills · context · voice · right
               (no separator — spacing only, per the single-surface design) ── */}
           <View style={styles.lowerRow}>
             <AttachmentMenu
@@ -492,175 +514,146 @@ export const Composer = React.memo(function ({
               onPickFiles={pickFiles}
             />
 
-            {showLivePill ? (
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsHorizontalScrollIndicator={false}
+              style={styles.pillScroll}
+              contentContainerStyle={styles.pillScrollContent}
+            >
+              {showLivePill ? (
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger>
+                    <View
+                      style={[styles.livePill, { borderColor: theme.accent }]}
+                    >
+                      <Text
+                        style={[styles.livePillText, { color: theme.accent }]}
+                      >
+                        {live === 'queue'
+                          ? t('session.queue')
+                          : t('session.steer')}
+                      </Text>
+                    </View>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Content>
+                    <DropdownMenu.Item
+                      key="queue"
+                      onSelect={() => setLiveActionPrefersSteer(false)}
+                    >
+                      <DropdownMenu.ItemTitle>
+                        {t('session.queue')}
+                      </DropdownMenu.ItemTitle>
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      key="steer"
+                      onSelect={() => setLiveActionPrefersSteer(true)}
+                    >
+                      <DropdownMenu.ItemTitle>
+                        {t('session.steer')}
+                      </DropdownMenu.ItemTitle>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Root>
+              ) : null}
+
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger>
                   <View
-                    style={[styles.livePill, { borderColor: theme.accent }]}
+                    hitSlop={4}
+                    accessibilityRole="button"
+                    accessibilityLabel={modelShortLabel}
                   >
-                    <Text
-                      style={[styles.livePillText, { color: theme.accent }]}
-                    >
-                      {live === 'queue'
-                        ? t('session.queue')
-                        : t('session.steer')}
-                    </Text>
+                    <Glass effect="clear" style={styles.modelBtn}>
+                      <ProviderMark kind={modelProvider} size={14} />
+                      <Text
+                        style={[styles.modelText, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {modelShortLabel}
+                      </Text>
+                    </Glass>
                   </View>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
-                  <DropdownMenu.Item
-                    key="queue"
-                    onSelect={() => setLiveActionPrefersSteer(false)}
-                  >
+                  {!harnessLocked && agents.length > 0 ? (
+                    <DropdownMenu.Sub>
+                      <DropdownMenu.SubTrigger key="agents">
+                        <DropdownMenu.ItemTitle>
+                          {t('composer.agents')}
+                        </DropdownMenu.ItemTitle>
+                      </DropdownMenu.SubTrigger>
+                      <DropdownMenu.SubContent>
+                        {agents.map(a => (
+                          <DropdownMenu.Item
+                            key={a.id}
+                            onSelect={() => onPickAgent(a.id)}
+                          >
+                            <DropdownMenu.ItemTitle>
+                              {a.name}
+                            </DropdownMenu.ItemTitle>
+                          </DropdownMenu.Item>
+                        ))}
+                      </DropdownMenu.SubContent>
+                    </DropdownMenu.Sub>
+                  ) : null}
+                  {models.map(m => (
+                    <DropdownMenu.Item
+                      key={m.id}
+                      onSelect={() => onPickModel(m.id)}
+                    >
+                      <DropdownMenu.ItemTitle>{m.label}</DropdownMenu.ItemTitle>
+                    </DropdownMenu.Item>
+                  ))}
+                  <DropdownMenu.Item key="more" onSelect={onOpenMore}>
                     <DropdownMenu.ItemTitle>
-                      {t('session.queue')}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    key="steer"
-                    onSelect={() => setLiveActionPrefersSteer(true)}
-                  >
-                    <DropdownMenu.ItemTitle>
-                      {t('session.steer')}
+                      {t('composer.more')}
                     </DropdownMenu.ItemTitle>
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
-            ) : null}
 
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <View
+              {composerShowsEffort(effortLevels) ? (
+                <Pressable
+                  onPress={() => setEffortOpen(true)}
                   hitSlop={4}
                   accessibilityRole="button"
-                  accessibilityLabel={modelShortLabel}
+                  accessibilityLabel={`${t(
+                    'composer.effort',
+                  )}, ${capitalizeEffort(effortValue ?? effortLevels[0] ?? '')}`}
                 >
                   <Glass effect="clear" style={styles.modelBtn}>
-                    <ProviderMark kind={modelProvider} size={14} />
+                    <Icon name={'gauge' as never} size={14} color={theme.text} />
                     <Text
                       style={[styles.modelText, { color: theme.text }]}
                       numberOfLines={1}
                     >
-                      {modelShortLabel}
+                      {capitalizeEffort(effortValue ?? effortLevels[0] ?? '')}
                     </Text>
                   </Glass>
-                </View>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content>
-                {!harnessLocked && agents.length > 0 ? (
-                  <DropdownMenu.Sub>
-                    <DropdownMenu.SubTrigger key="agents">
-                      <DropdownMenu.ItemTitle>
-                        {t('composer.agents')}
-                      </DropdownMenu.ItemTitle>
-                    </DropdownMenu.SubTrigger>
-                    <DropdownMenu.SubContent>
-                      {agents.map(a => (
-                        <DropdownMenu.Item
-                          key={a.id}
-                          onSelect={() => onPickAgent(a.id)}
-                        >
-                          <DropdownMenu.ItemTitle>
-                            {a.name}
-                          </DropdownMenu.ItemTitle>
-                        </DropdownMenu.Item>
-                      ))}
-                    </DropdownMenu.SubContent>
-                  </DropdownMenu.Sub>
-                ) : null}
-                {models.map(m => (
-                  <DropdownMenu.Item
-                    key={m.id}
-                    onSelect={() => onPickModel(m.id)}
-                  >
-                    <DropdownMenu.ItemTitle>{m.label}</DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                ))}
-                <DropdownMenu.Item key="more" onSelect={onOpenMore}>
-                  <DropdownMenu.ItemTitle>
-                    {t('composer.more')}
-                  </DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-
-            {composerShowsEffort(effortLevels) ? (
-              <Pressable
-                onPress={() => setEffortOpen(true)}
-                hitSlop={4}
-                accessibilityRole="button"
-                accessibilityLabel={`${t(
-                  'composer.effort',
-                )}, ${capitalizeEffort(effortValue ?? effortLevels[0] ?? '')}`}
-              >
-                <Glass effect="clear" style={styles.modelBtn}>
-                  <Icon name={'gauge' as never} size={14} color={theme.text} />
-                  <Text
-                    style={[styles.modelText, { color: theme.text }]}
-                    numberOfLines={1}
-                  >
-                    {capitalizeEffort(effortValue ?? effortLevels[0] ?? '')}
-                  </Text>
-                </Glass>
-              </Pressable>
-            ) : null}
-
-            {session.queue.length > 0 ? (
-              <Pressable
-                onPress={onOpenQueue}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('session.queue')} (${
-                  session.queue.length
-                })`}
-                style={styles.minTarget}
-              >
-                <Text style={[styles.queueBadge, { color: theme.accent }]}>
-                  {session.queue.length}
-                </Text>
-              </Pressable>
-            ) : null}
-
-            <View style={styles.spacer} />
+                </Pressable>
+              ) : null}
+            </ScrollView>
 
             <ContextUsageBar usage={contextUsage} />
 
-            <Pressable
-              onPress={toggleDictation}
+            <VoicePill
+              active={dictating}
               disabled={!dictationSupported}
-              hitSlop={6}
-              accessibilityRole="button"
+              onPress={toggleDictation}
+              accentColor={theme.text}
+              iconColor={
+                !dictationSupported ? theme.sendInactive : theme.textSecondary
+              }
+              background={theme.inputBackground}
               accessibilityLabel={t('composer.dictate')}
-              accessibilityState={{
-                disabled: !dictationSupported,
-                busy: dictating,
-              }}
               accessibilityHint={
                 dictationSupported
                   ? undefined
                   : t('composer.dictationUnavailable')
               }
-              style={styles.minTarget}
-            >
-              <View
-                style={[
-                  styles.circle,
-                  { backgroundColor: theme.inputBackground },
-                ]}
-              >
-                <Icon
-                  name={dictating ? 'stop.circle.fill' : 'mic'}
-                  size={17}
-                  color={
-                    !dictationSupported
-                      ? theme.sendInactive
-                      : dictating
-                      ? theme.danger
-                      : theme.textSecondary
-                  }
-                />
-              </View>
-            </Pressable>
+            />
 
             <Pressable
               onPress={
@@ -796,6 +789,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   circle: {
     width: CIRCLE,
@@ -868,7 +862,20 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   modelText: { fontSize: 13 },
-  spacer: { flex: 1 },
-  queueBadge: { fontSize: 13, fontWeight: '700' },
+  pillScroll: { flex: 1, flexGrow: 1, flexShrink: 1 },
+  pillScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 4,
+  },
+  queueChip: {
+    alignSelf: 'flex-start',
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  queueChipText: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 12, textAlign: 'center' },
 });

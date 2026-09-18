@@ -10,6 +10,10 @@ import { theme } from '../theme';
 // Symbol we use to the closest Material Design Icon.
 const SF_TO_MDI: Record<string, string> = {
   'line.3.horizontal': 'menu',
+  mic: 'microphone-outline',
+  trash: 'trash-can-outline',
+  'paperplane.fill': 'send',
+  'arrow.right.doc.on.clipboard': 'clipboard-arrow-right',
   'square.and.pencil': 'square-edit-outline',
   'chevron.down': 'chevron-down',
   'chevron.right': 'chevron-right',

@@ -253,11 +253,15 @@ const en = {
   'composer.agents': 'Agents',
 
   // Shared message queue
-  'queue.title': 'Queued messages',
+  'queue.title': 'Queue',
+  'queue.badge': 'Queue: {count}',
   'queue.empty': 'Nothing queued.',
   'queue.sendNow': 'Send now',
   'queue.steerNow': 'Steer now',
   'queue.remove': 'Remove',
+  'queue.reorder': 'Reorder',
+  'queue.moveUp': 'Move up',
+  'queue.moveDown': 'Move down',
   'queue.holdForTurnEnd': 'Held for turn end',
   'queue.attachments': '{count} attachment(s)',
 

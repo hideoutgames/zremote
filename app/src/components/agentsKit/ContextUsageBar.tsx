@@ -82,6 +82,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   canvas: { width: SIZE, height: SIZE },
 });

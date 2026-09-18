@@ -63,9 +63,8 @@ import { Icon } from '../components/Icon';
 import { Glass, GlassContainer } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { CheckoutSelector } from '../components/CheckoutSelector';
-import { QueuePanel } from '../components/QueuePanel';
+import { QueueSheet } from '../components/QueueSheet';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
-import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -743,29 +742,23 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       {queueOpen ? (
-        <TrueSheet
-          detents={['auto', 1]}
-          initialDetentIndex={0}
-          onDidDismiss={() => setQueueOpen(false)}
-          grabber
-          backgroundColor={theme.background}
-        >
-          <View style={styles.queueSheet}>
-            <QueuePanel
-              queue={session.queue}
-              actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
-              pending={session.queueActionsPending}
-              error={session.queueActionError}
-              canSteer={
-                harness?.supportsSteering === true &&
-                harness.steeringMode === 'step-boundary'
-              }
-              onAction={(id, a) => {
-                controller?.queueAction(id, a).catch(() => {});
-              }}
-            />
-          </View>
-        </TrueSheet>
+        <QueueSheet
+          queue={session.queue}
+          actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
+          pending={session.queueActionsPending}
+          error={session.queueActionError}
+          canSteer={
+            harness?.supportsSteering === true &&
+            harness.steeringMode === 'step-boundary'
+          }
+          onAction={(id, a) => {
+            controller?.queueAction(id, a).catch(() => {});
+          }}
+          onMove={(id, toIndex) => {
+            controller?.moveQueued(id, toIndex);
+          }}
+          onDismiss={() => setQueueOpen(false)}
+        />
       ) : null}
 
       {pickerOpen && runtime !== null && chat !== undefined ? (
@@ -919,5 +912,4 @@ const styles = StyleSheet.create({
   },
   failedText: { fontSize: 13, flex: 1 },
   failedAction: { fontSize: 13, fontWeight: '600' },
-  queueSheet: { padding: 20 },
 });

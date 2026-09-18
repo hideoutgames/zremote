@@ -13,6 +13,10 @@ import {
   type AppServices,
 } from '../src/app/runtimeContext';
 import { dictationUnavailable } from '../src/zeron/native/dictation';
+import {
+  getSessionStore,
+  resetSessionStores,
+} from '../src/zeron/state/sessionStores';
 import { ModelPickerSheet } from '../src/components/ModelPickerSheet';
 import {
   catalogStore,
@@ -48,6 +52,7 @@ const labelled = (root: TestRenderer.ReactTestInstance) =>
     }));
 
 beforeEach(() => {
+  resetSessionStores();
   workspaceStore.setState({
     devices: [
       {
@@ -158,6 +163,53 @@ test('composer: Devin shows separate model and effort buttons', async () => {
   expect(
     labels.some(l => l.role === 'button' && l.label === 'Effort, High'),
   ).toBe(true);
+});
+
+test('composer: queued messages show Queue: N above the glass', async () => {
+  getSessionStore('c1').setState({
+    queue: [
+      { id: 'q1', text: 'one', issuedBy: 'u', issuedAt: 1 },
+      { id: 'q2', text: 'two', issuedBy: 'u', issuedAt: 2 },
+    ],
+  });
+  const onOpenQueue = jest.fn();
+  const tree = await render(
+    <Composer
+      chatId="c1"
+      phase="working"
+      roomState="connected"
+      harness={undefined}
+      capabilities={new Set()}
+      modelShortLabel="Default"
+      modelProvider="generic"
+      models={[]}
+      agents={[]}
+      harnessLocked={false}
+      effortLevels={[]}
+      onPickModel={() => {}}
+      onPickAgent={() => {}}
+      onPickEffort={() => {}}
+      onOpenMore={() => {}}
+      onOpenQueue={onOpenQueue}
+      dictation={dictationUnavailable}
+      onSend={() => {}}
+      onSteer={() => {}}
+      onQueue={() => {}}
+      onStop={() => {}}
+      onCancel={() => {}}
+      onSendAttachments={() => Promise.resolve('sent' as never)}
+      onRespondInput={() => {}}
+      onSendBlocked={() => {}}
+      composerRef={{ current: null }}
+      onLayout={() => {}}
+    />,
+  );
+  const chip = tree.root.findByProps({ accessibilityLabel: 'Queue: 2' });
+  expect(chip.props.accessibilityRole).toBe('button');
+  await act(async () => {
+    chip.props.onPress();
+  });
+  expect(onOpenQueue).toHaveBeenCalledTimes(1);
 });
 
 test('session row: role button, label contains title + status + host', async () => {
