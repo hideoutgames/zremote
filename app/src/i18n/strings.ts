@@ -9,6 +9,8 @@ const en = {
   'signIn.pasteFallback.title': 'Paste the sign-in code',
   'signIn.pasteFallback.body':
     'If the browser did not return here, copy the code shown after sign-in and paste it below.',
+  'signIn.pasteFallback.expoGo':
+    'Expo Go preview: universal links are unavailable — finish sign-in by pasting the code shown in the browser.',
   'signIn.pasteFallback.placeholder': 'state.code',
   'signIn.pasteFallback.continue': 'Continue',
   'signIn.advanced': 'Advanced',
@@ -217,6 +219,10 @@ const en = {
   'settings.dictationUnsupported': 'unsupported on this device',
   'settings.dictationUnavailable': 'dictation module not built',
   'settings.renameDevice': 'Rename device',
+  'settings.syncMode': 'Sync',
+  'settings.syncModeRelay': 'Relay session mode',
+  'settings.syncModeHint':
+    'Stream transcripts over the host relay instead of syncing session documents. Applies on next sign-in or restart.',
   'settings.updateApply': 'Apply update',
   'settings.updateApplyConfirm':
     'Download and apply the update on this host? The Zeron service restarts.',

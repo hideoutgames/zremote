@@ -33,6 +33,11 @@ import {
   type RegistryEvent,
 } from '../../src/zeron/transport/registryClient';
 import type { TokenSource } from '../../src/zeron/transport/tokenSource';
+import { RelaySessionSource } from '../../src/zeron/runtime/relaySessionSource';
+import {
+  getSessionStore,
+  type SessionState,
+} from '../../src/zeron/state/sessionStores';
 
 export interface PhonePeerDeps {
   cfg: EdgeConfig;
@@ -189,6 +194,7 @@ export class PhonePeer {
   private relay: DeviceRelayClient | undefined;
   private readonly logFn: (line: string) => void;
   readonly sessions: PhoneSession[] = [];
+  readonly relaySessions: RelaySessionSource[] = [];
 
   constructor(private readonly deps: PhonePeerDeps) {
     this.logFn = deps.log ?? (() => {});
@@ -250,6 +256,7 @@ export class PhonePeer {
   }
 
   stop(): void {
+    for (const s of this.relaySessions) s.stop();
     for (const s of this.sessions) s.stop();
     this.registry.stop();
     this.relay?.close();
@@ -285,6 +292,24 @@ export class PhonePeer {
     const session = new PhoneSession(this, chatId, persisted);
     this.sessions.push(session);
     return session;
+  }
+
+  /** Relay-mode session (no Loro): transcript via WatchDocMessages frames,
+   * queue via WatchQueue, commands via QueueCommand — the Expo Go path. */
+  openRelayChat(chatId: string): {
+    src: RelaySessionSource;
+    state: () => SessionState;
+  } {
+    const src = new RelaySessionSource(chatId, {
+      deviceId: this.deviceId,
+      clock: systemClock,
+      relayFor: () => this.relay,
+      chatMeta: () => ({ hostDeviceId: this.hostDeviceId }),
+      sessionRow: () => this.workspace().sessions[chatId],
+      log: line => this.logLine(`[relay-session] ${line}`),
+    });
+    this.relaySessions.push(src);
+    return { src, state: () => getSessionStore(chatId).getState() };
   }
 
   /** SessionStore foregrounding: enqueue a command locally (the

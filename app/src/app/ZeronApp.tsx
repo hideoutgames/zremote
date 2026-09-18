@@ -23,6 +23,8 @@ import { createDocDisk } from '../zeron/native/expoDocDisk';
 import { readFileBase64 } from '../zeron/native/fileBytes';
 import { createLoroDoc } from '../zeron/native/loroPortFactory';
 import { nitroWsFactory } from '../zeron/transport/nitroWs';
+import { rnWsFactory } from '../zeron/transport/rnWs';
+import Constants from 'expo-constants';
 import { systemClock } from '../zeron/transport/clock';
 import { getInitialUrl, addUrlListener } from '../zeron/native/authBrowser';
 import { parseZeronLink } from '../zeron/protocol/edge';
@@ -35,6 +37,12 @@ import { OrgGateScreen } from '../screens/OrgGateScreen';
 import { AdaptiveShell } from '../navigation/AdaptiveShell';
 
 const log = createLog();
+
+/** Expo Go (`storeClient`) ships no nitro modules: the built-in WebSocket
+ * transport is used there, and the loro() probe in AppRuntime.create fails
+ * → relay session mode. */
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+const wsFactory = isExpoGo ? rnWsFactory : nitroWsFactory;
 
 export function ZeronApp() {
   const theme = useTheme();
@@ -99,7 +107,7 @@ export function ZeronApp() {
         deviceName: deviceName(),
         orgId: signedIn.orgId,
         userId: signedIn.user.id,
-        wsFactory: nitroWsFactory,
+        wsFactory,
         clock: systemClock,
         docDisk: createDocDisk(),
         loro: createLoroDoc,

@@ -37,9 +37,11 @@ import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 import {
+  setForceRelayMode,
   setLiveActivitiesEnabled,
   setLiveActivityShowHost,
   useDictationLocale,
+  useForceRelayMode,
   useLiveActivitiesEnabled,
   useLiveActivityShowHost,
 } from '../zeron/state/uiPrefs';
@@ -344,6 +346,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
+  const forceRelayMode = useForceRelayMode();
   const dictationLocale = useDictationLocale();
   const [dictationModelState, setDictationModelState] = useState<
     DictationModelState | undefined
@@ -563,6 +566,33 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
               <Switch
                 value={liveActivityShowHost}
                 onValueChange={setLiveActivityShowHost}
+              />
+            </View>
+
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {t('settings.syncMode')}
+            </Text>
+            <View
+              style={[
+                styles.deviceRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.cardText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  {t('settings.syncModeRelay')}
+                </Text>
+                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
+                  {t('settings.syncModeHint')}
+                </Text>
+              </View>
+              <Switch
+                value={forceRelayMode}
+                onValueChange={setForceRelayMode}
+                accessibilityLabel={t('settings.syncModeRelay')}
               />
             </View>
 

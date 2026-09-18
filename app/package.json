@@ -14,7 +14,9 @@
     "start": "react-native start",
     "test": "jest",
     "postinstall": "patch-package",
-    "parity:check": "node scripts/check-parity-paths.mjs"
+    "parity:check": "node scripts/check-parity-paths.mjs",
+    "start:go": "node scripts/start-go.js",
+    "export:go": "node scripts/start-go.js --export"
   },
   "dependencies": {
     "@callstack/liquid-glass": "^0.8.0",
@@ -34,8 +36,11 @@
     "expo-file-system": "~57.0.7",
     "expo-glass-effect": "~57.0.3",
     "expo-haptics": "~57.0.3",
+    "expo-image": "~57.0.5",
+    "expo-image-picker": "~57.0.18",
     "expo-linking": "~57.0.10",
     "expo-secure-store": "~57.0.4",
+    "expo-symbols": "~57.0.3",
     "expo-web-browser": "~57.0.3",
     "expo-widgets": "~57.0.19",
     "react": "19.2.3",
@@ -49,6 +54,7 @@
     "react-native-ios-utilities": "^5.2.0",
     "react-native-keyboard-controller": "^1.21.12",
     "react-native-loro": "file:./modules/react-native-loro",
+    "react-native-markdown-display": "^7.0.2",
     "react-native-nitro-fetch": "^1.4.2",
     "react-native-nitro-image": "^0.15.1",
     "react-native-nitro-modules": "^0.35.10",

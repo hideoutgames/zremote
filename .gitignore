@@ -92,3 +92,6 @@ yarn-error.log
 # react-native-loro vendored FFI binary (fetched by scripts/fetch-loro-ffi.sh)
 app/modules/react-native-loro/vendor/loroFFI.xcframework/
 app/modules/react-native-loro/vendor/loroFFI.xcframework.zip
+
+# Expo Go export artifact
+/app/.expo-go-export

@@ -38,6 +38,10 @@ import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
 import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
 import { harnessInlinesAttachments } from '../attachments/validate';
 import { sendPlan, type SendPlan } from '../attachments/sendPlan';
+import { RelaySessionSource } from './relaySessionSource';
+import { workspaceStore } from '../state/workspaceStore';
+
+export type SessionMode = 'doc' | 'relay';
 
 export interface SessionControllerDeps {
   cfg: EdgeConfig;
@@ -61,6 +65,9 @@ export interface SessionControllerDeps {
   readFileBase64?: (uri: string) => Promise<string>;
   /** Host capability strings for the chat's host device (workspace row). */
   hostCapabilities?: () => ReadonlySet<string>;
+  /** 'relay' = Loro-free host-authoritative session (Expo Go / fallback).
+   * Default 'doc'. */
+  sessionMode?: SessionMode;
 }
 
 /** Queue actions against the host — SessionQueue.swift performQueueAction.
@@ -90,8 +97,12 @@ const TERMINAL_BAD = new Set([
 export class SessionController {
   readonly chatId: string;
   private readonly deps: SessionControllerDeps;
-  private port: LoroDocPort;
-  private doc: SessionDoc;
+  private readonly mode: SessionMode;
+  /** Doc-mode only — never constructed in relay mode (deps.loro() may
+   * throw there). */
+  private port!: LoroDocPort;
+  private doc!: SessionDoc;
+  private relay: RelaySessionSource | undefined;
   private room: ChatRoomClient | undefined;
   private cursor = 0;
   private started = false;
@@ -107,8 +118,20 @@ export class SessionController {
   constructor(chatId: string, deps: SessionControllerDeps) {
     this.chatId = chatId;
     this.deps = deps;
-    this.port = deps.loro();
-    this.doc = new SessionDoc(this.port);
+    this.mode = deps.sessionMode ?? 'doc';
+    if (this.mode === 'relay') {
+      this.relay = new RelaySessionSource(chatId, {
+        deviceId: deps.deviceId,
+        clock: deps.clock,
+        relayFor: id => deps.relayFor?.(id),
+        chatMeta: deps.chatMeta,
+        sessionRow: () => workspaceStore.getState().sessions[chatId],
+        log: deps.log,
+      });
+    } else {
+      this.port = deps.loro();
+      this.doc = new SessionDoc(this.port);
+    }
   }
 
   // ── Lifecycle (SessionStore.start/connectIfReady/release) ────────────
@@ -139,6 +162,10 @@ export class SessionController {
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    if (this.relay !== undefined) {
+      this.relay.start();
+      return;
+    }
     const { docDisk, orgId, userId } = this.deps;
     const saved = await docDisk
       .loadChat2(orgId, userId, this.chatId)
@@ -159,6 +186,10 @@ export class SessionController {
 
   /** SessionStore.connectIfReady: rooms only exist at generation ≥ 2. */
   connectIfReady(): void {
+    if (this.relay !== undefined) {
+      this.relay.kick();
+      return;
+    }
     if (this.room !== undefined) return;
     const gen = this.deps.chatMeta().roomGen;
     if (gen !== undefined && gen < 2) return;
@@ -249,6 +280,7 @@ export class SessionController {
 
   /** Re-derive store state from the doc; reconcile pending/failed sends. */
   project(): void {
+    if (this.relay !== undefined) return;
     const proj = this.doc.project();
     if (proj === undefined) return;
     const store = getSessionStore(this.chatId);
@@ -283,6 +315,8 @@ export class SessionController {
   }
 
   private schedulePersist(): void {
+    // Relay sessions never persist a session doc — the host is authoritative.
+    if (this.relay !== undefined) return;
     const { clock } = this.deps;
     if (this.persistTimer !== undefined) clock.clearTimeout(this.persistTimer);
     this.persistTimer = clock.setTimeout(() => {
@@ -293,6 +327,7 @@ export class SessionController {
 
   /** Snapshot + cursor in ONE write (SessionStore saver). */
   async flush(): Promise<void> {
+    if (this.relay !== undefined) return;
     await this.deps.docDisk.saveChat2(
       this.deps.orgId,
       this.deps.userId,
@@ -305,10 +340,19 @@ export class SessionController {
   }
 
   kick(): void {
+    if (this.relay !== undefined) {
+      this.relay.kick();
+      return;
+    }
     this.room?.kick();
   }
 
   stop(): void {
+    if (this.relay !== undefined) {
+      this.relay.stop();
+      this.started = false;
+      return;
+    }
     this.unsub?.();
     this.unsub = undefined;
     this.room?.stop();
@@ -368,6 +412,10 @@ export class SessionController {
   ): string {
     const messageId = newId();
     const payload = buildRunCommand(text, chat, { ...opts, messageId });
+    if (this.relay !== undefined) {
+      this.relay.sendRun(text, chat, opts);
+      return '';
+    }
     const commandId = this.send(payload);
     this.commandByMessage.set(messageId, commandId);
     const store = getSessionStore(this.chatId);
@@ -382,6 +430,10 @@ export class SessionController {
   }
 
   sendSteer(text: string): string {
+    if (this.relay !== undefined) {
+      this.relay.sendSteer(text);
+      return '';
+    }
     const messageId = newId();
     const payload = buildSteer(text, messageId);
     const commandId = this.send(payload);
@@ -398,14 +450,26 @@ export class SessionController {
   }
 
   interrupt(): string {
+    if (this.relay !== undefined) {
+      this.relay.interrupt();
+      return '';
+    }
     return this.send(buildInterrupt());
   }
 
   respondInput(requestId: string, answers: UserInputAnswer[]): string {
+    if (this.relay !== undefined) {
+      this.relay.respondInput(requestId, answers);
+      return '';
+    }
     return this.send(buildRespondInput(requestId, answers));
   }
 
   cancelOwnCommand(commandId: string): boolean {
+    // Relay mode: the command was committed host-side by QueueCommand —
+    // there is no cancel RPC (ListCommands is the harness slash-command
+    // listing, not command status). Stop (interrupt) is the escape hatch.
+    if (this.relay !== undefined) return false;
     const ok = this.doc.cancelOwnCommand(commandId, this.deps.deviceId);
     if (ok) this.project();
     return ok;
@@ -418,6 +482,15 @@ export class SessionController {
     text: string,
     opts: { attachments?: string[]; holdForTurnEnd?: boolean } = {},
   ): string {
+    if (this.relay !== undefined) {
+      // Host mints the row id; WatchQueue lands it in store.queue.
+      this.relay.queueMessage(text, opts).catch(e => {
+        getSessionStore(this.chatId).setState({
+          queueActionError: `Couldn't queue the message: ${e}`,
+        });
+      });
+      return '';
+    }
     const id = this.doc.enqueueMessage({
       text,
       deviceId: this.deps.deviceId,
@@ -430,8 +503,13 @@ export class SessionController {
     return id;
   }
 
-  /** moveQueued: a pure local movable-list write (no RPC). */
+  /** moveQueued: a pure local movable-list write in doc mode; a
+   * `MoveQueuedMessage` RPC in relay mode. */
   moveQueued(id: string, toIndex: number): boolean {
+    if (this.relay !== undefined) {
+      this.relay.moveQueued(id, toIndex).catch(() => {});
+      return false;
+    }
     const ok = this.doc.moveQueued(id, toIndex);
     if (ok) {
       this.project();
@@ -474,7 +552,7 @@ export class SessionController {
         this.kick();
         return false;
       }
-      if (action === 'remove') {
+      if (action === 'remove' && this.relay === undefined) {
         this.doc.removeQueuedLocal(id);
         this.project();
       }

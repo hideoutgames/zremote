@@ -75,3 +75,38 @@ Test Files  9 passed (9)
 
 Includes the Stage-7 patch coverage: `live-activity.test.ts` (8) and
 `edge-patches.test.ts` (4).
+
+---
+
+# Stage 10 addendum — relay session mode + Expo Go
+
+- Date: 2026-09-19
+- Commit: `5d17629` (working tree contains the uncommitted Stage 1–10 changes)
+
+## Gates
+
+```
+npm run lint                    → 0 errors, 0 warnings        (exit 0)
+npx tsc --noEmit                → clean                       (exit 0)
+npm test -- --ci                → 49 suites / 353 tests pass  (exit 0)
+npm run format:check            → all files clean             (exit 0)
+npm run react-compiler-check    → 71/71 components            (exit 0)
+npx expo config --type introspect        → succeeds (production)
+EXPO_GO=1 npx expo config --type introspect → succeeds (Go mode)
+node scripts/prebuild-ios-windows.js --clean → ✔ Finished prebuild
+npm run parity:check            → 58/58 cited paths exist     (exit 0)
+```
+
+## Real E2E — 13/13 (`npm run e2e:windows`)
+
+Steps 1–10 as above plus: 11. relay-mode run to completion via
+`WatchDocMessages`; 12. relay-mode interrupt + question round-trip; 13. relay projection identical to doc projection (6 entries). Full log in
+[e2e-report.md](e2e-report.md).
+
+## Expo Go iOS export (`npm run export:go`)
+
+```
+iOS Bundled ~29s index.js (1604 modules)
+_expo/static/js/ios/index-011256b3c6d61c33a294166bf3e22691.hbc (4.5MB)
+metadata.json (142B) — exported to app/.expo-go-export (gitignored)
+```

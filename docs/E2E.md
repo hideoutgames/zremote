@@ -23,7 +23,7 @@ npm run e2e:windows        # == npx tsx scripts/e2e/run.ts
   `STATUS_DLL_NOT_FOUND` otherwise). The harness prepends it to the child
   `PATH`.
 
-## What it proves (10 steps, stops on first failure)
+## What it proves (13 steps, stops on first failure)
 
 1. Edge + engine startup; the registry room surfaces the engine's `devices`
    row (name/version/capabilities).
@@ -43,6 +43,14 @@ npm run e2e:windows        # == npx tsx scripts/e2e/run.ts
    snapshot+cursor and converges to the identical projection.
 9. `steer` mid-run — terminal command status recorded.
 10. Registry writes (rename/archive/unarchive/markSeen) converge after ack.
+11. **Relay mode** (`RelaySessionSource`, no Loro/room): a second chat's
+    `run` lands user + completed assistant entries via `WatchDocMessages`;
+    pendingSends reconciled.
+12. Relay `interrupt` → aborted entry; `respondInput` against
+    `ZERON_MOCK_QUESTION=1` — across engine restarts (streams reopen, first
+    frame is a reset).
+13. Relay-mode entries equal the doc-mode phone's projection of the same
+    chat (ids, part kinds/ids, statuses).
 
 ## Mock knobs (engine env, see `crates/harness/src/mock.rs`)
 

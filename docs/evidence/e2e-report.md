@@ -1,34 +1,37 @@
-<!-- Copied verbatim from app/.e2e/report.md — 2026-09-18, repo commit f6b39a9 + uncommitted Stage 1-8b changes -->
+<!-- Copied verbatim from app/.e2e/report.md — 2026-09-18, Stage 9+ relay mode -->
 
 # Zeron Windows E2E report
 
-Started: 2026-09-18T00:28:05.676Z
-Finished: 2026-09-18T00:28:27.037Z
+Started: 2026-09-18T00:52:45.948Z
+Finished: 2026-09-18T00:53:20.337Z
 
-## Summary: 10/10 steps passed
+## Summary: 13/13 steps passed
 
 | Step | Result | ms | Detail |
 |---|---|---|---|
-| 1. edge+engine startup, device row | PASS | 2908 | device 4cf45fa8 v0.2.72 caps=message-queue-v1,message-queue-actions-v1,message-queue-attachments-v1,message-queue-clean-attachment-text-v1,message-queue-edit-lease-v1 |
-| 2. relay RPC catalog | PASS | 98 | mock present; folders=36 |
-| 3. createSpace via Mutate | PASS | 51 | space e30c9600 gitDetected=true |
-| 4. createChat via registry | PASS | 264 | chat 301ac7f4 |
-| 5. run command to completion | PASS | 1557 | statuses=working→idle entries=2 |
-| 6. interrupt mid-run | PASS | 4356 | statuses=idle→working |
-| 7. question/approval | PASS | 2291 | questions resolved, run completed |
-| 8. reconnect/replay | PASS | 2217 | projections equal after rehydrate |
-| 9. steer mid-run | PASS | 6414 | steer terminal status: applied |
-| 10. registry mutations converge | PASS | 1056 | rename/archive/unarchive/markSeen converged |
+| 1. edge+engine startup, device row | PASS | 3273 | device c5972db5 v0.2.72 caps=message-queue-v1,message-queue-actions-v1,message-queue-attachments-v1,message-queue-clean-attachment-text-v1,message-queue-edit-lease-v1 |
+| 2. relay RPC catalog | PASS | 96 | mock present; folders=36 |
+| 3. createSpace via Mutate | PASS | 44 | space e30c9600 gitDetected=true |
+| 4. createChat via registry | PASS | 254 | chat 4bb5e55c |
+| 5. run command to completion | PASS | 1252 | statuses=working→idle entries=2 |
+| 6. interrupt mid-run | PASS | 4401 | statuses=idle→working |
+| 7. question/approval | PASS | 2622 | questions resolved, run completed |
+| 8. reconnect/replay | PASS | 2271 | projections equal after rehydrate |
+| 9. steer mid-run | PASS | 6567 | steer terminal status: applied |
+| 10. registry mutations converge | PASS | 1026 | rename/archive/unarchive/markSeen converged |
+| 11. relay mode: run → complete via WatchDocMessages | PASS | 4984 | entries=2 assistant=90897edd failed=0 |
+| 12. relay mode: interrupt + question | PASS | 6894 | interrupt aborted; question resolved over relay |
+| 13. relay projection == doc projection | PASS | 517 | projections identical: 6 entries |
 
 ## step1 device row
 
 ```json
 {
-  "id": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+  "id": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
   "name": "e2e-host",
   "platform": "windows",
-  "lastSeenAt": 1789691288103,
-  "createdAt": 1789691288103,
+  "lastSeenAt": 1789692768747,
+  "createdAt": 1789692768747,
   "version": "0.2.72",
   "capabilities": [
     "message-queue-v1",
@@ -383,8 +386,8 @@ Finished: 2026-09-18T00:28:27.037Z
 ```json
 {
   "op": "createSpace",
-  "spaceId": "e33ed1c9-15b0-4917-803e-711312c07db8",
-  "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+  "spaceId": "5e8d371e-40fe-4a2e-8b87-d27f1ee888fc",
+  "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
   "path": "C:\\Users\\torea\\Documents\\GitHub\\_ref\\e2e-space",
   "name": "e2e-space",
   "gitDetected": false
@@ -430,18 +433,18 @@ Finished: 2026-09-18T00:28:27.037Z
 
 ```json
 {
-  "chatId": "301ac7f4-f574-464b-905f-a98282c44dd0",
+  "chatId": "4bb5e55c-60f8-485c-b97d-00528f15028f",
   "kind": "chats",
-  "id": "301ac7f4-f574-464b-905f-a98282c44dd0",
+  "id": "4bb5e55c-60f8-485c-b97d-00528f15028f",
   "op": "upsert",
   "set": {
-    "id": "301ac7f4-f574-464b-905f-a98282c44dd0",
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "id": "4bb5e55c-60f8-485c-b97d-00528f15028f",
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "archived": false,
     "cwd": "C:\\Users\\torea\\Documents\\GitHub\\_ref\\e2e-space",
-    "createdAt": 1789691288735,
+    "createdAt": 1789692769363,
     "roomGen": 2,
-    "spaceId": "e33ed1c9-15b0-4917-803e-711312c07db8",
+    "spaceId": "5e8d371e-40fe-4a2e-8b87-d27f1ee888fc",
     "config": {
       "harness": "mock",
       "modelOptions": {}
@@ -454,17 +457,17 @@ Finished: 2026-09-18T00:28:27.037Z
 
 ```json
 {
-  "id": "301ac7f4-f574-464b-905f-a98282c44dd0",
-  "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+  "id": "4bb5e55c-60f8-485c-b97d-00528f15028f",
+  "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
   "archived": false,
   "cwd": "C:\\Users\\torea\\Documents\\GitHub\\_ref\\e2e-space",
-  "checkoutId": "aeb18b0c3df49fb1c4086d348656b548cb5a8bc01fe242ee20d2d3b9d4d04cd8",
+  "checkoutId": "637f599895974c4ccae910023fe12d17abadfd081d7a2a10ed4579b303ba900d",
   "config": {
     "harness": "mock",
     "modelOptions": {}
   },
-  "createdAt": 1789691288735,
-  "spaceId": "e33ed1c9-15b0-4917-803e-711312c07db8",
+  "createdAt": 1789692769363,
+  "spaceId": "5e8d371e-40fe-4a2e-8b87-d27f1ee888fc",
   "roomGen": 2
 }
 ```
@@ -474,7 +477,7 @@ Finished: 2026-09-18T00:28:27.037Z
 ```json
 [
   {
-    "id": "048a7a38-3c0d-4d80-9a7b-04efe6b4685c",
+    "id": "b3bfd919-8e41-4d30-b338-15a9dcbdd542",
     "role": "user",
     "parts": [
       {
@@ -483,12 +486,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "hello from the phone"
       }
     ],
-    "createdAt": 1789691289022,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692769623,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "3dea5d9e-fb67-40a5-be45-70b27b036b6f",
+    "id": "5f0f810d-bdef-40d2-8cb6-245d497743f7",
     "role": "assistant",
     "parts": [
       {
@@ -522,8 +525,8 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "The `SegmentWriter` appends into `LoroText` so the oplog stays RLE-merged:\n\n```rust\nfolded = fold_event_into_parts(&folded, &event);\nwriter.sync(&folded)?; // 120ms coalesced commits\n```\n\nSynced to every device through the session room. *Mock harness reporting in.*"
       }
     ],
-    "createdAt": 1789691289938,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692770307,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   }
 ]
@@ -534,7 +537,7 @@ Finished: 2026-09-18T00:28:27.037Z
 ```json
 [
   {
-    "id": "0a66f5c7-9e64-4a24-9840-66eb5256ab90",
+    "id": "dab0fa43-7f39-4f63-bc7a-132642dad4e3",
     "kind": "run",
     "payload": {
       "request": {
@@ -549,11 +552,11 @@ Finished: 2026-09-18T00:28:27.037Z
         "prompt": "hello from the phone"
       },
       "kind": "run",
-      "messageId": "048a7a38-3c0d-4d80-9a7b-04efe6b4685c"
+      "messageId": "b3bfd919-8e41-4d30-b338-15a9dcbdd542"
     },
-    "issuedBy": "241a6c94-3a9c-433f-acba-0f91f52e9229",
-    "issuedAt": 1789691289022,
-    "expiresAt": 1789777689022,
+    "issuedBy": "20a267f9-93ed-4d8f-851b-572a41903233",
+    "issuedAt": 1789692769623,
+    "expiresAt": 1789779169623,
     "status": "applied"
   }
 ]
@@ -563,8 +566,8 @@ Finished: 2026-09-18T00:28:27.037Z
 
 ```json
 {
-  "runId": "f28e5280-ac47-45ef-bcb8-3fb3be1b0ef4",
-  "interruptId": "13164f59-42f3-4456-8e7e-69a4253e0144",
+  "runId": "88bd3aab-51c0-4957-87fc-28b626baec66",
+  "interruptId": "f8afd5fa-16ba-4d90-94a8-b0e2cccbc414",
   "terminalStatus": "aborted",
   "statuses": [
     "idle",
@@ -578,8 +581,8 @@ Finished: 2026-09-18T00:28:27.037Z
 ```json
 {
   "kind": "input",
-  "id": "d7168450-2568-41ba-bd3d-8b9f061e2353",
-  "requestId": "d7168450-2568-41ba-bd3d-8b9f061e2353",
+  "id": "8bef23b5-7853-4cbc-8de4-e1e15b17945b",
+  "requestId": "8bef23b5-7853-4cbc-8de4-e1e15b17945b",
   "questions": [
     {
       "id": "q-sync",
@@ -632,7 +635,7 @@ Finished: 2026-09-18T00:28:27.037Z
 ```json
 [
   {
-    "id": "048a7a38-3c0d-4d80-9a7b-04efe6b4685c",
+    "id": "b3bfd919-8e41-4d30-b338-15a9dcbdd542",
     "role": "user",
     "parts": [
       {
@@ -641,12 +644,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "hello from the phone"
       }
     ],
-    "createdAt": 1789691289022,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692769623,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "3dea5d9e-fb67-40a5-be45-70b27b036b6f",
+    "id": "5f0f810d-bdef-40d2-8cb6-245d497743f7",
     "role": "assistant",
     "parts": [
       {
@@ -680,12 +683,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "The `SegmentWriter` appends into `LoroText` so the oplog stays RLE-merged:\n\n```rust\nfolded = fold_event_into_parts(&folded, &event);\nwriter.sync(&folded)?; // 120ms coalesced commits\n```\n\nSynced to every device through the session room. *Mock harness reporting in.*"
       }
     ],
-    "createdAt": 1789691289938,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692770307,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "cf6cf3db-f666-4e75-96ae-13a819850677",
+    "id": "e77a25a4-3364-4db7-9342-5a2afecf0e04",
     "role": "user",
     "parts": [
       {
@@ -694,12 +697,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "interrupt me"
       }
     ],
-    "createdAt": 1789691290654,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692771017,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "9858fd76-cfb9-45b8-9ff3-bbe4b592aa9f",
+    "id": "0568c0fa-bd17-40bf-a9c0-9280bb6a3240",
     "role": "assistant",
     "parts": [
       {
@@ -708,12 +711,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "## Streaming pipeline\n\nEvery turn flows through the same path:\n\n1. **Doc command** — the composer queues a durable `run` entry\n2. **Host executor** — the chat's host device marks it processed, then dispatches\n3. **Fold** — events fold into parts and diff into the Loro doc every 120ms\n\n"
       }
     ],
-    "createdAt": 1789691291546,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692771966,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "aborted"
   },
   {
-    "id": "c8d68977-c610-41b4-902b-c89e120b3436",
+    "id": "70ecbf9b-5c72-4877-8bed-c113b830e742",
     "role": "user",
     "parts": [
       {
@@ -722,12 +725,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "ask me things"
       }
     ],
-    "createdAt": 1789691294984,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692775389,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "75c08b85-46c5-4523-bd86-286dcfb59dcc",
+    "id": "0b5f821e-ece9-458b-97a8-300a7f4d39ae",
     "role": "assistant",
     "parts": [
       {
@@ -737,8 +740,8 @@ Finished: 2026-09-18T00:28:27.037Z
       },
       {
         "kind": "input",
-        "id": "d7168450-2568-41ba-bd3d-8b9f061e2353",
-        "requestId": "d7168450-2568-41ba-bd3d-8b9f061e2353",
+        "id": "8bef23b5-7853-4cbc-8de4-e1e15b17945b",
+        "requestId": "8bef23b5-7853-4cbc-8de4-e1e15b17945b",
         "questions": [
           {
             "id": "q-sync",
@@ -771,12 +774,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "Locked in: **Poll the doc host every 120ms**, **Unit tests**. Proceeding with the plan."
       }
     ],
-    "createdAt": 1789691295881,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692776519,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "c1af9593-67e0-4d11-8775-9618a340afbf",
+    "id": "2188e662-fcdc-48cf-bc0c-f705ae82554d",
     "role": "user",
     "parts": [
       {
@@ -785,12 +788,12 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "while you were away"
       }
     ],
-    "createdAt": 1789691297581,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692778344,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "complete"
   },
   {
-    "id": "0d8f02fe-0e54-480a-8f72-7a6cd2a0dbbf",
+    "id": "24dc7237-dbd9-4899-afdc-9a4b12aa0c94",
     "role": "assistant",
     "parts": [
       {
@@ -799,8 +802,8 @@ Finished: 2026-09-18T00:28:27.037Z
         "text": "## Streaming pipeline\n\nEvery turn flows through the same path:\n\n"
       }
     ],
-    "createdAt": 1789691298315,
-    "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+    "createdAt": 1789692779139,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
     "status": "streaming"
   }
 ]
@@ -810,16 +813,16 @@ Finished: 2026-09-18T00:28:27.037Z
 
 ```json
 {
-  "id": "3f0a8114-6056-4885-b973-48a7e6563ac4",
+  "id": "3796235b-19d2-402a-8dcd-1916339c2de2",
   "kind": "steer",
   "payload": {
-    "messageId": "bb698cc0-3073-45ad-918f-9c4fe25529ec",
+    "messageId": "f5e1cc5f-180d-4cae-b1e1-2b46248b7470",
     "kind": "steer",
     "prompt": "course correct mid-run"
   },
-  "issuedBy": "241a6c94-3a9c-433f-acba-0f91f52e9229",
-  "issuedAt": 1789691299482,
-  "expiresAt": 1789777699482,
+  "issuedBy": "20a267f9-93ed-4d8f-851b-572a41903233",
+  "issuedAt": 1789692780235,
+  "expiresAt": 1789779180235,
   "status": "applied",
   "resolution": "queued as new turn"
 }
@@ -829,127 +832,380 @@ Finished: 2026-09-18T00:28:27.037Z
 
 ```json
 {
-  "id": "301ac7f4-f574-464b-905f-a98282c44dd0",
-  "deviceId": "4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0",
+  "id": "4bb5e55c-60f8-485c-b97d-00528f15028f",
+  "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
   "title": "e2e renamed chat",
   "archived": false,
   "cwd": "C:\\Users\\torea\\Documents\\GitHub\\_ref\\e2e-space",
   "branch": "master",
-  "checkoutId": "aeb18b0c3df49fb1c4086d348656b548cb5a8bc01fe242ee20d2d3b9d4d04cd8",
+  "checkoutId": "637f599895974c4ccae910023fe12d17abadfd081d7a2a10ed4579b303ba900d",
   "config": {
     "harness": "mock",
     "modelOptions": {},
     "sandbox": "workspace-write"
   },
   "lastMessagePreview": "course correct mid-run",
-  "lastMessageAt": 1789691305704,
-  "createdAt": 1789691288735,
-  "spaceId": "e33ed1c9-15b0-4917-803e-711312c07db8",
-  "lastSeenAt": 1789691306625,
+  "lastMessageAt": 1789692786530,
+  "createdAt": 1789692769363,
+  "spaceId": "5e8d371e-40fe-4a2e-8b87-d27f1ee888fc",
+  "lastSeenAt": 1789692787499,
   "roomGen": 2
 }
+```
+
+## step11 relay transcript
+
+```json
+[
+  {
+    "id": "1e7ea563-8284-4f12-886f-d037eb26d561",
+    "role": "user",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "hello over relay"
+      }
+    ],
+    "createdAt": 1789692789161,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  },
+  {
+    "id": "90897edd-4bb2-41ab-8721-56c462b1960f",
+    "role": "assistant",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "## Streaming pipeline\n\nEvery turn flows through the same path:\n\n1. **Doc command** — the composer queues a durable `run` entry\n2. **Host executor** — the chat's host device marks it processed, then dispatches\n3. **Fold** — events fold into parts and diff into the Loro doc every 120ms\n\n"
+      },
+      {
+        "kind": "tool",
+        "id": "mock-tool-1",
+        "call": {
+          "kind": "exec",
+          "command": "cargo test --workspace"
+        },
+        "isError": false,
+        "resolved": true
+      },
+      {
+        "kind": "tool",
+        "id": "mock-tool-2",
+        "call": {
+          "kind": "exec",
+          "command": "git log -5 --oneline --decorate && git merge-base HEAD origin/main"
+        },
+        "isError": false,
+        "resolved": true
+      },
+      {
+        "kind": "text",
+        "id": "t3",
+        "text": "The `SegmentWriter` appends into `LoroText` so the oplog stays RLE-merged:\n\n```rust\nfolded = fold_event_into_parts(&folded, &event);\nwriter.sync(&folded)?; // 120ms coalesced commits\n```\n\nSynced to every device through the session room. *Mock harness reporting in.*"
+      }
+    ],
+    "createdAt": 1789692789417,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  }
+]
+```
+
+## step11 relay meta
+
+```json
+{
+  "chatId": "c973caab-5010-4ef8-9d13-7fc868dffa15",
+  "contextUsage": null
+}
+```
+
+## step12 relay interrupt/question
+
+```json
+{
+  "abortedId": "b87d8240-d6a7-45e5-bb13-cb48772b3cd2",
+  "answers": [
+    {
+      "questionId": "q-sync",
+      "labels": [
+        "Poll the doc host every 120ms"
+      ]
+    },
+    {
+      "questionId": "q-gates",
+      "labels": [
+        "Unit tests"
+      ]
+    }
+  ]
+}
+```
+
+## step13 relay entries
+
+```json
+[
+  {
+    "id": "1e7ea563-8284-4f12-886f-d037eb26d561",
+    "role": "user",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "hello over relay"
+      }
+    ],
+    "createdAt": 1789692789161,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  },
+  {
+    "id": "90897edd-4bb2-41ab-8721-56c462b1960f",
+    "role": "assistant",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "## Streaming pipeline\n\nEvery turn flows through the same path:\n\n1. **Doc command** — the composer queues a durable `run` entry\n2. **Host executor** — the chat's host device marks it processed, then dispatches\n3. **Fold** — events fold into parts and diff into the Loro doc every 120ms\n\n"
+      },
+      {
+        "kind": "tool",
+        "id": "mock-tool-1",
+        "call": {
+          "kind": "exec",
+          "command": "cargo test --workspace"
+        },
+        "isError": false,
+        "resolved": true
+      },
+      {
+        "kind": "tool",
+        "id": "mock-tool-2",
+        "call": {
+          "kind": "exec",
+          "command": "git log -5 --oneline --decorate && git merge-base HEAD origin/main"
+        },
+        "isError": false,
+        "resolved": true
+      },
+      {
+        "kind": "text",
+        "id": "t3",
+        "text": "The `SegmentWriter` appends into `LoroText` so the oplog stays RLE-merged:\n\n```rust\nfolded = fold_event_into_parts(&folded, &event);\nwriter.sync(&folded)?; // 120ms coalesced commits\n```\n\nSynced to every device through the session room. *Mock harness reporting in.*"
+      }
+    ],
+    "createdAt": 1789692789417,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  },
+  {
+    "id": "e5579184-46fb-46e6-810f-a02f2b2c9a88",
+    "role": "user",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "interrupt me over relay"
+      }
+    ],
+    "createdAt": 1789692793679,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  },
+  {
+    "id": "b87d8240-d6a7-45e5-bb13-cb48772b3cd2",
+    "role": "assistant",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "## Streaming pipeline\n\nEvery turn flows through the same path:\n\n"
+      }
+    ],
+    "createdAt": 1789692793918,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "aborted"
+  },
+  {
+    "id": "81c409e2-fb18-4c46-bf96-0c4a4ee139bc",
+    "role": "user",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "ask me over relay"
+      }
+    ],
+    "createdAt": 1789692798146,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  },
+  {
+    "id": "74bba529-82de-4fb0-a122-772eea652e25",
+    "role": "assistant",
+    "parts": [
+      {
+        "kind": "text",
+        "id": "t0",
+        "text": "Before I wire the reconciliation path I need two decisions from you.\n\n"
+      },
+      {
+        "kind": "input",
+        "id": "e6caa9d9-b494-429e-891d-4a4f59fc1e03",
+        "requestId": "e6caa9d9-b494-429e-891d-4a4f59fc1e03",
+        "questions": [
+          {
+            "id": "q-sync",
+            "header": "Question",
+            "question": "Which sync strategy should the rewrite use?",
+            "options": [
+              "Poll the doc host every 120ms",
+              "Event-driven fold with coalesced commits",
+              "Hybrid: event-driven with a polling fallback"
+            ],
+            "multiSelect": false
+          },
+          {
+            "id": "q-gates",
+            "header": "Question",
+            "question": "Which suites should gate the merge?",
+            "options": [
+              "Unit tests",
+              "End-to-end (two-device)",
+              "Golden screenshots"
+            ],
+            "multiSelect": true
+          }
+        ],
+        "resolved": true
+      },
+      {
+        "kind": "text",
+        "id": "t2",
+        "text": "Locked in: **Poll the doc host every 120ms**, **Unit tests**. Proceeding with the plan."
+      }
+    ],
+    "createdAt": 1789692798390,
+    "deviceId": "c5972db5-4d91-4cf3-bb7e-c160f3700c5c",
+    "status": "complete"
+  }
+]
 ```
 
 ## Log tail: phone harness
 
 ```
-edge started (pid 17576)
-phone(241a6c94-3a9) [registry] registry: dial ws://localhost:27640/registry/org1/ws?device=241a6c94-3a9c-433f-acba-0f91f52e9229
-phone(241a6c94-3a9) [registry] registry: joined (seq=47, full=true)
-phone(241a6c94-3a9) [relay] relay 4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0: dial ws://localhost:27640/device/4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0/ws?role=client&connId=380fcd92-4dfb-4c34-b28f-8417754b0420
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: dial ws://localhost:27640/chat2/301ac7f4-f574-464b-905f-a98282c44dd0/ws?device=241a6c94-3a9c-433f-acba-0f91f52e9229
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: joined (converged, resumed=false)
-phone(e4e10312-077) [registry] registry: dial ws://localhost:27640/registry/org1/ws?device=e4e10312-0773-422d-9ad8-fb9dc3b1f44a
-phone(e4e10312-077) [registry] registry: joined (seq=75, full=true)
-phone(e4e10312-077) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: dial ws://localhost:27640/chat2/301ac7f4-f574-464b-905f-a98282c44dd0/ws?device=e4e10312-0773-422d-9ad8-fb9dc3b1f44a
-phone(e4e10312-077) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: fetching checkpoint (seq=16, 5199B, rows in parallel)
-phone(e4e10312-077) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: http ack gap (seq=32, cursor=16); holding cursor
-phone(e4e10312-077) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=32, cursor=16); holding cursor
-phone(e4e10312-077) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: http ack gap (seq=33, cursor=22); holding cursor
-phone(e4e10312-077) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: joined (converged, resumed=false)
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: dial ws://localhost:27640/chat2/301ac7f4-f574-464b-905f-a98282c44dd0/ws?device=241a6c94-3a9c-433f-acba-0f91f52e9229
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=31, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=32, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=33, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=34, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=35, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=36, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=37, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: row gap (seq=38, cursor=16); holding cursor
-phone(241a6c94-3a9) [chat 301ac7f4] chat2 301ac7f4-f574-464b-905f-a98282c44dd0: joined (converged, resumed=false)
+edge started (pid 8740)
+phone(20a267f9-93e) [registry] registry: dial ws://localhost:27640/registry/org1/ws?device=20a267f9-93ed-4d8f-851b-572a41903233
+phone(20a267f9-93e) [registry] registry: joined (seq=93, full=true)
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=e9f44b49-1dae-457f-81fa-9e837621ce6c
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: dial ws://localhost:27640/chat2/4bb5e55c-60f8-485c-b97d-00528f15028f/ws?device=20a267f9-93ed-4d8f-851b-572a41903233
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: joined (converged, resumed=false)
+phone(6bdea9c9-485) [registry] registry: dial ws://localhost:27640/registry/org1/ws?device=6bdea9c9-4855-4a68-8e82-e9a7fcad7223
+phone(6bdea9c9-485) [registry] registry: joined (seq=121, full=true)
+phone(6bdea9c9-485) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: dial ws://localhost:27640/chat2/4bb5e55c-60f8-485c-b97d-00528f15028f/ws?device=6bdea9c9-4855-4a68-8e82-e9a7fcad7223
+phone(6bdea9c9-485) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: fetching checkpoint (seq=16, 5229B, rows in parallel)
+phone(6bdea9c9-485) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=32, cursor=16); holding cursor
+phone(6bdea9c9-485) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: http ack gap (seq=32, cursor=17); holding cursor
+phone(6bdea9c9-485) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: http ack gap (seq=33, cursor=22); holding cursor
+phone(6bdea9c9-485) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: joined (converged, resumed=false)
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: dial ws://localhost:27640/chat2/4bb5e55c-60f8-485c-b97d-00528f15028f/ws?device=20a267f9-93ed-4d8f-851b-572a41903233
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=31, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=32, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=33, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=34, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=35, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=36, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=37, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: row gap (seq=38, cursor=16); holding cursor
+phone(20a267f9-93e) [chat 4bb5e55c] chat2 4bb5e55c-60f8-485c-b97d-00528f15028f: joined (converged, resumed=false)
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=3dfa46bd-deef-4424-8244-aa3fcc61f3ca
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=f69e1710-60bd-45e2-a140-27d39f4dfd69
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=c12f51bf-a49d-44db-b933-e68410154aa6
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=f3562ce4-0bc5-4bf2-a93c-0e2950b6e3c4
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=50a05e41-8f01-47f0-80c6-6e9e2a445152
+phone(20a267f9-93e) [relay] relay c5972db5-4d91-4cf3-bb7e-c160f3700c5c: dial ws://localhost:27640/device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws?role=client&connId=76075f0a-fcef-4a7e-8efa-ddeeae7c01f2
+phone(20a267f9-93e) [chat c973caab] chat2 c973caab-5010-4ef8-9d13-7fc868dffa15: dial ws://localhost:27640/chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/ws?device=20a267f9-93ed-4d8f-851b-572a41903233
+phone(20a267f9-93e) [chat c973caab] chat2 c973caab-5010-4ef8-9d13-7fc868dffa15: fetching checkpoint (seq=12, 3028B, rows in parallel)
+phone(20a267f9-93e) [chat c973caab] chat2 c973caab-5010-4ef8-9d13-7fc868dffa15: row gap (seq=34, cursor=12); holding cursor
+phone(20a267f9-93e) [chat c973caab] chat2 c973caab-5010-4ef8-9d13-7fc868dffa15: http ack gap (seq=34, cursor=13); holding cursor
+phone(20a267f9-93e) [chat c973caab] chat2 c973caab-5010-4ef8-9d13-7fc868dffa15: joined (converged, resumed=false)
 ```
 
 ## Log tail: engine
 
 ```
-[2m2026-09-18T00:28:26.331763Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 20 bytes
-[2m2026-09-18T00:28:26.331770Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
-[2m2026-09-18T00:28:26.331778Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 111 bytes
-[2m2026-09-18T00:28:26.332078Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
-[2m2026-09-18T00:28:26.332098Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 17 bytes
-[2m2026-09-18T00:28:26.332106Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 5 bytes
-[2m2026-09-18T00:28:26.332114Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 19 bytes
-[2m2026-09-18T00:28:26.332122Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 13 bytes
-[2m2026-09-18T00:28:26.332129Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
-[2m2026-09-18T00:28:26.332137Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 27 bytes
-[2m2026-09-18T00:28:26.332144Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
-[2m2026-09-18T00:28:26.332152Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 81 bytes
-[2m2026-09-18T00:28:26.334875Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
-[2m2026-09-18T00:28:26.334904Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 61 bytes
-[2m2026-09-18T00:28:26.334915Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 6 bytes
-[2m2026-09-18T00:28:26.334924Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 198 bytes
-[2m2026-09-18T00:28:26.334932Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 109 bytes
-[2m2026-09-18T00:28:26.334940Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
-[2m2026-09-18T00:28:26.334948Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 270 bytes
-[2m2026-09-18T00:28:26.334956Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
-[2m2026-09-18T00:28:26.334964Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 2127 bytes
-[2m2026-09-18T00:28:26.844026Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
-[2m2026-09-18T00:28:26.844083Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 17 bytes
-[2m2026-09-18T00:28:26.844110Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 5 bytes
-[2m2026-09-18T00:28:26.844122Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 7 bytes
-[2m2026-09-18T00:28:26.844131Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 0 bytes
-[2m2026-09-18T00:28:26.844141Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
-[2m2026-09-18T00:28:26.844150Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 16 bytes
-[2m2026-09-18T00:28:26.844160Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
-[2m2026-09-18T00:28:26.844169Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 230 bytes
-[2m2026-09-18T00:28:26.846801Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
-[2m2026-09-18T00:28:26.846839Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 61 bytes
-[2m2026-09-18T00:28:26.846850Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 6 bytes
-[2m2026-09-18T00:28:26.846858Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 198 bytes
-[2m2026-09-18T00:28:26.846868Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 109 bytes
-[2m2026-09-18T00:28:26.846878Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
-[2m2026-09-18T00:28:26.846888Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 271 bytes
-[2m2026-09-18T00:28:26.846898Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
-[2m2026-09-18T00:28:26.846909Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 2356 bytes
+[2m2026-09-18T00:53:19.506548Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 14 bytes
+[2m2026-09-18T00:53:19.506557Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
+[2m2026-09-18T00:53:19.506564Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 1 bytes
+[2m2026-09-18T00:53:19.526112Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
+[2m2026-09-18T00:53:19.526142Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 28 bytes
+[2m2026-09-18T00:53:19.526151Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 5 bytes
+[2m2026-09-18T00:53:19.526161Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 73 bytes
+[2m2026-09-18T00:53:19.526169Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 330 bytes
+[2m2026-09-18T00:53:19.526178Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
+[2m2026-09-18T00:53:19.526185Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 124 bytes
+[2m2026-09-18T00:53:19.526193Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
+[2m2026-09-18T00:53:19.526202Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 1320 bytes
+[2m2026-09-18T00:53:19.686425Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
+[2m2026-09-18T00:53:19.686457Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 17 bytes
+[2m2026-09-18T00:53:19.686467Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 5 bytes
+[2m2026-09-18T00:53:19.686474Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 18 bytes
+[2m2026-09-18T00:53:19.686482Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 13 bytes
+[2m2026-09-18T00:53:19.686490Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
+[2m2026-09-18T00:53:19.686498Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 28 bytes
+[2m2026-09-18T00:53:19.686505Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
+[2m2026-09-18T00:53:19.686513Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 104 bytes
+[2m2026-09-18T00:53:19.686723Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
+[2m2026-09-18T00:53:19.686738Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 17 bytes
+[2m2026-09-18T00:53:19.686747Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 5 bytes
+[2m2026-09-18T00:53:19.686754Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 6 bytes
+[2m2026-09-18T00:53:19.686761Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 7 bytes
+[2m2026-09-18T00:53:19.686772Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
+[2m2026-09-18T00:53:19.686780Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 14 bytes
+[2m2026-09-18T00:53:19.686787Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
+[2m2026-09-18T00:53:19.686849Z[0m [32m INFO[0m [1mcommit_internal[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 10 bytes
+[2m2026-09-18T00:53:19.687826Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m Diagnosing EncodedBlock:
+[2m2026-09-18T00:53:19.687853Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   header 28 bytes
+[2m2026-09-18T00:53:19.687862Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   change_meta 5 bytes
+[2m2026-09-18T00:53:19.687871Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   cids: 85 bytes
+[2m2026-09-18T00:53:19.687879Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   keys: 330 bytes
+[2m2026-09-18T00:53:19.687886Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   positions: 0 bytes
+[2m2026-09-18T00:53:19.687894Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   ops: 143 bytes
+[2m2026-09-18T00:53:19.687901Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   delete_id_starts: 0 bytes
+[2m2026-09-18T00:53:19.687909Z[0m [32m INFO[0m [1mexport[0m[1m{[0m[3mmode[0m[2m=[0mSnapshot[1m}[0m[2m:[0m [2mloro_internal::oplog::change_store::block_encode[0m[2m:[0m   values: 1434 bytes
 
 ```
 
 ## Log tail: edge
 
 ```
-[wrangler:info] POST /diff/301ac7f4-f574-464b-905f-a98282c44dd0 200 OK (11ms)
-[wrangler:info] POST /device/4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0/nudge 200 OK (78ms)
-[wrangler:info] PUT /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/tail 200 OK (68ms)
-[wrangler:info] GET /preview/org1/ws 101 Switching Protocols (7ms)
-[wrangler:info] GET /registry/org1/ws 101 Switching Protocols (17ms)
-[wrangler:info] POST /device/4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0/nudge 200 OK (15ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/ws 101 Switching Protocols (22ms)
-[wrangler:info] POST /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/rows 200 OK (66ms)
-[wrangler:info] GET /registry/org1/ws 101 Switching Protocols (79ms)
-[wrangler:info] GET /device/4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0/ws 101 Switching Protocols (126ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/checkpoint 200 OK (170ms)
-[wrangler:info] POST /registry/org1/push 200 OK (131ms)
-[wrangler:info] POST /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/rows 200 OK (68ms)
+[wrangler:info] POST /registry/org1/push 200 OK (14ms)
 [wrangler:info] GET /registry/org1/rows 200 OK (20ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/rows 200 OK (53ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/ws 101 Switching Protocols (2ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/rows 200 OK (59ms)
-[wrangler:info] POST /diff/301ac7f4-f574-464b-905f-a98282c44dd0 200 OK (10ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/rows 200 OK (39ms)
-[wrangler:info] GET /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/ws 101 Switching Protocols (41ms)
-[wrangler:info] PUT /chat2/301ac7f4-f574-464b-905f-a98282c44dd0/tail 200 OK (9ms)
-[wrangler:info] GET /preview/org1/ws 101 Switching Protocols (5ms)
-[wrangler:info] POST /device/4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0/nudge 200 OK (57ms)
-[wrangler:info] POST /device/4cf45fa8-2a6d-46d6-9e13-ae1ec701fcc0/nudge 200 OK (88ms)
+[wrangler:info] GET /device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws 101 Switching Protocols (5ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/ws 101 Switching Protocols (89ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/rows 200 OK (95ms)
+[wrangler:info] POST /diff/4bb5e55c-60f8-485c-b97d-00528f15028f 200 OK (10ms)
+[wrangler:info] POST /diff/c973caab-5010-4ef8-9d13-7fc868dffa15 200 OK (10ms)
+[wrangler:info] GET /preview/org1/ws 101 Switching Protocols (6ms)
+[wrangler:info] GET /device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws 101 Switching Protocols (6ms)
+[wrangler:info] GET /registry/org1/ws 101 Switching Protocols (4ms)
+[wrangler:info] GET /device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws 101 Switching Protocols (9ms)
+[wrangler:info] POST /registry/org1/push 200 OK (9ms)
+[wrangler:info] GET /registry/org1/rows 200 OK (23ms)
+[wrangler:info] GET /device/c5972db5-4d91-4cf3-bb7e-c160f3700c5c/ws 101 Switching Protocols (3ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/ws 101 Switching Protocols (70ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/rows 200 OK (98ms)
+[wrangler:info] POST /diff/4bb5e55c-60f8-485c-b97d-00528f15028f 200 OK (10ms)
+[wrangler:info] POST /diff/c973caab-5010-4ef8-9d13-7fc868dffa15 200 OK (10ms)
+[wrangler:info] PUT /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/tail 200 OK (92ms)
+[wrangler:info] GET /preview/org1/ws 101 Switching Protocols (108ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/ws 101 Switching Protocols (5ms)
+[wrangler:info] POST /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/rows 200 OK (49ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/checkpoint 200 OK (153ms)
+[wrangler:info] GET /chat2/c973caab-5010-4ef8-9d13-7fc868dffa15/rows 200 OK (52ms)
 
 ```

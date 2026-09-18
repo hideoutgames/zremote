@@ -17,6 +17,9 @@ export interface UiPrefs {
   liveActivityShowHost: boolean;
   /** BCP-47 locale for the dictation model (Settings → Dictation). */
   dictationLocale: string;
+  /** Force the Loro-free relay session mode (Settings → Sync mode). When
+   * Loro init fails, relay mode is selected regardless. */
+  forceRelayMode: boolean;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
@@ -25,6 +28,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   liveActivitiesEnabled: true,
   liveActivityShowHost: true,
   dictationLocale: 'en-US',
+  forceRelayMode: false,
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -96,3 +100,11 @@ export const setDictationLocale = (v: string): void => {
 
 export const useDictationLocale = (): string =>
   useStore(uiPrefsStore, s => s.dictationLocale);
+
+export const setForceRelayMode = (v: boolean): void => {
+  uiPrefsStore.setState({ forceRelayMode: v });
+  save();
+};
+
+export const useForceRelayMode = (): boolean =>
+  useStore(uiPrefsStore, s => s.forceRelayMode);

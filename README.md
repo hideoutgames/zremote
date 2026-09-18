@@ -101,14 +101,15 @@ Latest evidence: [docs/evidence/](docs/evidence/).
 
 ## Expo Go boundary
 
-> The production app is an **Expo development build / custom dev client**.
-> Expo Go cannot load: the fork's Nitro modules (`react-native-nitro-*`),
-> `@callstack/liquid-glass`, `react-native-enriched-markdown`,
-> `@lodev09/react-native-true-sheet`, `react-native-bootsplash`,
-> `react-native-ios-context-menu`, the in-repo `react-native-loro` and
-> dictation modules, or the `expo-widgets` Live Activity extension. No Expo
-> Go preview of the full app is promised; a limited web/Jest-runnable slice
-> (protocol + reducers) is what runs without a native build.
+> The full app is an **Expo development build / custom dev client** — the
+> Nitro modules, Loro session documents, and Live Activities need it. Expo
+> Go is a **preview path only**: `npm run start:go` sets `EXPO_GO=1`, which
+> maps unsupported native modules to JS shims under
+> `app/src/expoGo/shims/` (Metro `resolveRequest`, bundle-time only —
+> production resolution is untouched), and sessions run in Loro-free
+> **relay mode** (host-authoritative
+> `WatchDocMessages`/`WatchQueue`/`QueueCommand`). Details:
+> [docs/EXPO_GO.md](docs/EXPO_GO.md).
 
 (verbatim from [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md))
 

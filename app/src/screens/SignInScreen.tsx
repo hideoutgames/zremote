@@ -3,6 +3,8 @@
 
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Constants from 'expo-constants';
+import * as WebBrowser from 'expo-web-browser';
 import { openAuthSession } from '../zeron/native/authBrowser';
 import { appConfig } from '../zeron/native/appConfig';
 import { useAuthSession } from '../app/runtimeContext';
@@ -16,6 +18,9 @@ const log = createLog();
 
 // The edge doesn't accept a PKCE verifier yet — flag kept for when it does.
 const PKCE_ENABLED = false;
+
+// Expo Go can't receive universal-link callbacks — sign-in is paste-code only.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 export function SignInScreen() {
   const theme = useTheme();
@@ -35,6 +40,13 @@ export function SignInScreen() {
         redirectUri: `${edgeUrl}/auth/cli/callback`,
         pkce: PKCE_ENABLED,
       });
+      if (isExpoGo) {
+        // Universal links can't land back in Expo Go — open the AuthKit URL
+        // and wait for the user to paste the code.
+        await WebBrowser.openBrowserAsync(url).catch(() => {});
+        setPasteOpen(true);
+        return;
+      }
       const result = await openAuthSession(url, `${edgeUrl}/auth/cli/callback`);
       if (result.type === 'success') {
         const link = new URL(result.url);
@@ -90,6 +102,11 @@ export function SignInScreen() {
 
       {pasteOpen ? (
         <View style={styles.pasteBox}>
+          {isExpoGo ? (
+            <Text style={[styles.pasteBody, { color: theme.textSecondary }]}>
+              {t('signIn.pasteFallback.expoGo')}
+            </Text>
+          ) : null}
           <Text style={[styles.pasteTitle, { color: theme.text }]}>
             {t('signIn.pasteFallback.title')}
           </Text>

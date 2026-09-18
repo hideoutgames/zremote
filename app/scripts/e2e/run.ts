@@ -567,6 +567,220 @@ const main = async (): Promise<number> => {
       report.section('step10 final chat row', chatRow());
       return 'rename/archive/unarchive/markSeen converged';
     });
+
+    // ── Steps 11–13: relay session mode against the real engine ────────
+    // A second chat owned by the host; a RelaySessionSource projects it
+    // with no Loro doc and no chat room — WatchDocMessages / WatchQueue /
+    // QueueCommand over the device relay only.
+    let relayChatId = '';
+    let relaySrc:
+      | import('../../src/zeron/runtime/relaySessionSource').RelaySessionSource
+      | undefined;
+    let relayState:
+      | (() => import('../../src/zeron/state/sessionStores').SessionState)
+      | undefined;
+
+    await report.step(
+      '11. relay mode: run → complete via WatchDocMessages',
+      async () => {
+        await engine.restart({ mockDelayMs: 400 });
+        await waitForHostRow(phone1!);
+        phone1!.relayTo(hostDeviceId);
+        const create = buildCreateChatSet({
+          deviceId: hostDeviceId,
+          spaceId,
+          cwd: SPACE_DIR,
+          config: { harness: 'mock', modelOptions: {} },
+          nowMs: Date.now(),
+        });
+        relayChatId = create.chatId;
+        phone1!.registryDoc.write(
+          create.kind,
+          create.id,
+          create.op,
+          create.set,
+        );
+        phone1!.registry.flushPending();
+        await waitFor(
+          'registry ack of relay createChat',
+          () => (phone1!.registryDoc.pendingCount === 0 ? true : undefined),
+          WAIT,
+        );
+        const { src, state } = phone1!.openRelayChat(relayChatId);
+        relaySrc = src;
+        relayState = state;
+        src.start();
+        await waitFor(
+          'relay session row visible',
+          () =>
+            phone1!.workspace().chats.some(c => c.id === relayChatId)
+              ? true
+              : undefined,
+          WAIT,
+        );
+        await waitFor(
+          'relay streams open',
+          () => (state().room === 'caughtUp' ? true : undefined),
+          WAIT,
+        );
+        src.sendRun(
+          'hello over relay',
+          { config: { harness: 'mock' }, cwd: SPACE_DIR },
+          {},
+        );
+        await waitFor(
+          'relay user entry',
+          () => state().entries.find(e => e.role === 'user'),
+          WAIT,
+        );
+        const assistant = await waitFor(
+          'relay assistant entry complete',
+          () =>
+            state().entries.find(
+              e => e.role === 'assistant' && e.status === 'complete',
+            ),
+          WAIT,
+        );
+        await waitFor(
+          'relay pendingSends reconciled',
+          () => (state().pendingSends.length === 0 ? true : undefined),
+          WAIT,
+        );
+        report.section('step11 relay transcript', state().entries);
+        report.section('step11 relay meta', state().meta);
+        return `entries=${
+          state().entries.length
+        } assistant=${assistant.id.slice(0, 8)} failed=${
+          state().failedSends.length
+        }`;
+      },
+    );
+
+    await report.step('12. relay mode: interrupt + question', async () => {
+      const src = relaySrc!;
+      const state = relayState!;
+      // Fresh engine with a slow mock; the relay streams die with the old
+      // host and must reopen against the new one (first frame = reset).
+      await engine.restart({ mockDelayMs: 1500 });
+      await waitForHostRow(phone1!);
+      // The old host's teardown cancelled the streams; the source must have
+      // reopened (reset → reconnect) before we send — QueueCommand on a dead
+      // socket would land in failedSends.
+      await waitFor(
+        'relay streams reopened after restart',
+        () => (state().room === 'caughtUp' ? true : undefined),
+        WAIT,
+      );
+      const idsBefore = new Set(state().entries.map(e => e.id));
+      src.sendRun(
+        'interrupt me over relay',
+        { config: { harness: 'mock' }, cwd: SPACE_DIR },
+        {},
+      );
+      await waitFor(
+        'relay session working',
+        () =>
+          phone1!.workspace().sessions[relayChatId]?.status === 'working'
+            ? true
+            : undefined,
+        WAIT,
+      );
+      src.interrupt();
+      const aborted = await waitFor(
+        'relay aborted assistant entry',
+        () =>
+          state().entries.find(
+            e =>
+              e.role === 'assistant' &&
+              !idsBefore.has(e.id) &&
+              e.status === 'aborted',
+          ),
+        WAIT,
+      );
+      await waitFor(
+        'relay session idle after interrupt',
+        () =>
+          phone1!.workspace().sessions[relayChatId]?.status === 'idle'
+            ? true
+            : undefined,
+        WAIT,
+      );
+      // question round-trip
+      await engine.restart({ mockDelayMs: 300, mockQuestion: true });
+      await waitForHostRow(phone1!);
+      await waitFor(
+        'relay streams reopened for question',
+        () => (state().room === 'caughtUp' ? true : undefined),
+        WAIT,
+      );
+      src.sendRun(
+        'ask me over relay',
+        { config: { harness: 'mock' }, cwd: SPACE_DIR },
+        {},
+      );
+      const inputPart = await waitFor(
+        'relay unresolved input part',
+        () =>
+          state()
+            .entries.flatMap(e => e.parts)
+            .find(p => p.kind === 'input' && !p.resolved),
+        WAIT,
+      );
+      if (inputPart.kind !== 'input')
+        throw new Error('relay input part missing requestId');
+      const answers = inputPart.questions.map(q => ({
+        questionId: q.id,
+        labels: [q.options[0] ?? 'yes'],
+      }));
+      src.respondInput(inputPart.requestId, answers);
+      await waitFor(
+        'relay question resolved + run complete',
+        () => {
+          const resolved = state()
+            .entries.flatMap(e => e.parts)
+            .some(p => p.kind === 'input' && p.resolved);
+          const done = state().entries.some(
+            e => e.role === 'assistant' && e.status === 'complete',
+          );
+          return resolved && done ? true : undefined;
+        },
+        WAIT,
+      );
+      report.section('step12 relay interrupt/question', {
+        abortedId: aborted.id,
+        answers,
+      });
+      return 'interrupt aborted; question resolved over relay';
+    });
+
+    await report.step('13. relay projection == doc projection', async () => {
+      // The doc-mode phone opens the SAME chat through the chat room; both
+      // projections must agree (ids, per-part kind/id, entry status).
+      const docSession = phone1!.openChat(relayChatId);
+      docSession.start();
+      const equal = () => {
+        const doc = docSession.project()?.entries ?? [];
+        const rel = relayState!().entries;
+        if (doc.length === 0 || doc.length !== rel.length) return undefined;
+        for (let i = 0; i < doc.length; i++) {
+          const d = doc[i];
+          const r = rel[i];
+          if (d.id !== r.id || d.status !== r.status) return undefined;
+          if (d.parts.length !== r.parts.length) return undefined;
+          for (let j = 0; j < d.parts.length; j++) {
+            if (d.parts[j].kind !== r.parts[j].kind) return undefined;
+            if (d.parts[j].id !== r.parts[j].id) return undefined;
+          }
+        }
+        return true;
+      };
+      await waitFor('relay/doc projections equal', equal, WAIT);
+      const rel = relayState!();
+      if (rel.failedSends.length > 0)
+        throw new Error(`relay failedSends: ${rel.failedSends.length}`);
+      report.section('step13 relay entries', rel.entries);
+      return `projections identical: ${rel.entries.length} entries`;
+    });
   } finally {
     phone1?.stop();
     phone2?.stop();

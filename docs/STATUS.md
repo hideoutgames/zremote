@@ -2,13 +2,13 @@
 
 Honest three-bucket summary as of 2026-09-18 (`f6b39a9` + uncommitted stage
 work). Row-level detail with exact statuses:
-[PARITY.md](PARITY.md) — **verified 39 · implemented-unverified 24 ·
+[PARITY.md](PARITY.md) — **verified 42 · implemented-unverified 25 ·
 requires-host-edge-change 4 · blocked 7 · not-started 15**. Evidence:
 [evidence/](evidence/).
 
 ## Implemented and tested (`verified`)
 
-Exercised against the real edge/engine (`e2e:windows` 10/10 —
+Exercised against the real edge/engine (`e2e:windows` 13/13 —
 [evidence/e2e-report.md](evidence/e2e-report.md)) or fully unit-covered pure
 logic:
 
@@ -30,6 +30,12 @@ logic:
 - **Navigation logic**: `layoutFor`, deep-link parsing, redacted logging.
 - **Edge patches**: AASA + PKCE + APNs producer — 53/53 vitest in the edge
   worktree (deployment still required; see below).
+- **Relay session mode** (Loro-free, host-authoritative): transcript delta
+  reducer ported from `transcript_delta.rs`, `WatchDocMessages`/`WatchQueue`/
+  `QueueCommand` over the device relay — e2e 11–13 verify
+  run/interrupt/question and doc-mode projection parity.
+- **Expo Go iOS export from Windows** — `npm run export:go` produces a 4.5MB
+  bundle via `EXPO_GO=1` shim resolution (`.expo-go-export/`).
 
 ## Implemented but unverified (`implemented-unverified`)
 
@@ -53,6 +59,9 @@ Needs a Mac build, a device, or a host in the right state:
   archived settings page (shelf exists, per-device page absent).
 - Real agent runs — e2e uses the `mock` harness only (the host lists
   codex/cursor as installed; they were not run).
+- **Expo Go on-device rendering** — the bundle resolves (`export:go`), but
+  no QR scan/device run was possible from this machine; shim fidelity
+  (markdown, sheets, menus, glass) is unverified.
 
 ## Requires host/edge change (`requires-host-edge-change`)
 

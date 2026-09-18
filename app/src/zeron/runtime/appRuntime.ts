@@ -26,8 +26,8 @@ import {
 import { resetSessionStores } from '../state/sessionStores';
 import { resetCatalog } from '../state/catalogStore';
 import { bindDrafts, resetDrafts } from '../state/draftStore';
-import { bindUiPrefs, unbindUiPrefs } from '../state/uiPrefs';
-import { SessionController } from './sessionController';
+import { bindUiPrefs, unbindUiPrefs, uiPrefsStore } from '../state/uiPrefs';
+import { SessionController, type SessionMode } from './sessionController';
 
 // WorkspaceStore.swift presence/dial-gate constants.
 export const PRESENCE_TTL_MS = 30_000;
@@ -71,9 +71,16 @@ export class AppRuntime {
   private registryJoinedAt: number | undefined;
   private persistTimer: unknown;
   private stopped = false;
+  /** 'relay' = Loro-free host-authoritative sessions (see relaySessionSource). */
+  readonly sessionMode: SessionMode;
 
-  private constructor(deps: AppRuntimeDeps, doc: RegistryDoc) {
+  private constructor(
+    deps: AppRuntimeDeps,
+    doc: RegistryDoc,
+    sessionMode: SessionMode = 'doc',
+  ) {
     this.deps = deps;
+    this.sessionMode = sessionMode;
     this.registryDoc = doc;
     this.registry = new RegistryClient({
       cfg: deps.cfg,
@@ -106,7 +113,25 @@ export class AppRuntime {
       () => {},
     );
     await bindUiPrefs(deps.docDisk, deps.orgId, deps.userId).catch(() => {});
-    return new AppRuntime(deps, doc);
+    // Session source selection: probe the Loro factory once — if it throws
+    // (Expo Go, missing pod) every session runs in relay mode. An explicit
+    // forceRelayMode pref skips the probe entirely.
+    let sessionMode: SessionMode = 'doc';
+    if (uiPrefsStore.getState().forceRelayMode) {
+      sessionMode = 'relay';
+    } else {
+      try {
+        deps.loro();
+      } catch (e) {
+        deps.log?.(
+          `loro unavailable (${
+            e instanceof Error ? e.message : String(e)
+          }) — sessions run in relay mode`,
+        );
+        sessionMode = 'relay';
+      }
+    }
+    return new AppRuntime(deps, doc, sessionMode);
   }
 
   start(): void {
@@ -232,6 +257,7 @@ export class AppRuntime {
     if (c === undefined) {
       c = new SessionController(chatId, {
         ...this.deps,
+        sessionMode: this.sessionMode,
         chatMeta: this.chatMeta(chatId),
         relayFor: id => {
           try {
