@@ -224,6 +224,8 @@ export function HomeScreen({
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [headerH, setHeaderH] = useState(0);
+  const [bottomH, setBottomH] = useState(0);
   const runtime = useRuntime();
 
   // Pull-to-refresh kicks the registry + open session rooms (same path the
@@ -268,86 +270,6 @@ export function HomeScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.topRow, { paddingTop: insets.top + 8 }]}>
-        <View
-          style={[styles.search, { backgroundColor: theme.inputBackground }]}
-        >
-          <Icon name="magnifyingglass" size={18} color={theme.textSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder={t('home.search')}
-            placeholderTextColor={theme.textSecondary}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-          />
-        </View>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <Glass interactive style={styles.filterPill}>
-              <Text
-                style={[styles.filterText, { color: theme.text }]}
-                numberOfLines={1}
-              >
-                {spaceFilter === undefined
-                  ? t('home.allSpaces')
-                  : spaceName(spaceFilter)}
-              </Text>
-              <Icon name="chevron.down" size={12} color={theme.textSecondary} />
-            </Glass>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item
-              key="all"
-              onSelect={() => setSpaceFilter(undefined)}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('home.allSpaces')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            {spaceFilter !== undefined ? (
-              <DropdownMenu.Item
-                key="newHere"
-                onSelect={() => setSheetOpen(true)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-            ) : null}
-            {devices.map(device => {
-              const deviceSpaces = spaces.filter(s => s.deviceId === device.id);
-              if (deviceSpaces.length === 0) return null;
-              return (
-                <DropdownMenu.Group key={device.id}>
-                  <DropdownMenu.Label>{device.name}</DropdownMenu.Label>
-                  {deviceSpaces.map(s => (
-                    <DropdownMenu.Item
-                      key={s.id}
-                      onSelect={() => setSpaceFilter(s.id)}
-                    >
-                      <DropdownMenu.ItemTitle>
-                        {s.name ?? s.path}
-                      </DropdownMenu.ItemTitle>
-                    </DropdownMenu.Item>
-                  ))}
-                </DropdownMenu.Group>
-              );
-            })}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      </View>
-
-      {connection !== 'connected' ? (
-        <View style={[styles.pill, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.pillText, { color: theme.textSecondary }]}>
-            {connection === 'connecting'
-              ? t('home.connection.connecting')
-              : t('home.connection.disconnected')}
-          </Text>
-        </View>
-      ) : null}
-
       <LegendList
         data={chats}
         keyExtractor={item => item.id}
@@ -392,12 +314,124 @@ export function HomeScreen({
             </View>
           ) : null
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          {
+            paddingTop: headerH !== 0 ? headerH : insets.top + 64,
+            paddingBottom: bottomH !== 0 ? bottomH + 12 : insets.bottom + 76,
+          },
+        ]}
+        scrollIndicatorInsets={{
+          top: headerH,
+          bottom: bottomH,
+        }}
         showsVerticalScrollIndicator={false}
         renderItem={renderRow}
       />
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+      {/* Floating top bar: search + space filter + connection pill, glass
+          over the sessions list which scrolls underneath. */}
+      <View
+        style={[styles.topBar, { paddingTop: insets.top + 8 }]}
+        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
+      >
+        <View style={styles.topRow}>
+          <View
+            style={[styles.search, { backgroundColor: theme.inputBackground }]}
+          >
+            <Icon
+              name="magnifyingglass"
+              size={18}
+              color={theme.textSecondary}
+            />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder={t('home.search')}
+              placeholderTextColor={theme.textSecondary}
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+            />
+          </View>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Glass interactive style={styles.filterPill}>
+                <Text
+                  style={[styles.filterText, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {spaceFilter === undefined
+                    ? t('home.allSpaces')
+                    : spaceName(spaceFilter)}
+                </Text>
+                <Icon
+                  name="chevron.down"
+                  size={12}
+                  color={theme.textSecondary}
+                />
+              </Glass>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content>
+              <DropdownMenu.Item
+                key="all"
+                onSelect={() => setSpaceFilter(undefined)}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('home.allSpaces')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              {spaceFilter !== undefined ? (
+                <DropdownMenu.Item
+                  key="newHere"
+                  onSelect={() => setSheetOpen(true)}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              ) : null}
+              {devices.map(device => {
+                const deviceSpaces = spaces.filter(
+                  s => s.deviceId === device.id,
+                );
+                if (deviceSpaces.length === 0) return null;
+                return (
+                  <DropdownMenu.Group key={device.id}>
+                    <DropdownMenu.Label>{device.name}</DropdownMenu.Label>
+                    {deviceSpaces.map(s => (
+                      <DropdownMenu.Item
+                        key={s.id}
+                        onSelect={() => setSpaceFilter(s.id)}
+                      >
+                        <DropdownMenu.ItemTitle>
+                          {s.name ?? s.path}
+                        </DropdownMenu.ItemTitle>
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Group>
+                );
+              })}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </View>
+
+        {connection !== 'connected' ? (
+          <View
+            style={[styles.pill, { backgroundColor: theme.cardBackground }]}
+          >
+            <Text style={[styles.pillText, { color: theme.textSecondary }]}>
+              {connection === 'connecting'
+                ? t('home.connection.connecting')
+                : t('home.connection.disconnected')}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View
+        style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
+        onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+      >
         <Pressable
           style={styles.newChatWrap}
           onPress={() => setSheetOpen(true)}
@@ -435,6 +469,7 @@ const CIRCLE = 44;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,6 +540,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

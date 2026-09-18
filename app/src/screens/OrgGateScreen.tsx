@@ -98,11 +98,13 @@ export function OrgGateScreen() {
               onPress={() => select(org.id)}
               disabled={busy}
             >
-              <Glass interactive style={styles.row}>
+              <View
+                style={[styles.row, { backgroundColor: theme.cardBackground }]}
+              >
                 <Text style={[styles.rowText, { color: theme.text }]}>
                   {org.name}
                 </Text>
-              </Glass>
+              </View>
             </Pressable>
           ))}
         </View>

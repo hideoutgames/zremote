@@ -51,7 +51,7 @@ import { loadCatalog } from '../zeron/runtime/catalog';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
-import { Glass } from '../components/Glass';
+import { Glass, GlassContainer } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { CheckoutSelector } from '../components/CheckoutSelector';
 import { QueuePanel } from '../components/QueuePanel';
@@ -410,6 +410,7 @@ export function SessionScreen({
             ? [styles.measureCap, { maxWidth: contentMaxWidth }]
             : undefined,
         ]}
+        scrollIndicatorInsets={{ top: insets.top + 96 }}
         keyboardDismissMode="interactive"
         ListEmptyComponent={
           <Text style={[styles.empty, { color: theme.textSecondary }]}>
@@ -419,16 +420,7 @@ export function SessionScreen({
       />
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow. */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 6,
-            backgroundColor: theme.background,
-            borderBottomColor: theme.border,
-          },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
         <Pressable
           onPress={onBack}
           hitSlop={8}
@@ -453,101 +445,108 @@ export function SessionScreen({
           accessibilityRole="button"
           accessibilityLabel={t('session.rename')}
         >
-          <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-            {sessionTitle(chat)}
-          </Text>
-          {subtitle !== '' ? (
+          <Glass style={styles.titlePill}>
             <Text
-              style={[styles.subtitle, { color: theme.textSecondary }]}
+              style={[styles.title, { color: theme.text }]}
               numberOfLines={1}
             >
-              {subtitle}
+              {sessionTitle(chat)}
             </Text>
-          ) : null}
+            {subtitle !== '' ? (
+              <Text
+                style={[styles.subtitle, { color: theme.textSecondary }]}
+                numberOfLines={1}
+              >
+                {subtitle}
+              </Text>
+            ) : null}
+          </Glass>
         </Pressable>
-        {onToggleInspector !== undefined ? (
-          <Pressable
-            onPress={onToggleInspector}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('inspector.toggle')}
-            style={styles.headerBtn}
-          >
-            <Glass interactive style={styles.circle}>
-              <Icon
-                name={'sidebar.right' as never}
-                size={18}
-                color={theme.text}
-              />
-            </Glass>
-          </Pressable>
-        ) : null}
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <Glass
-              interactive
-              style={styles.circle}
+        <GlassContainer spacing={8} style={styles.headerRight}>
+          {onToggleInspector !== undefined ? (
+            <Pressable
+              onPress={onToggleInspector}
+              hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={t('session.overflow')}
+              accessibilityLabel={t('inspector.toggle')}
+              style={styles.headerBtn}
             >
-              <Icon name="ellipsis.circle" size={18} color={theme.text} />
-            </Glass>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item
-              key="changes"
-              onSelect={() => setToolOverlay('changes')}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('session.changes')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              key="files"
-              onSelect={() => setToolOverlay('files')}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('session.files')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              key="terminal"
-              onSelect={() => setToolOverlay('terminal')}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('session.terminal')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              key="history"
-              onSelect={() => setToolOverlay('history')}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('session.history')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              key="previews"
-              onSelect={() => setToolOverlay('previews')}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('session.previews')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="archive" onSelect={onArchive}>
-              <DropdownMenu.ItemTitle>
-                {chat?.archived
-                  ? t('home.row.unarchive')
-                  : t('session.archive')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="copy" onSelect={onCopyId}>
-              <DropdownMenu.ItemTitle>
-                {t('session.copyId')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+              <Glass interactive style={styles.circle}>
+                <Icon
+                  name={'sidebar.right' as never}
+                  size={18}
+                  color={theme.text}
+                />
+              </Glass>
+            </Pressable>
+          ) : null}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Glass
+                interactive
+                style={styles.circle}
+                accessibilityRole="button"
+                accessibilityLabel={t('session.overflow')}
+              >
+                <Icon name="ellipsis.circle" size={18} color={theme.text} />
+              </Glass>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content>
+              <DropdownMenu.Item
+                key="changes"
+                onSelect={() => setToolOverlay('changes')}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.changes')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                key="files"
+                onSelect={() => setToolOverlay('files')}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.files')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                key="terminal"
+                onSelect={() => setToolOverlay('terminal')}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.terminal')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                key="history"
+                onSelect={() => setToolOverlay('history')}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.history')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                key="previews"
+                onSelect={() => setToolOverlay('previews')}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.previews')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item key="archive" onSelect={onArchive}>
+                <DropdownMenu.ItemTitle>
+                  {chat?.archived
+                    ? t('home.row.unarchive')
+                    : t('session.archive')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item key="copy" onSelect={onCopyId}>
+                <DropdownMenu.ItemTitle>
+                  {t('session.copyId')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </GlassContainer>
       </View>
 
       <ContextUsageBar usage={session.meta.contextUsage} />
@@ -695,9 +694,14 @@ export function SessionScreen({
               accessibilityLabel={t('session.back')}
               style={styles.headerBtn}
             >
-              <Glass interactive style={styles.circle}>
+              <View
+                style={[
+                  styles.circle,
+                  { backgroundColor: theme.cardBackground },
+                ]}
+              >
                 <Icon name="chevron.left" size={18} color={theme.text} />
-              </Glass>
+              </View>
             </Pressable>
             <Text style={[styles.title, { color: theme.text }]}>
               {toolOverlay === 'changes'
@@ -755,10 +759,18 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   measureCap: { width: '100%', alignSelf: 'center' },
   headerBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  titlePill: {
+    alignItems: 'center',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
   overlayBar: {
     flexDirection: 'row',
     alignItems: 'center',

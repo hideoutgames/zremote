@@ -482,11 +482,16 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
               </View>
             </View>
             <Pressable onPress={confirmSignOut} hitSlop={8}>
-              <Glass interactive style={styles.signOut}>
+              <View
+                style={[
+                  styles.signOut,
+                  { backgroundColor: theme.cardBackground },
+                ]}
+              >
                 <Text style={[styles.signOutText, { color: theme.danger }]}>
                   {t('settings.signOut')}
                 </Text>
-              </Glass>
+              </View>
             </Pressable>
 
             <Text style={[styles.section, { color: theme.textSecondary }]}>

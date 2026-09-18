@@ -16,7 +16,8 @@
     "postinstall": "patch-package",
     "parity:check": "node scripts/check-parity-paths.mjs",
     "start:go": "node scripts/start-go.js",
-    "export:go": "node scripts/start-go.js --export"
+    "export:go": "node scripts/start-go.js --export",
+    "start:go:shortcut": "powershell -ExecutionPolicy Bypass -File scripts/install-start-shortcut.ps1"
   },
   "dependencies": {
     "@callstack/liquid-glass": "^0.8.0",
@@ -26,6 +27,7 @@
     "@react-native-vector-icons/material-design-icons": "^13.1.2",
     "@shopify/react-native-skia": "2.6.2",
     "expo": "^57.0.23",
+    "expo-blur": "~57.0.3",
     "expo-build-properties": "~57.0.20",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.18",

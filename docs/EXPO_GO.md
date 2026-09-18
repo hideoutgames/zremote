@@ -23,6 +23,15 @@ node scripts/start-go.js --tunnel
 `npm run export:go` produces a static iOS bundle in `app/.expo-go-export/`
 (the "it bundles" proof — verified from Windows, 4.5MB / ~1600 modules).
 
+### Start-menu shortcut (Windows)
+
+`npm run start:go:shortcut` creates **ZRemote Expo Go Server** in Start
+(`scripts/install-start-shortcut.ps1`; `-Tunnel` also creates a tunnel
+variant). The shortcut launches `scripts/start-go.ps1` in a PowerShell window
+titled "ZRemote — Expo Go server" that stays open on errors. In Start, search
+"ZRemote", right-click → **Pin to Start** (programmatic pinning is blocked by
+Windows).
+
 ## What works
 
 - Sign-in via **paste code** — universal links can't return into Expo Go,

@@ -37,7 +37,6 @@ import { setAutoApprove, useAutoApprove } from '../zeron/state/uiPrefs';
 import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import { Glass } from './Glass';
 import { Icon } from './Icon';
 import { EffortSlider } from './EffortSlider';
 import { revalidateSelection } from './modelPicker';
@@ -387,7 +386,9 @@ export function ModelPickerSheet({
       </Pressable>
 
       <View style={styles.footer}>
-        <Glass interactive style={styles.doneBtn}>
+        <View
+          style={[styles.doneBtn, { backgroundColor: theme.cardBackground }]}
+        >
           <Pressable
             onPress={onClose}
             hitSlop={8}
@@ -398,7 +399,7 @@ export function ModelPickerSheet({
               {t('common.done')}
             </Text>
           </Pressable>
-        </Glass>
+        </View>
       </View>
     </ScrollView>
   );

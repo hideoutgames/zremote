@@ -567,7 +567,17 @@ export const Composer = React.memo(function ({
               }}
               style={styles.minTarget}
             >
-              <Glass interactive style={styles.circle}>
+              <View
+                style={[
+                  styles.circle,
+                  {
+                    backgroundColor:
+                      right === 'send' && action.primary !== 'send'
+                        ? theme.sendInactive
+                        : theme.sendActive,
+                  },
+                ]}
+              >
                 {right === 'stopping' ? (
                   <ActivityIndicator size="small" color={theme.textSecondary} />
                 ) : (
@@ -582,12 +592,14 @@ export const Composer = React.memo(function ({
                     size={right === 'send' ? 20 : 15}
                     color={
                       right === 'send' && action.primary !== 'send'
-                        ? theme.sendInactive
-                        : theme.sendActive
+                        ? '#FFFFFF'
+                        : theme.scheme === 'dark'
+                        ? '#000000'
+                        : '#FFFFFF'
                     }
                   />
                 )}
-              </Glass>
+              </View>
             </Pressable>
           </View>
         </Glass>

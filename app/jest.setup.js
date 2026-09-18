@@ -29,6 +29,11 @@ jest.mock('react-native-bootsplash', () => ({
 jest.mock('@callstack/liquid-glass', () => ({
   isLiquidGlassSupported: false,
   LiquidGlassView: require('react-native').View,
+  LiquidGlassContainerView: require('react-native').View,
+}));
+
+jest.mock('expo-blur', () => ({
+  BlurView: require('react-native').View,
 }));
 
 jest.mock('expo-glass-effect', () => ({

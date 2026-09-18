@@ -42,7 +42,6 @@ import type {
   WorktreeSpec,
 } from '../zeron/protocol/types';
 import { useRuntime } from '../app/runtimeContext';
-import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -494,16 +493,19 @@ export function NewSessionSheet({
         ) : null}
 
         <Pressable onPress={create} disabled={!canCreate} hitSlop={8}>
-          <Glass
-            interactive={canCreate}
-            style={[styles.create, !canCreate && styles.createDisabled]}
+          <View
+            style={[
+              styles.create,
+              { backgroundColor: theme.cardBackground },
+              !canCreate && styles.createDisabled,
+            ]}
           >
             <Text style={[styles.createText, { color: theme.sendActive }]}>
               {hostDevice === undefined
                 ? t('newSession.pickHost')
                 : t('newSession.create')}
             </Text>
-          </Glass>
+          </View>
         </Pressable>
       </ScrollView>
     </TrueSheet>

@@ -3,7 +3,11 @@
 // Maps `isLiquidGlassSupported`/`LiquidGlassView` onto GlassView.
 
 import React from 'react';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import {
+  GlassContainer,
+  GlassView,
+  isLiquidGlassAvailable,
+} from 'expo-glass-effect';
 import type { ColorValue, StyleProp, ViewStyle } from 'react-native';
 
 export const isLiquidGlassSupported: boolean = isLiquidGlassAvailable();
@@ -34,6 +38,22 @@ export const LiquidGlassView = ({
   >
     {children}
   </GlassView>
+);
+
+export interface LiquidGlassContainerViewProps {
+  spacing?: number;
+  style?: StyleProp<ViewStyle>;
+  children?: React.ReactNode;
+}
+
+export const LiquidGlassContainerView = ({
+  spacing,
+  style,
+  children,
+}: LiquidGlassContainerViewProps) => (
+  <GlassContainer spacing={spacing} style={style}>
+    {children}
+  </GlassContainer>
 );
 
 export default LiquidGlassView;
