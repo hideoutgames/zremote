@@ -21,8 +21,9 @@ Apple Developer Program membership is required (paid).
 
 **Certificates, Identifiers & Profiles → Identifiers:**
 
-- New **App ID** for the app's bundle id (the value of the
-  `IOS_BUNDLE_ID` GitHub variable). Capabilities to enable:
+- New **App ID** for the app's bundle id — `no.hideout.zremote` (the
+  default in `app.config.ts`; override with the `IOS_BUNDLE_ID` GitHub
+  variable). Capabilities to enable:
   - **Push Notifications** (`expo-widgets` with
     `enablePushNotifications: true` — Live Activity push-to-start).
   - **Associated Domains** (universal-link auth return:
@@ -56,32 +57,26 @@ Apple does not offer it again. Note the **Key ID** and **Issuer ID**.
 
 Repo → Settings → **Secrets and variables → Actions**:
 
-| Kind     | Name                     | Value                                   |
-| -------- | ------------------------ | --------------------------------------- |
-| Secret   | `ASC_KEY_ID`             | Key ID from step 2                      |
-| Secret   | `ASC_ISSUER_ID`          | Issuer ID from step 2                   |
-| Secret   | `ASC_PRIVATE_KEY_BASE64` | base64 of the `.p8` file (see below)    |
-| Secret   | `APPLE_TEAM_ID`          | Team ID                                 |
-| Variable | `IOS_BUNDLE_ID`          | the registered bundle id                |
-| Variable | `ZERON_EDGE_URL`         | edge base URL (default `edge.zeron.sh`) |
+| Kind     | Name              | Value                                              |
+| -------- | ----------------- | -------------------------------------------------- |
+| Secret   | `ASC_KEY_ID`      | Key ID from step 2                                 |
+| Secret   | `ASC_ISSUER_ID`   | Issuer ID from step 2                              |
+| Secret   | `ASC_PRIVATE_KEY` | the `.p8` file's text, pasted as-is (see below)    |
+| Secret   | `APPLE_TEAM_ID`   | Team ID                                            |
+| Variable | `IOS_BUNDLE_ID`   | optional — defaults to `no.hideout.zremote`        |
+| Variable | `ZERON_EDGE_URL`  | optional — edge base URL (default `edge.zeron.sh`) |
 
-Base64 the key — PowerShell:
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('AuthKey_XXXX.p8')) | Set-Clipboard
-```
-
-bash:
-
-```bash
-base64 -i AuthKey_XXXX.p8 | pbcopy
-```
+The `.p8` is a plain-text PEM file, so no conversion tool is needed. Open
+it in any text viewer (on iPad: Files → tap the file → Quick Look, or
+share it into Notes), select all, copy, and paste the whole thing —
+including the `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----`
+lines — into the secret's value box. GitHub secrets keep newlines. The
+workflow also accepts a base64-encoded value if you prefer.
 
 Create the **`testflight`** environment (Settings → Environments → New
 environment) and optionally add required reviewers so every upload is
-gated. The job is also skipped (`if: vars.IOS_BUNDLE_ID != ''`) until the
-variable is set, and its first step fails with a clear list of missing
-secret **names** (values are never printed).
+gated. The job's first step fails with a clear list of missing secret
+**names** (values are never printed).
 
 ## 4. Run
 

@@ -1,7 +1,8 @@
 # iOS TestFlight — signed archive + App Store Connect upload via the ASC
 # API key (cloud-managed signing; no certificates or profiles in the repo).
-# Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID /
-# ASC_PRIVATE_KEY_BASE64 / APPLE_TEAM_ID and variables IOS_BUNDLE_ID /
+# Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the
+# .p8 file contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID.
+# Optional variables IOS_BUNDLE_ID (default no.hideout.zremote) /
 # ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
 
 name: iOS TestFlight
@@ -25,8 +26,6 @@ concurrency:
 
 jobs:
   testflight:
-    # No bundle id configured → nothing sensible to sign for.
-    if: ${{ vars.IOS_BUNDLE_ID != '' }}
     runs-on: macos-26
     environment: testflight
     defaults:
@@ -39,11 +38,11 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           missing=""
-          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY_BASE64 APPLE_TEAM_ID; do
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APPLE_TEAM_ID; do
             val="${!name:-}"
             if [ -z "$val" ]; then missing="$missing $name"; fi
           done
@@ -77,7 +76,7 @@ jobs:
 
       - name: Expo prebuild
         env:
-          ZERON_IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+          ZERON_IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           IOS_BUILD_NUMBER: ${{ github.run_number }}
           ZERON_EDGE_URL: ${{ vars.ZERON_EDGE_URL || 'https://edge.zeron.sh' }}
@@ -91,11 +90,17 @@ jobs:
 
       - name: Write App Store Connect API key
         env:
-          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
+          # Accept the .p8 pasted as-is (PEM text) or base64-encoded.
           mkdir -p "$RUNNER_TEMP/asc"
-          echo "$ASC_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey.p8"
-          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+          key="$RUNNER_TEMP/asc/AuthKey.p8"
+          case "$ASC_PRIVATE_KEY" in
+            *"-----BEGIN "*) printf '%s\n' "$ASC_PRIVATE_KEY" > "$key" ;;
+            *) echo "$ASC_PRIVATE_KEY" | base64 --decode > "$key" ;;
+          esac
+          chmod 600 "$key"
+          grep -q "BEGIN PRIVATE KEY" "$key" || { echo "ASC_PRIVATE_KEY is not a valid .p8"; exit 1; }
 
       - name: Archive (cloud signing)
         env:
