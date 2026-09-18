@@ -8,8 +8,11 @@ Two workflows under `.github/workflows/`:
   `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
 - **`ios-testflight.yml` — iOS TestFlight.** Manual (`workflow_dispatch`,
   optional `notes`) or `v*` tag push. Signed archive + upload to App Store
-  Connect via the App Store Connect API key and Xcode cloud-managed
-  signing — no certificates, profiles, or key material are committed.
+  Connect via the App Store Connect API key and the team's **one
+  cloud-managed Apple Distribution certificate**. Expo prebuild's
+  Automatic / Apple Development settings are rewritten on the app and
+  widget targets only (never as workspace-wide `xcodebuild` xcargs). No
+  certificates, profiles, or key material are committed.
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
@@ -50,6 +53,21 @@ distribution certificates; App Manager + "Access to Cloud Managed
 Distribution Certificate" also works). Download the `.p8` **once** —
 Apple does not offer it again. Note the **Key ID** and **Issuer ID**.
 
+That API key is how CI uses the **single** Apple Distribution
+certificate Apple already manages for the team. The workflow never
+creates Apple Development certificates and never registers the GitHub
+runner as a device (`-allowProvisioningDeviceRegistration` is
+intentionally absent). Automatic development signing on an ephemeral
+runner mints a new development cert each job until the account hits
+Apple's 3-certificate cap ("Choose a certificate to revoke"), which is
+what broke later TestFlight archives.
+
+If Certificates, Identifiers & Profiles already lists several **Apple
+Development** entries named "Created via API" / "Created by Xcode" from
+those earlier runs, revoke the unused development ones so a Mac can
+still issue a local development cert. Leave the Apple Distribution /
+cloud-managed distribution certificate alone.
+
 **Team ID**: developer.apple.com → Membership details → Team ID
 (10 chars, e.g. `ABCDE12345`).
 
@@ -86,6 +104,14 @@ gated. The job's first step fails with a clear list of missing secret
 `IOS_BUILD_NUMBER` is the workflow run number; `aps-environment` stays
 `development` in the entitlements file — Xcode swaps it to `production`
 on App Store export via the distribution profile.
+
+The archive step does **not** pass `CODE_SIGN_IDENTITY` or
+`CODE_SIGN_STYLE` to `xcodebuild`. Those xcargs apply to every target
+in the workspace (including CocoaPods), which on Xcode 26 produces
+"ZRemote is automatically signed for development, but a conflicting
+code signing identity Apple Distribution has been manually specified."
+Signing style is set on `ZRemote` and `ExpoWidgetsTarget` in the
+generated `project.pbxproj` instead.
 
 ## 5. First-run expectations
 
