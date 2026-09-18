@@ -1,0 +1,97 @@
+# Status
+
+Honest three-bucket summary as of 2026-09-18 (`f6b39a9` + uncommitted stage
+work). Row-level detail with exact statuses:
+[PARITY.md](PARITY.md) — **verified 39 · implemented-unverified 24 ·
+requires-host-edge-change 4 · blocked 7 · not-started 15**. Evidence:
+[evidence/](evidence/).
+
+## Implemented and tested (`verified`)
+
+Exercised against the real edge/engine (`e2e:windows` 10/10 —
+[evidence/e2e-report.md](evidence/e2e-report.md)) or fully unit-covered pure
+logic:
+
+- **Sync substrate**: registry room, device relay, chat room, presence/dial
+  parking, auth dev-token/paste-code path.
+- **Command ledger**: run, steer, interrupt, respondInput,
+  cancelOwnCommand; queue enqueue/send-now/steer-now/remove/move.
+- **Registry writes**: createSpace, deleteSpace, createChat, renameChat,
+  archive/unarchive, markSeen, deleteChat, setChatConfig.
+- **Composer logic**: send routing, `autoApprove=false` default, sandbox,
+  picker logic incl. mid-chat harness lock, drafts, checkout rules +
+  version gate.
+- **Transcript projection**, message context menu, a11y labels/roles.
+- **Attachments logic**: chunked upload, retry/deadlines, escorts.
+- **Workspace-tool logic**: Changes reducer + unified-diff parser, Files
+  reducers + conflict handling, History paging reducer, Terminal ANSI model +
+  client (replay/resume, 12ms coalesce, 80ms debounce), accounts usage
+  thresholds, catalog toggles.
+- **Navigation logic**: `layoutFor`, deep-link parsing, redacted logging.
+- **Edge patches**: AASA + PKCE + APNs producer — 53/53 vitest in the edge
+  worktree (deployment still required; see below).
+
+## Implemented but unverified (`implemented-unverified`)
+
+Needs a Mac build, a device, or a host in the right state:
+
+- All Swift/native modules (`react-native-loro`, `zeron-dictation`,
+  `zeron-split-view`) — written, never compiled here.
+- Dictation (`SpeechAnalyzer` path is a marked TODO; `SFSpeechRecognizer`
+  on-device-only path written).
+- Composer/attachment UI surfaces, Border Beam, effort-slider haptics,
+  shimmer — device rendering.
+- Transcript rendering, theme, reduced-motion/transparency runtime,
+  ContextUsageBar — device rendering.
+- Terminal on-device rendering/input (font metrics are measured constants).
+- Checkout selector UI + `SwitchRef`/`CreateWorktree` round-trip.
+- Files/Changes/History RPC round-trips on a live checkout.
+- Previews screen (needs a checkout with running services).
+- Agent account flows (activate/forget/login) — need provider CLIs.
+- Device rename / `UpdateStatus` / `ApplyUpdate` / title settings.
+- Adaptive shell visuals on iPad; account isolation (by construction);
+  archived settings page (shelf exists, per-device page absent).
+- Real agent runs — e2e uses the `mock` harness only (the host lists
+  codex/cursor as installed; they were not run).
+
+## Requires host/edge change (`requires-host-edge-change`)
+
+- AASA + PKCE auth callback — patch `0001-*` in `patches/zeron-edge/` +
+  a WorkOS-registered app id.
+- Live Activity pushes + push registration routes — same patch + `APNS_*`
+  credentials.
+
+## Blocked (`blocked`)
+
+- Native split view — never compiled; `USE_NATIVE_SPLIT_VIEW=false` until a
+  Mac verifies it.
+- Hardware keyboard modifiers — RN 0.86 exposes no modifier flags.
+- Shortcuts settings page — same reason.
+- Appshots — captures the headed device's frontmost window; nothing to
+  expose to the phone.
+- Local→synced workspace import — IPC-only (`LocalImportStatus`,
+  `ImportLocalWorkspace` are not in `forwardable`, `rpc.rs` L940-1011).
+- Engine admin + sync probes (`RelayCommand`, `RetryDelivery`, `ProbeSync`,
+  `SyncStatus`, `WatchConnectivity`, `WatchTransfers`, `LocalDevice`,
+  `EngineInfo`, `EngineReady`, `StopEngine`, auth admin) — IPC-only.
+- Android — out of scope (`platforms: ['ios']`).
+
+## Not started (`not-started`)
+
+Queue edit leases · setChatActivity/setChatHost · review comments ·
+change-request badge · notification banners + sounds · appearance/theme
+library · in-app browser pane · widgets/composer/files settings pages ·
+image viewer/lightbox · transcript attachment thumbnails · workspace
+`zeron-file:` links · new-thread background effects · Watch\*/queue-admin RPC
+set superseded by room sync.
+
+## Deviation log (from stage reports)
+
+- TrueSheet cannot anchor iPad popovers — `Modal formSheet` fallback used.
+- `loro-crdt` npm replaced by a Nitro module over loro-swift 1.13.3.
+- `autoApprove` is a `RunRequest` field (not `ChatConfig`) — per-chat
+  `uiPrefs`, confirm-gated, off by default.
+- Terminal: bespoke ANSI model; LegendList over scrollback+grid.
+- `zeron-split-view` not in package.json deps on purpose.
+- No device screenshots/recordings — no iOS build was possible on this
+  machine; all visual claims are unverified.

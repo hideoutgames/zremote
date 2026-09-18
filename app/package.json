@@ -13,7 +13,8 @@
     "react-compiler-check": "react-compiler-healthcheck",
     "start": "react-native start",
     "test": "jest",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "parity:check": "node scripts/check-parity-paths.mjs"
   },
   "dependencies": {
     "@callstack/liquid-glass": "^0.8.0",

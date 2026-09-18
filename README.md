@@ -1,121 +1,174 @@
-<img src="img/demo.png" alt="MargeloChat running on iPhone 16" width="280" align="right">
+# Zeron for iPhone and iPad
 
-### MargeloChat
+A React Native / Expo client for [Zeron](https://github.com/zeronsh/zeron): the
+phone is a **peer device in the Zeron mesh**. It renders synchronized
+workspace and session state (Loro CRDT documents over the edge's Durable
+Object rooms) and drives remote engines through Zeron's durable command
+ledger. **No agent, repository operation, or terminal execution ever runs on
+the phone** — every action is relayed to the host device that owns the
+checkout.
 
-A ChatGPT-style mobile chat app with a twist: it knows about **Margelo**. You talk to a streaming AI assistant that renders replies as live markdown, shows its reasoning, and answers any question about Margelo (the company, its people, and its open-source libraries) by searching a real knowledge base instead of guessing.
+## Origin
 
-Ask it anything. For general questions it just replies; for Margelo questions it calls a retrieval tool, pulls matching facts from a vector database, and answers only from what it found.
+This repo started as a fork of Margelo's **MargeloChat** starter
+(`ai-chat-demo`). The original blog post:
+<https://blog.margelo.com/building-native-llm-chat-app-with-rag>. The
+streaming-LLM layer was replaced wholesale by the Zeron protocol stack; the
+markdown/transcript/UI toolkit remains and is credited in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+[docs/AGENTS_KIT_PROVENANCE.md](docs/AGENTS_KIT_PROVENANCE.md).
 
-> [!NOTE]
-> Read the full blog post about building a ChatGPT-Style AI Chat App in React Native here: https://blog.margelo.com/building-native-llm-chat-app-with-rag
+## Status
 
-### How it works
+Targets Zeron revision `853872d` (engine v0.2.72). See
+[docs/PARITY.md](docs/PARITY.md) for the desktop-parity matrix and
+[docs/STATUS.md](docs/STATUS.md) for the honest three-bucket summary —
+including what is implemented but unverified because this machine cannot
+compile iOS.
 
-- **Brain** - OpenAI's Responses API, streamed over a **WebSocket** ([`react-native-nitro-websockets`](https://github.com/mrousavy/nitro)) rather than HTTP. The socket is prewarmed natively at app start, before the JS bundle loads, so it's already open by the first message. Reply text and reasoning summaries stream token-by-token; turns are chained with `previous_response_id` so the model remembers the conversation.
-- **Knowledge base (RAG)** - the model can call a `search_margelo_kb` tool, which queries a [Pinecone](https://www.pinecone.io/) index (integrated embedding, so raw text goes up and Pinecone embeds it server-side) over [`react-native-nitro-fetch`](https://github.com/margelo/react-native-nitro-fetch). Margelo questions are answered from the retrieved context, never from the model's memory.
-- **Rendering** - replies render as native markdown with a streaming animation and tappable links ([`react-native-enriched-markdown`](https://github.com/software-mansion-labs/react-native-enriched-markdown)). The collapsible "thought process" opens in a bottom sheet ([`react-native-true-sheet`](https://github.com/lodev09/react-native-true-sheet)).
-- **List** - a keyboard-aware [`@legendapp/list`](https://github.com/LegendApp/legend-list) with anchored end-space, for ChatGPT-style scroll and anchor behavior while a reply streams in.
-- **Look** - real Liquid Glass surfaces on iOS 26+ ([`@callstack/liquid-glass`](https://github.com/callstack/liquid-glass)) with plain fallbacks everywhere else, a Skia shimmer "Thinking" label ([`@shopify/react-native-skia`](https://github.com/Shopify/react-native-skia)), and SF Symbols that fall back to Material Design Icons on Android.
-- **Attachments** - pick images ([`react-native-image-picker`](https://github.com/react-native-image-picker/react-native-image-picker)), sent to the model as base64 data URLs and shown as thumbnails ([`react-native-nitro-image`](https://github.com/mrousavy/react-native-nitro-image)).
+## Requirements
 
-### Requirements
+- **Node ≥ 22.13**, npm (see `app/package.json` engines)
+- **Xcode 26.x** on a Mac for device builds; iOS **16.4+** deployment target
+- iOS **26+** on device for Liquid Glass surfaces and the `SpeechAnalyzer`
+  dictation path (older iOS falls back to `SFSpeechRecognizer` on-device
+  recognition and plain surfaces)
+- A Windows machine can run the entire JS verification gate, including the
+  **real end-to-end** suite (see below)
 
-Runs on **iOS and Android** (New Architecture). Liquid Glass needs **iOS 26+**; on older iOS and on Android those surfaces fall back to a plain rounded style.
+## Setup
 
-- Xcode + CocoaPods, Node `>= 22.11`, and the [React Native environment](https://reactnative.dev/docs/set-up-your-environment).
-- An **OpenAI API key** and a populated **Pinecone index** for the knowledge-base tool.
+```sh
+cd app && npm ci
+```
 
-> **Note:** this is a demo. The API keys live in the app bundle, which is fine locally but unsafe for production - anyone can extract them. For anything real, put a relay server in front and keep the keys server-side.
+Environment variables consumed by `app/app.config.ts`:
 
-### Setup
+| Variable                 | Purpose                                                      | Default                 |
+| ------------------------ | ------------------------------------------------------------ | ----------------------- |
+| `ZERON_EDGE_URL`         | Edge base URL                                                | `https://edge.zeron.sh` |
+| `ZERON_WORKOS_CLIENT_ID` | WorkOS client id                                             | the Zeron client id     |
+| `ZERON_IOS_BUNDLE_ID`    | iOS bundle id (NOT `sh.zeron.ios` — that is Zeron's own app) | `sh.zeron.mobile`       |
+| `ZERON_APPLE_TEAM_ID`    | Apple team for signing/AASA                                  | none                    |
+
+## Native build (Mac)
 
 ```sh
 cd app
-npm install
-cp src/config.example.ts src/config.ts   # then fill in your keys
+npx expo prebuild --platform ios          # generates ios/
+app/modules/react-native-loro/scripts/fetch-loro-ffi.sh   # loro-swift 1.13.3 FFI (checksum-pinned)
 cd ios && pod install && cd ..
+npx expo run:ios --device                 # dev client + Metro
 ```
 
-Open `src/config.ts` and add your OpenAI key, Pinecone key, and index host. This file is gitignored and never committed.
+`react-native-loro` and `zeron-dictation` are Nitro modules that autolink via
+`file:` dependencies; the Loro FFI `xcframework` is downloaded and
+sha256-verified by `fetch-loro-ffi.sh` (pinned tag `1.13.3`, checksum in
+[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)). `ios.useFrameworks` must stay
+unset (Nitro requires static linking).
 
-### Run
+### Signing, entitlements, callback registration
+
+- **Associated Domains**: `applinks:<edge host>` (set automatically from
+  `ZERON_EDGE_URL`) — the edge must serve the AASA route; deploy the edge
+  patch in `patches/zeron-edge/` and set `IOS_APP_IDS` (see
+  [docs/HOST_EDGE_CHANGES.md](docs/HOST_EDGE_CHANGES.md)). Without it,
+  `zeron://` custom-scheme sign-in still works; the https universal-link
+  callback does not.
+- **APNs**: needed only for Live Activity push updates — the `APNS_TEAM_ID` /
+  `APNS_KEY_ID` / `APNS_P8` / `APNS_BUNDLE_ID` / `APNS_ENV` secrets documented
+  in `docs/HOST_EDGE_CHANGES.md`. Foreground polling works without them.
+- **App Group**: `group.<bundleId>` for the Live Activity extension.
+
+## Windows development loop
+
+Everything JS-side is verifiable on Windows:
 
 ```sh
 cd app
-npm start          # Metro
-npm run ios        # build + launch on the iOS simulator/device
-npm run android    # build + launch on the Android emulator/device
+npm run lint && npm run typecheck && npm test -- --ci
+npm run format:check && npm run react-compiler-check
+npx expo config --type introspect
+node scripts/prebuild-ios-windows.js --clean   # Expo prebuild that works on Windows
+npm run e2e:windows                            # real edge (wrangler dev) + real zeron.exe
 ```
 
-Other scripts (also run in CI):
+The e2e suite (`scripts/e2e/`) spawns `wrangler dev` and the real engine
+against a TypeScript "phone" built from the same `src/zeron` layers the app
+uses — 10 steps covering startup, RPC catalog, spaces/chats, run/interrupt,
+questions, multi-phone replay convergence, steer, and registry convergence.
+Latest evidence: [docs/evidence/](docs/evidence/).
 
-```sh
-npm run lint                 # eslint
-npm run typecheck            # tsc --noEmit
-npm run format               # prettier --write
-npm run format:check         # prettier --check
-npm run react-compiler-check # react-compiler healthcheck
-npm test                     # jest
-```
+## Expo Go boundary
 
-### Project structure
+> The production app is an **Expo development build / custom dev client**.
+> Expo Go cannot load: the fork's Nitro modules (`react-native-nitro-*`),
+> `@callstack/liquid-glass`, `react-native-enriched-markdown`,
+> `@lodev09/react-native-true-sheet`, `react-native-bootsplash`,
+> `react-native-ios-context-menu`, the in-repo `react-native-loro` and
+> dictation modules, or the `expo-widgets` Live Activity extension. No Expo
+> Go preview of the full app is promised; a limited web/Jest-runnable slice
+> (protocol + reducers) is what runs without a native build.
+
+(verbatim from [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md))
+
+## Scripts
+
+| Command                              | What it does                                                          |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `npm start`                          | Metro / Expo dev server                                               |
+| `npm run ios`                        | expo run:ios (Mac)                                                    |
+| `npm run android`                    | expo run:android (out of scope — see STATUS)                          |
+| `npm run lint` / `npm run typecheck` | ESLint / `tsc --noEmit`                                               |
+| `npm test` / `npm test -- --ci`      | Jest unit + component tests                                           |
+| `npm run format` / `format:check`    | Prettier (pinned 2.8.8 — use the app's local binary, not a global v3) |
+| `npm run react-compiler-check`       | react-compiler healthcheck                                            |
+| `npm run e2e:windows`                | Real edge + real engine e2e (Windows)                                 |
+
+## Project structure
 
 ```
 app/
-  src/
-    config.ts                 # API keys (gitignored; copy from config.example.ts)
-    theme.ts                  # dark theme + shared markdown design tokens
-    markdownStyle.ts          # maps the theme onto the markdown renderer
-    notImplemented.ts         # "demo only" alert for stubbed controls
-    state/
-      chatStore.ts            # zustand store: chat state, streaming, tool-call loop
-    openai/
-      protocol.ts             # builds Responses API requests, parses server events
-      connectionManager.ts    # module-level WebSocket lifecycle + reconnect with backoff
-    rag/
-      searchKnowledgeBase.ts  # Pinecone knowledge-base search (the model's tool)
-    hooks/
-      useAttachments.ts       # image picking
-    screens/
-      RootDrawer.tsx          # pager: recents <-> chat
-      ChatScreen.tsx          # the conversation, list, and composer wiring
-      RecentsScreen.tsx       # chat history (mocked for the UI pass)
-    components/
-      ChatMessages.tsx        # subscription boundary: only re-renders on message changes
-      Composer.tsx            # the input pill (grow/shrink, attachment thumbnails)
-      AttachmentMenu.tsx      # the "+" dropdown for picking attachments
-      MessageBubble.tsx       # user bubble / assistant markdown + reasoning trace
-      ReasoningSheet.tsx      # bottom sheet showing the thinking trace
-      ShimmerText.tsx         # Skia shimmer "Thinking" label
-      Header.tsx              # top bar
-      Glass.tsx               # Liquid Glass wrapper with a plain fallback
-      Icon.tsx                # SF Symbol with a Material Design Icon fallback
-      EmptyState.tsx          # centered logo before the first message
-      ScrollToBottomButton.tsx
+  app.config.ts            Expo CNG config (all native customizations)
+  src/app/                 runtime wiring, app shell entry
+  src/components/          composer, transcript, agentsKit UI
+  src/navigation/          adaptive shell (compact pager ↔ iPad 3-column)
+  src/screens/             Home/Session/Settings/Changes/Files/Terminal/
+                           History/Previews/AgentAccounts…
+  src/zeron/
+    protocol/              rpc methods, entities, wire types
+    doc/                   Loro session docs + registry projection
+    transport/             edge http, registry room, device relay, chat room
+    auth/                  WorkOS sign-in session
+    runtime/               AppRuntime, SessionController, workspace actions
+    state/                 zustand stores
+    terminal/              ANSI screen model + terminal client
+    accounts/ files/ diff/ history/ attachments/   workspace tool clients
+    native/                ports: dictation, file bytes, app config
+  modules/
+    react-native-loro/     Nitro module over loro-swift 1.13.3
+    zeron-dictation/       on-device speech (SFSpeechRecognizer/SpeechAnalyzer)
+    zeron-split-view/      UISplitViewController Fabric component (unverified)
+  scripts/e2e/             the Windows e2e harness
+docs/                      architecture, parity, status, host/edge changes
+patches/zeron-edge/        edge patches (format-patch + readable copies)
 ```
 
-### Open-source libraries
+## Docs index
 
-This app stands on the shoulders of these projects (thank you to their authors):
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layers, sync model, navigation
+- [docs/PARITY.md](docs/PARITY.md) — desktop-parity matrix
+- [docs/STATUS.md](docs/STATUS.md) — what's verified / unverified / blocked
+- [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) — capability gates, Loro pin,
+  Expo Go boundary
+- [docs/HOST_EDGE_CHANGES.md](docs/HOST_EDGE_CHANGES.md) — required edge patches
+- [docs/NATIVE_MODULES.md](docs/NATIVE_MODULES.md) — Swift modules + Mac checklist
+- [docs/E2E.md](docs/E2E.md) — e2e harness details
+- [docs/evidence/](docs/evidence/) — latest verification outputs
+- [docs/AGENTS_KIT_PROVENANCE.md](docs/AGENTS_KIT_PROVENANCE.md) — imported-UI
+  provenance
 
-- [react-native](https://github.com/facebook/react-native) & [react](https://github.com/facebook/react) - Meta
-- [react-native-nitro-modules](https://github.com/mrousavy/nitro) - Marc Rousavy / Margelo
-- [react-native-nitro-websockets](https://github.com/mrousavy/nitro) - Marc Rousavy / Margelo
-- [react-native-nitro-image](https://github.com/mrousavy/react-native-nitro-image) - Marc Rousavy / Margelo
-- [react-native-nitro-fetch](https://github.com/margelo/react-native-nitro-fetch) & [react-native-nitro-text-decoder](https://github.com/margelo/react-native-nitro-fetch) - Szymon Kapała / Margelo
-- [react-native-nitro-symbols](https://github.com/DaveyEke/react-native-nitro-symbols) - Dave Mkpa Eke / Margelo
-- [react-native-reanimated](https://github.com/software-mansion/react-native-reanimated) & [react-native-worklets](https://github.com/software-mansion/react-native-reanimated) - Software Mansion
-- [react-native-keyboard-controller](https://github.com/kirillzyusko/react-native-keyboard-controller) - Kiryl Ziusko / Margelo
-- [@legendapp/list](https://github.com/LegendApp/legend-list) - LegendApp
-- [react-native-enriched-markdown](https://github.com/software-mansion-labs/react-native-enriched-markdown) - Software Mansion
-- [react-native-true-sheet](https://github.com/lodev09/react-native-true-sheet) - Jovanni Lo
-- [@shopify/react-native-skia](https://github.com/Shopify/react-native-skia) - Shopify
-- [@callstack/liquid-glass](https://github.com/callstack/liquid-glass) - Callstack
-- [react-native-pager-view](https://github.com/callstack/react-native-pager-view) - Callstack
-- [zeego](https://github.com/nandorojo/zeego) - Fernando Rojo
-- [@react-native-menu/menu](https://github.com/react-native-menu/menu) - Jesse Katsumata
-- [@react-native-vector-icons/material-design-icons](https://github.com/oblador/react-native-vector-icons) - Joel Arvidsson
-- [react-native-image-picker](https://github.com/react-native-image-picker/react-native-image-picker) - community
-- [react-native-safe-area-context](https://github.com/AppAndFlow/react-native-safe-area-context) - Janic Duplessis
-- [react-native-bootsplash](https://github.com/zoontek/react-native-bootsplash) & [react-native-edge-to-edge](https://github.com/zoontek/react-native-edge-to-edge) - Mathieu Acthernoene
-- Vector database: [Pinecone](https://www.pinecone.io/) · Model API: [OpenAI](https://openai.com/)
+## Licenses
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the MargeloChat and
+library notices.

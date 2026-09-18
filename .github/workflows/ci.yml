@@ -7,24 +7,26 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/ci.yml'
-      - '**/*.ts'
-      - '**/*.tsx'
-      - '**/*.js'
-      - '**/*.jsx'
-      - '**/*.json'
-      - 'app/.prettierrc.js'
-      - 'app/.prettierignore'
+      - ".github/workflows/ci.yml"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.json"
+      - "app/modules/**"
+      - "app/.prettierrc.js"
+      - "app/.prettierignore"
   pull_request:
     paths:
-      - '.github/workflows/ci.yml'
-      - '**/*.ts'
-      - '**/*.tsx'
-      - '**/*.js'
-      - '**/*.jsx'
-      - '**/*.json'
-      - 'app/.prettierrc.js'
-      - 'app/.prettierignore'
+      - ".github/workflows/ci.yml"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.json"
+      - "app/modules/**"
+      - "app/.prettierrc.js"
+      - "app/.prettierignore"
 
 # One job per check so failures surface as separate status checks. Node version
 # tracks app/package.json "engines".
@@ -87,4 +89,19 @@ jobs:
       - run: npm ci
         working-directory: app
       - run: npm run react-compiler-check
+        working-directory: app
+
+  test:
+    name: Test (Jest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npm test -- --ci
         working-directory: app

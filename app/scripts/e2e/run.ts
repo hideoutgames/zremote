@@ -89,18 +89,25 @@ const makeEngineCtl = (): EngineCtl => ({
   },
 });
 
-/** Wait for the host's `devices` row (doubles as engine readiness). */
+/** Wait for the host's `devices` row (doubles as engine readiness).
+ * `wrangler dev` persists registry DO state between runs, so a stale
+ * `e2e-host` row from an earlier engine can satisfy the name+shape check —
+ * require presence within the freshness window so we dial the LIVE device. */
 const waitForHostRow = async (phone: PhonePeer) =>
   waitFor(
     'engine devices row',
     () => {
       const w = phone.workspace();
-      const host = w.devices.find(d => d.name === 'e2e-host');
-      return host !== undefined &&
-        host.version !== undefined &&
-        host.capabilities.length > 0
-        ? host
-        : undefined;
+      const now = Date.now();
+      const host = w.devices.find(
+        d =>
+          d.name === 'e2e-host' &&
+          d.version !== undefined &&
+          d.capabilities.length > 0 &&
+          phone.presence[d.id] !== undefined &&
+          now - phone.presence[d.id] < 45_000,
+      );
+      return host;
     },
     WAIT,
   );

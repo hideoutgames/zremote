@@ -14,3 +14,4 @@ yarn.lock
 # Build output & caches
 coverage/
 *.log
+.e2e
