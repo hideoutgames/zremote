@@ -20,11 +20,21 @@ jest.mock(
   () => require('react-native-safe-area-context/jest/mock').default,
 );
 
-jest.mock('react-native-bootsplash', () => ({
-  __esModule: true,
-  default: { hide: jest.fn(), isVisible: jest.fn(() => false) },
-  HideOnDraw: () => null,
-}));
+jest.mock('react-native-bootsplash', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const HideOnDraw = () =>
+    React.createElement(View, { testID: 'bootsplash-hide-on-draw' });
+  return {
+    __esModule: true,
+    default: {
+      hide: jest.fn(() => Promise.resolve()),
+      isVisible: jest.fn(() => Promise.resolve(false)),
+      HideOnDraw,
+    },
+    HideOnDraw,
+  };
+});
 
 jest.mock('@callstack/liquid-glass', () => ({
   isLiquidGlassSupported: false,

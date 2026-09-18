@@ -37,7 +37,6 @@ import {
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
-import BootSplash from 'react-native-bootsplash';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
@@ -384,8 +383,6 @@ export function SessionScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <BootSplash.HideOnDraw fade />
-
       <KeyboardAwareLegendList
         ref={listRef}
         style={styles.fill}

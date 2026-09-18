@@ -39,6 +39,13 @@ test('renders SignInScreen when signed out', async () => {
   const texts = allText(tree!.root);
   expect(texts).toContain('Sign in to ZRemote');
   expect(authStore.getState().status.state).toBe('signedOut');
+  // Native splash must hide on this path — SessionScreen is not mounted.
+  expect(
+    tree!.root.findByProps({ testID: 'bootsplash-hide-on-draw' }),
+  ).toBeTruthy();
+  await act(async () => {
+    tree!.unmount();
+  });
 });
 
 test('Advanced → Try demo mode lands on Home with fixture data + badge', async () => {
