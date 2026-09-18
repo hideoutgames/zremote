@@ -2,7 +2,7 @@
 // session on the right. Settings overlays as a sheet-like screen.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
 import PagerView, {
   type PageScrollStateChangedNativeEvent,
   type PagerViewOnPageSelectedEvent,
@@ -73,11 +73,15 @@ export function RootPager({ requestedChat }: { requestedChat: string | null }) {
           </Freeze>
         </View>
       </PagerView>
-      {settingsOpen ? (
-        <View style={StyleSheet.absoluteFill}>
-          <SettingsScreen onClose={() => setSettingsOpen(false)} />
-        </View>
-      ) : null}
+      {/* Settings as a native sheet (compact width → pageSheet). */}
+      <Modal
+        visible={settingsOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSettingsOpen(false)}
+      >
+        <SettingsScreen onClose={() => setSettingsOpen(false)} />
+      </Modal>
     </View>
   );
 }

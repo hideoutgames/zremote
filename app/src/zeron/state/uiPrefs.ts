@@ -20,6 +20,8 @@ export interface UiPrefs {
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
    * Loro init fails, relay mode is selected regardless. */
   forceRelayMode: boolean;
+  /** iPad floating sidebar collapsed (AdaptiveShell, ≥700pt only). */
+  sidebarCollapsed: boolean;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
@@ -29,6 +31,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   liveActivityShowHost: true,
   dictationLocale: 'en-US',
   forceRelayMode: false,
+  sidebarCollapsed: false,
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -108,3 +111,11 @@ export const setForceRelayMode = (v: boolean): void => {
 
 export const useForceRelayMode = (): boolean =>
   useStore(uiPrefsStore, s => s.forceRelayMode);
+
+export const setSidebarCollapsed = (v: boolean): void => {
+  uiPrefsStore.setState({ sidebarCollapsed: v });
+  save();
+};
+
+export const useSidebarCollapsed = (): boolean =>
+  useStore(uiPrefsStore, s => s.sidebarCollapsed);

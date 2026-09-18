@@ -1,0 +1,188 @@
+# iOS TestFlight — signed archive + App Store Connect upload via the ASC
+# API key (cloud-managed signing; no certificates or profiles in the repo).
+# Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID /
+# ASC_PRIVATE_KEY_BASE64 / APPLE_TEAM_ID and variables IOS_BUNDLE_ID /
+# ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
+
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Release notes (informational only)"
+        required: false
+        type: string
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    # No bundle id configured → nothing sensible to sign for.
+    if: ${{ vars.IOS_BUNDLE_ID != '' }}
+    runs-on: macos-26
+    environment: testflight
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets are present
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY_BASE64 APPLE_TEAM_ID; do
+            val="${!name:-}"
+            if [ -z "$val" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing required repository secrets:$missing"
+            echo "Configure them under Settings → Secrets and variables → Actions (docs/TESTFLIGHT.md)."
+            exit 1
+          fi
+
+      - name: Select Xcode 26
+        run: |
+          ls /Applications | grep -i xcode || true
+          if [ -d /Applications/Xcode_26.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.app
+          fi
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+          working-directory: app
+
+      - name: Expo prebuild
+        env:
+          ZERON_IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_BUILD_NUMBER: ${{ github.run_number }}
+          ZERON_EDGE_URL: ${{ vars.ZERON_EDGE_URL || 'https://edge.zeron.sh' }}
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: CocoaPods install
+        working-directory: app/ios
+        env:
+          COCOAPODS_DISABLE_STATS: "1"
+        run: bundle exec pod install
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo "$ASC_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+
+      - name: Archive (cloud signing)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/ZRemote.xcworkspace \
+            -scheme ZRemote -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            archive 2>&1 | tee build.log | xcpretty || {
+              grep -E "error:" build.log || true
+              exit 1
+            }
+
+      - name: Write ExportOptions.plist
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export + upload to App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee export.log | xcpretty || {
+              grep -E "error:" export.log || true
+              exit 1
+            }
+
+      - name: Cleanup key material + guard logs
+        if: always()
+        run: |
+          # Belt and braces: the logs must never contain key material. If
+          # they do, delete them so the artifact upload below has nothing
+          # to leak, then fail the job loudly.
+          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" build.log export.log 2>/dev/null; then
+            echo "Log file contains key material — deleting logs and failing."
+            rm -f build.log export.log
+            exit 1
+          fi
+          rm -rf "$RUNNER_TEMP/asc"
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-logs
+          path: |
+            app/build.log
+            app/export.log
+          if-no-files-found: ignore

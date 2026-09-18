@@ -19,6 +19,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     // NOT sh.zeron.ios — that identifier belongs to Zeron's SwiftUI app.
     bundleIdentifier: process.env.ZERON_IOS_BUNDLE_ID ?? 'sh.zeron.mobile',
+    buildNumber: process.env.IOS_BUILD_NUMBER ?? '1',
+    // TestFlight pipeline only — never hardcode a team id in a public repo.
+    ...(process.env.APPLE_TEAM_ID !== undefined
+      ? { appleTeamId: process.env.APPLE_TEAM_ID }
+      : {}),
     supportsTablet: true,
     requireFullScreen: false,
     associatedDomains: [`applinks:${edgeHost}`],

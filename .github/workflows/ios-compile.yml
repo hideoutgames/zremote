@@ -1,0 +1,85 @@
+# iOS compile check — unsigned Release build of the generated workspace.
+# Needs NO secrets: prebuild uses a placeholder bundle id and
+# CODE_SIGNING_ALLOWED=NO. Its purpose is to compile the in-repo native
+# modules (react-native-loro, zeron-dictation, expo-widgets target) on a
+# real Xcode 26 toolchain and surface Swift errors in build.log.
+
+name: iOS Compile Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/ios-*.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - ".github/workflows/ios-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          ls /Applications | grep -i xcode || true
+          if [ -d /Applications/Xcode_26.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.app
+          fi
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+          working-directory: app
+
+      - name: Expo prebuild (unsigned placeholder bundle id)
+        env:
+          ZERON_IOS_BUNDLE_ID: dev.zremote.compilecheck
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: CocoaPods install
+        working-directory: app/ios
+        env:
+          COCOAPODS_DISABLE_STATS: "1"
+        run: bundle exec pod install
+
+      - name: Build (unsigned Release)
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/ZRemote.xcworkspace \
+            -scheme ZRemote -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | xcpretty || {
+              grep -E "error:|warning: .*Swift" build.log || true
+              exit 1
+            }
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-compile-build-log
+          path: app/build.log
+          if-no-files-found: ignore

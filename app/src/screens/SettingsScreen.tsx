@@ -16,7 +16,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../zeron/state/workspaceStore';
 import { authStore } from '../zeron/state/authStore';
@@ -31,7 +30,6 @@ import type {
 } from '../zeron/protocol/types';
 import { METHODS } from '../zeron/protocol/rpc';
 import { AgentAccountsScreen } from './AgentAccountsScreen';
-import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { useDemoMode } from '../demo/demoMode';
@@ -338,7 +336,6 @@ const AgentsPage = ({
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { signOut } = useAppServices();
   const status = useStore(authStore, s => s.status);
   const devices = useStore(workspaceStore, s => s.devices);
@@ -430,25 +427,31 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: theme.background, paddingTop: insets.top + 8 },
-      ]}
-    >
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {/* Native sheet chrome: centered title + text Done button (a glass
+          close circle inside a system sheet is glass-on-glass). */}
       <View style={styles.header}>
-        <Pressable onPress={onClose} hitSlop={8}>
-          <Glass interactive style={styles.circle}>
-            <Icon name="xmark" size={16} color={theme.text} />
-          </Glass>
-        </Pressable>
+        <View style={styles.headerSide} />
         <Text style={[styles.title, { color: theme.text }]}>
           {agentsFor === undefined ? t('settings.title') : t('settings.agents')}
         </Text>
-        <View style={styles.circle} />
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.done')}
+          style={styles.headerSide}
+        >
+          <Text style={[styles.done, { color: theme.accent }]}>
+            {t('common.done')}
+          </Text>
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+      >
         {agentsFor !== undefined ? (
           <AgentsPage
             device={agentsFor}
@@ -664,14 +667,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
-  circle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
+  headerSide: {
+    minWidth: 60,
+    minHeight: 44,
     justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: 'flex-end',
   },
+  done: { fontSize: 17, fontWeight: '600' },
   title: { fontSize: 17, fontWeight: '600' },
   content: { padding: 16, gap: 10 },
   page: { gap: 8 },

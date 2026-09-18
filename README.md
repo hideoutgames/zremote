@@ -170,6 +170,7 @@ patches/zeron-edge/        edge patches (format-patch + readable copies)
 - [docs/HOST_EDGE_CHANGES.md](docs/HOST_EDGE_CHANGES.md) — required edge patches
 - [docs/NATIVE_MODULES.md](docs/NATIVE_MODULES.md) — Swift modules + Mac checklist
 - [docs/E2E.md](docs/E2E.md) — e2e harness details
+- [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md) — iOS CI/TestFlight pipeline
 - [docs/evidence/](docs/evidence/) — latest verification outputs
 - [docs/AGENTS_KIT_PROVENANCE.md](docs/AGENTS_KIT_PROVENANCE.md) — imported-UI
   provenance

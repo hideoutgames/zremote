@@ -22,6 +22,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { type LegendListRef } from '@legendapp/list/react-native';
 import {
@@ -92,6 +97,7 @@ export function SessionScreen({
   onBack,
   leadingIcon,
   contentMaxWidth,
+  leadingInsetSV,
   onToggleInspector,
 }: {
   chatId: string;
@@ -100,11 +106,18 @@ export function SessionScreen({
   leadingIcon?: string;
   /** iPad: cap the transcript/composer measure (~720pt), centered. */
   contentMaxWidth?: number;
+  /** iPad: animated leading inset under the floating sidebar — applied to
+   * the header and composer measure only; the transcript scrolls under. */
+  leadingInsetSV?: SharedValue<number>;
   /** iPad: shows an inspector toggle in the header. */
   onToggleInspector?: () => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const fallbackInset = useSharedValue(0);
+  const leadingPad = useAnimatedStyle(() => ({
+    paddingLeft: (leadingInsetSV ?? fallbackInset).value,
+  }));
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const auth = useAuthSession();
@@ -421,8 +434,8 @@ export function SessionScreen({
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
-      <View
-        style={[styles.header, { paddingTop: insets.top + 6 }]}
+      <Animated.View
+        style={[styles.header, { paddingTop: insets.top + 6 }, leadingPad]}
         pointerEvents="box-none"
       >
         <Pressable
@@ -551,7 +564,7 @@ export function SessionScreen({
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </GlassContainer>
-      </View>
+      </Animated.View>
 
       <ContextUsageBar usage={session.meta.contextUsage} />
 
@@ -591,12 +604,13 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        <View
-          style={
+        <Animated.View
+          style={[
             contentMaxWidth !== undefined
               ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-              : undefined
-          }
+              : undefined,
+            leadingPad,
+          ]}
         >
           {runtime !== null && chat !== undefined ? (
             <CheckoutSelector
@@ -629,7 +643,7 @@ export function SessionScreen({
             composerRef={composerRef}
             onLayout={onComposerLayout}
           />
-        </View>
+        </Animated.View>
       </KeyboardStickyView>
 
       {queueOpen ? (

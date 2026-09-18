@@ -15,3 +15,6 @@ gem 'logger'
 gem 'benchmark'
 gem 'mutex_m'
 gem 'nkf'
+
+# CI: pretty xcodebuild output for the iOS compile/TestFlight workflows.
+gem 'xcpretty'

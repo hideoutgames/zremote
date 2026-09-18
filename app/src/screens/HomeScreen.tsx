@@ -6,10 +6,12 @@ import {
   Alert,
   Pressable,
   RefreshControl,
+  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ViewStyle,
 } from 'react-native';
 import {
   LegendList,
@@ -213,12 +215,30 @@ const ChatRow = React.memo(function ({
 export function HomeScreen({
   onOpenSession,
   onOpenSettings,
+  variant = 'screen',
 }: {
   onOpenSession: (chatId: string) => void;
   onOpenSettings: () => void;
+  /** 'sidebar' renders inside the floating glass panel — its own controls
+   * switch from glass to subtle fills (no glass-on-glass). */
+  variant?: 'screen' | 'sidebar';
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // Inside the floating sidebar the safe area is handled by the panel.
+  const barInset = variant === 'sidebar' ? 0 : undefined;
+  // Sidebar variant: controls use subtle fills, never a second glass layer.
+  // (A render helper, not a component — a JSX-typed const would remount.)
+  const control = (style: StyleProp<ViewStyle>, children: React.ReactNode) =>
+    variant === 'sidebar' ? (
+      <View style={[style, { backgroundColor: theme.inputBackground }]}>
+        {children}
+      </View>
+    ) : (
+      <Glass interactive style={style}>
+        {children}
+      </Glass>
+    );
   const [query, setQuery] = useState('');
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -332,7 +352,7 @@ export function HomeScreen({
       {/* Floating top bar: search + space filter + connection pill, glass
           over the sessions list which scrolls underneath. */}
       <View
-        style={[styles.topBar, { paddingTop: insets.top + 8 }]}
+        style={[styles.topBar, { paddingTop: (barInset ?? insets.top) + 8 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
@@ -356,21 +376,24 @@ export function HomeScreen({
           </View>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
-              <Glass interactive style={styles.filterPill}>
-                <Text
-                  style={[styles.filterText, { color: theme.text }]}
-                  numberOfLines={1}
-                >
-                  {spaceFilter === undefined
-                    ? t('home.allSpaces')
-                    : spaceName(spaceFilter)}
-                </Text>
-                <Icon
-                  name="chevron.down"
-                  size={12}
-                  color={theme.textSecondary}
-                />
-              </Glass>
+              {control(
+                styles.filterPill,
+                <>
+                  <Text
+                    style={[styles.filterText, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {spaceFilter === undefined
+                      ? t('home.allSpaces')
+                      : spaceName(spaceFilter)}
+                  </Text>
+                  <Icon
+                    name="chevron.down"
+                    size={12}
+                    color={theme.textSecondary}
+                  />
+                </>,
+              )}
             </DropdownMenu.Trigger>
             <DropdownMenu.Content>
               <DropdownMenu.Item
@@ -430,7 +453,10 @@ export function HomeScreen({
       </View>
 
       <View
-        style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
+        style={[
+          styles.bottomBar,
+          { paddingBottom: (barInset ?? insets.bottom) + 8 },
+        ]}
         onLayout={e => setBottomH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
@@ -439,17 +465,21 @@ export function HomeScreen({
           onPress={() => setSheetOpen(true)}
           hitSlop={8}
         >
-          <Glass interactive style={styles.newChat}>
-            <Icon name="plus" size={16} color={theme.text} />
-            <Text style={[styles.newChatText, { color: theme.text }]}>
-              {t('home.newSession')}
-            </Text>
-          </Glass>
+          {control(
+            styles.newChat,
+            <>
+              <Icon name="plus" size={16} color={theme.text} />
+              <Text style={[styles.newChatText, { color: theme.text }]}>
+                {t('home.newSession')}
+              </Text>
+            </>,
+          )}
         </Pressable>
         <Pressable onPress={onOpenSettings} hitSlop={8}>
-          <Glass interactive style={styles.circle}>
-            <Icon name="gearshape" size={20} color={theme.text} />
-          </Glass>
+          {control(
+            styles.circle,
+            <Icon name="gearshape" size={20} color={theme.text} />,
+          )}
         </Pressable>
       </View>
 
