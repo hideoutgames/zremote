@@ -29,7 +29,7 @@ compile iOS.
 ## Requirements
 
 - **Node ≥ 22.13**, npm (see `app/package.json` engines)
-- **Xcode 26.x** on a Mac for device builds; iOS **16.4+** deployment target
+- **Xcode 26.x** on a Mac for device builds; iOS **17.0+** deployment target
 - iOS **26+** on device for Liquid Glass surfaces and the `SpeechAnalyzer`
   dictation path (older iOS falls back to `SFSpeechRecognizer` on-device
   recognition and plain surfaces)

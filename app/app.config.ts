@@ -54,7 +54,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     workosApiBase: 'https://api.workos.com',
   },
   plugins: [
-    ['expo-build-properties', { ios: { deploymentTarget: '16.4' } }],
+    ['expo-build-properties', { ios: { deploymentTarget: '17.0' } }],
     [
       'react-native-bootsplash',
       {
