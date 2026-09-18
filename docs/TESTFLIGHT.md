@@ -28,7 +28,8 @@ Apple Developer Program membership is required (paid).
   default in `app.config.ts`; override with the `IOS_BUNDLE_ID` GitHub
   variable). Capabilities to enable:
   - **Push Notifications** (`expo-widgets` with
-    `enablePushNotifications: true` — Live Activity push-to-start).
+    `enablePushNotifications: true` — Live Activity push-to-start — and
+    `expo-notifications` for finish-banner alerts).
   - **Associated Domains** (universal-link auth return:
     `applinks:<edge host>`).
   - **App Groups** — the `expo-widgets` config plugin defaults the shared

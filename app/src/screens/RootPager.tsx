@@ -17,7 +17,13 @@ import { useTheme } from '../theme';
 const HOME_PAGE = 0;
 const SESSION_PAGE = 1;
 
-export function RootPager({ requestedChat }: { requestedChat: string | null }) {
+export function RootPager({
+  requestedChat,
+  onSelectedChat,
+}: {
+  requestedChat: string | null;
+  onSelectedChat?: (chatId: string | undefined) => void;
+}) {
   const theme = useTheme();
   const pagerRef = useRef<PagerView>(null);
   const [chatId, setChatId] = useState<string | null>(null);
@@ -34,6 +40,12 @@ export function RootPager({ requestedChat }: { requestedChat: string | null }) {
   useEffect(() => {
     if (requestedChat !== null) goToSession(requestedChat);
   }, [requestedChat, goToSession]);
+
+  useEffect(() => {
+    onSelectedChat?.(
+      activePage === SESSION_PAGE ? chatId ?? undefined : undefined,
+    );
+  }, [activePage, chatId, onSelectedChat]);
 
   const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
     const { position } = event.nativeEvent;

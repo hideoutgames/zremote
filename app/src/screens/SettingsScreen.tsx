@@ -39,10 +39,12 @@ import {
   setForceRelayMode,
   setLiveActivitiesEnabled,
   setLiveActivityShowHost,
+  setNotificationsEnabled,
   useDictationLocale,
   useForceRelayMode,
   useLiveActivitiesEnabled,
   useLiveActivityShowHost,
+  useNotificationsEnabled,
 } from '../zeron/state/uiPrefs';
 import {
   dictationUnavailable,
@@ -344,6 +346,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
+  const notificationsEnabled = useNotificationsEnabled();
   const forceRelayMode = useForceRelayMode();
   const dictationLocale = useDictationLocale();
   const [dictationModelState, setDictationModelState] = useState<
@@ -544,6 +547,29 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 </View>
               </Pressable>
             ))}
+
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {t('settings.notifications')}
+            </Text>
+            <View
+              style={[
+                styles.deviceRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.cardText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  {t('settings.notificationsEnabled')}
+                </Text>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={setNotificationsEnabled}
+              />
+            </View>
 
             <Text style={[styles.section, { color: theme.textSecondary }]}>
               {t('settings.liveActivities')}

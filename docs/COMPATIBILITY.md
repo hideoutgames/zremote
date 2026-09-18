@@ -67,7 +67,9 @@ bootsplash Expo plugin, a local `withPodfileMods` plugin for SDWebImage,
 `expo-build-properties` for the deployment target). New native requirements —
 URL scheme, Associated Domains, microphone/speech/camera/photo permissions,
 Live Activities (`expo-widgets` with `enablePushNotifications`), App Groups,
-`NSSupportsLiveActivities` — are plugins too. The generated `ios/` and
+`NSSupportsLiveActivities` — are plugins too. Finish-banner alerts add
+`expo-notifications` with `enableBackgroundRemoteNotifications: false` so
+`UIBackgroundModes` stays empty. The generated `ios/` and
 `android/` directories are then produced by `npx expo prebuild`, and the
 committed template projects are removed from git _only after_ the plugin set
 has been verified to reproduce every customisation above (`npx expo prebuild

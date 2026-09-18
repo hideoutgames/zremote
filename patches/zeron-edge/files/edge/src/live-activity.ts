@@ -1,7 +1,10 @@
 /**
- * APNs Live Activity push producer (zremote iOS client) — ES256 JWT auth,
- * update/end/start payloads, and the expo-widgets content-state shape
- * (`{name, props}` — props is a JSON string decoded by the widget).
+ * APNs producer (zremote iOS client) — ES256 JWT auth, Live Activity
+ * update/end/start payloads, and alert banners when a run finishes.
+ *
+ * Live Activity content-state is expo-widgets' `{name, props}` (props is a
+ * JSON string decoded by the widget). Alert pushes use `apns-push-type:
+ * alert` on a device token (`kind: "alert"`), not an ActivityKit token.
  *
  * Everything here is inert until APNS_TEAM_ID/APNS_KEY_ID/APNS_P8/
  * APNS_BUNDLE_ID are configured (wrangler secrets); callers gate on
@@ -126,27 +129,47 @@ export type ApnsResult =
   | { ok: true }
   | { ok: false; status: number; reason: string };
 
-/** POST one Live Activity push to APNs for a device token. */
-export const sendLiveActivityPush = async (
+/** True when a sessions.status flip means the agent finished a turn. */
+export const isRunFinished = (
+  prevStatus: string | undefined,
+  status: string
+): boolean =>
+  (status === "idle" &&
+    (prevStatus === "working" || prevStatus === "awaitingInput")) ||
+  status === "errored";
+
+export type AlertPushProps = {
+  chatId: string;
+  title: string;
+  body: string;
+};
+
+/** User-visible banner. No prompt/message text — title is the chat title. */
+export const buildAlertPayload = (
+  props: AlertPushProps
+): Record<string, unknown> => ({
+  aps: {
+    alert: { title: props.title, body: props.body },
+    sound: "default",
+    "thread-id": props.chatId
+  },
+  chatId: props.chatId,
+  url: `zeron://session/${props.chatId}`
+});
+
+const postApns = async (
   env: Env,
   deviceToken: string,
-  event: LiveActivityEvent,
-  props: SessionPushProps,
-  now = Date.now(),
-  fetchImpl: typeof fetch = fetch
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  now: number,
+  fetchImpl: typeof fetch
 ): Promise<ApnsResult> => {
   const jwt = await apnsJwt(env, now);
   const res = await fetchImpl(`${apnsHost(env)}/3/device/${deviceToken}`, {
     method: "POST",
-    headers: {
-      authorization: `bearer ${jwt}`,
-      "apns-push-type": "liveactivity",
-      "apns-topic": `${env.APNS_BUNDLE_ID}.push-type.liveactivity`,
-      "apns-priority": String(
-        event === "update" ? priorityFor(props.phase) : 10
-      )
-    },
-    body: JSON.stringify(buildLiveActivityPayload(event, props, now))
+    headers: { authorization: `bearer ${jwt}`, ...headers },
+    body: JSON.stringify(body)
   });
   if (res.ok) return { ok: true };
   let reason = "";
@@ -157,3 +180,48 @@ export const sendLiveActivityPush = async (
   }
   return { ok: false, status: res.status, reason };
 };
+
+/** POST one Live Activity push to APNs for a device token. */
+export const sendLiveActivityPush = async (
+  env: Env,
+  deviceToken: string,
+  event: LiveActivityEvent,
+  props: SessionPushProps,
+  now = Date.now(),
+  fetchImpl: typeof fetch = fetch
+): Promise<ApnsResult> =>
+  postApns(
+    env,
+    deviceToken,
+    {
+      "apns-push-type": "liveactivity",
+      "apns-topic": `${env.APNS_BUNDLE_ID}.push-type.liveactivity`,
+      "apns-priority": String(
+        event === "update" ? priorityFor(props.phase) : 10
+      )
+    },
+    buildLiveActivityPayload(event, props, now),
+    now,
+    fetchImpl
+  );
+
+/** POST one alert banner to APNs for a native device token (`kind: "alert"`). */
+export const sendAlertPush = async (
+  env: Env,
+  deviceToken: string,
+  props: AlertPushProps,
+  now = Date.now(),
+  fetchImpl: typeof fetch = fetch
+): Promise<ApnsResult> =>
+  postApns(
+    env,
+    deviceToken,
+    {
+      "apns-push-type": "alert",
+      "apns-topic": env.APNS_BUNDLE_ID as string,
+      "apns-priority": "10"
+    },
+    buildAlertPayload(props),
+    now,
+    fetchImpl
+  );

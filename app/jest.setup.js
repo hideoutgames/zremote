@@ -205,6 +205,20 @@ jest.mock('expo-linking', () => ({
   addEventListener: jest.fn(() => ({ remove: jest.fn() })),
   parse: jest.fn(() => ({ path: '', queryParams: {} })),
 }));
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  addNotificationResponseReceivedListener: jest.fn(() => ({
+    remove: jest.fn(),
+  })),
+  addPushTokenListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
+  requestPermissionsAsync: jest.fn(() =>
+    Promise.resolve({ status: 'granted' }),
+  ),
+  getDevicePushTokenAsync: jest.fn(() =>
+    Promise.resolve({ type: 'ios', data: 'apns-test-token' }),
+  ),
+}));
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
 }));

@@ -23,6 +23,8 @@ import { applyOp, validateOp, type Op, type Row } from "./registry-core";
 import { AUTH_USER_HEADER, type Env } from "./env";
 import {
   apnsConfigured,
+  isRunFinished,
+  sendAlertPush,
   sendLiveActivityPush,
   type SessionPushProps
 } from "./live-activity";
@@ -253,6 +255,8 @@ export class RegistryRoom implements DurableObject {
     if (url.pathname === "/live-activity" && request.method === "PUT") {
       // iOS client token registration: {chatId, token, kind, device}.
       // `chatId: "*"` + kind "push_to_start" is the per-user start token.
+      // `chatId: "*"` + kind "alert" is the native APNs device token used
+      // for finish banners (apns-push-type: alert).
       let body: { chatId?: unknown; token?: unknown; kind?: unknown; device?: unknown };
       try {
         body = (await request.json()) as typeof body;
@@ -262,7 +266,9 @@ export class RegistryRoom implements DurableObject {
       if (
         typeof body?.chatId !== "string" ||
         typeof body?.token !== "string" ||
-        (body?.kind !== "activity" && body?.kind !== "push_to_start") ||
+        (body?.kind !== "activity" &&
+          body?.kind !== "push_to_start" &&
+          body?.kind !== "alert") ||
         typeof body?.device !== "string"
       ) {
         return json({ error: "bad_request" }, 400);
@@ -530,13 +536,8 @@ export class RegistryRoom implements DurableObject {
 
       // End event when the session returns to idle after working/
       // awaitingInput; errored maps to 'end' too (final state, dismiss 30min).
-      const event =
-        status === "idle" &&
-        (prevStatus === "working" || prevStatus === "awaitingInput")
-          ? "end"
-          : status === "errored"
-            ? "end"
-            : "update";
+      const finished = isRunFinished(prevStatus, status);
+      const event = finished ? "end" : "update";
 
       // working → update throttled to 1/5s per chat.
       if (
@@ -573,6 +574,26 @@ export class RegistryRoom implements DurableObject {
       for (const token of activityTokens) {
         const res = await sendLiveActivityPush(this.env, token, event, props, now);
         if (!res.ok) await this.pruneBadToken(token, res);
+      }
+
+      // Alert banners (native device tokens). Independent of Live Activities
+      // so a backgrounded phone with no activity instance still gets a banner.
+      if (finished) {
+        const alertTokens = [
+          ...this.ctx.storage.sql.exec(
+            "SELECT token FROM live_activity_tokens WHERE kind = 'alert'"
+          )
+        ].map(r => r.token as string);
+        const body = status === "errored" ? "Run failed" : "Run completed";
+        for (const token of alertTokens) {
+          const res = await sendAlertPush(
+            this.env,
+            token,
+            { chatId, title: props.title, body },
+            now
+          );
+          if (!res.ok) await this.pruneBadToken(token, res);
+        }
       }
     }
   }

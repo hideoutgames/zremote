@@ -54,8 +54,10 @@ type InspectorTab = 'changes' | 'files' | 'terminal' | 'history';
 
 export function AdaptiveShell({
   requestedChat,
+  onSelectedChat,
 }: {
   requestedChat: string | null;
+  onSelectedChat?: (chatId: string | undefined) => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -72,6 +74,11 @@ export function AdaptiveShell({
 
   const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen };
   const layout = layoutFor(width, prefs);
+
+  useEffect(() => {
+    if (layout.mode === 'compact') return;
+    onSelectedChat?.(chatId ?? undefined);
+  }, [layout.mode, chatId, onSelectedChat]);
 
   const toggleSidebar = useCallback(
     () => setSidebarCollapsed(!sidebarCollapsed),
@@ -105,7 +112,12 @@ export function AdaptiveShell({
   );
 
   if (layout.mode === 'compact') {
-    return <RootPager requestedChat={requestedChat} />;
+    return (
+      <RootPager
+        requestedChat={requestedChat}
+        onSelectedChat={onSelectedChat}
+      />
+    );
   }
 
   return (

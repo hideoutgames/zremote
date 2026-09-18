@@ -350,10 +350,10 @@ export default {
       if (parts[2] === "reset" && request.method === "POST") {
         return forward(env.REGISTRY_ROOMS, room, request, auth.userId, "/reset", "");
       }
-      // iOS Live Activity push-token registry (the APNs producer lives in
-      // the DO; see docs/HOST_EDGE_CHANGES.md). Same auth shape as every
-      // /registry/* route — the org claim was checked above and the room is
-      // the caller's own per-user registry.
+      // iOS push-token registry (Live Activity + alert banners; the APNs
+      // producer lives in the DO; see docs/HOST_EDGE_CHANGES.md). Same auth
+      // shape as every /registry/* route — the org claim was checked above
+      // and the room is the caller's own per-user registry.
       if (
         parts[2] === "live-activity" &&
         (request.method === "PUT" || request.method === "DELETE")

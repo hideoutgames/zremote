@@ -15,6 +15,8 @@ export interface UiPrefs {
   /** Live Activities on/off + whether host/project show on the Lock Screen. */
   liveActivitiesEnabled: boolean;
   liveActivityShowHost: boolean;
+  /** APNs finish banners (run completed / failed). Off → token DELETE. */
+  notificationsEnabled: boolean;
   /** BCP-47 locale for the dictation model (Settings → Dictation). */
   dictationLocale: string;
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
@@ -33,6 +35,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   autoApproveByChat: {},
   liveActivitiesEnabled: true,
   liveActivityShowHost: true,
+  notificationsEnabled: true,
   dictationLocale: 'en-US',
   forceRelayMode: false,
   sidebarCollapsed: false,
@@ -101,6 +104,14 @@ export const useLiveActivitiesEnabled = (): boolean =>
 
 export const useLiveActivityShowHost = (): boolean =>
   useStore(uiPrefsStore, s => s.liveActivityShowHost);
+
+export const setNotificationsEnabled = (v: boolean): void => {
+  uiPrefsStore.setState({ notificationsEnabled: v });
+  save();
+};
+
+export const useNotificationsEnabled = (): boolean =>
+  useStore(uiPrefsStore, s => s.notificationsEnabled);
 
 export const setDictationLocale = (v: string): void => {
   uiPrefsStore.setState({ dictationLocale: v });
