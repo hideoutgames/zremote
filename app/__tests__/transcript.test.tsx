@@ -77,12 +77,74 @@ const textOf = (root: TestRenderer.ReactTestInstance): string[] =>
     return Array.isArray(c) ? c : [c];
   });
 
-test('UserMessage renders the text', async () => {
+test('UserMessage strips the plan prefix and shows a Plan badge', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it',
+      },
+    ],
+  };
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
-    tree = TestRenderer.create(<UserMessage entry={userEntry} />);
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
   });
-  expect(textOf(tree!.root)).toContain('hello from the phone');
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Plan');
+  expect(texts).toContain('ship it');
+  expect(texts.some(s => typeof s === 'string' && s.includes('/plan'))).toBe(
+    false,
+  );
+});
+
+test('AssistantMessage shows a plan card and turn changes', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 'p1',
+        call: {
+          kind: 'unknown',
+          name: 'createPlan',
+          input: { name: 'Resize composer', plan: '# Resize\n\nDrag.' },
+        },
+        resolved: true,
+      },
+      {
+        kind: 'tool',
+        id: 'e1',
+        call: { kind: 'editFile', path: 'app/src/components/Composer.tsx' },
+        resolved: true,
+        diffStats: [
+          {
+            path: 'app/src/components/Composer.tsx',
+            additions: 12,
+            deletions: 3,
+          },
+        ],
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        phase="idle"
+        onOpenReasoning={() => {}}
+        onOpenPlan={() => {}}
+        onOpenFileDiff={() => {}}
+      />,
+    );
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Resize composer');
+  expect(texts).toContain('Changes 1');
+  expect(texts).toContain('Composer.tsx');
 });
 
 test('AssistantMessage groups the tool parts into one rail', async () => {

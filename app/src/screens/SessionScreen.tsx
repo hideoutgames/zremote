@@ -41,7 +41,7 @@ import BootSplash from 'react-native-bootsplash';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
-import { autoApproveFor } from '../zeron/state/uiPrefs';
+import { autoApproveFor, setPlanMode } from '../zeron/state/uiPrefs';
 import {
   sessionTitle,
   hostLabel,
@@ -71,6 +71,10 @@ import { CAP_QUEUE_ACTIONS } from '../zeron/attachments/sendPlan';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
+import { PlanSheet } from '../components/PlanSheet';
+import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
+import { FileDiffSheet } from '../components/FileDiffSheet';
+import type { FileDiffRequest } from '../components/FileDiffSheet';
 import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
@@ -188,6 +192,8 @@ export function SessionScreen({
           onOpenReasoning={openReasoning}
           onFetchOutput={onFetchOutput}
           chatId={chatId}
+          onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
+          onOpenFileDiff={file => setFileDiff(file)}
         />
       ),
     [phase, openReasoning, onFetchOutput, chatId],
@@ -328,6 +334,12 @@ export function SessionScreen({
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [planSheet, setPlanSheet] = useState<{
+    name: string;
+    markdown: string;
+  } | null>(null);
+  const [fileDiff, setFileDiff] = useState<FileDiffRequest | null>(null);
   const [toolOverlay, setToolOverlay] = useState<
     'changes' | 'files' | 'terminal' | 'history' | 'previews' | null
   >(null);
@@ -510,6 +522,14 @@ export function SessionScreen({
             </DropdownMenu.Trigger>
             <DropdownMenu.Content>
               <DropdownMenu.Item
+                key="details"
+                onSelect={() => setDetailsOpen(true)}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.details')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
                 key="changes"
                 onSelect={() => setToolOverlay('changes')}
               >
@@ -680,6 +700,40 @@ export function SessionScreen({
           hasMessages={entries.length > 0}
           onClose={() => setPickerOpen(false)}
           formSheet={windowWidth >= 700}
+        />
+      ) : null}
+
+      {detailsOpen && chat !== undefined ? (
+        <ThreadDetailsSheet
+          chat={chat}
+          host={host}
+          modelLabel={modelLabel}
+          onDismiss={() => setDetailsOpen(false)}
+          onRename={() => {
+            setDetailsOpen(false);
+            onRename();
+          }}
+        />
+      ) : null}
+
+      {planSheet !== null ? (
+        <PlanSheet
+          name={planSheet.name}
+          markdown={planSheet.markdown}
+          onDismiss={() => setPlanSheet(null)}
+          onImplement={() => {
+            setPlanSheet(null);
+            setPlanMode(chatId, false);
+            doSend('Implement the plan.');
+          }}
+        />
+      ) : null}
+
+      {fileDiff !== null ? (
+        <FileDiffSheet
+          chatId={chatId}
+          request={fileDiff}
+          onDismiss={() => setFileDiff(null)}
         />
       ) : null}
 

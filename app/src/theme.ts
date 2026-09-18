@@ -27,6 +27,9 @@ export interface Theme {
   // Composer / cards.
   inputBackground: string;
   cardBackground: string;
+  planBadge: string;
+  planBadgeFill: string;
+  planButton: string;
   // Diff rows.
   diffAddBackground: string;
   diffDelBackground: string;
@@ -54,6 +57,9 @@ export const darkTheme: Theme = {
   indicatorCompleted: '#30D158',
   inputBackground: '#1C1C1E',
   cardBackground: '#1C1C1E',
+  planBadge: '#C7934A',
+  planBadgeFill: 'rgba(199,147,74,0.22)',
+  planButton: '#E8A317',
   diffAddBackground: 'rgba(48,209,88,0.14)',
   diffDelBackground: 'rgba(215,38,61,0.14)',
   diffAddText: '#30D158',
@@ -80,6 +86,9 @@ export const lightTheme: Theme = {
   indicatorCompleted: '#248A3D',
   inputBackground: '#F2F2F7',
   cardBackground: '#F2F2F7',
+  planBadge: '#B07828',
+  planBadgeFill: 'rgba(176,120,40,0.16)',
+  planButton: '#E8A317',
   diffAddBackground: 'rgba(36,138,61,0.12)',
   diffDelBackground: 'rgba(215,38,61,0.10)',
   diffAddText: '#248A3D',

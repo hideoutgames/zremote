@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   AppState,
   type LayoutChangeEvent,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -32,6 +33,8 @@ import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { Glass } from './Glass';
 import { Icon } from './Icon';
+import { PlanBadge } from './PlanBadge';
+import { withPlanPrefixIf } from './planMode';
 import { useAttachments } from '../hooks/useAttachments';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -52,6 +55,10 @@ import {
   useLiveActionPrefersSteer,
   setLiveActionPrefersSteer,
   uiPrefsStore,
+  usePlanMode,
+  setPlanMode,
+  useComposerExtraHeight,
+  setComposerExtraHeight,
 } from '../zeron/state/uiPrefs';
 import type { HarnessDescriptor } from '../zeron/protocol/types';
 import { composerAction, harnessSteers, liveAction } from './composerAction';
@@ -63,6 +70,7 @@ import { QuestionPanel } from './agentsKit/QuestionPanel';
 // lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
 const INPUT_MAX_HEIGHT_COMPACT = 148;
 const INPUT_MAX_HEIGHT_REGULAR = 214;
+const COMPOSER_EXTRA_MAX = 280;
 const THUMBS_ANIM_MS = 220;
 
 export interface ComposerProps {
@@ -119,9 +127,44 @@ export const Composer = React.memo(function ({
 }: ComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const persistedExtra = useComposerExtraHeight();
+  const [dragExtra, setDragExtra] = useState<number | null>(null);
+  const extraHeight = dragExtra ?? persistedExtra;
+  const extraRef = useRef(extraHeight);
+  extraRef.current = extraHeight;
+  const extraStartRef = useRef(0);
+  const extraMaxRef = useRef(COMPOSER_EXTRA_MAX);
+  extraMaxRef.current = Math.min(
+    COMPOSER_EXTRA_MAX,
+    Math.round(windowHeight * 0.45),
+  );
+  const setDragExtraRef = useRef(setDragExtra);
+  setDragExtraRef.current = setDragExtra;
+  const grabberPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        extraStartRef.current = extraRef.current;
+      },
+      onPanResponderMove: (_e, g) => {
+        const max = extraMaxRef.current;
+        const next = Math.max(0, Math.min(max, extraStartRef.current - g.dy));
+        setDragExtraRef.current(next);
+      },
+      onPanResponderRelease: (_e, g) => {
+        const max = extraMaxRef.current;
+        const next = Math.max(0, Math.min(max, extraStartRef.current - g.dy));
+        setComposerExtraHeight(next);
+        setDragExtraRef.current(null);
+      },
+    }),
+  ).current;
   const inputMaxHeight =
-    windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT;
+    (windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT) +
+    extraHeight;
+  const planMode = usePlanMode(chatId);
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
   const session = useSessionState(chatId);
@@ -232,7 +275,7 @@ export const Composer = React.memo(function ({
   }, [dictating, dictation, draft.text]);
 
   const submit = useCallback(() => {
-    const text = draft.text.trim();
+    const text = withPlanPrefixIf(planMode, draft.text.trim());
     if (hasAttachments) {
       // Routes per sendPlan; 'blocked' surfaces onSendBlocked — the draft
       // and attachments stay put (nothing silently dropped).
@@ -263,6 +306,7 @@ export const Composer = React.memo(function ({
   }, [
     hasAttachments,
     draft.text,
+    planMode,
     action.primary,
     live,
     phase,
@@ -302,7 +346,12 @@ export const Composer = React.memo(function ({
       style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
     >
       <View
-        style={styles.glassWrap}
+        style={[
+          styles.glassWrap,
+          theme.scheme === 'dark'
+            ? styles.glassHaloDark
+            : styles.glassHaloLight,
+        ]}
         onLayout={e =>
           setGlassSize({
             w: e.nativeEvent.layout.width,
@@ -311,6 +360,16 @@ export const Composer = React.memo(function ({
         }
       >
         <Glass style={styles.glass}>
+          <View
+            style={styles.grabberHit}
+            accessibilityRole="adjustable"
+            accessibilityLabel={t('composer.resize')}
+            {...grabberPan.panHandlers}
+          >
+            <View
+              style={[styles.grabber, { backgroundColor: theme.textSecondary }]}
+            />
+          </View>
           {/* ── Upper tier: attachment strip + input ──────────────────── */}
           <Animated.View
             style={[styles.stripClip, stripStyle]}
@@ -419,7 +478,11 @@ export const Composer = React.memo(function ({
             placeholderTextColor={theme.textSecondary}
             style={[
               styles.input,
-              { color: theme.text, maxHeight: inputMaxHeight },
+              {
+                color: theme.text,
+                maxHeight: inputMaxHeight,
+                minHeight: 60 + extraHeight,
+              },
               question !== undefined ? styles.inputDimmed : undefined,
             ]}
             multiline
@@ -436,7 +499,12 @@ export const Composer = React.memo(function ({
               onPickPhotos={pickImages}
               onPickCamera={pickCamera}
               onPickFiles={pickFiles}
+              onEnablePlan={() => setPlanMode(chatId, true)}
             />
+
+            {planMode ? (
+              <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
+            ) : null}
 
             {showLivePill ? (
               <DropdownMenu.Root>
@@ -653,6 +721,32 @@ const CIRCLE = 32;
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
   glassWrap: { position: 'relative' },
+  glassHaloDark: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 16,
+  },
+  glassHaloLight: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 16,
+  },
+  grabberHit: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 2,
+  },
+  grabber: {
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
+    opacity: 0.55,
+  },
   glass: {
     borderRadius: 24,
     overflow: 'hidden',

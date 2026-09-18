@@ -27,6 +27,11 @@ import { TaskRows } from '../agentsKit/TaskRows';
 import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
 import type { SFSymbol } from 'sf-symbols-typescript';
+import { detectPlanArtifact, isPlanToolPart } from './detectPlan';
+import { isCompleteAssistant, turnChanges } from './turnChanges';
+import type { TurnChange } from './turnChanges';
+import { PlanCard } from './PlanCard';
+import { TurnChangesCard } from './TurnChangesCard';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
@@ -45,6 +50,7 @@ const groupParts = (parts: MessagePart[]): Item[] => {
     run = [];
   };
   for (const part of parts) {
+    if (part.kind === 'tool' && isPlanToolPart(part)) continue;
     if (part.kind === 'tool') run.push(part);
     else {
       flush();
@@ -174,16 +180,25 @@ export const AssistantMessage = React.memo(function ({
   onOpenReasoning,
   onFetchOutput,
   chatId,
+  onOpenPlan,
+  onOpenFileDiff,
 }: {
   entry: MessageEntry;
   phase: string;
   onOpenReasoning: (text: string) => void;
   onFetchOutput?: (partId: string) => void;
   chatId?: string;
+  onOpenPlan?: (name: string, markdown: string) => void;
+  onOpenFileDiff?: (file: TurnChange) => void;
 }) {
   const theme = useTheme();
   const streaming = entry.status === 'streaming';
   const items = useMemo(() => groupParts(entry.parts), [entry.parts]);
+  const plan = useMemo(() => detectPlanArtifact(entry), [entry]);
+  const files = useMemo(
+    () => (isCompleteAssistant(entry) ? turnChanges(entry) : []),
+    [entry],
+  );
   const lastTextId = [...entry.parts]
     .reverse()
     .find(p => p.kind === 'text')?.id;
@@ -239,6 +254,15 @@ export const AssistantMessage = React.memo(function ({
             <Text style={[styles.error, { color: theme.danger }]}>
               {t('session.interrupted')}
             </Text>
+          ) : null}
+          {plan !== undefined ? (
+            <PlanCard
+              plan={plan}
+              onOpen={() => onOpenPlan?.(plan.name, plan.markdown)}
+            />
+          ) : null}
+          {files.length > 0 && onOpenFileDiff !== undefined ? (
+            <TurnChangesCard files={files} onOpenFile={onOpenFileDiff} />
           ) : null}
         </View>
       </ContextMenu.Trigger>
