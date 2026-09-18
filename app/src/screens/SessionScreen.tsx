@@ -73,6 +73,7 @@ import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
+import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
 import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
@@ -335,6 +336,7 @@ export function SessionScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
     name: string;
     markdown: string;
@@ -530,6 +532,14 @@ export function SessionScreen({
                 </DropdownMenu.ItemTitle>
               </DropdownMenu.Item>
               <DropdownMenu.Item
+                key="subagents"
+                onSelect={() => setSubagentsOpen(true)}
+              >
+                <DropdownMenu.ItemTitle>
+                  {t('session.subagents')}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
                 key="changes"
                 onSelect={() => setToolOverlay('changes')}
               >
@@ -713,6 +723,13 @@ export function SessionScreen({
             setDetailsOpen(false);
             onRename();
           }}
+        />
+      ) : null}
+
+      {subagentsOpen ? (
+        <SubagentsSheet
+          entries={entries}
+          onDismiss={() => setSubagentsOpen(false)}
         />
       ) : null}
 

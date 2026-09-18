@@ -28,9 +28,11 @@ import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { detectPlanArtifact, isPlanToolPart } from './detectPlan';
+import { isSubagentSpawn, subagentView } from './detectSubagent';
 import { isCompleteAssistant, turnChanges } from './turnChanges';
 import type { TurnChange } from './turnChanges';
 import { PlanCard } from './PlanCard';
+import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
@@ -42,11 +44,22 @@ const groupParts = (parts: MessagePart[]): Item[] => {
   const items: Item[] = [];
   let run: ToolPart[] = [];
   const flush = () => {
-    // `todo` calls render as a TaskRows list instead of inside the rail.
-    const todos = run.filter(p => p.call.kind === 'todo');
-    const rest = run.filter(p => p.call.kind !== 'todo');
-    for (const p of todos) items.push({ kind: 'part', part: p });
-    if (rest.length > 0) items.push({ kind: 'tools', parts: rest });
+    // Todos and subagent spawns render as their own blocks, in doc order.
+    // Remaining consecutive tools stay in one ToolActivity rail.
+    let tools: ToolPart[] = [];
+    const flushTools = () => {
+      if (tools.length > 0) items.push({ kind: 'tools', parts: tools });
+      tools = [];
+    };
+    for (const p of run) {
+      if (p.call.kind === 'todo' || isSubagentSpawn(p)) {
+        flushTools();
+        items.push({ kind: 'part', part: p });
+      } else {
+        tools.push(p);
+      }
+    }
+    flushTools();
     run = [];
   };
   for (const part of parts) {
@@ -168,6 +181,8 @@ const PartView = ({
             }
           />
         );
+      if (isSubagentSpawn(part))
+        return <SubAgentCard view={subagentView(part)} />;
       return <ToolActivity parts={[part]} onFetchOutput={onFetchOutput} />;
     default:
       return null;
