@@ -67,7 +67,7 @@ export const bindPushNotifications = (deps: BindPushDeps): (() => void) => {
     resp => openFrom(resp.notification.request.content.data),
   );
 
-  void Notifications.getLastNotificationResponseAsync()
+  Notifications.getLastNotificationResponseAsync()
     .then(resp => {
       if (cancelled || resp === null) return;
       openFrom(resp.notification.request.content.data);
@@ -105,7 +105,7 @@ export const bindPushNotifications = (deps: BindPushDeps): (() => void) => {
       unregister();
       return;
     }
-    void (async () => {
+    (async () => {
       const perm = await Notifications.requestPermissionsAsync();
       if (cancelled || perm.status !== 'granted') return;
       const tok = await Notifications.getDevicePushTokenAsync();

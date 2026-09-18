@@ -29,8 +29,8 @@ logic:
   thresholds, catalog toggles.
 - **Navigation logic**: `layoutFor`, deep-link parsing, redacted logging.
 - **Edge patches**: AASA + PKCE + APNs producer (Live Activity + finish
-  banners) — 59/59 vitest in the edge worktree (deployment still required;
-  see below).
+  banners) — 14 live-activity unit tests in the patch files (was 8);
+  full edge `test:unit` still needs the worktree. Deployment required.
 - **Relay session mode** (Loro-free, host-authoritative): transcript delta
   reducer ported from `transcript_delta.rs`, `WatchDocMessages`/`WatchQueue`/
   `QueueCommand` over the device relay — e2e 11–13 verify

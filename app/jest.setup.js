@@ -200,6 +200,11 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 0, Medium: 1, Heavy: 2 },
   NotificationFeedbackType: { Success: 0, Warning: 1, Error: 2 },
 }));
+jest.mock('expo-linking', () => ({
+  getInitialURL: jest.fn(() => Promise.resolve(null)),
+  addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  parse: jest.fn(() => ({ path: '', queryParams: {} })),
+}));
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
   addNotificationResponseReceivedListener: jest.fn(() => ({
