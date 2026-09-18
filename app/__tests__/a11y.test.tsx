@@ -173,7 +173,6 @@ test('model picker: search, provider groups, and sandbox are labelled', async ()
         config: { harness: 'claude', modelOptions: {} },
       }}
       phase="idle"
-      hasMessages={false}
       onClose={() => {}}
     />,
   );

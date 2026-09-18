@@ -50,7 +50,7 @@ export function ComposerChromeRow({
           onPress={onOpenPr}
           accessibilityRole="button"
           accessibilityLabel={t(
-            pr.label === 'viewPrDraft' ? 'pr.viewDraft' : 'pr.view',
+            pr.label === 'viewPrDraft' ? 'pr.viewDraftA11y' : 'pr.viewA11y',
           )}
         >
           <Glass style={styles.pill}>
