@@ -3,7 +3,7 @@
 Honest three-bucket summary as of 2026-09-18 (`f6b39a9` + uncommitted stage
 work). Row-level detail with exact statuses:
 [PARITY.md](PARITY.md) — **verified 42 · implemented-unverified 25 ·
-requires-host-edge-change 4 · blocked 7 · not-started 15**. Evidence:
+requires-host-edge-change 6 · blocked 7 · not-started 15**. Evidence:
 [evidence/](evidence/).
 
 ## Implemented and tested (`verified`)
@@ -28,8 +28,9 @@ logic:
   client (replay/resume, 12ms coalesce, 80ms debounce), accounts usage
   thresholds, catalog toggles.
 - **Navigation logic**: `layoutFor`, deep-link parsing, redacted logging.
-- **Edge patches**: AASA + PKCE + APNs producer — 53/53 vitest in the edge
-  worktree (deployment still required; see below).
+- **Edge patches**: AASA + PKCE + APNs producer (Live Activity + finish
+  banners) — 59/59 vitest in the edge worktree (deployment still required;
+  see below).
 - **Relay session mode** (Loro-free, host-authoritative): transcript delta
   reducer ported from `transcript_delta.rs`, `WatchDocMessages`/`WatchQueue`/
   `QueueCommand` over the device relay — e2e 11–13 verify
@@ -73,6 +74,8 @@ Needs a Mac build, a device, or a host in the right state:
   a WorkOS-registered app id.
 - Live Activity pushes + push registration routes — same patch + `APNS_*`
   credentials.
+- Finish-banner alerts when a run completes — patch `0002-*` + same
+  `APNS_*` credentials.
 
 ## Blocked (`blocked`)
 
@@ -92,7 +95,7 @@ Needs a Mac build, a device, or a host in the right state:
 ## Not started (`not-started`)
 
 Queue edit leases · setChatActivity/setChatHost · review comments ·
-change-request badge · notification banners + sounds · appearance/theme
+change-request badge · session sounds · appearance/theme
 library · in-app browser pane · widgets/composer/files settings pages ·
 image viewer/lightbox · transcript attachment thumbnails · workspace
 `zeron-file:` links · new-thread background effects · Watch\*/queue-admin RPC

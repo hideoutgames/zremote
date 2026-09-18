@@ -25,8 +25,9 @@ export interface Env {
   /** iOS universal-link app ids ("TEAMID.bundle"), comma-separated — serves
    * /.well-known/apple-app-site-association when set. */
   IOS_APP_IDS?: string;
-  /** APNs Live Activity producer (all required together; unset ⇒ the
-   * producer is inert and /live-activity routes still work). */
+  /** APNs producer — Live Activities + finish-banner alerts (all required
+   * together; unset ⇒ the producer is inert and /live-activity routes
+   * still work). */
   APNS_ENV?: string; // "production" | "sandbox"
   APNS_BUNDLE_ID?: string;
   APNS_TEAM_ID?: string;

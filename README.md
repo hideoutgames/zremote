@@ -75,9 +75,10 @@ unset (Nitro requires static linking).
   [docs/HOST_EDGE_CHANGES.md](docs/HOST_EDGE_CHANGES.md)). Without it,
   `zeron://` custom-scheme sign-in still works; the https universal-link
   callback does not.
-- **APNs**: needed only for Live Activity push updates — the `APNS_TEAM_ID` /
-  `APNS_KEY_ID` / `APNS_P8` / `APNS_BUNDLE_ID` / `APNS_ENV` secrets documented
-  in `docs/HOST_EDGE_CHANGES.md`. Foreground polling works without them.
+- **APNs**: needed for Live Activity push updates and finish-banner
+  alerts — the `APNS_TEAM_ID` / `APNS_KEY_ID` / `APNS_P8` /
+  `APNS_BUNDLE_ID` / `APNS_ENV` secrets documented in
+  `docs/HOST_EDGE_CHANGES.md`. Foreground polling works without them.
 - **App Group**: `group.<bundleId>` for the Live Activity extension.
 
 ## Windows development loop

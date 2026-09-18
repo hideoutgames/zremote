@@ -72,7 +72,10 @@ when the app returns to the foreground each open room re-hellos with its
 persisted cursor and reconciles (rows since cursor, checkpoint if the frontier
 is not contained). Live Activities are updated by APNs pushes produced host/edge
 side (see `docs/HOST_EDGE_CHANGES.md`); the app only registers per-activity
-push tokens and deep-links back to the exact session.
+push tokens and deep-links back to the exact session. Finish banners are
+separate APNs **alert** pushes on a native device token (`kind: "alert"`):
+the app registers the token, suppresses the banner when that thread is
+already on screen, and opens `zeron://session/{chatId}` on tap.
 
 ## Navigation and adaptive layout
 

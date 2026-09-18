@@ -4,7 +4,7 @@ Patches live in `patches/zeron-edge/` (`*.patch` from
 `git format-patch 853872d` on branch `zremote-edge-patches`, worktree
 `../_ref/zeron-edge-patch`; full file copies under `files/` for
 readability). Apply to a zeron edge deployment at revision 853872d
-(v0.2.72). Unit tests: `cd edge && npm run test:unit` (53 tests incl. the
+(v0.2.72). Unit tests: `cd edge && npm run test:unit` (59 tests incl. the
 new `live-activity` + `edge-patches` suites; workerd pool not run on
 Windows).
 
@@ -26,12 +26,14 @@ public-client PKCE flow on iOS (no client secret on the phone). Without it,
 HTTPS-callback sign-in fails PKCE validation; paste-code sign-in still works.
 
 ## 3. Live Activity push producer — `edge/src/registry-room.ts` +
+
 `edge/src/live-activity.ts` + routes in `index.ts`
 
 The per-user RegistryRoom DO gains:
 
 - Table `live_activity_tokens(chat_id, token, kind, device, updated_at)` —
-  scoped to the owning user's registry by construction.
+  scoped to the owning user's registry by construction. `kind` is
+  `activity`, `push_to_start`, or `alert`.
 - `PUT`/`DELETE /live-activity` (same auth shape as `/registry/*`: org claim
   check at the Worker, `x-zeron-auth-user` at the DO).
 - On every applied op batch: `sessions` rows whose `status` changed push a
@@ -50,6 +52,37 @@ The per-user RegistryRoom DO gains:
   cached ≤50min. Endpoint `api.push.apple.com`, or sandbox with
   `APNS_ENV=sandbox`. Topic `${APNS_BUNDLE_ID}.push-type.liveactivity`.
 
+## 4. Alert banners when a run finishes — same files as §3
+
+The phone has no background socket, so finish banners cannot be local.
+On the same `sessions` status-change path:
+
+- `kind: "alert"` tokens (`chatId: "*"`) are native APNs device tokens
+  registered by `expo-notifications` (`getDevicePushTokenAsync`). They
+  are not ActivityKit tokens and cannot share the liveactivity topic.
+- A flip `working`/`awaitingInput` → `idle`, or any flip to `errored`,
+  sends `apns-push-type: alert` to every `alert` token on that user's
+  registry. Topic is `${APNS_BUNDLE_ID}` (no `.push-type.liveactivity`
+  suffix). Priority 10. Payload:
+
+```json
+{
+  "aps": {
+    "alert": { "title": "<chat title>", "body": "Run completed" },
+    "sound": "default",
+    "thread-id": "<chatId>"
+  },
+  "chatId": "<chatId>",
+  "url": "zeron://session/<chatId>"
+}
+```
+
+`errored` uses body `"Run failed"`. No prompt or message text.
+
+- First-seen `idle` (no previous working/awaitingInput) does not notify.
+- Same JWT, host, prune-on-`BadDeviceToken`/410 as Live Activities.
+  Inert without `APNS_*`.
+
 Env/secrets: `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`,
 `APNS_P8` (PKCS8 PEM), `APNS_ENV` (`sandbox` optional). Everything is gated
 on the secrets being set — without them the producer is inert and the
@@ -60,6 +93,7 @@ registry routes still answer.
 ```sh
 cd <edge checkout>
 git am <zremote>/patches/zeron-edge/0001-*.patch
+git am <zremote>/patches/zeron-edge/0002-*.patch
 wrangler secret put APNS_P8        # PKCS8 PEM
 wrangler secret put APNS_KEY_ID
 wrangler secret put APNS_TEAM_ID
@@ -74,3 +108,4 @@ npm run test:unit && wrangler deploy
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
 - Live Activities still render locally while the app is foregrounded; only
   APNs-driven updates/start are missing.
+- Finish-banner alerts are missing (no `kind: "alert"` producer).

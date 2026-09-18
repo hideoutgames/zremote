@@ -1,0 +1,371 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hideoutgames <154709155+hideoutgames@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 21:20:00 +0000
+Subject: [PATCH] edge: APNs alert banners when a session finishes
+
+Register kind=alert device tokens on the existing /live-activity route
+and send apns-push-type:alert when sessions.status returns to idle after
+working/awaitingInput (or flips to errored). Reuses the Live Activity
+APNs JWT. Inert without APNS_* secrets.
+---
+diff --git a/edge/src/live-activity.ts b/edge/src/live-activity.ts
+index 1111111..2222222 100644
+--- a/edge/src/live-activity.ts
++++ b/edge/src/live-activity.ts
+@@ -1,7 +1,10 @@
+ /**
+- * APNs Live Activity push producer (zremote iOS client) — ES256 JWT auth,
+- * update/end/start payloads, and the expo-widgets content-state shape
+- * (`{name, props}` — props is a JSON string decoded by the widget).
++ * APNs producer (zremote iOS client) — ES256 JWT auth, Live Activity
++ * update/end/start payloads, and alert banners when a run finishes.
++ *
++ * Live Activity content-state is expo-widgets' `{name, props}` (props is a
++ * JSON string decoded by the widget). Alert pushes use `apns-push-type:
++ * alert` on a device token (`kind: "alert"`), not an ActivityKit token.
+  *
+  * Everything here is inert until APNS_TEAM_ID/APNS_KEY_ID/APNS_P8/
+  * APNS_BUNDLE_ID are configured (wrangler secrets); callers gate on
+@@ -126,27 +129,47 @@
+   | { ok: true }
+   | { ok: false; status: number; reason: string };
+ 
+-/** POST one Live Activity push to APNs for a device token. */
+-export const sendLiveActivityPush = async (
++/** True when a sessions.status flip means the agent finished a turn. */
++export const isRunFinished = (
++  prevStatus: string | undefined,
++  status: string
++): boolean =>
++  (status === "idle" &&
++    (prevStatus === "working" || prevStatus === "awaitingInput")) ||
++  status === "errored";
++
++export type AlertPushProps = {
++  chatId: string;
++  title: string;
++  body: string;
++};
++
++/** User-visible banner. No prompt/message text — title is the chat title. */
++export const buildAlertPayload = (
++  props: AlertPushProps
++): Record<string, unknown> => ({
++  aps: {
++    alert: { title: props.title, body: props.body },
++    sound: "default",
++    "thread-id": props.chatId
++  },
++  chatId: props.chatId,
++  url: `zeron://session/${props.chatId}`
++});
++
++const postApns = async (
+   env: Env,
+   deviceToken: string,
+-  event: LiveActivityEvent,
+-  props: SessionPushProps,
+-  now = Date.now(),
+-  fetchImpl: typeof fetch = fetch
++  headers: Record<string, string>,
++  body: Record<string, unknown>,
++  now: number,
++  fetchImpl: typeof fetch
+ ): Promise<ApnsResult> => {
+   const jwt = await apnsJwt(env, now);
+   const res = await fetchImpl(`${apnsHost(env)}/3/device/${deviceToken}`, {
+     method: "POST",
+-    headers: {
+-      authorization: `bearer ${jwt}`,
+-      "apns-push-type": "liveactivity",
+-      "apns-topic": `${env.APNS_BUNDLE_ID}.push-type.liveactivity`,
+-      "apns-priority": String(
+-        event === "update" ? priorityFor(props.phase) : 10
+-      )
+-    },
+-    body: JSON.stringify(buildLiveActivityPayload(event, props, now))
++    headers: { authorization: `bearer ${jwt}`, ...headers },
++    body: JSON.stringify(body)
+   });
+   if (res.ok) return { ok: true };
+   let reason = "";
+@@ -157,3 +180,48 @@
+   }
+   return { ok: false, status: res.status, reason };
+ };
++
++/** POST one Live Activity push to APNs for a device token. */
++export const sendLiveActivityPush = async (
++  env: Env,
++  deviceToken: string,
++  event: LiveActivityEvent,
++  props: SessionPushProps,
++  now = Date.now(),
++  fetchImpl: typeof fetch = fetch
++): Promise<ApnsResult> =>
++  postApns(
++    env,
++    deviceToken,
++    {
++      "apns-push-type": "liveactivity",
++      "apns-topic": `${env.APNS_BUNDLE_ID}.push-type.liveactivity`,
++      "apns-priority": String(
++        event === "update" ? priorityFor(props.phase) : 10
++      )
++    },
++    buildLiveActivityPayload(event, props, now),
++    now,
++    fetchImpl
++  );
++
++/** POST one alert banner to APNs for a native device token (`kind: "alert"`). */
++export const sendAlertPush = async (
++  env: Env,
++  deviceToken: string,
++  props: AlertPushProps,
++  now = Date.now(),
++  fetchImpl: typeof fetch = fetch
++): Promise<ApnsResult> =>
++  postApns(
++    env,
++    deviceToken,
++    {
++      "apns-push-type": "alert",
++      "apns-topic": env.APNS_BUNDLE_ID as string,
++      "apns-priority": "10"
++    },
++    buildAlertPayload(props),
++    now,
++    fetchImpl
++  );
+diff --git a/edge/src/live-activity.test.ts b/edge/src/live-activity.test.ts
+index 1111111..2222222 100644
+--- a/edge/src/live-activity.test.ts
++++ b/edge/src/live-activity.test.ts
+@@ -1,8 +1,11 @@
+ import { describe, expect, it, vi, beforeEach } from "vitest";
+ import {
+   apnsConfigured,
++  buildAlertPayload,
+   buildLiveActivityPayload,
++  isRunFinished,
+   resetApnsJwtCache,
++  sendAlertPush,
+   sendLiveActivityPush,
+   APNS_HOSTS
+ } from "./live-activity";
+@@ -133,3 +136,103 @@
+     expect(h1.authorization).toBe(h2.authorization);
+   });
+ });
++
++describe("isRunFinished", () => {
++  it("is true for working/awaitingInput → idle and for errored", () => {
++    expect(isRunFinished("working", "idle")).toBe(true);
++    expect(isRunFinished("awaitingInput", "idle")).toBe(true);
++    expect(isRunFinished("working", "errored")).toBe(true);
++    expect(isRunFinished(undefined, "errored")).toBe(true);
++  });
++
++  it("is false for still-running and first-seen idle", () => {
++    expect(isRunFinished("idle", "working")).toBe(false);
++    expect(isRunFinished("working", "awaitingInput")).toBe(false);
++    expect(isRunFinished("awaitingInput", "working")).toBe(false);
++    expect(isRunFinished(undefined, "idle")).toBe(false);
++    expect(isRunFinished("idle", "idle")).toBe(false);
++  });
++});
++
++describe("buildAlertPayload", () => {
++  it("carries aps.alert + thread-id + deep link, no message text", () => {
++    const p = buildAlertPayload({
++      chatId: "c1",
++      title: "Fix bug",
++      body: "Run completed"
++    }) as {
++      aps: {
++        alert: { title: string; body: string };
++        sound: string;
++        "thread-id": string;
++      };
++      chatId: string;
++      url: string;
++    };
++    expect(p.aps.alert).toEqual({ title: "Fix bug", body: "Run completed" });
++    expect(p.aps.sound).toBe("default");
++    expect(p.aps["thread-id"]).toBe("c1");
++    expect(p.chatId).toBe("c1");
++    expect(p.url).toBe("zeron://session/c1");
++  });
++});
++
++describe("sendAlertPush", () => {
++  let p8: string;
++  beforeEach(async () => {
++    resetApnsJwtCache();
++    const kp = (await crypto.subtle.generateKey(
++      { name: "ECDSA", namedCurve: "P-256" },
++      true,
++      ["sign"]
++    )) as CryptoKeyPair;
++    const der = (await crypto.subtle.exportKey("pkcs8", kp.privateKey)) as ArrayBuffer;
++    p8 = `-----BEGIN PRIVATE KEY-----\n${btoa(
++      String.fromCharCode(...new Uint8Array(der))
++    )}\n-----END PRIVATE KEY-----`;
++  });
++
++  const env = () => ({ ...envBase, APNS_P8: p8 }) as Env;
++  const alert = { chatId: "c1", title: "Fix bug", body: "Run completed" };
++
++  it("POSTs to production with alert headers and bundle-id topic", async () => {
++    const calls: { url: string; init: RequestInit }[] = [];
++    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
++      calls.push({ url: String(url), init: init as RequestInit });
++      return new Response("{}", { status: 200 });
++    });
++    const r = await sendAlertPush(env(), "devtoken", alert, 0, fetchImpl as typeof fetch);
++    expect(r.ok).toBe(true);
++    expect(calls[0].url).toBe(`${APNS_HOSTS.production}/3/device/devtoken`);
++    const h = calls[0].init.headers as Record<string, string>;
++    expect(h["apns-push-type"]).toBe("alert");
++    expect(h["apns-topic"]).toBe("com.zeron.app");
++    expect(h["apns-priority"]).toBe("10");
++    expect(h.authorization.startsWith("bearer ")).toBe(true);
++    const body = JSON.parse(calls[0].init.body as string) as {
++      aps: { alert: { body: string } };
++    };
++    expect(body.aps.alert.body).toBe("Run completed");
++  });
++
++  it("uses sandbox host via APNS_ENV", async () => {
++    const fetchImpl = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>(async () => new Response("{}", { status: 200 }));
++    await sendAlertPush(
++      { ...env(), APNS_ENV: "sandbox" } as Env,
++      "t",
++      { ...alert, body: "Run failed" },
++      0,
++      fetchImpl as typeof fetch
++    );
++    expect(String(fetchImpl.mock.calls[0][0])).toContain("api.sandbox.push.apple.com");
++  });
++
++  it("surfaces BadDeviceToken for pruning", async () => {
++    const fetchImpl = vi.fn(
++      async () =>
++        new Response(JSON.stringify({ reason: "BadDeviceToken" }), { status: 400 })
++    );
++    const r = await sendAlertPush(env(), "t", alert, 0, fetchImpl as typeof fetch);
++    expect(r).toEqual({ ok: false, status: 400, reason: "BadDeviceToken" });
++  });
++});
+diff --git a/edge/src/registry-room.ts b/edge/src/registry-room.ts
+index 1111111..2222222 100644
+--- a/edge/src/registry-room.ts
++++ b/edge/src/registry-room.ts
+@@ -23,6 +23,8 @@
+ import { AUTH_USER_HEADER, type Env } from "./env";
+ import {
+   apnsConfigured,
++  isRunFinished,
++  sendAlertPush,
+   sendLiveActivityPush,
+   type SessionPushProps
+ } from "./live-activity";
+@@ -253,6 +255,8 @@
+     if (url.pathname === "/live-activity" && request.method === "PUT") {
+       // iOS client token registration: {chatId, token, kind, device}.
+       // `chatId: "*"` + kind "push_to_start" is the per-user start token.
++      // `chatId: "*"` + kind "alert" is the native APNs device token used
++      // for finish banners (apns-push-type: alert).
+       let body: { chatId?: unknown; token?: unknown; kind?: unknown; device?: unknown };
+       try {
+         body = (await request.json()) as typeof body;
+@@ -262,7 +266,9 @@
+       if (
+         typeof body?.chatId !== "string" ||
+         typeof body?.token !== "string" ||
+-        (body?.kind !== "activity" && body?.kind !== "push_to_start") ||
++        (body?.kind !== "activity" &&
++          body?.kind !== "push_to_start" &&
++          body?.kind !== "alert") ||
+         typeof body?.device !== "string"
+       ) {
+         return json({ error: "bad_request" }, 400);
+@@ -530,13 +536,8 @@
+ 
+       // End event when the session returns to idle after working/
+       // awaitingInput; errored maps to 'end' too (final state, dismiss 30min).
+-      const event =
+-        status === "idle" &&
+-        (prevStatus === "working" || prevStatus === "awaitingInput")
+-          ? "end"
+-          : status === "errored"
+-            ? "end"
+-            : "update";
++      const finished = isRunFinished(prevStatus, status);
++      const event = finished ? "end" : "update";
+ 
+       // working → update throttled to 1/5s per chat.
+       if (
+@@ -574,6 +575,26 @@
+         const res = await sendLiveActivityPush(this.env, token, event, props, now);
+         if (!res.ok) await this.pruneBadToken(token, res);
+       }
++
++      // Alert banners (native device tokens). Independent of Live Activities
++      // so a backgrounded phone with no activity instance still gets a banner.
++      if (finished) {
++        const alertTokens = [
++          ...this.ctx.storage.sql.exec(
++            "SELECT token FROM live_activity_tokens WHERE kind = 'alert'"
++          )
++        ].map(r => r.token as string);
++        const body = status === "errored" ? "Run failed" : "Run completed";
++        for (const token of alertTokens) {
++          const res = await sendAlertPush(
++            this.env,
++            token,
++            { chatId, title: props.title, body },
++            now
++          );
++          if (!res.ok) await this.pruneBadToken(token, res);
++        }
++      }
+     }
+   }
+ 
+diff --git a/edge/src/env.ts b/edge/src/env.ts
+index 1111111..2222222 100644
+--- a/edge/src/env.ts
++++ b/edge/src/env.ts
+@@ -25,8 +25,9 @@
+   /** iOS universal-link app ids ("TEAMID.bundle"), comma-separated — serves
+    * /.well-known/apple-app-site-association when set. */
+   IOS_APP_IDS?: string;
+-  /** APNs Live Activity producer (all required together; unset ⇒ the
+-   * producer is inert and /live-activity routes still work). */
++  /** APNs producer — Live Activities + finish-banner alerts (all required
++   * together; unset ⇒ the producer is inert and /live-activity routes
++   * still work). */
+   APNS_ENV?: string; // "production" | "sandbox"
+   APNS_BUNDLE_ID?: string;
+   APNS_TEAM_ID?: string;
+diff --git a/edge/src/index.ts b/edge/src/index.ts
+index 1111111..2222222 100644
+--- a/edge/src/index.ts
++++ b/edge/src/index.ts
+@@ -350,10 +350,10 @@
+       if (parts[2] === "reset" && request.method === "POST") {
+         return forward(env.REGISTRY_ROOMS, room, request, auth.userId, "/reset", "");
+       }
+-      // iOS Live Activity push-token registry (the APNs producer lives in
+-      // the DO; see docs/HOST_EDGE_CHANGES.md). Same auth shape as every
+-      // /registry/* route — the org claim was checked above and the room is
+-      // the caller's own per-user registry.
++      // iOS push-token registry (Live Activity + alert banners; the APNs
++      // producer lives in the DO; see docs/HOST_EDGE_CHANGES.md). Same auth
++      // shape as every /registry/* route — the org claim was checked above
++      // and the room is the caller's own per-user registry.
+       if (
+         parts[2] === "live-activity" &&
+         (request.method === "PUT" || request.method === "DELETE")

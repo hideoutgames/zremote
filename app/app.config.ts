@@ -66,6 +66,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     // Live Activities are runtime-registered — no widgets[] entries here.
     ['expo-widgets', { enablePushNotifications: true }],
+    ['expo-notifications', { enableBackgroundRemoteNotifications: false }],
     './plugins/withPodfileMods',
     'expo-secure-store',
     'expo-web-browser',

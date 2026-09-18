@@ -57,7 +57,8 @@ Windows).
 ## What differs or doesn't
 
 - **Live Activities / APNs** — `expo-widgets` is shimmed; `start` throws
-  "not available in Expo Go" (the binding tolerates this).
+  "not available in Expo Go" (the binding tolerates this). Finish-banner
+  registration is skipped: Expo Go's device token is the wrong APNs topic.
 - **Dictation** — `zeron-dictation` needs Nitro; resolves to
   `dictationUnavailable`.
 - **Liquid Glass** — `@callstack/liquid-glass` → `expo-glass-effect`

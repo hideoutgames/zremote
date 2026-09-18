@@ -160,6 +160,15 @@ export function ZeronApp() {
   // ── Live Activities (iOS; expo-widgets) — lazily imported so the JS
   // bundle still loads where the pod/module is absent.
   const selectedChatRef = useRef<string | undefined>(undefined);
+  const onSelectedChat = useCallback((chatId: string | undefined) => {
+    selectedChatRef.current = chatId;
+  }, []);
+
+  const [requestedChat, setRequestedChat] = useState<string | null>(null);
+  const openSession = useCallback((chatId: string) => {
+    setRequestedChat(chatId);
+  }, []);
+
   useEffect(() => {
     // Demo mode never registers push tokens — no real-edge traffic.
     if (runtime === null || signedIn === undefined || demoActive) return;
@@ -179,6 +188,28 @@ export function ZeronApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runtime, signedIn?.orgId, demoActive]);
 
+  // Alert banners when a run finishes. Skip Expo Go (wrong APNs topic)
+  // and demo (no real edge).
+  useEffect(() => {
+    if (runtime === null || signedIn === undefined || demoActive || isExpoGo)
+      return;
+    let unbind: (() => void) | undefined;
+    import('../notifications/bindPushNotifications')
+      .then(m => {
+        unbind = m.bindPushNotifications({
+          edgeUrl: cfg.edgeUrl,
+          tokenSource: auth,
+          orgId: signedIn.orgId,
+          phoneDeviceId: runtime.deviceId,
+          selectedChatId: () => selectedChatRef.current,
+          openSession,
+        });
+      })
+      .catch(e => log.warn(`push notifications unavailable: ${e}`));
+    return () => unbind?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime, signedIn?.orgId, demoActive, openSession]);
+
   // ── AppState → foreground/background ──────────────────────────────────
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
@@ -190,14 +221,6 @@ export function ZeronApp() {
   }, [runtime]);
 
   // ── Deep links ─────────────────────────────────────────────────────────
-  const [requestedChat, setRequestedChat] = useState<string | null>(null);
-  const openSession = useCallback((chatId: string) => {
-    setRequestedChat(chatId);
-  }, []);
-  useEffect(() => {
-    selectedChatRef.current = requestedChat ?? undefined;
-  }, [requestedChat]);
-
   useEffect(() => {
     const handle = (url: string | null) => {
       if (url === null) return;
@@ -240,7 +263,13 @@ export function ZeronApp() {
   let body: React.ReactNode;
   if (status.state === 'signedOut') body = <SignInScreen />;
   else if (status.state === 'needsOrganization') body = <OrgGateScreen />;
-  else body = <AdaptiveShell requestedChat={requestedChat} />;
+  else
+    body = (
+      <AdaptiveShell
+        requestedChat={requestedChat}
+        onSelectedChat={onSelectedChat}
+      />
+    );
 
   return (
     <AppServicesContext.Provider value={services}>
