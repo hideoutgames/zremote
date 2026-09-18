@@ -23,4 +23,9 @@ Pod::Spec.new do |s|
   s.prepare_command = <<-CMD
     bash ../../scripts/fetch-loro-ffi.sh "#{__dir__}" || exit 1
   CMD
+  # Nitrogen-generated Swift<->C++ bridge + interop build settings
+  # (SWIFT_OBJC_INTEROP_MODE=objcxx, C++20). Without this the Swift target
+  # cannot import NitroModules ("'functional' file not found").
+  load File.join(__dir__, 'nitrogen/generated/ios/ReactNativeLoro+autolinking.rb')
+  add_nitrogen_files(s)
 end
