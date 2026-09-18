@@ -10,7 +10,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AccessibilityInfo,
   ActivityIndicator,
   AppState,
   type LayoutChangeEvent,
@@ -22,6 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  useReducedMotion,
   Easing,
   useAnimatedStyle,
   withTiming,
@@ -268,13 +268,15 @@ export const Composer = React.memo(function ({
   ]);
 
   const [stripContentHeight, setStripContentHeight] = useState(0);
+  // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
+  const reduceMotion = useReducedMotion();
   const stripStyle = useAnimatedStyle(() => ({
     height: withTiming(hasAttachments ? stripContentHeight : 0, {
-      duration: THUMBS_ANIM_MS,
+      duration: reduceMotion ? 0 : THUMBS_ANIM_MS,
       easing: Easing.inOut(Easing.ease),
     }),
     opacity: withTiming(hasAttachments ? 1 : 0, {
-      duration: THUMBS_ANIM_MS,
+      duration: reduceMotion ? 0 : THUMBS_ANIM_MS,
       easing: Easing.inOut(Easing.ease),
     }),
   }));
@@ -285,12 +287,6 @@ export const Composer = React.memo(function ({
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
   const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then(setReduceMotion)
-      .catch(() => {});
-  }, []);
 
   return (
     <View
@@ -420,6 +416,10 @@ export const Composer = React.memo(function ({
               question !== undefined ? styles.inputDimmed : undefined,
             ]}
             multiline
+            accessibilityLabel={t('session.messagePlaceholder')}
+            // Cmd+Enter: RN 0.86 onKeyPress exposes key but no modifier
+            // flags on iOS — handled in the parent where available; the
+            // modifier gap is documented in docs/ARCHITECTURE.md.
           />
 
           {/* ── Hairline tier separator ────────────────────────────────── */}
@@ -473,6 +473,8 @@ export const Composer = React.memo(function ({
               style={styles.modelBtn}
               onPress={onOpenModelPicker}
               hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={modelLabel}
             >
               <Text
                 style={[styles.modelText, { color: theme.textSecondary }]}
@@ -488,7 +490,15 @@ export const Composer = React.memo(function ({
             </Pressable>
 
             {session.queue.length > 0 ? (
-              <Pressable onPress={onOpenQueue} hitSlop={6}>
+              <Pressable
+                onPress={onOpenQueue}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('session.queue')} (${
+                  session.queue.length
+                })`}
+                style={styles.minTarget}
+              >
                 <Text style={[styles.queueBadge, { color: theme.accent }]}>
                   {session.queue.length}
                 </Text>
@@ -499,7 +509,12 @@ export const Composer = React.memo(function ({
               onPress={toggleDictation}
               disabled={!dictationSupported}
               hitSlop={6}
+              accessibilityRole="button"
               accessibilityLabel={t('composer.dictate')}
+              accessibilityState={{
+                disabled: !dictationSupported,
+                busy: dictating,
+              }}
               accessibilityHint={
                 dictationSupported
                   ? undefined
@@ -534,6 +549,23 @@ export const Composer = React.memo(function ({
                 (right === 'send' && action.primary !== 'send')
               }
               hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={
+                right === 'stop'
+                  ? t('session.stop')
+                  : right === 'stopping'
+                  ? t('session.stopping')
+                  : right === 'cancel'
+                  ? t('session.cancel')
+                  : t('session.send')
+              }
+              accessibilityState={{
+                disabled:
+                  right === 'stopping' ||
+                  (right === 'send' && action.primary !== 'send'),
+                busy: right === 'stopping',
+              }}
+              style={styles.minTarget}
             >
               <Glass interactive style={styles.circle}>
                 {right === 'stopping' ? (
@@ -611,6 +643,12 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     opacity: 0.4,
     marginHorizontal: 14,
+  },
+  minTarget: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   circle: {
     width: CIRCLE,

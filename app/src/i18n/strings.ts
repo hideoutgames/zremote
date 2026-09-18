@@ -92,6 +92,47 @@ const en = {
   'session.submit': 'Submit',
   'session.working': 'Working',
   'session.queuedLocally': 'Queued',
+  'session.changes': 'Changes',
+  'session.files': 'Files',
+  'session.terminalNextBuild': 'Terminal — next build',
+
+  // Inspector (iPad)
+  'inspector.changes': 'Changes',
+  'inspector.files': 'Files',
+  'inspector.terminal': 'Terminal — next build',
+  'inspector.terminalPlaceholder': 'Terminal — next build',
+  'inspector.noSession': 'Select a session',
+  'inspector.toggle': 'Toggle inspector',
+  'sidebar.toggle': 'Toggle sidebar',
+
+  // Changes
+  'changes.preparing': 'Waiting for the host diff…',
+  'changes.clean': 'Working tree is clean',
+  'changes.error': 'Diff failed',
+  'changes.copyPath': 'Copy path',
+  'changes.copyPatch': 'Copy patch',
+  'changes.truncated': 'Diff truncated by the host',
+
+  // Files
+  'files.search': 'Search files…',
+  'files.showIgnored': 'Show ignored files',
+  'files.hideIgnored': 'Hide ignored files',
+  'files.trustBoundary':
+    'Ignored files stay on the host — they are never synced to this device.',
+  'files.empty': 'No files',
+  'files.unsaved': 'Unsaved changes',
+  'files.save': 'Save',
+  'files.reload': 'Reload',
+  'files.overwrite': 'Overwrite',
+  'files.conflict': 'File changed on host — reload or overwrite?',
+  'files.lines': 'lines',
+  'files.readOnly': 'Read-only',
+
+  // Accessibility announcements
+  'session.overflow': 'More actions',
+  'session.announce.awaitingInput': 'The agent needs your input',
+  'session.announce.completed': 'Run completed',
+  'session.announce.errored': 'Run failed',
   'session.synchronized': 'Sent',
   'session.stale': 'Connection lost',
   'session.errored': 'Error',

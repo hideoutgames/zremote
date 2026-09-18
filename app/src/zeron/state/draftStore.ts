@@ -163,8 +163,7 @@ export const restoreFailedSend = (chatId: string, text: string): void => {
   patchDraft(chatId, { text: merged });
 };
 
+const EMPTY_DRAFT: Draft = { text: '', attachments: [], updatedAt: 0 };
+
 export const useDraft = (chatId: string): Draft =>
-  useStore(
-    draftStore,
-    s => s.byChat[chatId] ?? { text: '', attachments: [], updatedAt: 0 },
-  );
+  useStore(draftStore, s => s.byChat[chatId] ?? EMPTY_DRAFT);

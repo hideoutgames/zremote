@@ -73,3 +73,61 @@ persisted cursor and reconciles (rows since cursor, checkpoint if the frontier
 is not contained). Live Activities are updated by APNs pushes produced host/edge
 side (see `docs/HOST_EDGE_CHANGES.md`); the app only registers per-activity
 push tokens and deep-links back to the exact session.
+
+## Navigation and adaptive layout
+
+`src/navigation/AdaptiveShell.tsx` is the app's root container (replaces the
+bare pager in `ZeronApp`). `layoutFor(width, prefs)` (pure, unit-tested) maps
+window width to a plan:
+
+- **< 700pt** → `compact`: the original `RootPager` (Home ↔ Session).
+- **≥ 700pt** → `regular`: Sidebar (`HomeScreen` at 300–360pt) + Detail
+  (`SessionScreen`) + optional Inspector (360–480pt). The inspector appears
+  at ≥1100pt or when toggled from the session header; tabs are Changes /
+  Files / a disabled "Terminal — next build" placeholder (removed in 8b).
+  Transcript and composer are capped at ~720pt and centered.
+
+Selection (`chatId`), sidebar collapse, inspector tab and drafts persist
+across size-class changes because they live in the shell or the stores, not
+in the column tree. `SessionScreen` stays mounted while columns toggle; the
+compact pager's `Freeze` only applies when the session page is not visible.
+
+On iPhone the session overflow menu opens Changes / Files as overlays; the
+Terminal row is visible but disabled.
+
+**Hardware keyboard gaps:** RN 0.86's `TextInput.onKeyPress` reports `key`
+but exposes no modifier flags on iOS, so Cmd+Enter cannot be distinguished
+from Enter in JS — documented gap; Escape-to-dismiss sheets is likewise not
+reachable from JS and is deferred to the native split-view stage. Sheet
+dismissal relies on TrueSheet's grabber / `Modal`'s own iPad Esc handling.
+
+**Popover anchoring:** `@lodev09/react-native-true-sheet` has no iPad popover
+anchoring — its `anchor`/`anchorOffset` props only center/align the sheet on
+web. So on regular width `ModelPickerSheet` renders inside a `Modal` with
+`presentationStyle="formSheet"`; checkout selection already uses a Zeego
+dropdown (popover-anchored natively).
+
+## Workspace tools (Changes / Files)
+
+Both are thin screens over host-relayed RPCs — nothing runs on the phone.
+
+- **Changes** (`screens/ChangesScreen.tsx`, `components/agentsKit/FileDiff.tsx`,
+  `zeron/diff/`): `WatchCheckoutDiffs` stream (Vec<CheckoutDiff>) filtered to
+  the chat's `checkoutId` (falling back to `cwd` match), plus one-shot
+  `GetCheckoutDiff` / `GetCheckoutFileDiffText` for expansion. States mirror
+  the desktop pane: preparing / clean / error / summary rows. Wire shapes:
+  `crates/proto/src/entities.rs` L657-746 (`CheckoutDiff`,
+  `DiffFileSummary`, `CheckoutFileDiffText`), dispatch
+  `crates/engine/src/rpc.rs` ~L1639-1730. No commit/stage RPCs exist, so the
+  screen offers none (copy path / copy patch only — and Clipboard is still
+  not a dependency, so copy shows an Alert, same gap as `session.copyId`).
+- **Files** (`screens/FilesScreen.tsx`, `screens/FileEditorScreen.tsx`,
+  `zeron/files/filesClient.ts`): `ListWorkspaceDirectory` (+ `includeIgnored`
+  toggle; `.git` is never listed — filtered host-side and client-side),
+  debounced `SearchWorkspaceFiles`, `ReadWorkspaceFile` → monospace editor,
+  `ReadWorkspaceImage` chunked base64 → `NitroImage`, `WriteWorkspaceFile`
+  with `expectedCheckoutId` + `expectedContentHash` (conflict → "File
+  changed on host — reload or overwrite?"), `WatchWorkspaceFiles` refreshes
+  the listing and honors `resyncRequired`. Shapes:
+  `crates/proto/src/entities.rs` L384-640; dispatch `rpc.rs` ~L2089-2144.
+  Path-jail errors surface verbatim.

@@ -347,3 +347,138 @@ export interface QueuedMessage {
   editedAt?: number;
   deliveryGate?: QueueDeliveryGate;
 }
+
+// ── Workspace files + checkout diffs (crates/proto/src/entities.rs L384-640) ─
+
+/** targets a checkout by chatId | spaceId | checkoutPath (L384). */
+export interface WorkspaceTarget {
+  chatId?: string;
+  spaceId?: string;
+  checkoutPath?: string;
+}
+
+export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink';
+
+export interface WorkspaceEntry {
+  path: string;
+  name: string;
+  kind: WorkspaceEntryKind;
+  size?: number;
+  modifiedAt?: string;
+  ignored: boolean;
+  readOnly: boolean;
+}
+
+export interface WorkspaceDirectoryPage {
+  directory: string;
+  entries: WorkspaceEntry[];
+  nextCursor?: string;
+  truncated: boolean;
+}
+
+export interface WorkspaceFileSearchMatch {
+  path: string;
+  name: string;
+  kind: WorkspaceEntryKind;
+  score: number;
+}
+
+export type WorkspaceTextEncoding =
+  | 'utf8'
+  | 'utf8Bom'
+  | 'binary'
+  | 'unsupported';
+export type WorkspaceLineEnding = 'lf' | 'crlf' | 'mixed' | 'none';
+export type WorkspaceReadOnlyReason =
+  | 'binary'
+  | 'unsupportedEncoding'
+  | 'mixedLineEndings'
+  | 'symlink'
+  | 'tooLarge'
+  | 'permissionDenied'
+  | 'notRegularFile';
+
+export interface WorkspaceFileText {
+  checkoutId: string;
+  path: string;
+  text?: string;
+  contentHash?: string;
+  size: number;
+  modifiedAt?: string;
+  encoding: WorkspaceTextEncoding;
+  lineEnding?: WorkspaceLineEnding;
+  readOnlyReason?: WorkspaceReadOnlyReason;
+  truncated: boolean;
+}
+
+export interface WorkspaceImageChunk {
+  checkoutId: string;
+  contentHash: string;
+  mimeType: string;
+  data: string;
+  nextOffset: number;
+  size: number;
+  done: boolean;
+}
+
+export type WriteWorkspaceFileOutcome =
+  | {
+      status: 'written';
+      file: {
+        path: string;
+        contentHash: string;
+        size: number;
+        modifiedAt?: string;
+      };
+    }
+  | {
+      status: 'conflict';
+      reason: 'changed' | 'deleted' | 'replaced' | 'notRegularFile';
+      currentContentHash?: string;
+      currentModifiedAt?: string;
+    };
+
+export interface WorkspaceFileChanges {
+  sequence: number;
+  resyncRequired: boolean;
+  changes: {
+    kind: 'created' | 'modified' | 'removed' | 'renamed';
+    path: string;
+    oldPath?: string;
+  }[];
+}
+
+// ── Checkout diffs (entities.rs L640-746) ────────────────────────────────────
+
+export interface DiffFileSummary {
+  path: string;
+  oldPath?: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  binary: boolean;
+}
+
+export interface CheckoutDiff {
+  checkoutId: string;
+  deviceId: string;
+  cwd: string;
+  patch: string;
+  files: DiffFileSummary[];
+  additions: number;
+  deletions: number;
+  truncated: boolean;
+  checksum: string;
+  updatedAt: string;
+}
+
+export interface CheckoutFileDiffText {
+  diffChecksum: string;
+  oldText?: string;
+  newText?: string;
+  oldContentHash?: string;
+  newContentHash?: string;
+  binary: boolean;
+  truncated: boolean;
+  stale: boolean;
+}

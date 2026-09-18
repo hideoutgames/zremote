@@ -77,6 +77,9 @@ export const QuestionPanel = React.memo(function ({
                 <Pressable
                   key={option}
                   onPress={() => toggle(q, option)}
+                  accessibilityRole="button"
+                  accessibilityLabel={option}
+                  accessibilityState={{ selected }}
                   style={[
                     styles.option,
                     { borderColor: selected ? theme.accent : theme.border },
@@ -100,6 +103,9 @@ export const QuestionPanel = React.memo(function ({
       <Pressable
         onPress={submit}
         disabled={!complete}
+        accessibilityRole="button"
+        accessibilityLabel={t('session.submit')}
+        accessibilityState={{ disabled: !complete }}
         style={[
           styles.submit,
           { backgroundColor: complete ? theme.accent : theme.border },

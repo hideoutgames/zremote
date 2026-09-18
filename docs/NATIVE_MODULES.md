@@ -6,11 +6,11 @@ surfaces and has never been compiled. First build happens on a Mac.
 
 ## Modules
 
-| Module | Path | Purpose |
-| --- | --- | --- |
-| `react-native-loro` | `app/modules/react-native-loro` | Nitro `LoroDoc` HybridObject over loro-swift 1.13.3 — the `LoroDocPort` backing on iOS |
-| `zeron-dictation` | `app/modules/zeron-dictation` | On-device speech dictation (SFSpeechRecognizer, `requiresOnDeviceRecognition`) |
-| Live Activities | `app/src/liveActivity/*` | expo-widgets `ZeronSession` activity (no custom native code — ActivityKit comes from expo-widgets) |
+| Module              | Path                            | Purpose                                                                                            |
+| ------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `react-native-loro` | `app/modules/react-native-loro` | Nitro `LoroDoc` HybridObject over loro-swift 1.13.3 — the `LoroDocPort` backing on iOS             |
+| `zeron-dictation`   | `app/modules/zeron-dictation`   | On-device speech dictation (SFSpeechRecognizer, `requiresOnDeviceRecognition`)                     |
+| Live Activities     | `app/src/liveActivity/*`        | expo-widgets `ZeronSession` activity (no custom native code — ActivityKit comes from expo-widgets) |
 
 ### react-native-loro
 
@@ -56,11 +56,11 @@ surfaces and has never been compiled. First build happens on a Mac.
   completed green, stale dimmed; indeterminate progress without task
   counts.
 - `src/liveActivity/liveActivityManager.ts` — pure policy (`planActivity`
-  + `LiveActivityManager`): dedupe by chatId, working updates throttled to
-  1/5s, urgent phases immediate, `completed` → end `after(now+30min)`,
-  archive → `immediate`, stale-date now+120s.
-  **Fallback:** if `start()` throws (OS limit/disabled), one aggregate
-  activity is used for the currently-selected session.
+  - `LiveActivityManager`): dedupe by chatId, working updates throttled to
+    1/5s, urgent phases immediate, `completed` → end `after(now+30min)`,
+    archive → `immediate`, stale-date now+120s.
+    **Fallback:** if `start()` throws (OS limit/disabled), one aggregate
+    activity is used for the currently-selected session.
 - `src/liveActivity/bindLiveActivities.ts` — store wiring + push-token
   registration (`/registry/{org}/live-activity`, see
   `docs/HOST_EDGE_CHANGES.md`); push-to-start tokens register with
@@ -68,6 +68,35 @@ surfaces and has never been compiled. First build happens on a Mac.
   end/sign-out.
 - Settings → Live Activities: on/off + "Show host and project on Lock
   Screen" (the privacy default — `showContext`).
+
+### zeron-split-view (Fabric component — NOT compiled)
+
+`app/modules/zeron-split-view/` hosts a `UISplitViewController(style:
+.tripleColumn)` whose three columns are RN child views (sidebar / content /
+inspector). Spec `src/ZeronSplitViewNativeComponent.ts` (codegen:
+`preferredDisplayMode`, `presentsWithGesture`, `onDisplayModeChange`,
+`collapse`/`expand` commands); `ios/ZeronSplitView.swift` +
+`ios/ZeronSplitView.mm` bridge it to `ZeronSplitViewContainer`.
+
+**Written blind — unverified.** Before flipping `useNativeSplitView` in
+`AdaptiveShell.tsx` verify on a Mac:
+
+1. `npx expo prebuild` runs codegen (`codegenConfig` in the module's
+   package.json emits `ZeronSplitViewSpecs` under `ios/generated`); confirm
+   the generated `Props`/`EventEmitters` headers exist and the names used in
+   `ZeronSplitView.mm` match.
+2. `pod install` picks up `ZeronSplitView.podspec`; confirm the generated
+   Swift bridging header name (`ZeronSplitView-Swift.h` vs
+   `<zeron_split_view/zeron_split_view-Swift.h>`) — the `#if __has_include`
+   covers both guesses.
+3. Fabric child-view → `UIViewController` hosting: `mountChildComponentView`
+   hands UIViews, so each column wraps a plain `UIViewController`; confirm
+   responder-chain `reactViewController()` lookup and safe-area behavior.
+4. `presentsWithGesture` / display-mode callbacks on real iPad rotation and
+   multitasking (50/50, slide-over).
+5. Only then add `"zeron-split-view": "file:./modules/zeron-split-view"` to
+   app deps so autolinking + codegen pick it up (deliberately NOT a dep yet
+   — an unverified codegen/podspec must not break prebuild).
 
 ## macOS build steps
 
@@ -88,3 +117,4 @@ nitrogen) do not support `useFrameworks: static`; leave it off.
 - All Swift compilation (`HybridLoroDoc`, `LoroValueJSON`, `HybridDictation`).
 - ActivityKit rendering, Dynamic Island, push token delivery/rotation.
 - Nitro WS (`nitroWs.ts`), SpeechAnalyzer path, FFI loading.
+- `zeron-split-view` entirely (never compiled — checklist above).

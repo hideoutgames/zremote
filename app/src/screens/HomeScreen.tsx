@@ -88,6 +88,7 @@ const ChatRow = React.memo(function ({
   const online = useDeviceOnline(chat.deviceId);
   const unseen = chatUnseen(chat);
   const dot = indicatorColor(theme, indicator);
+  const [hovered, setHovered] = useState(false);
   const at = chat.lastMessageAt ?? chat.createdAt;
 
   const onRename = useCallback(() => {
@@ -124,11 +125,21 @@ const ChatRow = React.memo(function ({
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <Pressable
-          style={styles.row}
+          style={[styles.row, hovered ? styles.rowHover : undefined]}
           onPress={() => {
             if (runtime !== null) markChatSeen(runtime, chat.id);
             onOpen(chat.id);
           }}
+          onHoverIn={() => setHovered(true)}
+          onHoverOut={() => setHovered(false)}
+          accessibilityRole="button"
+          accessibilityLabel={[
+            sessionTitle(chat),
+            indicator,
+            hostLabel(chat, host === undefined ? [] : [host]),
+          ]
+            .filter(Boolean)
+            .join(', ')}
         >
           {dot !== null ? (
             <View style={[styles.dot, { backgroundColor: dot }]} />
@@ -440,7 +451,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 20,
     paddingVertical: 12,
+    minHeight: 44,
   },
+  rowHover: { opacity: 0.72 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotPlaceholder: { width: 8, height: 8 },
   rowText: { flex: 1, gap: 3 },

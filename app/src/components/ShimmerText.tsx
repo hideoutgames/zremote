@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { useDerivedValue } from 'react-native-reanimated';
+import { Text as RNText } from 'react-native';
+import { useDerivedValue, useReducedMotion } from 'react-native-reanimated';
 import {
   Canvas,
   Text as SkiaText,
@@ -98,12 +99,30 @@ export function ShimmerText({
 
   const band = Math.max(60, width * 0.5);
   const travel = width + band * 2;
+  const reduceMotion = useReducedMotion();
   const clock = useClock();
   const startX = useDerivedValue(
     () => -band + ((clock.value % periodMs) / periodMs) * travel,
   );
   const gradientStart = useDerivedValue(() => vec(startX.value, 0));
   const gradientEnd = useDerivedValue(() => vec(startX.value + band, 0));
+
+  if (reduceMotion) {
+    return (
+      <RNText
+        style={{
+          width,
+          fontSize,
+          fontWeight,
+          color: baseColor,
+          textAlign: align,
+        }}
+        numberOfLines={maxLines}
+      >
+        {text}
+      </RNText>
+    );
+  }
 
   return (
     <Canvas style={{ width, height }}>

@@ -32,7 +32,7 @@ import { useTheme } from '../theme';
 import { AppServicesContext, type AppServices } from './runtimeContext';
 import { SignInScreen } from '../screens/SignInScreen';
 import { OrgGateScreen } from '../screens/OrgGateScreen';
-import { RootPager } from '../screens/RootPager';
+import { AdaptiveShell } from '../navigation/AdaptiveShell';
 
 const log = createLog();
 
@@ -195,7 +195,7 @@ export function ZeronApp() {
   let body: React.ReactNode;
   if (status.state === 'signedOut') body = <SignInScreen />;
   else if (status.state === 'needsOrganization') body = <OrgGateScreen />;
-  else body = <RootPager requestedChat={requestedChat} />;
+  else body = <AdaptiveShell requestedChat={requestedChat} />;
 
   return (
     <AppServicesContext.Provider value={services}>

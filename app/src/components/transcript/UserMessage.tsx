@@ -5,7 +5,11 @@
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, SlideInDown } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  SlideInDown,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import type { MessageEntry } from '../../zeron/protocol/types';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
@@ -28,6 +32,7 @@ export const UserMessage = React.memo(function ({
   entry: MessageEntry;
 }) {
   const theme = useTheme();
+  const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
   const images = entry.parts.filter(p => p.kind === 'image');
@@ -37,7 +42,11 @@ export const UserMessage = React.memo(function ({
   return (
     <Animated.View
       style={styles.row}
-      entering={SlideInDown.easing(Easing.out(Easing.exp)).duration(700)}
+      entering={
+        reduceMotion
+          ? undefined
+          : SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
+      }
     >
       {images.length > 0 ? (
         <View style={styles.attachmentRow}>
@@ -76,7 +85,15 @@ export const UserMessage = React.memo(function ({
             {shown}
           </Text>
           {foldable ? (
-            <Pressable onPress={() => setExpanded(e => !e)} hitSlop={6}>
+            <Pressable
+              onPress={() => setExpanded(e => !e)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={
+                expanded ? t('session.showLess') : t('session.showMore')
+              }
+              accessibilityState={{ expanded }}
+            >
               <Text style={[styles.fold, { color: theme.accent }]}>
                 {expanded ? t('session.showLess') : t('session.showMore')}
               </Text>

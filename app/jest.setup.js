@@ -6,9 +6,11 @@
 jest.mock('react-native-worklets', () =>
   require('react-native-worklets/src/mock'),
 );
-jest.mock('react-native-reanimated', () =>
-  require('react-native-reanimated/mock'),
-);
+jest.mock('react-native-reanimated', () => ({
+  ...require('react-native-reanimated/mock'),
+  // The upstream mock is missing this hook ("ADD ME IF NEEDED").
+  useReducedMotion: () => false,
+}));
 jest.mock('react-native-keyboard-controller', () =>
   require('react-native-keyboard-controller/jest'),
 );

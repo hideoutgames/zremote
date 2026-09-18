@@ -11,6 +11,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   type LayoutChangeEvent,
   Platform,
@@ -68,6 +69,8 @@ import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import { ChangesScreen } from './ChangesScreen';
+import { FilesScreen } from './FilesScreen';
 import { createLog } from '../zeron/log';
 
 const log = createLog();
@@ -83,9 +86,18 @@ const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 export function SessionScreen({
   chatId,
   onBack,
+  leadingIcon,
+  contentMaxWidth,
+  onToggleInspector,
 }: {
   chatId: string;
   onBack: () => void;
+  /** iPad split view: replaces the back chevron with a sidebar toggle. */
+  leadingIcon?: string;
+  /** iPad: cap the transcript/composer measure (~720pt), centered. */
+  contentMaxWidth?: number;
+  /** iPad: shows an inspector toggle in the header. */
+  onToggleInspector?: () => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -300,6 +312,27 @@ export function SessionScreen({
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [toolOverlay, setToolOverlay] = useState<'changes' | 'files' | null>(
+    null,
+  );
+
+  // Announce run-phase transitions for VoiceOver (working → awaiting
+  // input / completed / failed).
+  const prevPhaseRef = useRef(phase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = phase;
+    if (phase === prev) return;
+    const key =
+      phase === 'awaitingInput'
+        ? 'session.announce.awaitingInput'
+        : phase === 'errored'
+        ? 'session.announce.errored'
+        : (prev === 'working' || prev === 'awaitingInput') && phase === 'idle'
+        ? 'session.announce.completed'
+        : undefined;
+    if (key !== undefined) AccessibilityInfo.announceForAccessibility(t(key));
+  }, [phase]);
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
   useEffect(() => {
@@ -370,6 +403,9 @@ export function SessionScreen({
         contentContainerStyle={[
           styles.listContent,
           { paddingTop: insets.top + 96 },
+          contentMaxWidth !== undefined
+            ? [styles.measureCap, { maxWidth: contentMaxWidth }]
+            : undefined,
         ]}
         keyboardDismissMode="interactive"
         ListEmptyComponent={
@@ -390,12 +426,30 @@ export function SessionScreen({
           },
         ]}
       >
-        <Pressable onPress={onBack} hitSlop={8}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            leadingIcon !== undefined ? t('sidebar.toggle') : t('session.back')
+          }
+          style={styles.headerBtn}
+        >
           <Glass interactive style={styles.circle}>
-            <Icon name="chevron.left" size={18} color={theme.text} />
+            <Icon
+              name={(leadingIcon ?? 'chevron.left') as never}
+              size={18}
+              color={theme.text}
+            />
           </Glass>
         </Pressable>
-        <Pressable style={styles.headerText} onPress={onRename} hitSlop={4}>
+        <Pressable
+          style={styles.headerText}
+          onPress={onRename}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.rename')}
+        >
           <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
             {sessionTitle(chat)}
           </Text>
@@ -408,13 +462,56 @@ export function SessionScreen({
             </Text>
           ) : null}
         </Pressable>
+        {onToggleInspector !== undefined ? (
+          <Pressable
+            onPress={onToggleInspector}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('inspector.toggle')}
+            style={styles.headerBtn}
+          >
+            <Glass interactive style={styles.circle}>
+              <Icon
+                name={'sidebar.right' as never}
+                size={18}
+                color={theme.text}
+              />
+            </Glass>
+          </Pressable>
+        ) : null}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
-            <Glass interactive style={styles.circle}>
+            <Glass
+              interactive
+              style={styles.circle}
+              accessibilityRole="button"
+              accessibilityLabel={t('session.overflow')}
+            >
               <Icon name="ellipsis.circle" size={18} color={theme.text} />
             </Glass>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content>
+            <DropdownMenu.Item
+              key="changes"
+              onSelect={() => setToolOverlay('changes')}
+            >
+              <DropdownMenu.ItemTitle>
+                {t('session.changes')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              key="files"
+              onSelect={() => setToolOverlay('files')}
+            >
+              <DropdownMenu.ItemTitle>
+                {t('session.files')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item key="terminal" disabled>
+              <DropdownMenu.ItemTitle>
+                {t('session.terminalNextBuild')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
             <DropdownMenu.Item key="archive" onSelect={onArchive}>
               <DropdownMenu.ItemTitle>
                 {chat?.archived
@@ -469,37 +566,45 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        {runtime !== null && chat !== undefined ? (
-          <CheckoutSelector
-            runtime={runtime}
-            chat={chat}
-            host={host}
+        <View
+          style={
+            contentMaxWidth !== undefined
+              ? [styles.measureCap, { maxWidth: contentMaxWidth }]
+              : undefined
+          }
+        >
+          {runtime !== null && chat !== undefined ? (
+            <CheckoutSelector
+              runtime={runtime}
+              chat={chat}
+              host={host}
+              phase={phase}
+              repoPath={space?.path}
+              label={subtitle !== '' ? subtitle : t('checkout.noProject')}
+            />
+          ) : null}
+          <Composer
+            chatId={chatId}
             phase={phase}
-            repoPath={space?.path}
-            label={subtitle !== '' ? subtitle : t('checkout.noProject')}
+            roomState={session.room}
+            harness={harness}
+            capabilities={capabilities}
+            modelLabel={modelLabel}
+            onOpenModelPicker={() => setPickerOpen(true)}
+            onOpenQueue={() => setQueueOpen(true)}
+            dictation={dictation}
+            onSend={doSend}
+            onSteer={doSteer}
+            onQueue={doQueue}
+            onStop={doStop}
+            onCancel={doCancel}
+            onSendAttachments={doSendAttachments}
+            onRespondInput={doRespond}
+            onSendBlocked={onSendBlocked}
+            composerRef={composerRef}
+            onLayout={onComposerLayout}
           />
-        ) : null}
-        <Composer
-          chatId={chatId}
-          phase={phase}
-          roomState={session.room}
-          harness={harness}
-          capabilities={capabilities}
-          modelLabel={modelLabel}
-          onOpenModelPicker={() => setPickerOpen(true)}
-          onOpenQueue={() => setQueueOpen(true)}
-          dictation={dictation}
-          onSend={doSend}
-          onSteer={doSteer}
-          onQueue={doQueue}
-          onStop={doStop}
-          onCancel={doCancel}
-          onSendAttachments={doSendAttachments}
-          onRespondInput={doRespond}
-          onSendBlocked={onSendBlocked}
-          composerRef={composerRef}
-          onLayout={onComposerLayout}
-        />
+        </View>
       </KeyboardStickyView>
 
       {queueOpen ? (
@@ -535,6 +640,7 @@ export function SessionScreen({
           phase={phase}
           hasMessages={entries.length > 0}
           onClose={() => setPickerOpen(false)}
+          formSheet={windowWidth >= 700}
         />
       ) : null}
 
@@ -545,6 +651,46 @@ export function SessionScreen({
             onDismiss={() => setReasoning(null)}
           />
         </Suspense>
+      ) : null}
+
+      {toolOverlay !== null ? (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: theme.background },
+          ]}
+        >
+          <View
+            style={[
+              styles.overlayBar,
+              { paddingTop: insets.top + 6, borderBottomColor: theme.border },
+            ]}
+          >
+            <Pressable
+              onPress={() => setToolOverlay(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('session.back')}
+              style={styles.headerBtn}
+            >
+              <Glass interactive style={styles.circle}>
+                <Icon name="chevron.left" size={18} color={theme.text} />
+              </Glass>
+            </Pressable>
+            <Text style={[styles.title, { color: theme.text }]}>
+              {toolOverlay === 'changes'
+                ? t('session.changes')
+                : t('session.files')}
+            </Text>
+          </View>
+          <View style={styles.fill}>
+            {toolOverlay === 'changes' ? (
+              <ChangesScreen chatId={chatId} />
+            ) : (
+              <FilesScreen chatId={chatId} />
+            )}
+          </View>
+        </View>
       ) : null}
     </View>
   );
@@ -567,6 +713,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  measureCap: { width: '100%', alignSelf: 'center' },
+  headerBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  overlayBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,

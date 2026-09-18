@@ -70,7 +70,14 @@ const ToolRow = ({
 
   return (
     <View>
-      <Pressable style={styles.row} onPress={toggle} hitSlop={4}>
+      <Pressable
+        style={styles.row}
+        onPress={toggle}
+        hitSlop={4}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}${detail === '' ? '' : `, ${detail}`}`}
+        accessibilityState={{ expanded, disabled: !expandable }}
+      >
         <View
           style={[
             styles.iconTile,

@@ -1,0 +1,27 @@
+{
+  "name": "zeron-split-view",
+  "version": "0.1.0",
+  "description": "UISplitViewController triple-column Fabric component (UNVERIFIED — written blind, compile on a Mac before use)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "react-native": "./src/index.ts",
+  "source": "./src/index.ts",
+  "files": [
+    "src",
+    "ios",
+    "ZeronSplitView.podspec"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "codegenConfig": {
+    "name": "ZeronSplitViewSpecs",
+    "type": "components",
+    "jsSrcsDir": "src",
+    "outputDir": {
+      "ios": "ios/generated"
+    }
+  }
+}

@@ -1,5 +1,10 @@
-import React from 'react';
-import { View, type ColorValue, type ViewProps } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  AccessibilityInfo,
+  View,
+  type ColorValue,
+  type ViewProps,
+} from 'react-native';
 import {
   isLiquidGlassSupported,
   LiquidGlassView,
@@ -23,7 +28,19 @@ export function Glass({
   ...rest
 }: GlassProps) {
   const theme = useTheme();
-  if (isLiquidGlassSupported) {
+  // Reduce Transparency → always the opaque fallback surface.
+  const [reduceTransparency, setReduceTransparency] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceTransparencyEnabled()
+      .then(setReduceTransparency)
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceTransparencyChanged',
+      setReduceTransparency,
+    );
+    return () => sub.remove();
+  }, []);
+  if (isLiquidGlassSupported && !reduceTransparency) {
     return (
       <LiquidGlassView
         interactive={interactive}

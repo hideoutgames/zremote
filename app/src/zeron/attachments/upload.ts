@@ -49,6 +49,11 @@ export interface RelayLike {
     params: Record<string, unknown>,
     opts?: { timeoutMs?: number },
   ): Promise<T>;
+  /** Streaming RPCs (WATCH_*); absent on the HTTP-fallback shims. */
+  stream?<T>(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<{ items: AsyncIterable<T>; cancel(): void }>;
 }
 
 export interface UploadDeps {

@@ -13,6 +13,7 @@
 import React, { useCallback, useMemo } from 'react';
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -49,6 +50,9 @@ export interface ModelPickerSheetProps {
    * (desktop: `harness_locked` = selected_chat.is_some()). */
   hasMessages: boolean;
   onClose: () => void;
+  /** iPad regular width: render in a formSheet Modal instead of TrueSheet —
+   * TrueSheet has no iPad popover anchoring (`anchor` is web-only). */
+  formSheet?: boolean;
 }
 
 const SANDBOX_LEVELS = [
@@ -63,6 +67,7 @@ export function ModelPickerSheet({
   phase,
   hasMessages,
   onClose,
+  formSheet,
 }: ModelPickerSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -162,6 +167,257 @@ export function ModelPickerSheet({
     [apply],
   );
 
+  const content = (
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { paddingBottom: insets.bottom + 24 },
+      ]}
+    >
+      <Text style={[styles.title, { color: theme.text }]}>
+        {t('picker.title')}
+      </Text>
+      {live ? (
+        <Text style={[styles.note, { color: theme.textSecondary }]}>
+          {t('picker.appliesNext')}
+        </Text>
+      ) : null}
+
+      {/* Agents — locked once the chat exists. */}
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('picker.agents')}
+      </Text>
+      {harnesses.map(h => (
+        <Pressable
+          key={h.id}
+          style={[
+            styles.row,
+            { borderColor: theme.border },
+            h.id === harnessId && { borderColor: theme.accent },
+            hasMessages && styles.rowDimmed,
+          ]}
+          onPress={() => pickHarness(h.id)}
+          disabled={hasMessages}
+          accessibilityRole="button"
+          accessibilityLabel={h.name}
+          accessibilityState={{
+            selected: h.id === harnessId,
+            disabled: hasMessages,
+          }}
+        >
+          <Text style={[styles.rowText, { color: theme.text }]}>{h.name}</Text>
+          {h.id === harnessId ? (
+            <Icon name="checkmark" size={14} color={theme.accent} />
+          ) : null}
+        </Pressable>
+      ))}
+      {hasMessages ? (
+        <Text style={[styles.note, { color: theme.textSecondary }]}>
+          {t('picker.harnessLocked')}
+        </Text>
+      ) : null}
+
+      {/* Models — unavailable saved selection is shown, not replaced. */}
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('picker.models')}
+      </Text>
+      {!health.modelOk && config?.model !== undefined ? (
+        <View style={[styles.row, { borderColor: theme.danger }]}>
+          <Text style={[styles.rowText, { color: theme.text }]}>
+            {config.model}
+          </Text>
+          <Text style={[styles.badge, { color: theme.danger }]}>
+            {t('picker.unavailable')}
+          </Text>
+        </View>
+      ) : null}
+      {models.map(m => (
+        <Pressable
+          key={m.id}
+          style={[
+            styles.row,
+            { borderColor: theme.border },
+            m.id === config?.model && { borderColor: theme.accent },
+          ]}
+          onPress={() => apply({ model: m.id })}
+          accessibilityRole="button"
+          accessibilityLabel={m.label}
+          accessibilityState={{ selected: m.id === config?.model }}
+        >
+          <View style={styles.rowBody}>
+            <Text style={[styles.rowText, { color: theme.text }]}>
+              {m.label}
+            </Text>
+            {m.description !== undefined ? (
+              <Text
+                style={[styles.rowSub, { color: theme.textSecondary }]}
+                numberOfLines={1}
+              >
+                {m.description}
+              </Text>
+            ) : null}
+          </View>
+          {m.id === config?.model ? (
+            <Icon name="checkmark" size={14} color={theme.accent} />
+          ) : null}
+        </Pressable>
+      ))}
+
+      {/* Effort — hidden with an explanation when the harness advertises
+            no levels. */}
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('picker.effort')}
+      </Text>
+      {levels.length === 0 ? (
+        <Text style={[styles.note, { color: theme.textSecondary }]}>
+          {t('picker.effortUnsupported')}
+        </Text>
+      ) : (
+        <EffortSlider
+          levels={levels}
+          value={config?.reasoning}
+          onChange={level => apply({ reasoning: level })}
+        />
+      )}
+
+      {/* Model options — segmented rows; untouched choices round-trip. */}
+      {(models.find(m => m.id === config?.model)?.options ?? []).map(opt => (
+        <View key={opt.id} style={styles.optGroup}>
+          <Text style={[styles.section, { color: theme.textSecondary }]}>
+            {opt.label}
+          </Text>
+          <View style={styles.segmented}>
+            {opt.choices.map(c => {
+              const selected =
+                (config?.modelOptions?.[opt.id] as string | undefined) ??
+                opt.defaultChoice;
+              return (
+                <Pressable
+                  key={c.id}
+                  style={[
+                    styles.segment,
+                    {
+                      backgroundColor:
+                        c.id === selected ? theme.accent : theme.cardBackground,
+                    },
+                  ]}
+                  onPress={() =>
+                    apply({
+                      modelOptions: {
+                        ...(config?.modelOptions ?? {}),
+                        [opt.id]: c.id,
+                      },
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`${opt.label}: ${c.label}`}
+                  accessibilityState={{ selected: c.id === selected }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      {
+                        color:
+                          c.id === selected ? theme.sendActive : theme.text,
+                      },
+                    ]}
+                  >
+                    {c.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+
+      {/* Sandbox / approvals — consequential choices confirm. */}
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('picker.sandbox')}
+      </Text>
+      <View style={styles.segmented}>
+        {SANDBOX_LEVELS.map(l => {
+          const selected = (config?.sandbox ?? 'workspace-write') === l;
+          return (
+            <Pressable
+              key={l}
+              style={[
+                styles.segment,
+                {
+                  backgroundColor: selected
+                    ? theme.accent
+                    : theme.cardBackground,
+                },
+              ]}
+              onPress={() => pickSandbox(l)}
+              accessibilityRole="button"
+              accessibilityLabel={t(`picker.sandbox.${l}`)}
+              accessibilityState={{ selected }}
+            >
+              <Text
+                style={[
+                  styles.segmentTextSmall,
+                  { color: selected ? theme.sendActive : theme.text },
+                ]}
+              >
+                {t(`picker.sandbox.${l}`)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Pressable
+        style={[styles.row, { borderColor: theme.border }]}
+        onPress={toggleAutoApprove}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: autoApprove }}
+      >
+        <Text style={[styles.rowText, { color: theme.text }]}>
+          {t('picker.autoApprove')}
+        </Text>
+        <Text
+          style={[
+            styles.rowSub,
+            { color: autoApprove ? theme.danger : theme.textSecondary },
+          ]}
+        >
+          {autoApprove ? t('common.on') : t('common.off')}
+        </Text>
+      </Pressable>
+
+      <View style={styles.footer}>
+        <Glass interactive style={styles.doneBtn}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.done')}
+          >
+            <Text style={[styles.doneText, { color: theme.accent }]}>
+              {t('common.done')}
+            </Text>
+          </Pressable>
+        </Glass>
+      </View>
+    </ScrollView>
+  );
+
+  // iPad regular width → formSheet modal (TrueSheet can't anchor popovers).
+  if (formSheet === true) {
+    return (
+      <Modal
+        visible
+        presentationStyle="formSheet"
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
+          {content}
+        </View>
+      </Modal>
+    );
+  }
   return (
     <TrueSheet
       detents={['auto', 1]}
@@ -170,228 +426,13 @@ export function ModelPickerSheet({
       grabber
       backgroundColor={theme.background}
     >
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
-      >
-        <Text style={[styles.title, { color: theme.text }]}>
-          {t('picker.title')}
-        </Text>
-        {live ? (
-          <Text style={[styles.note, { color: theme.textSecondary }]}>
-            {t('picker.appliesNext')}
-          </Text>
-        ) : null}
-
-        {/* Agents — locked once the chat exists. */}
-        <Text style={[styles.section, { color: theme.textSecondary }]}>
-          {t('picker.agents')}
-        </Text>
-        {harnesses.map(h => (
-          <Pressable
-            key={h.id}
-            style={[
-              styles.row,
-              { borderColor: theme.border },
-              h.id === harnessId && { borderColor: theme.accent },
-              hasMessages && styles.rowDimmed,
-            ]}
-            onPress={() => pickHarness(h.id)}
-            disabled={hasMessages}
-          >
-            <Text style={[styles.rowText, { color: theme.text }]}>
-              {h.name}
-            </Text>
-            {h.id === harnessId ? (
-              <Icon name="checkmark" size={14} color={theme.accent} />
-            ) : null}
-          </Pressable>
-        ))}
-        {hasMessages ? (
-          <Text style={[styles.note, { color: theme.textSecondary }]}>
-            {t('picker.harnessLocked')}
-          </Text>
-        ) : null}
-
-        {/* Models — unavailable saved selection is shown, not replaced. */}
-        <Text style={[styles.section, { color: theme.textSecondary }]}>
-          {t('picker.models')}
-        </Text>
-        {!health.modelOk && config?.model !== undefined ? (
-          <View style={[styles.row, { borderColor: theme.danger }]}>
-            <Text style={[styles.rowText, { color: theme.text }]}>
-              {config.model}
-            </Text>
-            <Text style={[styles.badge, { color: theme.danger }]}>
-              {t('picker.unavailable')}
-            </Text>
-          </View>
-        ) : null}
-        {models.map(m => (
-          <Pressable
-            key={m.id}
-            style={[
-              styles.row,
-              { borderColor: theme.border },
-              m.id === config?.model && { borderColor: theme.accent },
-            ]}
-            onPress={() => apply({ model: m.id })}
-          >
-            <View style={styles.rowBody}>
-              <Text style={[styles.rowText, { color: theme.text }]}>
-                {m.label}
-              </Text>
-              {m.description !== undefined ? (
-                <Text
-                  style={[styles.rowSub, { color: theme.textSecondary }]}
-                  numberOfLines={1}
-                >
-                  {m.description}
-                </Text>
-              ) : null}
-            </View>
-            {m.id === config?.model ? (
-              <Icon name="checkmark" size={14} color={theme.accent} />
-            ) : null}
-          </Pressable>
-        ))}
-
-        {/* Effort — hidden with an explanation when the harness advertises
-            no levels. */}
-        <Text style={[styles.section, { color: theme.textSecondary }]}>
-          {t('picker.effort')}
-        </Text>
-        {levels.length === 0 ? (
-          <Text style={[styles.note, { color: theme.textSecondary }]}>
-            {t('picker.effortUnsupported')}
-          </Text>
-        ) : (
-          <EffortSlider
-            levels={levels}
-            value={config?.reasoning}
-            onChange={level => apply({ reasoning: level })}
-          />
-        )}
-
-        {/* Model options — segmented rows; untouched choices round-trip. */}
-        {(models.find(m => m.id === config?.model)?.options ?? []).map(opt => (
-          <View key={opt.id} style={styles.optGroup}>
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {opt.label}
-            </Text>
-            <View style={styles.segmented}>
-              {opt.choices.map(c => {
-                const selected =
-                  (config?.modelOptions?.[opt.id] as string | undefined) ??
-                  opt.defaultChoice;
-                return (
-                  <Pressable
-                    key={c.id}
-                    style={[
-                      styles.segment,
-                      {
-                        backgroundColor:
-                          c.id === selected
-                            ? theme.accent
-                            : theme.cardBackground,
-                      },
-                    ]}
-                    onPress={() =>
-                      apply({
-                        modelOptions: {
-                          ...(config?.modelOptions ?? {}),
-                          [opt.id]: c.id,
-                        },
-                      })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        {
-                          color:
-                            c.id === selected ? theme.sendActive : theme.text,
-                        },
-                      ]}
-                    >
-                      {c.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ))}
-
-        {/* Sandbox / approvals — consequential choices confirm. */}
-        <Text style={[styles.section, { color: theme.textSecondary }]}>
-          {t('picker.sandbox')}
-        </Text>
-        <View style={styles.segmented}>
-          {SANDBOX_LEVELS.map(l => {
-            const selected = (config?.sandbox ?? 'workspace-write') === l;
-            return (
-              <Pressable
-                key={l}
-                style={[
-                  styles.segment,
-                  {
-                    backgroundColor: selected
-                      ? theme.accent
-                      : theme.cardBackground,
-                  },
-                ]}
-                onPress={() => pickSandbox(l)}
-              >
-                <Text
-                  style={[
-                    styles.segmentTextSmall,
-                    { color: selected ? theme.sendActive : theme.text },
-                  ]}
-                >
-                  {t(`picker.sandbox.${l}`)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Pressable
-          style={[styles.row, { borderColor: theme.border }]}
-          onPress={toggleAutoApprove}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: autoApprove }}
-        >
-          <Text style={[styles.rowText, { color: theme.text }]}>
-            {t('picker.autoApprove')}
-          </Text>
-          <Text
-            style={[
-              styles.rowSub,
-              { color: autoApprove ? theme.danger : theme.textSecondary },
-            ]}
-          >
-            {autoApprove ? t('common.on') : t('common.off')}
-          </Text>
-        </Pressable>
-
-        <View style={styles.footer}>
-          <Glass interactive style={styles.doneBtn}>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <Text style={[styles.doneText, { color: theme.accent }]}>
-                {t('common.done')}
-              </Text>
-            </Pressable>
-          </Glass>
-        </View>
-      </ScrollView>
+      {content}
     </TrueSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  modalFill: { flex: 1 },
   content: { padding: 20, gap: 10 },
   title: { fontSize: 20, fontWeight: '700' },
   section: { fontSize: 12, fontWeight: '600', marginTop: 10 },

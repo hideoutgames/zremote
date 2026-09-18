@@ -21,8 +21,7 @@ import type { SFSymbol } from 'sf-symbols-typescript';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
-  | { kind: 'part'; part: MessagePart }
-  | { kind: 'tools'; parts: ToolPart[] };
+  { kind: 'part'; part: MessagePart } | { kind: 'tools'; parts: ToolPart[] };
 
 const groupParts = (parts: MessagePart[]): Item[] => {
   const items: Item[] = [];
@@ -182,7 +181,7 @@ export const AssistantMessage = React.memo(function ({
   return (
     <View style={styles.row}>
       {waiting ? (
-        <View style={styles.statusRow}>
+        <View style={styles.statusRow} accessibilityLiveRegion="polite">
           <Icon
             name={
               (phase === 'working' ? 'sparkles' : 'text.bubble') as SFSymbol

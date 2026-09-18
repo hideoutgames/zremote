@@ -59,6 +59,10 @@ const SF_TO_MDI: Record<string, string> = {
   'chevron.up': 'chevron-up',
   folder: 'folder-outline',
   'arrow.up.doc': 'file-upload-outline',
+  'doc.text': 'file-document-outline',
+  eye: 'eye-outline',
+  'sidebar.left': 'page-layout-sidebar-left',
+  'sidebar.right': 'page-layout-sidebar-right',
 };
 
 type MdiName = ComponentProps<typeof MaterialDesignIcons>['name'];

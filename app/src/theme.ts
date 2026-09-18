@@ -27,6 +27,11 @@ export interface Theme {
   // Composer / cards.
   inputBackground: string;
   cardBackground: string;
+  // Diff rows.
+  diffAddBackground: string;
+  diffDelBackground: string;
+  diffAddText: string;
+  diffDelText: string;
 }
 
 export const darkTheme: Theme = {
@@ -49,6 +54,10 @@ export const darkTheme: Theme = {
   indicatorCompleted: '#30D158',
   inputBackground: '#1C1C1E',
   cardBackground: '#1C1C1E',
+  diffAddBackground: 'rgba(48,209,88,0.14)',
+  diffDelBackground: 'rgba(215,38,61,0.14)',
+  diffAddText: '#30D158',
+  diffDelText: '#FF6B6B',
 };
 
 export const lightTheme: Theme = {
@@ -71,6 +80,10 @@ export const lightTheme: Theme = {
   indicatorCompleted: '#248A3D',
   inputBackground: '#F2F2F7',
   cardBackground: '#F2F2F7',
+  diffAddBackground: 'rgba(36,138,61,0.12)',
+  diffDelBackground: 'rgba(215,38,61,0.10)',
+  diffAddText: '#248A3D',
+  diffDelText: '#D7263D',
 };
 
 /** Dark default for non-hook call sites (module-level styles are re-evaluated
