@@ -1,29 +1,13 @@
-// In-memory DocDisk for deterministic runtime/state tests.
+// In-memory DocDisk for deterministic runtime/state tests. The
+// implementation lives in src/zeron/native/memDocDisk.ts so demo mode can
+// share it.
 
-import { DocDisk, type DocDiskFs } from '../native/docDisk';
+import { DocDisk } from '../native/docDisk';
+import { MemoryDocFs } from '../native/memDocDisk';
 
-export class MemoryFs implements DocDiskFs {
-  files = new Map<string, string>();
-  writes: string[] = [];
-  async readText(path: string) {
-    return this.files.get(path);
-  }
-  async writeText(path: string, contents: string) {
-    this.writes.push(path);
-    this.files.set(path, contents);
-  }
-  async move(from: string, to: string) {
-    const c = this.files.get(from);
-    if (c === undefined) throw new Error(`no temp file: ${from}`);
-    this.files.delete(from);
-    this.files.set(to, c);
-  }
-  async delete(path: string) {
-    for (const k of [...this.files.keys()]) {
-      if (k === path || k.startsWith(`${path}/`)) this.files.delete(k);
-    }
-  }
-}
+export { MemoryDocFs };
+
+export class MemoryFs extends MemoryDocFs {}
 
 export const memDisk = (baseDir = '/docs') => {
   const fs = new MemoryFs();

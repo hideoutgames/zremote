@@ -49,6 +49,9 @@ export interface AppRuntimeDeps {
   docDisk: DocDisk;
   loro: () => LoroDocPort;
   fetchImpl?: FetchImpl;
+  /** Explicit session source: overrides the Loro probe AND the persisted
+   * forceRelayMode pref (demo mode forces 'relay'). */
+  sessionMode?: SessionMode;
   log?: (line: string) => void;
   /** Reads a staged attachment's bytes as base64 (expo-file-system). */
   readFileBase64?: (uri: string) => Promise<string>;
@@ -117,7 +120,9 @@ export class AppRuntime {
     // (Expo Go, missing pod) every session runs in relay mode. An explicit
     // forceRelayMode pref skips the probe entirely.
     let sessionMode: SessionMode = 'doc';
-    if (uiPrefsStore.getState().forceRelayMode) {
+    if (deps.sessionMode !== undefined) {
+      sessionMode = deps.sessionMode;
+    } else if (uiPrefsStore.getState().forceRelayMode) {
       sessionMode = 'relay';
     } else {
       try {

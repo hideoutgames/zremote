@@ -67,6 +67,34 @@ Windows).
   session doc; the host is authoritative (drafts still persist).
 - **Universal-link sign-in**, deep links into the app.
 
+## Demo mode
+
+**Sign in → Advanced → "Try demo mode"** enters a fully in-process demo: a
+simulated edge + host (`src/demo/demoEdge.ts`) is plugged into the exact
+runtime seams the production path uses — the app's `wsFactory` /
+`fetchImpl` / `Clock` / `DocDisk` dependencies — so every screen, store and
+controller runs the real code in relay session mode.
+
+What it simulates:
+
+- Registry room: 2 hosts (one live with presence beats, one dark for ~3h),
+  3 spaces, 7 chats (working / awaitingInput / idle / errored / archived),
+  and client pushes (rename/archive/seen/create) round-tripped as `rows`.
+- Device room: the full relay-forwardable RPC surface — transcript streams
+  (`WatchDocMessages` reset/delta), the command plane (`run` streams a
+  realistic multi-part reply, `steer`, `interrupt`, `respondInput`), the
+  message queue, attachments, workspace files, checkout diffs, git history,
+  echo terminals, agent accounts, previews, and update status.
+- A "Demo" pill is pinned top-right on every screen; Settings shows
+  "Demo account" / "Exit demo". Demo mode is not persisted — a reload
+  returns to sign-in.
+
+**Nothing leaves the device.** `demoEdge.fetchImpl` answers the same
+endpoint shapes the runtime calls; there is no network dial, no auth
+server, and no account. It also works in the native dev build (the same
+`DemoEdge` drives `AppRuntime` with an in-memory DocDisk and forced relay
+mode).
+
 ## Relay mode vs doc mode
 
 |             | Doc mode (default)                       | Relay mode                                                                         |

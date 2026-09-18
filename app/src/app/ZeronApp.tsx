@@ -10,7 +10,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthClient } from '../zeron/auth/authClient';
@@ -29,6 +29,12 @@ import { systemClock } from '../zeron/transport/clock';
 import { getInitialUrl, addUrlListener } from '../zeron/native/authBrowser';
 import { parseZeronLink } from '../zeron/protocol/edge';
 import { AppRuntime } from '../zeron/runtime/appRuntime';
+import { staticTokenSource } from '../zeron/transport/tokenSource';
+import { memDocDisk } from '../zeron/native/memDocDisk';
+import { DemoEdge } from '../demo/demoEdge';
+import { exitDemo, useDemoMode } from '../demo/demoMode';
+import { DEMO_ORG, DEMO_PHONE, DEMO_USER } from '../demo/fixtures';
+import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 import { useTheme } from '../theme';
 import { AppServicesContext, type AppServices } from './runtimeContext';
@@ -47,6 +53,7 @@ const wsFactory = isExpoGo ? rnWsFactory : nitroWsFactory;
 export function ZeronApp() {
   const theme = useTheme();
   const status = useAuthStatus();
+  const demoActive = useDemoMode();
 
   // One AuthSession per edge URL (persisted record is namespaced by baseUrl).
   const cfg = useMemo(() => appConfig(), []);
@@ -80,6 +87,10 @@ export function ZeronApp() {
   // ── Account-scoped runtime ────────────────────────────────────────────
   const [runtime, setRuntime] = useState<AppRuntime | null>(null);
   const accountRef = useRef<string | null>(null);
+  const demoEdge = useMemo(
+    () => (demoActive ? new DemoEdge({ clock: systemClock }) : null),
+    [demoActive],
+  );
 
   const signedIn = status.state === 'signedIn' ? status : undefined;
 
@@ -99,21 +110,38 @@ export function ZeronApp() {
     accountRef.current = key;
     let cancelled = false;
     (async () => {
-      const id = await deviceId(expoSecureStore);
-      const rt = await AppRuntime.create({
-        cfg: { baseUrl: cfg.edgeUrl },
-        tokenSource: auth,
-        deviceId: id,
-        deviceName: deviceName(),
-        orgId: signedIn.orgId,
-        userId: signedIn.user.id,
-        wsFactory,
-        clock: systemClock,
-        docDisk: createDocDisk(),
-        loro: createLoroDoc,
-        readFileBase64,
-        log: line => log.info(line),
-      });
+      const rt = demoActive
+        ? await AppRuntime.create({
+            // In-process simulated edge: same runtime seams, no network.
+            cfg: { baseUrl: 'https://demo.invalid' },
+            tokenSource: staticTokenSource('demo'),
+            deviceId: DEMO_PHONE,
+            deviceName: 'Demo Phone',
+            orgId: DEMO_ORG,
+            userId: DEMO_USER,
+            wsFactory: demoEdge!.wsFactory,
+            fetchImpl: demoEdge!.fetchImpl,
+            clock: systemClock,
+            docDisk: memDocDisk(),
+            loro: createLoroDoc,
+            sessionMode: 'relay',
+            readFileBase64,
+            log: line => log.info(line),
+          })
+        : await AppRuntime.create({
+            cfg: { baseUrl: cfg.edgeUrl },
+            tokenSource: auth,
+            deviceId: await deviceId(expoSecureStore),
+            deviceName: deviceName(),
+            orgId: signedIn.orgId,
+            userId: signedIn.user.id,
+            wsFactory,
+            clock: systemClock,
+            docDisk: createDocDisk(),
+            loro: createLoroDoc,
+            readFileBase64,
+            log: line => log.info(line),
+          });
       if (cancelled) {
         rt.stop();
         return;
@@ -127,13 +155,14 @@ export function ZeronApp() {
       rt?.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedIn?.orgId, signedIn?.user.id]);
+  }, [signedIn?.orgId, signedIn?.user.id, demoActive, demoEdge]);
 
   // ── Live Activities (iOS; expo-widgets) — lazily imported so the JS
   // bundle still loads where the pod/module is absent.
   const selectedChatRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (runtime === null || signedIn === undefined) return;
+    // Demo mode never registers push tokens — no real-edge traffic.
+    if (runtime === null || signedIn === undefined || demoActive) return;
     let unbind: (() => void) | undefined;
     import('../liveActivity/bindLiveActivities')
       .then(m => {
@@ -148,7 +177,7 @@ export function ZeronApp() {
       .catch(e => log.warn(`live activities unavailable: ${e}`));
     return () => unbind?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, signedIn?.orgId]);
+  }, [runtime, signedIn?.orgId, demoActive]);
 
   // ── AppState → foreground/background ──────────────────────────────────
   useEffect(() => {
@@ -187,12 +216,20 @@ export function ZeronApp() {
   }, [auth, edgeHost, openSession]);
 
   const signOut = useCallback(async () => {
+    if (demoActive) {
+      exitDemo();
+      const rt = runtime;
+      setRuntime(null);
+      accountRef.current = null;
+      rt?.stop();
+      return;
+    }
     await auth.signOut();
     const rt = runtime;
     setRuntime(null);
     accountRef.current = null;
     if (rt !== null) await rt.clearAccountCaches();
-  }, [auth, runtime]);
+  }, [auth, runtime, demoActive]);
 
   const insets = useSafeAreaInsets();
   const services = useMemo<AppServices>(
@@ -221,6 +258,19 @@ export function ZeronApp() {
           backgroundColor="transparent"
         />
         {body}
+        {demoActive ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.demoBadge,
+              { top: insets.top + 6, backgroundColor: theme.accent },
+            ]}
+          >
+            <Text style={[styles.demoBadgeText, { color: theme.background }]}>
+              {t('demo.badge')}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </AppServicesContext.Provider>
   );
@@ -228,4 +278,12 @@ export function ZeronApp() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  demoBadge: {
+    position: 'absolute',
+    right: 14,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  demoBadgeText: { fontSize: 11, fontWeight: '700' },
 });

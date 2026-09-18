@@ -11,6 +11,7 @@ import { useAuthSession } from '../app/runtimeContext';
 import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
+import { enterDemo } from '../demo/demoMode';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 
@@ -154,9 +155,21 @@ export function SignInScreen() {
         </Text>
       </Pressable>
       {advanced ? (
-        <Text style={[styles.edge, { color: theme.textSecondary }]}>
-          {`${t('signIn.edgeUrl')}: ${edgeUrl}`}
-        </Text>
+        <View style={styles.advancedBox}>
+          <Text style={[styles.edge, { color: theme.textSecondary }]}>
+            {`${t('signIn.edgeUrl')}: ${edgeUrl}`}
+          </Text>
+          <Pressable onPress={enterDemo} hitSlop={8}>
+            <Glass interactive style={styles.demoButton}>
+              <Text style={[styles.demoText, { color: theme.sendActive }]}>
+                {t('signIn.demo.button')}
+              </Text>
+            </Glass>
+          </Pressable>
+          <Text style={[styles.demoHint, { color: theme.textSecondary }]}>
+            {t('signIn.demo.hint')}
+          </Text>
+        </View>
       ) : null}
     </View>
   );
@@ -198,5 +211,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   advancedText: { fontSize: 13 },
+  advancedBox: { alignItems: 'center', gap: 10, marginTop: 4 },
   edge: { fontSize: 12, fontFamily: 'Menlo' },
+  demoButton: {
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  demoText: { fontSize: 15, fontWeight: '600' },
+  demoHint: { fontSize: 12, textAlign: 'center', lineHeight: 16 },
 });

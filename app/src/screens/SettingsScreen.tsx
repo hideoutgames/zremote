@@ -34,6 +34,7 @@ import { AgentAccountsScreen } from './AgentAccountsScreen';
 import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
+import { useDemoMode } from '../demo/demoMode';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 import {
@@ -395,7 +396,14 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
       : undefined;
   const orgId = status.state === 'signedIn' ? status.orgId : undefined;
 
+  const demoActive = useDemoMode();
+
   const confirmSignOut = useCallback(() => {
+    if (demoActive) {
+      signOut().catch(e => log.warn(`signOut: ${e}`));
+      onClose();
+      return;
+    }
     Alert.alert(t('settings.signOut'), t('settings.signOutConfirm'), [
       { text: t('home.row.cancel'), style: 'cancel' },
       {
@@ -407,7 +415,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         },
       },
     ]);
-  }, [signOut, onClose]);
+  }, [signOut, onClose, demoActive]);
 
   const deviceSubtitle = (d: DeviceRow): string => {
     const at = presence[d.id];
@@ -467,7 +475,9 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
               />
               <View style={styles.cardText}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {user?.email ?? user?.id ?? ''}
+                  {demoActive
+                    ? t('settings.demoAccount')
+                    : user?.email ?? user?.id ?? ''}
                 </Text>
                 {orgId !== undefined ? (
                   <Text
@@ -489,7 +499,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 ]}
               >
                 <Text style={[styles.signOutText, { color: theme.danger }]}>
-                  {t('settings.signOut')}
+                  {demoActive ? t('settings.exitDemo') : t('settings.signOut')}
                 </Text>
               </View>
             </Pressable>
