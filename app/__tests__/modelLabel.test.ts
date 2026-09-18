@@ -1,5 +1,6 @@
 import {
   composerShowsEffort,
+  modelsBoundToProvider,
   providerKind,
   shortModelLabel,
 } from '../src/components/modelLabel';
@@ -27,4 +28,18 @@ test('providerKind maps harness and model ids', () => {
 test('Devin offers effort only when the host advertises levels', () => {
   expect(composerShowsEffort(['low', 'medium', 'high'])).toBe(true);
   expect(composerShowsEffort([])).toBe(false);
+});
+
+test('modelsBoundToProvider keeps only the session provider', () => {
+  const models = [
+    { id: 'opus-4.7' },
+    { id: 'sonnet-4' },
+    { id: 'gpt-5' },
+  ];
+  expect(
+    modelsBoundToProvider(models, 'claude-code', 'opus-4.7').map(m => m.id),
+  ).toEqual(['opus-4.7', 'sonnet-4']);
+  expect(
+    modelsBoundToProvider(models, 'claude-code', undefined).map(m => m.id),
+  ).toEqual(['opus-4.7', 'sonnet-4', 'gpt-5']);
 });

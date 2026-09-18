@@ -120,3 +120,40 @@ test('InputCard shows Answered once resolved', async () => {
   });
   expect(textOf(tree!.root)).toContain('Answered');
 });
+
+test('streaming AssistantMessage shows reasoning and tools before text', async () => {
+  const streaming: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+    parts: [
+      {
+        kind: 'reasoning',
+        id: 'r0',
+        text: '**Checking the repo**\nNeed to look at git status.',
+      },
+      {
+        kind: 'tool',
+        id: 't-exec',
+        call: { command: 'git status', kind: 'exec' },
+        isError: false,
+        resolved: false,
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={streaming}
+        phase="working"
+        onOpenReasoning={() => {}}
+      />,
+    );
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Checking the repo');
+  expect(texts.some(s => typeof s === 'string' && s.includes('git status'))).toBe(
+    true,
+  );
+  expect(texts).not.toContain('Working');
+});

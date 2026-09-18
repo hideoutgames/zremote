@@ -2,6 +2,7 @@ import {
   layoutFor,
   REGULAR_MIN_WIDTH,
   INSPECTOR_AUTO_WIDTH,
+  MEASURE_CAP_MAX,
 } from '../src/navigation/layout';
 
 const prefs = { sidebarCollapsed: false, inspectorOpen: false };
@@ -13,7 +14,7 @@ test('compact below 700pt keeps the pager', () => {
   expect(l.inspectorVisible).toBe(false);
 });
 
-test('regular width shows sidebar + detail, no inspector below 1100', () => {
+test('regular width shows sidebar + detail, inspector stays closed', () => {
   const l = layoutFor(820, prefs);
   expect(l.mode).toBe('regular');
   expect(l.sidebarVisible).toBe(true);
@@ -27,16 +28,19 @@ test('sidebar collapse persists through prefs', () => {
   expect(l.sidebarVisible).toBe(false);
 });
 
-test('inspector auto-shows at 1100pt and when toggled', () => {
-  expect(layoutFor(INSPECTOR_AUTO_WIDTH, prefs).inspectorVisible).toBe(true);
+test('inspector does not auto-show at 1100pt; only when toggled', () => {
+  expect(layoutFor(INSPECTOR_AUTO_WIDTH, prefs).inspectorVisible).toBe(false);
   expect(
     layoutFor(900, { ...prefs, inspectorOpen: true }).inspectorVisible,
   ).toBe(true);
-  const l = layoutFor(1400, prefs);
+  const l = layoutFor(1400, { ...prefs, inspectorOpen: true });
   expect(l.inspectorWidth).toBeGreaterThanOrEqual(360);
   expect(l.inspectorWidth).toBeLessThanOrEqual(480);
 });
 
-test('measure cap is ~720', () => {
-  expect(layoutFor(REGULAR_MIN_WIDTH, prefs).measureCap).toBe(720);
+test('measure cap fills remaining detail up to 1100', () => {
+  const l = layoutFor(1400, prefs);
+  expect(l.measureCap).toBe(Math.min(MEASURE_CAP_MAX, 1400 - l.sidebarWidth));
+  expect(l.measureCap).toBeGreaterThan(REGULAR_MIN_WIDTH);
+  expect(l.measureCap).toBeLessThanOrEqual(MEASURE_CAP_MAX);
 });

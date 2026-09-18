@@ -1,4 +1,4 @@
-// CheckoutSelector — the `Space · host · branch ▾` pill above the composer
+// CheckoutSelector — the `Space · host · branch ▾` row inside the composer
 // glass. Menu lists the host's refs (worktree-backed refs tagged), plus a
 // "New worktree" entry gated on host ≥ MIN_VERSION_RUN_WORKTREE
 // (checkoutRules.checkoutChangeAllowed). Reassignment mirrors desktop:
@@ -28,6 +28,8 @@ export interface CheckoutSelectorProps {
   /** The chat's space path (repo root for ListRefs/CreateWorktree). */
   repoPath?: string;
   label: string;
+  /** Inner composer bar: stretch full width, no outer offset. */
+  embedded?: boolean;
 }
 
 export function CheckoutSelector({
@@ -37,6 +39,7 @@ export function CheckoutSelector({
   phase,
   repoPath,
   label,
+  embedded,
 }: CheckoutSelectorProps) {
   const theme = useTheme();
   const [refs, setRefs] = useState<RepoRef[] | undefined>(undefined);
@@ -105,7 +108,7 @@ export function CheckoutSelector({
       <DropdownMenu.Trigger>
         <Pressable
           disabled={!enabled}
-          style={styles.pill}
+          style={[styles.pill, embedded === true && styles.embedded]}
           hitSlop={6}
           accessibilityLabel={t('checkout.label')}
         >
@@ -173,6 +176,14 @@ const styles = StyleSheet.create({
     // Aligns with the composer input's text edge (12 container + 16 inner).
     marginLeft: 28,
     marginBottom: 6,
+  },
+  embedded: {
+    alignSelf: 'stretch',
+    justifyContent: 'space-between',
+    marginLeft: 0,
+    marginBottom: 0,
+    height: 32,
+    paddingHorizontal: 16,
   },
   label: { fontSize: 12, maxWidth: 260 },
 });

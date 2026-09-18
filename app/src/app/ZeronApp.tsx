@@ -4,11 +4,14 @@
 // screen (SignIn / OrgGate / pager).
 
 import React, {
+  Component,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type ErrorInfo,
+  type ReactNode,
 } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'react-native';
@@ -44,6 +47,34 @@ import { AdaptiveShell } from '../navigation/AdaptiveShell';
 import BootSplash from 'react-native-bootsplash';
 
 const log = createLog();
+
+const hideSplash = (): void => {
+  void Promise.resolve(BootSplash.hide({ fade: true })).catch(() => {});
+};
+
+type RNErrorUtils = {
+  getGlobalHandler?: () => (error: unknown, isFatal?: boolean) => void;
+  setGlobalHandler?: (
+    handler: (error: unknown, isFatal?: boolean) => void,
+  ) => void;
+};
+
+class SplashHideBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error, _info: ErrorInfo) {
+    log.warn(`splash hide failed: ${error.message}`);
+    hideSplash();
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 
 /** Expo Go (`storeClient`) ships no nitro modules: the built-in WebSocket
  * transport is used there, and the loro() probe in AppRuntime.create fails
@@ -84,6 +115,24 @@ export function ZeronApp() {
     auth.restore().catch(() => {});
     return unbind;
   }, [auth]);
+
+  useEffect(() => {
+    hideSplash();
+  }, []);
+
+  useEffect(() => {
+    const eu = (globalThis as { ErrorUtils?: RNErrorUtils }).ErrorUtils;
+    if (eu?.getGlobalHandler === undefined || eu.setGlobalHandler === undefined)
+      return;
+    const prev = eu.getGlobalHandler();
+    eu.setGlobalHandler((error, isFatal) => {
+      log.error(`js ${isFatal === true ? 'fatal' : 'error'}: ${String(error)}`);
+      prev?.(error, isFatal);
+    });
+    return () => {
+      eu.setGlobalHandler?.(prev);
+    };
+  }, []);
 
   // ── Account-scoped runtime ────────────────────────────────────────────
   const [runtime, setRuntime] = useState<AppRuntime | null>(null);
@@ -199,15 +248,22 @@ export function ZeronApp() {
     selectedChatRef.current = requestedChat ?? undefined;
   }, [requestedChat]);
 
+  const completingSignIn = useRef(false);
   useEffect(() => {
     const handle = (url: string | null) => {
       if (url === null) return;
       const link = parseZeronLink(url, edgeHost);
       if (link?.kind === 'session') openSession(link.chatId);
-      else if (link?.kind === 'authCallback')
+      else if (link?.kind === 'authCallback') {
+        if (completingSignIn.current) return;
+        completingSignIn.current = true;
         auth
           .completeSignIn({ code: link.code, state: link.state })
-          .catch(e => log.warn(`sign-in callback failed: ${e}`));
+          .catch(e => log.warn(`sign-in callback failed: ${e}`))
+          .finally(() => {
+            completingSignIn.current = false;
+          });
+      }
     };
     getInitialUrl()
       .then(handle)
@@ -254,7 +310,9 @@ export function ZeronApp() {
           },
         ]}
       >
-        <BootSplash.HideOnDraw fade />
+        <SplashHideBoundary>
+          <BootSplash.HideOnDraw fade />
+        </SplashHideBoundary>
         <StatusBar
           barStyle={theme.scheme === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor="transparent"

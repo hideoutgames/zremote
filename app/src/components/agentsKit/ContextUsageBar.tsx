@@ -1,12 +1,37 @@
 // Ported from Agents Kit components/ai-elements/context.tsx (Apache-2.0,
-// Vercel AI Elements) — the context-window usage meter. A thin bar under the
-// session header; rendered only when the doc's meta carries contextUsage
-// (never invented).
+// Vercel AI Elements) — circular context-window ring for the composer
+// (left of dictation). Rendered only when the doc's meta carries
+// contextUsage (never invented).
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import type { ContextUsage } from '../../zeron/protocol/types';
 import { useTheme } from '../../theme';
+import { t } from '../../i18n/strings';
+
+const SIZE = 22;
+const STROKE = 2.5;
+const RADIUS = (SIZE - STROKE) / 2;
+const CX = SIZE / 2;
+
+export const compactTokens = (n: number): string => {
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000;
+    return `${v >= 10 ? Math.round(v) : v.toFixed(1).replace(/\.0$/, '')}M`;
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000;
+    return `${v >= 10 ? Math.round(v) : v.toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(n);
+};
+
+const ringPath = () => {
+  const p = Skia.Path.Make();
+  p.addCircle(CX, CX, RADIUS);
+  return p;
+};
 
 export const ContextUsageBar = React.memo(function ({
   usage,
@@ -17,41 +42,46 @@ export const ContextUsageBar = React.memo(function ({
   if (usage === undefined || usage.tokens == null || usage.window == null)
     return null;
   const ratio = Math.max(0, Math.min(1, usage.tokens / usage.window));
+  const pct = Math.round(ratio * 100);
+  const color = ratio > 0.9 ? theme.danger : theme.accent;
+  const path = ringPath();
   return (
-    <View style={styles.wrap}>
-      <View style={[styles.track, { backgroundColor: theme.border }]}>
-        <View
-          style={[
-            styles.fill,
-            {
-              backgroundColor:
-                ratio > 0.9 ? theme.danger : theme.indicatorWorking,
-              width: `${Math.round(ratio * 100)}%`,
-            },
-          ]}
+    <View
+      testID="contextUsageBar"
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={`${t('composer.context')}, ${pct} percent, ${compactTokens(
+        usage.tokens,
+      )} of ${compactTokens(usage.window)}`}
+      accessibilityValue={{ min: 0, max: 100, now: pct }}
+      style={styles.wrap}
+    >
+      <Canvas style={styles.canvas}>
+        <Path
+          path={path}
+          style="stroke"
+          strokeWidth={STROKE}
+          color={theme.border}
         />
-      </View>
-      <Text style={[styles.label, { color: theme.textSecondary }]}>
-        {`${usage.tokens.toLocaleString()} / ${usage.window.toLocaleString()}`}
-      </Text>
+        <Path
+          path={path}
+          style="stroke"
+          strokeWidth={STROKE}
+          color={color}
+          start={0}
+          end={Math.max(0.02, ratio)}
+        />
+      </Canvas>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   wrap: {
-    flexDirection: 'row',
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    justifyContent: 'center',
   },
-  track: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  fill: { height: 3, borderRadius: 2 },
-  label: { fontSize: 11, fontVariant: ['tabular-nums'] },
+  canvas: { width: SIZE, height: SIZE },
 });

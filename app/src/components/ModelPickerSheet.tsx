@@ -1,5 +1,6 @@
-// ModelPickerSheet (TrueSheet) — Agents / Models / Effort / Model options /
-// Sandbox & approvals for the session's host device. Desktop rules:
+// ModelPickerSheet (TrueSheet) — Agents / Models / Model options /
+// Sandbox & approvals for the session's host device. Effort lives on the
+// composer overlay, not in this sheet. Desktop rules:
 //   - harness is LOCKED once the chat exists (crates/ui/src/pickers.rs
 //     harness_locked L770-771 — `selected_chat.is_some()`); a foreign
 //     harness pick also clears model+reasoning (pick_harness L1473-1480);
@@ -38,9 +39,8 @@ import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
-import { EffortSlider } from './EffortSlider';
 import { patchOnModelPick, revalidateSelection } from './modelPicker';
-import { capitalizeEffort } from './modelLabel';
+import { modelsBoundToProvider } from './modelLabel';
 
 export interface ModelPickerSheetProps {
   runtime: AppRuntime;
@@ -64,8 +64,6 @@ const SANDBOX_LEVELS = [
 export function ModelPickerSheet({
   runtime,
   chat,
-  phase,
-  hasMessages,
   onClose,
   formSheet,
 }: ModelPickerSheetProps) {
@@ -82,11 +80,14 @@ export function ModelPickerSheet({
   );
   const config = chat.config;
   const harnessId = config?.harness;
-  const models = useMemo(
-    () => (harnessId === undefined ? [] : modelsFor(deviceId, harnessId)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deviceId, harnessId, catalogTick],
-  );
+  const models = useMemo(() => {
+    if (harnessId === undefined) return [];
+    return modelsBoundToProvider(
+      modelsFor(deviceId, harnessId),
+      harnessId,
+      config?.model,
+    );
+  }, [deviceId, harnessId, catalogTick, config?.model]);
   const levels = useMemo(
     () =>
       harnessId === undefined
@@ -107,7 +108,6 @@ export function ModelPickerSheet({
       loadModels(runtime, deviceId, harnessId).catch(() => {});
   }, [catalog, models.length, runtime, deviceId, harnessId]);
 
-  const live = phase === 'working' || phase === 'stopping';
   // RunRequest.autoApprove is a per-chat RUN field (not ChatConfig) — kept
   // in uiPrefs and applied at send time; off by default.
   const autoApprove = useAutoApprove(chat.id);
@@ -139,16 +139,6 @@ export function ModelPickerSheet({
     [runtime, chat.id, config],
   );
 
-  const pickHarness = useCallback(
-    (id: string) => {
-      if (hasMessages) return; // harness locked mid-chat
-      // Foreign harness pick: clear the remembered model+reasoning so a
-      // stale pick can't linger (pick_harness).
-      apply({ harness: id, model: undefined, reasoning: undefined });
-    },
-    [hasMessages, apply],
-  );
-
   const pickSandbox = useCallback(
     (level: string) => {
       if (level === 'danger-full-access') {
@@ -177,45 +167,6 @@ export function ModelPickerSheet({
       <Text style={[styles.title, { color: theme.text }]}>
         {t('picker.title')}
       </Text>
-      {live ? (
-        <Text style={[styles.note, { color: theme.textSecondary }]}>
-          {t('picker.appliesNext')}
-        </Text>
-      ) : null}
-
-      {/* Agents — locked once the chat exists. */}
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.agents')}
-      </Text>
-      {harnesses.map(h => (
-        <Pressable
-          key={h.id}
-          style={[
-            styles.row,
-            { borderColor: theme.border },
-            h.id === harnessId && { borderColor: theme.accent },
-            hasMessages && styles.rowDimmed,
-          ]}
-          onPress={() => pickHarness(h.id)}
-          disabled={hasMessages}
-          accessibilityRole="button"
-          accessibilityLabel={h.name}
-          accessibilityState={{
-            selected: h.id === harnessId,
-            disabled: hasMessages,
-          }}
-        >
-          <Text style={[styles.rowText, { color: theme.text }]}>{h.name}</Text>
-          {h.id === harnessId ? (
-            <Icon name="checkmark" size={14} color={theme.accent} />
-          ) : null}
-        </Pressable>
-      ))}
-      {hasMessages ? (
-        <Text style={[styles.note, { color: theme.textSecondary }]}>
-          {t('picker.harnessLocked')}
-        </Text>
-      ) : null}
 
       {/* Models — unavailable saved selection is shown, not replaced. */}
       <Text style={[styles.section, { color: theme.textSecondary }]}>
@@ -270,28 +221,6 @@ export function ModelPickerSheet({
           ) : null}
         </Pressable>
       ))}
-
-      {/* Effort — hidden with an explanation when the harness advertises
-            no levels. */}
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.effort')}
-      </Text>
-      {levels.length === 0 ? (
-        <Text style={[styles.note, { color: theme.textSecondary }]}>
-          {t('picker.effortUnsupported')}
-        </Text>
-      ) : (
-        <View style={styles.effortBlock}>
-          <Text style={[styles.rowText, { color: theme.text }]}>
-            {capitalizeEffort(config?.reasoning ?? levels[0] ?? '')}
-          </Text>
-          <EffortSlider
-            levels={levels}
-            value={config?.reasoning}
-            onChange={level => apply({ reasoning: level })}
-          />
-        </View>
-      )}
 
       {/* Model options — segmented rows; untouched choices round-trip. */}
       {(models.find(m => m.id === config?.model)?.options ?? []).map(opt => (
@@ -449,7 +378,6 @@ export function ModelPickerSheet({
 const styles = StyleSheet.create({
   modalFill: { flex: 1 },
   content: { padding: 20, gap: 10 },
-  effortBlock: { gap: 10 },
   title: { fontSize: 20, fontWeight: '700' },
   section: { fontSize: 12, fontWeight: '600', marginTop: 10 },
   note: { fontSize: 12 },

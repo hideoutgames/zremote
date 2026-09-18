@@ -37,7 +37,7 @@ jest.mock('react-native-bootsplash', () => {
   return {
     __esModule: true,
     default: {
-      hide: jest.fn(),
+      hide: jest.fn(() => Promise.resolve()),
       isVisible: jest.fn(() => false),
       HideOnDraw,
     },
@@ -226,6 +226,7 @@ jest.mock('expo-linking', () => ({
 }));
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
+  maybeCompleteAuthSession: jest.fn(() => ({ type: 'cancel' })),
 }));
 jest.mock('expo-file-system', () => ({
   File: class {

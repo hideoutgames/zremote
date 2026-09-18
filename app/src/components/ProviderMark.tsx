@@ -1,19 +1,27 @@
-// Tiny provider glyph for composer / picker rows. Distinctive color + mark
-// instead of shipping trademarked PNG logos.
+// Provider glyph for composer / picker rows. Marks are the SVGs from
+// zeronsh/zeron@853872d crates/ui/assets/icons (MIT). Claude keeps its
+// brand orange; the rest tint to the current text color.
 
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Canvas, ImageSVG, Skia } from '@shopify/react-native-skia';
+import { useTheme } from '../theme';
 import type { ProviderKind } from './modelLabel';
+import { PROVIDER_MARK_SVG } from './providerMarkSvg';
 
-const MARK: Record<ProviderKind, { bg: string; fg: string; glyph: string }> = {
-  claude: { bg: '#D97757', fg: '#FFFFFF', glyph: '✶' },
-  openai: { bg: '#10A37F', fg: '#FFFFFF', glyph: '◉' },
-  cursor: { bg: '#555555', fg: '#FFFFFF', glyph: '▸' },
-  devin: { bg: '#5B5CFF', fg: '#FFFFFF', glyph: 'D' },
-  grok: { bg: '#1A1A1A', fg: '#FFFFFF', glyph: 'X' },
-  zhipu: { bg: '#3859FF', fg: '#FFFFFF', glyph: 'Z' },
-  google: { bg: '#4285F4', fg: '#FFFFFF', glyph: 'G' },
-  generic: { bg: '#8E8E93', fg: '#FFFFFF', glyph: '◆' },
+const CLAUDE_BRAND = '#D97757';
+
+const svgFor = (kind: ProviderKind, color: string) => {
+  if (kind === 'generic') return null;
+  const xml = PROVIDER_MARK_SVG[kind];
+  if (xml === undefined) return null;
+  try {
+    const make = Skia.SVG?.MakeFromString;
+    if (typeof make !== 'function') return null;
+    return make(xml.replace(/currentColor/g, color));
+  } catch {
+    return null;
+  }
 };
 
 export function ProviderMark({
@@ -23,31 +31,29 @@ export function ProviderMark({
   kind: ProviderKind;
   size?: number;
 }) {
-  const mark = MARK[kind];
+  const theme = useTheme();
+  const tint = kind === 'claude' ? CLAUDE_BRAND : theme.text;
+  const svg = useMemo(() => svgFor(kind, tint), [kind, tint]);
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
-      style={[
-        styles.wrap,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.28,
-          backgroundColor: mark.bg,
-        },
-      ]}
+      style={[styles.wrap, { width: size, height: size }]}
     >
-      <Text
-        style={{
-          color: mark.fg,
-          fontSize: size * 0.62,
-          fontWeight: '800',
-          lineHeight: size * 0.72,
-        }}
-      >
-        {mark.glyph}
-      </Text>
+      {svg != null ? (
+        <Canvas style={{ width: size, height: size }}>
+          <ImageSVG svg={svg} x={0} y={0} width={size} height={size} />
+        </Canvas>
+      ) : (
+        <View
+          style={{
+            width: size * 0.7,
+            height: size * 0.7,
+            borderRadius: size * 0.18,
+            backgroundColor: theme.textSecondary,
+          }}
+        />
+      )}
     </View>
   );
 }

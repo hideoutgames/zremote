@@ -4,7 +4,7 @@
 const en = {
   // Sign in / org gate
   'signIn.title': 'Sign in to ZRemote',
-  'signIn.subtitle': 'Control your Zeron sessions from anywhere.',
+  'signIn.subtitle': 'Control Zeron from this device.',
   'signIn.button': 'Sign in',
   'signIn.pasteFallback.title': 'Paste the sign-in code',
   'signIn.pasteFallback.body':
@@ -16,6 +16,8 @@ const en = {
   'signIn.advanced': 'Advanced',
   'signIn.edgeUrl': 'Edge URL',
   'signIn.error.generic': 'Sign-in failed. Try again.',
+  'signIn.error.cancelled': 'Sign-in was cancelled.',
+  'signIn.useCode': 'Use a code instead',
   'signIn.demo.button': 'Try demo mode',
   'signIn.demo.hint':
     'Sample hosts and sessions, no network or account. Nothing you do here is sent anywhere.',
@@ -65,22 +67,21 @@ const en = {
   'newSession.pickHost': 'Pick a host first',
 
   // Session
-  'session.rename': 'Rename session',
+  'session.rename': 'Rename thread',
   'session.archive': 'Archive',
-  'session.copyId': 'Copy session id',
+  'session.copyId': 'Copy ID',
   'session.back': 'Back',
-  'session.empty': 'Nothing here yet — send a message to start.',
+  'session.empty': 'Send a message to start.',
   'session.messagePlaceholder': 'Message',
-  'session.steerPlaceholder': 'Steer the run…',
+  'session.steerPlaceholder': 'Steer…',
   'session.stop': 'Stop',
   'session.stopping': 'Stopping…',
   'session.steer': 'Steer',
   'session.send': 'Send',
-  'session.attachmentsBlocked':
-    'Attachments can\u2019t be sent while the agent is working on this host — stop it or wait.',
+  'session.attachmentsBlocked': 'Stop the run to attach files.',
   'session.queue': 'Queue',
   'session.queuePlaceholder': 'Queue a message…',
-  'session.workingHint': 'Agent is working — stop it or wait',
+  'session.workingHint': 'Working',
   'session.cancel': 'Cancel',
   'session.failedSend': "Message wasn't accepted",
   'session.failedSend.rejected': 'rejected',
@@ -96,6 +97,7 @@ const en = {
   'session.answered': 'Answered',
   'session.interrupted': 'Interrupted',
   'session.submit': 'Submit',
+  'session.approval': 'Approval Card',
   'session.working': 'Working',
   'session.queuedLocally': 'Queued',
   'session.changes': 'Changes',
@@ -243,10 +245,11 @@ const en = {
   'composer.files': 'Files',
   'composer.attach': 'Add attachment',
   'composer.dictate': 'Dictate',
+  'composer.context': 'Context used',
   'composer.dictationUnavailable': 'Dictation unavailable on this build',
   'composer.removeAttachment': 'Remove {name}',
   'composer.effort': 'Effort',
-  'composer.more': 'More…',
+  'composer.more': 'More',
   'composer.agents': 'Agents',
 
   // Shared message queue
@@ -265,7 +268,7 @@ const en = {
   'picker.effort': 'Effort',
   'picker.effortUnsupported': 'This agent doesn\u2019t support effort levels.',
   'picker.harnessLocked': 'The agent is locked once a chat has messages.',
-  'picker.unavailable': 'Unavailable on this host',
+  'picker.unavailable': 'Unavailable',
   'picker.appliesNext': 'Changes apply to the next message.',
   'picker.sandbox': 'Sandbox',
   'picker.sandbox.read-only': 'Read only',

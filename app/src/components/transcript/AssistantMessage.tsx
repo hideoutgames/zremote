@@ -9,7 +9,6 @@ import React, { useMemo } from 'react';
 import {
   Linking,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -96,6 +95,7 @@ const PartView = ({
   const mdStyle = markdownStyleFor(theme);
   switch (part.kind) {
     case 'text':
+      if ((part.text ?? '').trim() === '') return null;
       return (
         <EnrichedMarkdownText
           markdown={part.text}
@@ -106,6 +106,7 @@ const PartView = ({
         />
       );
     case 'reasoning':
+      if ((part.text ?? '').trim() === '') return null;
       return (
         <Pressable
           style={styles.traceRow}
@@ -173,7 +174,6 @@ export const AssistantMessage = React.memo(function ({
   phase,
   onOpenReasoning,
   onFetchOutput,
-  chatId,
 }: {
   entry: MessageEntry;
   phase: string;
@@ -187,8 +187,12 @@ export const AssistantMessage = React.memo(function ({
   const lastTextId = [...entry.parts]
     .reverse()
     .find(p => p.kind === 'text')?.id;
-  const waiting =
-    streaming && !entry.parts.some(p => p.kind === 'text' && p.text !== '');
+  const hasVisible = entry.parts.some(p => {
+    if (p.kind === 'text' || p.kind === 'reasoning')
+      return (p.text ?? '').trim() !== '';
+    return p.kind === 'tool' || p.kind === 'input' || p.kind === 'error';
+  });
+  const waiting = !hasVisible && (streaming || phase === 'working');
 
   const fullText = entry.parts
     .filter(p => p.kind === 'text')
@@ -215,25 +219,24 @@ export const AssistantMessage = React.memo(function ({
                 align="left"
               />
             </View>
-          ) : (
-            items.map((item, i) =>
-              item.kind === 'tools' ? (
-                <ToolActivity
-                  key={`tools-${i}`}
-                  parts={item.parts}
-                  onFetchOutput={onFetchOutput}
-                />
-              ) : (
-                <PartView
-                  key={item.part.id}
-                  part={item.part}
-                  streaming={streaming}
-                  isLastText={item.part.id === lastTextId}
-                  onOpenReasoning={onOpenReasoning}
-                  onFetchOutput={onFetchOutput}
-                />
-              ),
-            )
+          ) : null}
+          {items.map((item, i) =>
+            item.kind === 'tools' ? (
+              <ToolActivity
+                key={`tools-${i}`}
+                parts={item.parts}
+                onFetchOutput={onFetchOutput}
+              />
+            ) : (
+              <PartView
+                key={item.part.id}
+                part={item.part}
+                streaming={streaming}
+                isLastText={item.part.id === lastTextId}
+                onOpenReasoning={onOpenReasoning}
+                onFetchOutput={onFetchOutput}
+              />
+            ),
           )}
           {entry.status === 'aborted' ? (
             <Text style={[styles.error, { color: theme.danger }]}>
@@ -247,35 +250,20 @@ export const AssistantMessage = React.memo(function ({
           key="copy"
           onSelect={() => Clipboard.setStringAsync(fullText).catch(() => {})}
         >
-          <ContextMenu.ItemTitle>{t('common.copyText')}</ContextMenu.ItemTitle>
+          <ContextMenu.ItemTitle>{t('common.copy')}</ContextMenu.ItemTitle>
+          <ContextMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
         </ContextMenu.Item>
-        <ContextMenu.Item
-          key="share"
-          onSelect={() => Share.share({ message: fullText }).catch(() => {})}
-        >
-          <ContextMenu.ItemTitle>{t('common.share')}</ContextMenu.ItemTitle>
-        </ContextMenu.Item>
-        {chatId !== undefined ? (
-          <ContextMenu.Item
-            key="link"
-            onSelect={() =>
-              Clipboard.setStringAsync(`zeron://session/${chatId}`).catch(
-                () => {},
-              )
-            }
-          >
-            <ContextMenu.ItemTitle>
-              {t('common.copyLink')}
-            </ContextMenu.ItemTitle>
-          </ContextMenu.Item>
-        ) : null}
       </ContextMenu.Content>
     </ContextMenu.Root>
   );
 });
 
 const styles = StyleSheet.create({
-  row: { paddingHorizontal: 16, paddingVertical: 4 },
+  row: {
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   traceRow: {
     flexDirection: 'row',

@@ -43,6 +43,7 @@ const SF_TO_MDI: Record<string, string> = {
   wrench: 'wrench',
   'chevron.left': 'chevron-left',
   'ellipsis.circle': 'dots-horizontal-circle-outline',
+  ellipsis: 'dots-horizontal',
   gauge: 'gauge',
   'checkmark.circle': 'check-circle-outline',
   'circle.fill': 'circle',

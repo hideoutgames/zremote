@@ -201,10 +201,19 @@ test('question panel: options are labelled buttons', async () => {
   ).toBeGreaterThanOrEqual(3); // two options + submit
 });
 
-test('model picker: agent/model/effort controls are labelled', async () => {
+test('model picker: model rows are labelled', async () => {
   const catalog: DeviceCatalog = {
     harnesses: [{ id: 'claude', name: 'Claude', reasoningLevels: [] } as never],
-    modelsByHarness: { claude: [] },
+    modelsByHarness: {
+      claude: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          reasoningLevels: [],
+          options: [],
+        },
+      ],
+    },
     loading: false,
     loadedAt: Date.now(),
   };
@@ -217,7 +226,7 @@ test('model picker: agent/model/effort controls are labelled', async () => {
         deviceId: 'h1',
         archived: false,
         createdAt: 0,
-        config: { harness: 'claude', modelOptions: {} },
+        config: { harness: 'claude', model: 'opus', modelOptions: {} },
       }}
       phase="idle"
       hasMessages={false}
@@ -225,7 +234,6 @@ test('model picker: agent/model/effort controls are labelled', async () => {
     />,
   );
   const labels = labelled(tree.root);
-  // Every pressable row carries a role + label.
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
-  expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
+  expect(labels.some(l => l.label.includes('Opus'))).toBe(true);
 });

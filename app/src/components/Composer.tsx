@@ -54,11 +54,12 @@ import {
   setLiveActionPrefersSteer,
   uiPrefsStore,
 } from '../zeron/state/uiPrefs';
-import type { HarnessDescriptor } from '../zeron/protocol/types';
+import type { ContextUsage, HarnessDescriptor } from '../zeron/protocol/types';
 import { composerAction, harnessSteers, liveAction } from './composerAction';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
+import { ContextUsageBar } from './agentsKit/ContextUsageBar';
 import { EffortOverlay } from './EffortOverlay';
 import { ProviderMark } from './ProviderMark';
 import {
@@ -123,6 +124,9 @@ export interface ComposerProps {
   onSendBlocked: () => void;
   composerRef: React.RefObject<View | null>;
   onLayout: (event: LayoutChangeEvent) => void;
+  /** Worktree / host pill rendered as the inner composer top bar. */
+  checkout?: React.ReactNode;
+  contextUsage?: ContextUsage;
 }
 
 export const Composer = React.memo(function ({
@@ -134,9 +138,9 @@ export const Composer = React.memo(function ({
   modelShortLabel,
   modelProvider,
   models,
-  selectedModelId,
+  selectedModelId: _selectedModelId,
   agents,
-  selectedAgentId,
+  selectedAgentId: _selectedAgentId,
   harnessLocked,
   effortLevels,
   effortValue,
@@ -156,6 +160,8 @@ export const Composer = React.memo(function ({
   onSendBlocked,
   composerRef,
   onLayout,
+  checkout,
+  contextUsage,
 }: ComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -352,6 +358,13 @@ export const Composer = React.memo(function ({
         }
       >
         <Glass style={styles.glass}>
+          {checkout != null ? (
+            <View
+              style={[styles.checkoutRow, { borderBottomColor: theme.border }]}
+            >
+              {checkout}
+            </View>
+          ) : null}
           {/* ── Upper tier: attachment strip + input ──────────────────── */}
           <Animated.View
             style={[styles.stripClip, stripStyle]}
@@ -530,11 +543,6 @@ export const Composer = React.memo(function ({
                     >
                       {modelShortLabel}
                     </Text>
-                    <Icon
-                      name="chevron.down"
-                      size={11}
-                      color={theme.textSecondary}
-                    />
                   </Glass>
                 </View>
               </DropdownMenu.Trigger>
@@ -553,7 +561,7 @@ export const Composer = React.memo(function ({
                           onSelect={() => onPickAgent(a.id)}
                         >
                           <DropdownMenu.ItemTitle>
-                            {a.id === selectedAgentId ? `✓ ${a.name}` : a.name}
+                            {a.name}
                           </DropdownMenu.ItemTitle>
                         </DropdownMenu.Item>
                       ))}
@@ -565,9 +573,7 @@ export const Composer = React.memo(function ({
                     key={m.id}
                     onSelect={() => onPickModel(m.id)}
                   >
-                    <DropdownMenu.ItemTitle>
-                      {m.id === selectedModelId ? `✓ ${m.label}` : m.label}
-                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemTitle>{m.label}</DropdownMenu.ItemTitle>
                   </DropdownMenu.Item>
                 ))}
                 <DropdownMenu.Item key="more" onSelect={onOpenMore}>
@@ -616,6 +622,8 @@ export const Composer = React.memo(function ({
             ) : null}
 
             <View style={styles.spacer} />
+
+            <ContextUsageBar usage={contextUsage} />
 
             <Pressable
               onPress={toggleDictation}
@@ -771,6 +779,9 @@ const styles = StyleSheet.create({
   glass: {
     borderRadius: 24,
     overflow: 'hidden',
+  },
+  checkoutRow: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   lowerRow: {
     flexDirection: 'row',

@@ -1,6 +1,7 @@
 // SessionScreen — the fork's ChatScreen shape driven by the synchronized
-// session store: KeyboardAwareLegendList transcript, glass composer, scroll
-// chevron, reasoning sheet, context-usage bar, failed-send banner.
+// session store: KeyboardAwareLegendList transcript, glass composer (worktree
+// checkout + context ring live inside it), scroll chevron, reasoning sheet,
+// failed-send banner.
 
 import React, {
   Suspense,
@@ -22,11 +23,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  type SharedValue,
-} from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { type LegendListRef } from '@legendapp/list/react-native';
 import {
@@ -79,12 +75,15 @@ import { CAP_QUEUE_ACTIONS } from '../zeron/attachments/sendPlan';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
-import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { patchOnModelPick } from '../components/modelPicker';
-import { providerKind, shortModelLabel } from '../components/modelLabel';
+import {
+  providerKind,
+  shortModelLabel,
+  modelsBoundToProvider,
+} from '../components/modelLabel';
 import { ChangesScreen } from './ChangesScreen';
 import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
@@ -107,27 +106,19 @@ export function SessionScreen({
   onBack,
   leadingIcon,
   contentMaxWidth,
-  leadingInsetSV,
   onToggleInspector,
 }: {
   chatId: string;
   onBack: () => void;
   /** iPad split view: replaces the back chevron with a sidebar toggle. */
   leadingIcon?: string;
-  /** iPad: cap the transcript/composer measure (~720pt), centered. */
+  /** iPad: cap the transcript/composer measure to the detail column. */
   contentMaxWidth?: number;
-  /** iPad: animated leading inset under the floating sidebar — applied to
-   * the header and composer measure only; the transcript scrolls under. */
-  leadingInsetSV?: SharedValue<number>;
   /** iPad: shows an inspector toggle in the header. */
   onToggleInspector?: () => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const fallbackInset = useSharedValue(0);
-  const leadingPad = useAnimatedStyle(() => ({
-    paddingLeft: (leadingInsetSV ?? fallbackInset).value,
-  }));
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const auth = useAuthSession();
@@ -165,14 +156,14 @@ export function SessionScreen({
   const harness = catalog?.harnesses.find(h => h.id === chat?.config?.harness);
   const harnessId = chat?.config?.harness;
   const catalogTick = catalog?.loadedAt ?? 0;
-  const pickerModels = useMemo(
-    () =>
-      hostDeviceId === undefined || harnessId === undefined
-        ? []
-        : modelsFor(hostDeviceId, harnessId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hostDeviceId, harnessId, catalogTick],
-  );
+  const pickerModels = useMemo(() => {
+    if (hostDeviceId === undefined || harnessId === undefined) return [];
+    return modelsBoundToProvider(
+      modelsFor(hostDeviceId, harnessId),
+      harnessId,
+      chat?.config?.model,
+    );
+  }, [hostDeviceId, harnessId, catalogTick, chat?.config?.model]);
   const effortLevels = useMemo(
     () =>
       hostDeviceId === undefined || harnessId === undefined
@@ -506,8 +497,8 @@ export function SessionScreen({
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + 6 }, leadingPad]}
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
       >
         <Pressable
@@ -527,30 +518,41 @@ export function SessionScreen({
             />
           </Glass>
         </Pressable>
-        <Pressable
-          style={styles.headerText}
-          onPress={onRename}
-          hitSlop={4}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.rename')}
-        >
-          <Glass style={styles.titlePill}>
-            <Text
-              style={[styles.title, { color: theme.text }]}
-              numberOfLines={1}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <Pressable
+              style={styles.headerText}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={t('session.rename')}
             >
-              {sessionTitle(chat)}
-            </Text>
-            {subtitle !== '' ? (
-              <Text
-                style={[styles.subtitle, { color: theme.textSecondary }]}
-                numberOfLines={1}
-              >
-                {subtitle}
-              </Text>
-            ) : null}
-          </Glass>
-        </Pressable>
+              <Glass style={styles.titlePill}>
+                <Text
+                  style={[styles.title, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {sessionTitle(chat)}
+                </Text>
+                {subtitle !== '' ? (
+                  <Text
+                    style={[styles.subtitle, { color: theme.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </Glass>
+            </Pressable>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content>
+            <DropdownMenu.Item key="rename" onSelect={onRename}>
+              <DropdownMenu.ItemTitle>
+                {t('session.rename')}
+              </DropdownMenu.ItemTitle>
+              <DropdownMenu.ItemIcon ios={{ name: 'pencil' }} />
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
         <GlassContainer spacing={8} style={styles.headerRight}>
           {onToggleInspector !== undefined ? (
             <Pressable
@@ -571,14 +573,13 @@ export function SessionScreen({
           ) : null}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
-              <Glass
-                interactive
-                style={styles.circle}
+              <View
+                style={styles.headerBtn}
                 accessibilityRole="button"
                 accessibilityLabel={t('session.overflow')}
               >
-                <Icon name="ellipsis.circle" size={18} color={theme.text} />
-              </Glass>
+                <Icon name={'ellipsis' as never} size={18} color={theme.text} />
+              </View>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content>
               <DropdownMenu.Item
@@ -588,6 +589,7 @@ export function SessionScreen({
                 <DropdownMenu.ItemTitle>
                   {t('session.changes')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'doc.text' }} />
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 key="files"
@@ -596,6 +598,7 @@ export function SessionScreen({
                 <DropdownMenu.ItemTitle>
                   {t('session.files')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'folder' }} />
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 key="terminal"
@@ -604,6 +607,7 @@ export function SessionScreen({
                 <DropdownMenu.ItemTitle>
                   {t('session.terminal')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'terminal' }} />
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 key="history"
@@ -612,6 +616,7 @@ export function SessionScreen({
                 <DropdownMenu.ItemTitle>
                   {t('session.history')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'clock' }} />
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 key="previews"
@@ -620,6 +625,7 @@ export function SessionScreen({
                 <DropdownMenu.ItemTitle>
                   {t('session.previews')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'safari' }} />
               </DropdownMenu.Item>
               <DropdownMenu.Item key="archive" onSelect={onArchive}>
                 <DropdownMenu.ItemTitle>
@@ -627,18 +633,18 @@ export function SessionScreen({
                     ? t('home.row.unarchive')
                     : t('session.archive')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'archivebox' }} />
               </DropdownMenu.Item>
               <DropdownMenu.Item key="copy" onSelect={onCopyId}>
                 <DropdownMenu.ItemTitle>
                   {t('session.copyId')}
                 </DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </GlassContainer>
-      </Animated.View>
-
-      <ContextUsageBar usage={session.meta.contextUsage} />
+      </View>
 
       {session.failedSends.map(f => (
         <View
@@ -676,24 +682,13 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        <Animated.View
-          style={[
+        <View
+          style={
             contentMaxWidth !== undefined
               ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-              : undefined,
-            leadingPad,
-          ]}
+              : undefined
+          }
         >
-          {runtime !== null && chat !== undefined ? (
-            <CheckoutSelector
-              runtime={runtime}
-              chat={chat}
-              host={host}
-              phase={phase}
-              repoPath={space?.path}
-              label={subtitle !== '' ? subtitle : t('checkout.noProject')}
-            />
-          ) : null}
           <Composer
             chatId={chatId}
             phase={phase}
@@ -710,7 +705,7 @@ export function SessionScreen({
             selectedModelId={chat?.config?.model}
             agents={pickerAgents.map(a => ({ id: a.id, name: a.name }))}
             selectedAgentId={harnessId}
-            harnessLocked={entries.length > 0}
+            harnessLocked
             effortLevels={effortLevels}
             effortValue={chat?.config?.reasoning}
             onPickModel={onPickModel}
@@ -729,8 +724,22 @@ export function SessionScreen({
             onSendBlocked={onSendBlocked}
             composerRef={composerRef}
             onLayout={onComposerLayout}
+            contextUsage={session.meta.contextUsage}
+            checkout={
+              runtime !== null && chat !== undefined ? (
+                <CheckoutSelector
+                  runtime={runtime}
+                  chat={chat}
+                  host={host}
+                  phase={phase}
+                  repoPath={space?.path}
+                  label={subtitle !== '' ? subtitle : t('checkout.noProject')}
+                  embedded
+                />
+              ) : null
+            }
           />
-        </Animated.View>
+        </View>
       </KeyboardStickyView>
 
       {queueOpen ? (

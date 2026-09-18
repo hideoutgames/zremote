@@ -1,5 +1,6 @@
-// Adaptive layout helper — pure. Regular width ≥ 700pt splits into
-// sidebar + detail; the inspector appears at ≥ 1100pt or when toggled.
+// Adaptive layout helper — pure. Regular width ≥ 700pt splits into reserved
+// sidebar + detail columns; the inspector is a reserved column only when the
+// user opens it (never auto-shown from width).
 
 export interface LayoutPrefs {
   sidebarCollapsed: boolean;
@@ -19,8 +20,12 @@ export interface LayoutPlan {
 }
 
 export const REGULAR_MIN_WIDTH = 700;
+/** Kept for callers/tests; inspector no longer auto-opens at this width. */
 export const INSPECTOR_AUTO_WIDTH = 1100;
-export const MEASURE_CAP = 720;
+export const MEASURE_CAP_MIN = 720;
+export const MEASURE_CAP_MAX = 1100;
+/** @deprecated use MEASURE_CAP_MIN — phone/compact fallback. */
+export const MEASURE_CAP = MEASURE_CAP_MIN;
 
 export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
   if (width < REGULAR_MIN_WIDTH) {
@@ -30,16 +35,23 @@ export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
       inspectorVisible: false,
       sidebarWidth: 0,
       inspectorWidth: 0,
-      measureCap: MEASURE_CAP,
+      measureCap: Math.min(MEASURE_CAP_MAX, width),
     };
   }
+  const sidebarWidth = Math.min(360, Math.max(300, Math.round(width * 0.24)));
   const inspectorWidth = Math.min(480, Math.max(360, Math.round(width * 0.28)));
+  const sidebarVisible = !prefs.sidebarCollapsed;
+  const inspectorVisible = prefs.inspectorOpen;
+  const occupied =
+    (sidebarVisible ? sidebarWidth : 0) +
+    (inspectorVisible ? inspectorWidth : 0);
+  const detail = Math.max(0, width - occupied);
   return {
     mode: 'regular',
-    sidebarVisible: !prefs.sidebarCollapsed,
-    inspectorVisible: width >= INSPECTOR_AUTO_WIDTH || prefs.inspectorOpen,
-    sidebarWidth: Math.min(360, Math.max(300, Math.round(width * 0.24))),
+    sidebarVisible,
+    inspectorVisible,
+    sidebarWidth,
     inspectorWidth,
-    measureCap: MEASURE_CAP,
+    measureCap: Math.min(MEASURE_CAP_MAX, detail),
   };
 };

@@ -1,11 +1,13 @@
-// Sign-in: browser auth session → code exchange; paste-code fallback when the
-// browser doesn't return; collapsed Advanced section with the edge URL.
+// Sign-in: ASWebAuthenticationSession callback → code exchange. Paste-code
+// is opt-in ("Use a code instead") except in Expo Go, where universal links
+// cannot land. Collapsed Advanced section with the edge URL.
 
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { openAuthSession } from '../zeron/native/authBrowser';
+import { parseCallbackUrl } from '../zeron/auth/authKit';
 import { appConfig } from '../zeron/native/appConfig';
 import { useAuthSession } from '../app/runtimeContext';
 import { Glass } from '../components/Glass';
@@ -50,18 +52,25 @@ export function SignInScreen() {
       }
       const result = await openAuthSession(url, `${edgeUrl}/auth/cli/callback`);
       if (result.type === 'success') {
-        const link = new URL(result.url);
-        await auth.completeSignIn({
-          code: link.searchParams.get('code') ?? '',
-          state: link.searchParams.get('state') ?? '',
-        });
-      } else {
-        setPasteOpen(true);
+        const parsed = parseCallbackUrl(result.url);
+        if (parsed.error !== undefined) {
+          setError(t('signIn.error.generic'));
+          return;
+        }
+        if (parsed.code !== undefined && parsed.state !== undefined) {
+          await auth.completeSignIn({
+            code: parsed.code,
+            state: parsed.state,
+          });
+        }
+        // No code on the returned URL: the universal-link listener in
+        // ZeronApp finishes the exchange. Do not fall through to paste.
+        return;
       }
+      setError(t('signIn.error.cancelled'));
     } catch (e) {
       log.warn(`sign-in failed: ${e}`);
       setError(t('signIn.error.generic'));
-      setPasteOpen(true);
     } finally {
       setBusy(false);
     }
@@ -99,6 +108,14 @@ export function SignInScreen() {
 
       {error !== null ? (
         <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
+      ) : null}
+
+      {!isExpoGo && !pasteOpen ? (
+        <Pressable onPress={() => setPasteOpen(true)} hitSlop={8}>
+          <Text style={[styles.useCode, { color: theme.textSecondary }]}>
+            {t('signIn.useCode')}
+          </Text>
+        </Pressable>
       ) : null}
 
       {pasteOpen ? (
@@ -194,6 +211,7 @@ const styles = StyleSheet.create({
   },
   primaryText: { fontSize: 17, fontWeight: '600' },
   error: { fontSize: 13 },
+  useCode: { fontSize: 13, textDecorationLine: 'underline' },
   pasteBox: { alignSelf: 'stretch', gap: 10, marginTop: 8 },
   pasteTitle: { fontSize: 15, fontWeight: '600' },
   pasteBody: { fontSize: 13, lineHeight: 18 },

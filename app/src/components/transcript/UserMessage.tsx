@@ -6,7 +6,6 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Share } from 'react-native';
 import * as ContextMenu from 'zeego/context-menu';
 import Animated, {
   Easing,
@@ -31,7 +30,6 @@ const textOf = (entry: MessageEntry): string =>
 
 export const UserMessage = React.memo(function ({
   entry,
-  chatId,
 }: {
   entry: MessageEntry;
   chatId?: string;
@@ -44,73 +42,43 @@ export const UserMessage = React.memo(function ({
   const foldable = text.length > FOLD_CHARS;
   const shown = expanded || !foldable ? text : `${text.slice(0, FOLD_CHARS)}…`;
 
-  const menu = (
-    <ContextMenu.Content>
-      <ContextMenu.Item
-        key="copy"
-        onSelect={() => Clipboard.setStringAsync(text).catch(() => {})}
-      >
-        <ContextMenu.ItemTitle>{t('common.copyText')}</ContextMenu.ItemTitle>
-      </ContextMenu.Item>
-      <ContextMenu.Item
-        key="share"
-        onSelect={() => Share.share({ message: text }).catch(() => {})}
-      >
-        <ContextMenu.ItemTitle>{t('common.share')}</ContextMenu.ItemTitle>
-      </ContextMenu.Item>
-      {chatId !== undefined ? (
-        <ContextMenu.Item
-          key="link"
-          onSelect={() =>
-            Clipboard.setStringAsync(`zeron://session/${chatId}`).catch(
-              () => {},
-            )
-          }
-        >
-          <ContextMenu.ItemTitle>{t('common.copyLink')}</ContextMenu.ItemTitle>
-        </ContextMenu.Item>
-      ) : null}
-    </ContextMenu.Content>
-  );
   return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger>
-        <Animated.View
-          style={styles.row}
-          entering={
-            reduceMotion
-              ? undefined
-              : SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
-          }
-        >
-          {images.length > 0 ? (
-            <View style={styles.attachmentRow}>
-              {images.map(p =>
-                p.kind === 'image' ? (
-                  <View
-                    key={p.id}
-                    style={[
-                      styles.attachmentChip,
-                      {
-                        backgroundColor: theme.surface,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                  >
-                    <Icon name="photo" size={13} color={theme.textSecondary} />
-                    <Text
-                      style={[styles.attachmentName, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {p.name}
-                    </Text>
-                  </View>
-                ) : null,
-              )}
-            </View>
-          ) : null}
-          {text !== '' ? (
-            <View
+    <View style={styles.row}>
+      {images.length > 0 ? (
+        <View style={styles.attachmentRow}>
+          {images.map(p =>
+            p.kind === 'image' ? (
+              <View
+                key={p.id}
+                style={[
+                  styles.attachmentChip,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Icon name="photo" size={13} color={theme.textSecondary} />
+                <Text
+                  style={[styles.attachmentName, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {p.name}
+                </Text>
+              </View>
+            ) : null,
+          )}
+        </View>
+      ) : null}
+      {text !== '' ? (
+        <ContextMenu.Root>
+          <ContextMenu.Trigger>
+            <Animated.View
+              entering={
+                reduceMotion
+                  ? undefined
+                  : SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
+              }
               style={[
                 styles.bubble,
                 { backgroundColor: theme.userBubbleBackground },
@@ -137,12 +105,20 @@ export const UserMessage = React.memo(function ({
                   </Text>
                 </Pressable>
               ) : null}
-            </View>
-          ) : null}
-        </Animated.View>
-      </ContextMenu.Trigger>
-      {menu}
-    </ContextMenu.Root>
+            </Animated.View>
+          </ContextMenu.Trigger>
+          <ContextMenu.Content>
+            <ContextMenu.Item
+              key="copy"
+              onSelect={() => Clipboard.setStringAsync(text).catch(() => {})}
+            >
+              <ContextMenu.ItemTitle>{t('common.copy')}</ContextMenu.ItemTitle>
+              <ContextMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Root>
+      ) : null}
+    </View>
   );
 });
 

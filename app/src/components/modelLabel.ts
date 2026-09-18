@@ -41,6 +41,21 @@ export const capitalizeEffort = (level: string): string =>
 export const composerShowsEffort = (levels: readonly string[]): boolean =>
   levels.length > 0;
 
+/** Models the composer may offer once a session is bound to a provider. */
+export const modelsBoundToProvider = <T extends { id: string }>(
+  models: readonly T[],
+  harness: string | undefined,
+  selectedModelId: string | undefined,
+): T[] => {
+  if (selectedModelId === undefined) return [...models];
+  const kindOf = (id?: string): ProviderKind => {
+    const fromModel = providerKind(undefined, id);
+    return fromModel === 'generic' ? providerKind(harness, id) : fromModel;
+  };
+  const kind = kindOf(selectedModelId);
+  return models.filter(m => kindOf(m.id) === kind);
+};
+
 /** Map harness + model id to a provider mark. Model id wins for mixed catalogs. */
 export const providerKind = (
   harness?: string,

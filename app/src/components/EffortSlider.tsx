@@ -38,6 +38,8 @@ export interface EffortSliderProps {
   value: string | undefined;
   onChange: (level: string) => void;
   disabled?: boolean;
+  /** `glass` — transparent track on Liquid Glass. */
+  tone?: 'solid' | 'glass';
 }
 
 const SNAP = { duration: 200, easing: Easing.out(Easing.cubic) } as const;
@@ -47,6 +49,7 @@ export function EffortSlider({
   value,
   onChange,
   disabled = false,
+  tone = 'solid',
 }: EffortSliderProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
@@ -124,7 +127,12 @@ export function EffortSlider({
       effortSliderThumbInset,
     );
   const progressInset = thumbCenterStart - effortSliderProgressHeight / 2;
-  const capsule = theme.scheme === 'dark' ? '#2C2C2E' : '#FFFFFF';
+  const capsule =
+    tone === 'glass'
+      ? 'transparent'
+      : theme.scheme === 'dark'
+      ? '#2C2C2E'
+      : '#FFFFFF';
   const fill = theme.text;
   const thumb = theme.scheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const tickMuted =

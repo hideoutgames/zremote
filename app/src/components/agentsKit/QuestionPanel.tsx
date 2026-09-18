@@ -64,9 +64,11 @@ export const QuestionPanel = React.memo(function ({
     >
       {questions.map(q => (
         <View key={q.id} style={styles.question}>
-          <Text style={[styles.header, { color: theme.textSecondary }]}>
-            {q.header}
-          </Text>
+          {q.header !== undefined && q.header !== '' ? (
+            <Text style={[styles.header, { color: theme.textSecondary }]}>
+              {q.header}
+            </Text>
+          ) : null}
           <Text style={[styles.prompt, { color: theme.text }]}>
             {q.question}
           </Text>
@@ -82,8 +84,12 @@ export const QuestionPanel = React.memo(function ({
                   accessibilityState={{ selected }}
                   style={[
                     styles.option,
-                    { borderColor: selected ? theme.accent : theme.border },
-                    selected && { backgroundColor: theme.accent + '22' },
+                    {
+                      borderColor: selected ? theme.accent : theme.border,
+                      backgroundColor: selected
+                        ? theme.accent + '22'
+                        : 'transparent',
+                    },
                   ]}
                 >
                   <Text
@@ -94,6 +100,9 @@ export const QuestionPanel = React.memo(function ({
                   >
                     {option}
                   </Text>
+                  {selected ? (
+                    <Icon name="checkmark" size={14} color={theme.accent} />
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -111,7 +120,6 @@ export const QuestionPanel = React.memo(function ({
           { backgroundColor: complete ? theme.accent : theme.border },
         ]}
       >
-        <Icon name="arrow.up" size={14} color="#FFFFFF" />
         <Text style={styles.submitText}>{t('session.submit')}</Text>
       </Pressable>
     </View>
@@ -120,29 +128,32 @@ export const QuestionPanel = React.memo(function ({
 
 const styles = StyleSheet.create({
   panel: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
+    padding: 16,
     gap: 14,
+    marginHorizontal: 8,
+    marginTop: 8,
   },
   question: { gap: 8 },
   header: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   prompt: { fontSize: 15, lineHeight: 20 },
-  options: { gap: 6 },
+  options: { gap: 8 },
   option: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  optionText: { fontSize: 14 },
-  submit: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: 10,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
   },
-  submitText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  optionText: { fontSize: 15, flex: 1, paddingRight: 8 },
+  submit: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  submitText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });

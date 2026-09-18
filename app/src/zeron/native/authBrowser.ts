@@ -29,3 +29,9 @@ export const addUrlListener = (
   const sub = Linking.addEventListener('url', e => cb(e.url));
   return { remove: () => sub.remove() };
 };
+
+/** Completes an AuthSession that redirected back into the app (universal
+ *  link). Safe to call at module load; a no-op when no session is pending. */
+export const maybeCompleteAuthSession = (): void => {
+  WebBrowser.maybeCompleteAuthSession();
+};
