@@ -53,7 +53,7 @@ Needs a Mac build, a device, or a host in the right state:
 - Terminal on-device rendering/input (font metrics are measured constants).
 - Checkout selector UI + `SwitchRef`/`CreateWorktree` round-trip.
 - Files/Changes/History RPC round-trips on a live checkout.
-- Previews screen (needs a checkout with running services).
+- Previews screen exists but is unwired from the session overflow.
 - Agent account flows (activate/forget/login) — need provider CLIs.
 - Device rename / `UpdateStatus` / `ApplyUpdate` / title settings.
 - Adaptive shell visuals on iPad; account isolation (by construction);

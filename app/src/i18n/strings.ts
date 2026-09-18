@@ -156,6 +156,8 @@ const en = {
   'history.search': 'Search commits…',
   'history.fetch': 'Fetch all',
   'history.copySha': 'Copy SHA',
+  'history.empty': 'No pull requests in this thread.',
+  'history.prRow': '#{number} {title}',
 
   // Accounts
   'accounts.title': 'Agent accounts',
@@ -329,6 +331,7 @@ const en = {
   'pr.open': 'Open',
   'pr.merged': 'Merged',
   'pr.draft': 'Draft',
+  'pr.closed': 'Closed',
 
   'common.cancel': 'Cancel',
   'common.enable': 'Enable',

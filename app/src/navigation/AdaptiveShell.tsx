@@ -1,7 +1,9 @@
 // Adaptive navigation shell (JS — the UISplitViewController-backed container
 // in modules/zeron-split-view is written but unverified, so this is what
 // ships). Compact width keeps the Home↔Session pager; regular width (≥700pt)
-// splits into Sidebar | Detail. Workspace tools open from the session menu.
+// splits into Sidebar | Detail. The right inspector column is gone —
+// History / Files / Terminal open from the session overflow as 75%
+// SessionSheets (same chrome as View details).
 //
 // selectedChatId, sidebar collapse, inspector tab and drafts all live in this
 // component (or the stores), so they survive size-class changes and rotation.
