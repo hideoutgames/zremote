@@ -148,7 +148,8 @@ export function VoicePill({
         {...(active ? pan.panHandlers : {})}
         style={[
           styles.pill,
-          { backgroundColor: fill, opacity: supported ? 1 : 0.45 },
+          { backgroundColor: fill },
+          supported ? undefined : styles.pillDim,
           pillStyle,
         ]}
       >
@@ -199,6 +200,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
+  pillDim: { opacity: 0.45 },
   openRow: {
     flex: 1,
     flexDirection: 'row',
