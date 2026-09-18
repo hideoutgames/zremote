@@ -14,6 +14,7 @@ import {
 } from '../src/app/runtimeContext';
 import { dictationUnavailable } from '../src/zeron/native/dictation';
 import { ModelPickerSheet } from '../src/components/ModelPickerSheet';
+import { QueuePanel } from '../src/components/QueuePanel';
 import {
   catalogStore,
   type DeviceCatalog,
@@ -75,9 +76,17 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
       roomState="connected"
       harness={undefined}
       capabilities={new Set()}
-      modelLabel="Agent · Default"
-      onOpenModelPicker={() => {}}
-      onOpenQueue={() => {}}
+      modelLabel="Default"
+      harnessId="claude-code"
+      recentItems={[
+        { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
+      ]}
+      onPickRecentModel={() => {}}
+      onOpenMoreModels={() => {}}
+      effortLabel="High"
+      effortSupported
+      fastEnabled={false}
+      onOpenEffort={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
       onSteer={() => {}}
@@ -100,7 +109,8 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   expect(labels.some(l => l.label === 'Dictate' || /dict/i.test(l.label))).toBe(
     true,
   );
-  expect(labels.some(l => l.label === 'Agent · Default')).toBe(true);
+  expect(labels.some(l => l.label === 'Default')).toBe(true);
+  expect(labels.some(l => l.label === 'High')).toBe(true);
 });
 
 test('session row: role button, label contains title + status + host', async () => {
@@ -144,7 +154,7 @@ test('question panel: options are labelled buttons', async () => {
   ).toBeGreaterThanOrEqual(3); // two options + submit
 });
 
-test('model picker: agent/model/effort controls are labelled', async () => {
+test('model picker: search, provider groups, and sandbox are labelled', async () => {
   const catalog: DeviceCatalog = {
     harnesses: [{ id: 'claude', name: 'Claude', reasoningLevels: [] } as never],
     modelsByHarness: { claude: [] },
@@ -171,4 +181,32 @@ test('model picker: agent/model/effort controls are labelled', async () => {
   // Every pressable row carries a role + label.
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
   expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
+});
+
+test('queue panel: send now and delete are icon-only labelled buttons', async () => {
+  const tree = await render(
+    <QueuePanel
+      queue={[
+        {
+          id: 'q1',
+          text: 'follow up',
+          issuedBy: 'p',
+          issuedAt: 1,
+        },
+      ]}
+      actionsSupported
+      pending={new Set()}
+      canSteer={false}
+      onAction={() => {}}
+      onMove={() => {}}
+    />,
+  );
+  const labels = labelled(tree.root);
+  expect(labels.some(l => l.role === 'button' && l.label === 'Send now')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.role === 'button' && l.label === 'Remove')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.label === 'Reorder')).toBe(true);
 });

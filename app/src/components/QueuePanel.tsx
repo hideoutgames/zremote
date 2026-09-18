@@ -1,12 +1,10 @@
-// QueuePanel — port of apps/ios/Zeron/Composer/QueuePanelView.swift: rows
-// from the projected doc `queue` list with per-row actions against the host
-// (gated by `message-queue-actions-v1`). Edit-lease UI
-// (`message-queue-edit-lease-v1`: Begin/Renew/FinishQueuedMessageEdit) is a
-// documented gap — rows are read-only text here.
+// QueuePanel — icon-only send-now / delete, drag handle to reorder.
+// Edit-lease UI remains a documented gap.
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -18,16 +16,16 @@ import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
 
+const ROW_H = 56;
+
 export interface QueuePanelProps {
   queue: readonly QueuedMessage[];
-  /** host has `message-queue-actions-v1`. */
   actionsSupported: boolean;
-  /** row ids with an in-flight action (queueActionsPending). */
   pending: ReadonlySet<string>;
   error?: string;
-  /** Host supports mid-turn steering of a queued row. */
   canSteer: boolean;
   onAction: (id: string, action: QueueActionKind) => void;
+  onMove?: (id: string, toIndex: number) => void;
 }
 
 export function QueuePanel({
@@ -37,13 +35,15 @@ export function QueuePanel({
   error,
   canSteer,
   onAction,
+  onMove,
 }: QueuePanelProps) {
   const theme = useTheme();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragDy, setDragDy] = useState(0);
+  const startIndex = useRef(0);
+
   return (
     <View style={styles.panel}>
-      <Text style={[styles.title, { color: theme.text }]}>
-        {t('queue.title')}
-      </Text>
       {error !== undefined ? (
         <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
       ) : null}
@@ -52,14 +52,58 @@ export function QueuePanel({
           {t('queue.empty')}
         </Text>
       ) : (
-        queue.map(item => {
+        queue.map((item, index) => {
           const busy = pending.has(item.id);
           const gated = item.deliveryGate != null;
+          const dragging = dragId === item.id;
+          const handle = PanResponder.create({
+            onStartShouldSetPanResponder: () => onMove !== undefined,
+            onMoveShouldSetPanResponder: () => onMove !== undefined,
+            onPanResponderGrant: () => {
+              startIndex.current = index;
+              setDragId(item.id);
+              setDragDy(0);
+            },
+            onPanResponderMove: (_e, g) => setDragDy(g.dy),
+            onPanResponderRelease: (_e, g) => {
+              const delta = Math.round(g.dy / ROW_H);
+              const next = Math.min(
+                Math.max(startIndex.current + delta, 0),
+                queue.length - 1,
+              );
+              setDragId(null);
+              setDragDy(0);
+              if (next !== startIndex.current) onMove?.(item.id, next);
+            },
+            onPanResponderTerminate: () => {
+              setDragId(null);
+              setDragDy(0);
+            },
+          });
           return (
             <View
               key={item.id}
-              style={[styles.row, { borderColor: theme.border }]}
+              style={[
+                styles.row,
+                { borderColor: theme.border },
+                dragging
+                  ? [styles.dragging, { transform: [{ translateY: dragDy }] }]
+                  : undefined,
+              ]}
             >
+              {onMove !== undefined ? (
+                <View
+                  {...handle.panHandlers}
+                  style={styles.handle}
+                  accessibilityLabel={t('queue.reorder')}
+                >
+                  <Icon
+                    name="line.3.horizontal"
+                    size={14}
+                    color={theme.textSecondary}
+                  />
+                </View>
+              ) : null}
               <View style={styles.rowBody}>
                 <Text
                   style={[styles.rowText, { color: theme.text }]}
@@ -92,11 +136,10 @@ export function QueuePanel({
                 <View style={styles.actions}>
                   {canSteer &&
                   !gated &&
-                  // The host rejects steering rows that carry attachments
-                  // (doc_host.rs: "cannot be steered mid-turn").
                   (item.attachments?.length ?? 0) === 0 ? (
                     <Pressable
                       hitSlop={6}
+                      accessibilityRole="button"
                       accessibilityLabel={t('queue.steerNow')}
                       onPress={() => onAction(item.id, 'steerNow')}
                     >
@@ -110,6 +153,7 @@ export function QueuePanel({
                   {!gated ? (
                     <Pressable
                       hitSlop={6}
+                      accessibilityRole="button"
                       accessibilityLabel={t('queue.sendNow')}
                       onPress={() => onAction(item.id, 'sendNow')}
                     >
@@ -122,6 +166,7 @@ export function QueuePanel({
                   ) : null}
                   <Pressable
                     hitSlop={6}
+                    accessibilityRole="button"
                     accessibilityLabel={t('queue.remove')}
                     onPress={() => onAction(item.id, 'remove')}
                   >
@@ -138,8 +183,7 @@ export function QueuePanel({
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 8 },
-  title: { fontSize: 16, fontWeight: '600' },
+  panel: { gap: 8, paddingHorizontal: 16 },
   error: { fontSize: 12 },
   empty: { fontSize: 13, paddingVertical: 12 },
   row: {
@@ -149,6 +193,14 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     padding: 10,
+    minHeight: ROW_H,
+  },
+  dragging: { zIndex: 2 },
+  handle: {
+    width: 28,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rowBody: { flex: 1, gap: 2 },
   rowText: { fontSize: 14 },

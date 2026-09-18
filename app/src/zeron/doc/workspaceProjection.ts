@@ -326,6 +326,16 @@ export const buildChatCheckoutSet = (
   branch,
 });
 
+/** Retarget the chat at another space on the same host (cwd follows the
+ * space path). Branch is left untouched — worktree chips change that. */
+export const buildChatSpaceSet = (
+  spaceId: string,
+  cwd: string,
+): Record<string, FieldValue> => ({
+  spaceId,
+  cwd,
+});
+
 /** Tombstone a chat (and its session-status row) in one batch. */
 export const buildDeleteChatKeys = (
   chatId: string,

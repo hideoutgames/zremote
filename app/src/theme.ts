@@ -30,6 +30,10 @@ export interface Theme {
   planBadge: string;
   planBadgeFill: string;
   planButton: string;
+  /** Composer effort chip when Fast mode is on. */
+  fastAccent: string;
+  prOpen: string;
+  prMerged: string;
   // Diff rows.
   diffAddBackground: string;
   diffDelBackground: string;
@@ -60,6 +64,9 @@ export const darkTheme: Theme = {
   planBadge: '#C7934A',
   planBadgeFill: 'rgba(199,147,74,0.22)',
   planButton: '#E8A317',
+  fastAccent: '#FF9F0A',
+  prOpen: '#30D158',
+  prMerged: '#BF5AF2',
   diffAddBackground: 'rgba(48,209,88,0.14)',
   diffDelBackground: 'rgba(215,38,61,0.14)',
   diffAddText: '#30D158',
@@ -89,6 +96,9 @@ export const lightTheme: Theme = {
   planBadge: '#B07828',
   planBadgeFill: 'rgba(176,120,40,0.16)',
   planButton: '#E8A317',
+  fastAccent: '#FF9F0A',
+  prOpen: '#248A3D',
+  prMerged: '#8944AB',
   diffAddBackground: 'rgba(36,138,61,0.12)',
   diffDelBackground: 'rgba(215,38,61,0.10)',
   diffAddText: '#248A3D',

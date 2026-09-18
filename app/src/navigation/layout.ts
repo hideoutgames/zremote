@@ -1,5 +1,6 @@
 // Adaptive layout helper — pure. Regular width ≥ 700pt splits into
-// sidebar + detail; the inspector appears at ≥ 1100pt or when toggled.
+// sidebar + detail. The inspector column is retired (`inspectorVisible`
+// is always false); tools open from the session overflow menu.
 
 export interface LayoutPrefs {
   sidebarCollapsed: boolean;
@@ -37,7 +38,7 @@ export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
   return {
     mode: 'regular',
     sidebarVisible: !prefs.sidebarCollapsed,
-    inspectorVisible: width >= INSPECTOR_AUTO_WIDTH || prefs.inspectorOpen,
+    inspectorVisible: false,
     sidebarWidth: Math.min(360, Math.max(300, Math.round(width * 0.24))),
     inspectorWidth,
     measureCap: MEASURE_CAP,

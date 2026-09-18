@@ -1,49 +1,87 @@
-// CheckoutSelector — the `Space · host · branch ▾` pill above the composer
-// glass. Menu lists the host's refs (worktree-backed refs tagged), plus a
-// "New worktree" entry gated on host ≥ MIN_VERSION_RUN_WORKTREE
-// (checkoutRules.checkoutChangeAllowed). Reassignment mirrors desktop:
-//   plain ref  → SwitchRef on the host, then setChatCheckout(cwd, branch);
-//   worktree   → setChatCheckout(worktreePath, ref) — no git checkout;
-//   new        → CreateWorktree then the same retarget.
-// Disabled while a run is live/stopping.
+// Project + worktree chips inside the composer glass. Project lists spaces
+// on the current host (machine name is a checked, non-switching row —
+// setChatHost is not implemented). Worktree keeps today's ListRefs /
+// SwitchRef / CreateWorktree menu.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
-import type { Chat, DeviceRow, RepoRef } from '../zeron/protocol/types';
+import type { Chat, DeviceRow, RepoRef, Space } from '../zeron/protocol/types';
 import type { RunPhase } from '../zeron/state/sessionStores';
 import { checkoutChangeAllowed, type CheckoutChoice } from './checkoutRules';
 import { createWorktree, listRefs, switchRef } from '../zeron/runtime/catalog';
-import { setChatCheckout } from '../zeron/runtime/workspaceActions';
+import {
+  setChatCheckout,
+  setChatSpace,
+} from '../zeron/runtime/workspaceActions';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
 
-export interface CheckoutSelectorProps {
+export interface CheckoutChipsProps {
   runtime: AppRuntime;
   chat: Chat;
   host: DeviceRow | undefined;
   phase: RunPhase;
-  /** The chat's space path (repo root for ListRefs/CreateWorktree). */
   repoPath?: string;
-  label: string;
+  spaces: readonly Space[];
+  projectLabel: string;
+  worktreeLabel: string;
 }
 
-export function CheckoutSelector({
+const ChipTrigger = ({
+  label,
+  enabled,
+  accessibilityLabel,
+}: {
+  label: string;
+  enabled: boolean;
+  accessibilityLabel: string;
+}) => {
+  const theme = useTheme();
+  return (
+    <Pressable
+      disabled={!enabled}
+      style={styles.chip}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !enabled }}
+    >
+      <Text
+        style={[
+          styles.chipText,
+          { color: enabled ? theme.text : theme.sendInactive },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Icon
+        name="chevron.down"
+        size={10}
+        color={enabled ? theme.textSecondary : theme.sendInactive}
+      />
+    </Pressable>
+  );
+};
+
+export function CheckoutChips({
   runtime,
   chat,
   host,
   phase,
   repoPath,
-  label,
-}: CheckoutSelectorProps) {
-  const theme = useTheme();
+  spaces,
+  projectLabel,
+  worktreeLabel,
+}: CheckoutChipsProps) {
   const [refs, setRefs] = useState<RepoRef[] | undefined>(undefined);
-  const [open, setOpen] = useState(false);
+  const [wtOpen, setWtOpen] = useState(false);
 
   useEffect(() => {
-    if (!open || host === undefined || repoPath === undefined) return;
+    if (!wtOpen || host === undefined || repoPath === undefined) return;
     let live = true;
     listRefs(runtime, host.id, repoPath).then(r => {
       if (live) setRefs(r ?? []);
@@ -51,9 +89,9 @@ export function CheckoutSelector({
     return () => {
       live = false;
     };
-  }, [open, runtime, host, repoPath]);
+  }, [wtOpen, runtime, host, repoPath]);
 
-  const apply = useCallback(
+  const applyWorktree = useCallback(
     async (choice: CheckoutChoice) => {
       if (host === undefined) return;
       const verdict = checkoutChangeAllowed(phase, choice, host);
@@ -67,13 +105,11 @@ export function CheckoutSelector({
       }
       if (choice.kind === 'ref') {
         if (choice.worktreePath !== undefined) {
-          // Worktree-backed ref: retarget the chat — no git checkout.
           setChatCheckout(runtime, chat.id, choice.worktreePath, choice.ref);
           return;
         }
         if (repoPath === undefined) return;
         const err = await switchRef(runtime, host.id, repoPath, choice.ref);
-        // git's error (dirty tree etc.) surfaces verbatim.
         if (err !== undefined) {
           Alert.alert(t('checkout.switchFailed'), err);
           return;
@@ -100,79 +136,99 @@ export function CheckoutSelector({
   const enabled =
     phase !== 'working' && phase !== 'awaitingInput' && phase !== 'stopping';
 
+  const hostSpaces =
+    host === undefined ? [] : spaces.filter(s => s.deviceId === host.id);
+
   return (
-    <DropdownMenu.Root onOpenChange={setOpen}>
-      <DropdownMenu.Trigger>
-        <Pressable
-          disabled={!enabled}
-          style={styles.pill}
-          hitSlop={6}
-          accessibilityLabel={t('checkout.label')}
-        >
-          <Text
-            style={[
-              styles.label,
-              { color: enabled ? theme.textSecondary : theme.sendInactive },
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
-          <Icon
-            name="chevron.down"
-            size={10}
-            color={enabled ? theme.textSecondary : theme.sendInactive}
+    <View style={styles.row}>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <ChipTrigger
+            label={projectLabel}
+            enabled={enabled}
+            accessibilityLabel={t('checkout.project')}
           />
-        </Pressable>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
-        {(refs ?? []).map(r => (
-          <DropdownMenu.Item
-            key={r.name}
-            onSelect={() =>
-              apply({
-                kind: 'ref',
-                ref: r.name,
-                worktreePath: r.worktreePath,
-              }).catch(() => {})
-            }
-          >
-            <DropdownMenu.ItemTitle>
-              {r.current
-                ? t('checkout.current').replace('{branch}', r.name)
-                : r.worktreePath !== undefined
-                ? `${r.name} (${t('checkout.worktree')})`
-                : r.name}
-            </DropdownMenu.ItemTitle>
-          </DropdownMenu.Item>
-        ))}
-        {(refs ?? []).map(r => (
-          <DropdownMenu.Item
-            key={`wt-${r.name}`}
-            onSelect={() =>
-              apply({ kind: 'newWorktree', base: r.name }).catch(() => {})
-            }
-          >
-            <DropdownMenu.ItemTitle>
-              {t('checkout.newWorktree').replace('{base}', r.name)}
-            </DropdownMenu.ItemTitle>
-          </DropdownMenu.Item>
-        ))}
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          {host !== undefined ? (
+            <DropdownMenu.Item key="machine" disabled>
+              <DropdownMenu.ItemTitle>{host.name}</DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          ) : null}
+          {hostSpaces.map(s => (
+            <DropdownMenu.Item
+              key={s.id}
+              onSelect={() => {
+                if (!enabled) return;
+                setChatSpace(runtime, chat.id, s.id, s.path);
+              }}
+            >
+              <DropdownMenu.ItemTitle>
+                {s.name !== undefined && s.name !== '' ? s.name : s.path}
+                {s.id === chat.spaceId ? ` · ${t('checkout.currentHost')}` : ''}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+
+      <DropdownMenu.Root onOpenChange={setWtOpen}>
+        <DropdownMenu.Trigger>
+          <ChipTrigger
+            label={worktreeLabel}
+            enabled={enabled}
+            accessibilityLabel={t('checkout.label')}
+          />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          {(refs ?? []).map(r => (
+            <DropdownMenu.Item
+              key={r.name}
+              onSelect={() =>
+                applyWorktree({
+                  kind: 'ref',
+                  ref: r.name,
+                  worktreePath: r.worktreePath,
+                }).catch(() => {})
+              }
+            >
+              <DropdownMenu.ItemTitle>
+                {r.current
+                  ? t('checkout.current').replace('{branch}', r.name)
+                  : r.worktreePath !== undefined
+                  ? `${r.name} (${t('checkout.worktree')})`
+                  : r.name}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          ))}
+          {(refs ?? []).map(r => (
+            <DropdownMenu.Item
+              key={`wt-${r.name}`}
+              onSelect={() =>
+                applyWorktree({ kind: 'newWorktree', base: r.name }).catch(
+                  () => {},
+                )
+              }
+            >
+              <DropdownMenu.ItemTitle>
+                {t('checkout.newWorktree').replace('{base}', r.name)}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  pill: {
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
+    gap: 3,
     height: 28,
-    // Aligns with the composer input's text edge (12 container + 16 inner).
-    marginLeft: 28,
-    marginBottom: 6,
+    maxWidth: 120,
   },
-  label: { fontSize: 12, maxWidth: 260 },
+  chipText: { fontSize: 12, flexShrink: 1 },
 });

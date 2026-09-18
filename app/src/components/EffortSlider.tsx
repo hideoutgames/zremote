@@ -1,19 +1,33 @@
-// EffortSlider — discrete detents over the harness's advertised reasoning
-// levels (modelPicker.ts helpers drive the math; expo-haptics ticks when a
-// drag crosses a detent; accessibilityRole="adjustable" with
-// increment/decrement).
+// EffortSlider — Cherry Studio geometry/interaction (capsule, magnetism,
+// 200ms snap, haptic on every crossed detent), reimplemented. Outer chrome
+// is supplied by EffortOverlay (Liquid Glass).
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { StyleSheet, View, type GestureResponderEvent } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  useReducedMotion,
+} from 'react-native-reanimated';
+import { selectionTick } from '../zeron/native/haptics';
+import { detentForValue } from './modelPicker';
 import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type GestureResponderEvent,
-} from 'react-native';
-import * as Haptics from 'expo-haptics';
+  effortSliderMagnetRadius,
+  effortSliderProgressHeight,
+  effortSliderSnapMs,
+  effortSliderThumbInset,
+  effortSliderThumbSize,
+  effortSliderTickSize,
+  effortSliderTrackHeight,
+  getEffortSliderTrackGeometry,
+  magnetize,
+  nearestStopIndex,
+  stopFraction,
+  trackXToFraction,
+} from './effortSliderMath';
 import { useTheme } from '../theme';
-import { detentForValue, nearestDetent } from './modelPicker';
 
 export interface EffortSliderProps {
   levels: readonly string[];
@@ -21,102 +35,179 @@ export interface EffortSliderProps {
   onChange: (level: string) => void;
 }
 
-const capitalize = (s: string): string =>
-  s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
-
 export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
   const theme = useTheme();
+  const reduceMotion = useReducedMotion();
   const trackWidth = useRef(0);
+  const [measured, setMeasured] = useState(0);
   const current = detentForValue(levels, value);
+  const currentRef = useRef(current);
+  currentRef.current = current;
+  const position = useSharedValue(stopFraction(current, levels.length));
+  const pressed = useRef(false);
 
-  const moveTo = useCallback(
-    (x: number) => {
-      const next = nearestDetent(x, trackWidth.current, levels.length);
-      if (next !== current && levels[next] !== undefined) {
-        Haptics.selectionAsync().catch(() => {});
-        onChange(levels[next]);
+  const commitIndex = useCallback(
+    (index: number) => {
+      if (index !== currentRef.current && levels[index] !== undefined) {
+        selectionTick();
+        onChange(levels[index]);
       }
     },
-    [current, levels, onChange],
+    [levels, onChange],
+  );
+
+  const applyX = useCallback(
+    (x: number, release: boolean) => {
+      const width = trackWidth.current;
+      const inset = effortSliderThumbInset + effortSliderThumbSize / 2;
+      const raw = trackXToFraction(x, width, inset);
+      const pulled = magnetize(raw, levels.length, effortSliderMagnetRadius);
+      const next = nearestStopIndex(release ? pulled : raw, levels.length);
+      if (release) {
+        position.value = reduceMotion
+          ? stopFraction(next, levels.length)
+          : withTiming(stopFraction(next, levels.length), {
+              duration: effortSliderSnapMs,
+              easing: Easing.out(Easing.cubic),
+            });
+        commitIndex(next);
+        return;
+      }
+      position.value = pulled;
+      if (next !== currentRef.current) commitIndex(next);
+    },
+    [commitIndex, levels.length, position, reduceMotion],
   );
 
   const onTouch = useCallback(
-    (e: GestureResponderEvent) => moveTo(e.nativeEvent.locationX),
-    [moveTo],
+    (e: GestureResponderEvent, release: boolean) => {
+      applyX(e.nativeEvent.locationX, release);
+    },
+    [applyX],
   );
 
+  const geo = getEffortSliderTrackGeometry(
+    measured,
+    levels.length,
+    effortSliderThumbSize,
+    effortSliderThumbInset,
+  );
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: effortSliderProgressHeight + geo.travelDistance * position.value,
+  }));
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX:
+          effortSliderThumbInset + geo.travelDistance * position.value,
+      },
+    ],
+  }));
+
+  const progressInset = geo.thumbCenterStart - effortSliderProgressHeight / 2;
+
   return (
-    <View style={styles.wrap}>
-      <Text style={[styles.value, { color: theme.text }]}>
-        {capitalize(levels[current] ?? '')}
-      </Text>
-      <View
-        style={[styles.track, { backgroundColor: theme.border }]}
-        onLayout={e => (trackWidth.current = e.nativeEvent.layout.width)}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderGrant={onTouch}
-        onResponderMove={onTouch}
-        accessibilityRole="adjustable"
-        accessibilityValue={{ text: levels[current] }}
-        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-        onAccessibilityAction={e => {
-          const dir = e.nativeEvent.actionName === 'increment' ? 1 : -1;
-          const next = Math.min(Math.max(current + dir, 0), levels.length - 1);
-          if (next !== current && levels[next] !== undefined)
-            onChange(levels[next]);
-        }}
-      >
-        {levels.map((l, i) => (
-          <Pressable
-            key={l}
-            style={[
-              styles.detent,
-              {
-                backgroundColor:
-                  i === current ? theme.accent : theme.textSecondary,
-              },
-            ]}
-            onPress={() => {
-              if (i !== current) {
-                Haptics.selectionAsync().catch(() => {});
-                onChange(l);
-              }
-            }}
-          />
-        ))}
-      </View>
-      <View style={styles.labels}>
-        {levels.map(l => (
-          <Text
-            key={l}
-            style={[styles.label, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {capitalize(l)}
-          </Text>
-        ))}
-      </View>
+    <View
+      style={styles.track}
+      onLayout={e => {
+        const w = e.nativeEvent.layout.width;
+        trackWidth.current = w;
+        setMeasured(cur => (cur === w ? cur : w));
+      }}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderGrant={e => {
+        pressed.current = true;
+        onTouch(e, false);
+      }}
+      onResponderMove={e => onTouch(e, false)}
+      onResponderRelease={e => {
+        pressed.current = false;
+        onTouch(e, true);
+      }}
+      accessibilityRole="adjustable"
+      accessibilityValue={{ text: levels[current] }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={e => {
+        const dir = e.nativeEvent.actionName === 'increment' ? 1 : -1;
+        const next = Math.min(Math.max(current + dir, 0), levels.length - 1);
+        if (next !== current && levels[next] !== undefined) {
+          selectionTick();
+          onChange(levels[next]);
+          position.value = reduceMotion
+            ? stopFraction(next, levels.length)
+            : withTiming(stopFraction(next, levels.length), {
+                duration: effortSliderSnapMs,
+                easing: Easing.out(Easing.cubic),
+              });
+        }
+      }}
+    >
+      {geo.tickCenters.map((cx, i) => (
+        <View
+          key={`tick-${i}`}
+          pointerEvents="none"
+          style={[
+            styles.tick,
+            {
+              left: cx - effortSliderTickSize / 2,
+              backgroundColor: i <= current ? theme.text : theme.textSecondary,
+            },
+          ]}
+        />
+      ))}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.progress,
+          {
+            backgroundColor: theme.text,
+            left: progressInset,
+            top: (effortSliderTrackHeight - effortSliderProgressHeight) / 2,
+          },
+          fillStyle,
+        ]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.thumb,
+          {
+            backgroundColor: theme.sendActive,
+            top: (effortSliderTrackHeight - effortSliderThumbSize) / 2,
+          },
+          thumbStyle,
+        ]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8 },
-  value: { fontSize: 20, fontWeight: '600' },
   track: {
-    height: 4,
-    borderRadius: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
+    height: effortSliderTrackHeight,
+    borderRadius: effortSliderTrackHeight / 2,
+    justifyContent: 'center',
   },
-  detent: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  tick: {
+    position: 'absolute',
+    width: effortSliderTickSize,
+    height: effortSliderTickSize,
+    borderRadius: effortSliderTickSize / 2,
+    top: (effortSliderTrackHeight - effortSliderTickSize) / 2,
   },
-  labels: { flexDirection: 'row', justifyContent: 'space-between' },
-  label: { fontSize: 11 },
+  progress: {
+    position: 'absolute',
+    height: effortSliderProgressHeight,
+    borderRadius: effortSliderProgressHeight / 2,
+    overflow: 'hidden',
+  },
+  thumb: {
+    position: 'absolute',
+    width: effortSliderThumbSize,
+    height: effortSliderThumbSize,
+    borderRadius: effortSliderThumbSize / 2,
+    left: 0,
+  },
 });

@@ -2,8 +2,8 @@
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
-//   lower tier: [+] attachment menu · live Queue/Steer pill ·
-//     [Agent · Model] button · mic · right circle (send/stop/stopping/cancel).
+//   action row: [+] · live Queue/Steer · project · worktree · mic · send,
+//   chip row: Plan · model menu · effort (scrollable, faded edges).
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
 // legacy upload-first — never a device-local URI on the wire).
@@ -15,6 +15,7 @@ import {
   type LayoutChangeEvent,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -31,9 +32,12 @@ import Animated, {
 import { NitroImage } from 'react-native-nitro-image';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
+import { CheckoutChips, type CheckoutChipsProps } from './CheckoutSelector';
 import { Glass } from './Glass';
 import { Icon } from './Icon';
+import { ModelMenuButton } from './ModelMenuButton';
 import { PlanBadge } from './PlanBadge';
+import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
 import { useAttachments } from '../hooks/useAttachments';
 import { useTheme } from '../theme';
@@ -71,6 +75,7 @@ import { QuestionPanel } from './agentsKit/QuestionPanel';
 const INPUT_MAX_HEIGHT_COMPACT = 148;
 const INPUT_MAX_HEIGHT_REGULAR = 214;
 const COMPOSER_EXTRA_MAX = 280;
+const COMPOSER_EXTRA_WINDOW_FRAC = 0.4;
 const THUMBS_ANIM_MS = 220;
 
 export interface ComposerProps {
@@ -80,10 +85,18 @@ export interface ComposerProps {
   harness?: HarnessDescriptor;
   /** Host capability strings (message-queue-v1 et al). */
   capabilities: ReadonlySet<string>;
-  /** e.g. "Claude · Opus 4.7" for the lower-tier picker button. */
+  /** Model label only — harness name is replaced by a brand mark. */
   modelLabel: string;
-  onOpenModelPicker: () => void;
-  onOpenQueue: () => void;
+  harnessId?: string;
+  recentItems: readonly CatalogModelRef[];
+  onPickRecentModel: (harness: string, model: string) => void;
+  onOpenMoreModels: () => void;
+  effortLabel: string;
+  effortSupported: boolean;
+  fastEnabled: boolean;
+  onOpenEffort: () => void;
+  onFocusChange?: (focused: boolean) => void;
+  checkout?: CheckoutChipsProps;
   dictation: DictationPort;
   onSend: (text: string) => void;
   onSteer: (text: string) => void;
@@ -111,8 +124,16 @@ export const Composer = React.memo(function ({
   harness,
   capabilities,
   modelLabel,
-  onOpenModelPicker,
-  onOpenQueue,
+  harnessId,
+  recentItems,
+  onPickRecentModel,
+  onOpenMoreModels,
+  effortLabel,
+  effortSupported,
+  fastEnabled,
+  onOpenEffort,
+  onFocusChange,
+  checkout,
   dictation,
   onSend,
   onSteer,
@@ -137,7 +158,7 @@ export const Composer = React.memo(function ({
   const extraMaxRef = useRef(COMPOSER_EXTRA_MAX);
   extraMaxRef.current = Math.min(
     COMPOSER_EXTRA_MAX,
-    Math.round(windowHeight * 0.45),
+    Math.round(windowHeight * COMPOSER_EXTRA_WINDOW_FRAC),
   );
   const setDragExtraRef = useRef(setDragExtra);
   setDragExtraRef.current = setDragExtra;
@@ -468,6 +489,8 @@ export const Composer = React.memo(function ({
             onSelectionChange={e =>
               (selRef.current = e.nativeEvent.selection.start)
             }
+            onFocus={() => onFocusChange?.(true)}
+            onBlur={() => onFocusChange?.(false)}
             placeholder={
               live === 'queue'
                 ? t('session.queuePlaceholder')
@@ -492,8 +515,6 @@ export const Composer = React.memo(function ({
             // modifier gap is documented in docs/ARCHITECTURE.md.
           />
 
-          {/* ── Lower tier: [+] · queue/steer pill · model · mic · right ─
-              (no separator — spacing only, per the single-surface design) ── */}
           <View style={styles.lowerRow}>
             <AttachmentMenu
               onPickPhotos={pickImages}
@@ -501,10 +522,6 @@ export const Composer = React.memo(function ({
               onPickFiles={pickFiles}
               onEnablePlan={() => setPlanMode(chatId, true)}
             />
-
-            {planMode ? (
-              <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
-            ) : null}
 
             {showLivePill ? (
               <DropdownMenu.Root>
@@ -542,40 +559,7 @@ export const Composer = React.memo(function ({
               </DropdownMenu.Root>
             ) : null}
 
-            <Pressable
-              style={[
-                styles.modelBtn,
-                { backgroundColor: theme.inputBackground },
-              ]}
-              onPress={onOpenModelPicker}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={modelLabel}
-            >
-              <Text
-                style={[styles.modelText, { color: theme.text }]}
-                numberOfLines={1}
-              >
-                {modelLabel}
-              </Text>
-              <Icon name="chevron.down" size={11} color={theme.textSecondary} />
-            </Pressable>
-
-            {session.queue.length > 0 ? (
-              <Pressable
-                onPress={onOpenQueue}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('session.queue')} (${
-                  session.queue.length
-                })`}
-                style={styles.minTarget}
-              >
-                <Text style={[styles.queueBadge, { color: theme.accent }]}>
-                  {session.queue.length}
-                </Text>
-              </Pressable>
-            ) : null}
+            {checkout !== undefined ? <CheckoutChips {...checkout} /> : null}
 
             <View style={styles.spacer} />
 
@@ -683,6 +667,77 @@ export const Composer = React.memo(function ({
                 )}
               </View>
             </Pressable>
+          </View>
+
+          <View style={styles.chipRowWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipRow}
+            >
+              {planMode ? (
+                <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
+              ) : null}
+              <ModelMenuButton
+                harnessId={harnessId}
+                modelLabel={modelLabel}
+                items={recentItems}
+                onPick={onPickRecentModel}
+                onMore={onOpenMoreModels}
+              />
+              {effortSupported ? (
+                <Pressable
+                  style={[
+                    styles.effortChip,
+                    {
+                      backgroundColor: fastEnabled
+                        ? theme.fastAccent
+                        : theme.inputBackground,
+                    },
+                  ]}
+                  onPress={onOpenEffort}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel={effortLabel}
+                >
+                  <Text
+                    style={[
+                      styles.effortText,
+                      {
+                        color: fastEnabled
+                          ? theme.scheme === 'dark'
+                            ? '#000000'
+                            : '#FFFFFF'
+                          : theme.text,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {effortLabel}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
+            <View
+              pointerEvents="none"
+              style={[
+                styles.chipFade,
+                styles.chipFadeLeft,
+                theme.scheme === 'dark'
+                  ? styles.chipFadeDark
+                  : styles.chipFadeLight,
+              ]}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.chipFade,
+                styles.chipFadeRight,
+                theme.scheme === 'dark'
+                  ? styles.chipFadeDark
+                  : styles.chipFadeLight,
+              ]}
+            />
           </View>
         </Glass>
         <BorderBeam
@@ -826,17 +881,33 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   livePillText: { fontSize: 12, fontWeight: '600' },
-  modelBtn: {
+  spacer: { flex: 1 },
+  chipRowWrap: { position: 'relative', marginTop: 2 },
+  chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    paddingTop: 2,
+  },
+  chipFade: {
+    position: 'absolute',
+    top: 0,
+    bottom: 8,
+    width: 16,
+  },
+  chipFadeLeft: { left: 0 },
+  chipFadeRight: { right: 0 },
+  chipFadeDark: { backgroundColor: 'rgba(0,0,0,0.35)' },
+  chipFadeLight: { backgroundColor: 'rgba(255,255,255,0.35)' },
+  effortChip: {
     height: 32,
     borderRadius: 16,
-    paddingHorizontal: 10,
-    gap: 4,
-    maxWidth: '46%',
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modelText: { fontSize: 13 },
-  spacer: { flex: 1 },
-  queueBadge: { fontSize: 13, fontWeight: '700' },
+  effortText: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 12, textAlign: 'center' },
 });

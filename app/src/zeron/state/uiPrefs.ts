@@ -4,6 +4,7 @@
 
 import { createStore, useStore } from 'zustand';
 import type { DocDisk } from '../native/docDisk';
+import { rememberRecentModel, type RecentModel } from './recentModels';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
@@ -28,6 +29,10 @@ export interface UiPrefs {
   planModeByChat: Record<string, boolean>;
   /** Extra composer input height from the grabber, in points. */
   composerExtraHeight: number;
+  /** Last-picked models for the composer Liquid Glass menu. */
+  recentModels: RecentModel[];
+  /** Local-only pin-to-top (no registry pin field). */
+  pinnedChatIds: string[];
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
@@ -41,6 +46,8 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   sidebarCollapsed: false,
   planModeByChat: {},
   composerExtraHeight: 0,
+  recentModels: [],
+  pinnedChatIds: [],
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -154,3 +161,34 @@ export const setComposerExtraHeight = (v: number): void => {
 
 export const useComposerExtraHeight = (): number =>
   useStore(uiPrefsStore, s => s.composerExtraHeight);
+
+export const rememberModelPick = (pick: RecentModel): void => {
+  uiPrefsStore.setState(s => ({
+    recentModels: rememberRecentModel(s.recentModels, pick),
+  }));
+  save();
+};
+
+export const useRecentModels = (): RecentModel[] =>
+  useStore(uiPrefsStore, s => s.recentModels);
+
+export const isChatPinned = (chatId: string): boolean =>
+  uiPrefsStore.getState().pinnedChatIds.includes(chatId);
+
+export const toggleChatPinned = (chatId: string): void => {
+  uiPrefsStore.setState(s => {
+    const has = s.pinnedChatIds.includes(chatId);
+    return {
+      pinnedChatIds: has
+        ? s.pinnedChatIds.filter(id => id !== chatId)
+        : [chatId, ...s.pinnedChatIds],
+    };
+  });
+  save();
+};
+
+export const usePinnedChatIds = (): string[] =>
+  useStore(uiPrefsStore, s => s.pinnedChatIds);
+
+export const useChatPinned = (chatId: string): boolean =>
+  useStore(uiPrefsStore, s => s.pinnedChatIds.includes(chatId));
