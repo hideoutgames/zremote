@@ -17,6 +17,8 @@ import type { MessageEntry } from '../../zeron/protocol/types';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
+import { stripPlanPrefix } from '../planMode';
+import { PlanBadge } from '../PlanBadge';
 
 const FOLD_CHARS = 400;
 const FOLD_LINES = 5;
@@ -40,21 +42,23 @@ export const UserMessage = React.memo(function ({
   const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
+  const { plan, text: visible } = stripPlanPrefix(text);
   const images = entry.parts.filter(p => p.kind === 'image');
-  const foldable = text.length > FOLD_CHARS;
-  const shown = expanded || !foldable ? text : `${text.slice(0, FOLD_CHARS)}…`;
+  const foldable = visible.length > FOLD_CHARS;
+  const shown =
+    expanded || !foldable ? visible : `${visible.slice(0, FOLD_CHARS)}…`;
 
   const menu = (
     <ContextMenu.Content>
       <ContextMenu.Item
         key="copy"
-        onSelect={() => Clipboard.setStringAsync(text).catch(() => {})}
+        onSelect={() => Clipboard.setStringAsync(visible).catch(() => {})}
       >
         <ContextMenu.ItemTitle>{t('common.copyText')}</ContextMenu.ItemTitle>
       </ContextMenu.Item>
       <ContextMenu.Item
         key="share"
-        onSelect={() => Share.share({ message: text }).catch(() => {})}
+        onSelect={() => Share.share({ message: visible }).catch(() => {})}
       >
         <ContextMenu.ItemTitle>{t('common.share')}</ContextMenu.ItemTitle>
       </ContextMenu.Item>
@@ -109,7 +113,12 @@ export const UserMessage = React.memo(function ({
               )}
             </View>
           ) : null}
-          {text !== '' ? (
+          {plan ? (
+            <View style={styles.planWrap}>
+              <PlanBadge />
+            </View>
+          ) : null}
+          {visible !== '' ? (
             <View
               style={[
                 styles.bubble,
@@ -179,4 +188,5 @@ const styles = StyleSheet.create({
   },
   text: { fontSize: 16, lineHeight: 21 },
   fold: { fontSize: 13, fontWeight: '500', marginTop: 4 },
+  planWrap: { marginBottom: 6, maxWidth: '82%' },
 });

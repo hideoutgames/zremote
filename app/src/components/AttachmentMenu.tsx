@@ -9,12 +9,14 @@ type AttachmentMenuProps = {
   onPickPhotos: () => void;
   onPickCamera: () => void;
   onPickFiles: () => void;
+  onEnablePlan?: () => void;
 };
 
 export function AttachmentMenu({
   onPickPhotos,
   onPickCamera,
   onPickFiles,
+  onEnablePlan,
 }: AttachmentMenuProps) {
   const theme = useTheme();
   return (
@@ -45,6 +47,14 @@ export function AttachmentMenu({
           <DropdownMenu.ItemTitle>{t('composer.files')}</DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'paperclip' }} />
         </DropdownMenu.Item>
+        {onEnablePlan !== undefined ? (
+          <DropdownMenu.Item key="plan" onSelect={onEnablePlan}>
+            <DropdownMenu.ItemTitle>
+              {t('composer.plan')}
+            </DropdownMenu.ItemTitle>
+            <DropdownMenu.ItemIcon ios={{ name: 'list.bullet.indent' }} />
+          </DropdownMenu.Item>
+        ) : null}
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );

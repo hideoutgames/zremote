@@ -22,6 +22,10 @@ export interface UiPrefs {
   forceRelayMode: boolean;
   /** iPad floating sidebar collapsed (AdaptiveShell, ≥700pt only). */
   sidebarCollapsed: boolean;
+  /** Per-chat composer Plan mode (prefixes the outgoing prompt). */
+  planModeByChat: Record<string, boolean>;
+  /** Extra composer input height from the grabber, in points. */
+  composerExtraHeight: number;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
@@ -32,6 +36,8 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   dictationLocale: 'en-US',
   forceRelayMode: false,
   sidebarCollapsed: false,
+  planModeByChat: {},
+  composerExtraHeight: 0,
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -119,3 +125,21 @@ export const setSidebarCollapsed = (v: boolean): void => {
 
 export const useSidebarCollapsed = (): boolean =>
   useStore(uiPrefsStore, s => s.sidebarCollapsed);
+
+export const setPlanMode = (chatId: string, v: boolean): void => {
+  uiPrefsStore.setState(s => ({
+    planModeByChat: { ...s.planModeByChat, [chatId]: v },
+  }));
+  save();
+};
+
+export const usePlanMode = (chatId: string): boolean =>
+  useStore(uiPrefsStore, s => s.planModeByChat[chatId] === true);
+
+export const setComposerExtraHeight = (v: number): void => {
+  uiPrefsStore.setState({ composerExtraHeight: v });
+  save();
+};
+
+export const useComposerExtraHeight = (): number =>
+  useStore(uiPrefsStore, s => s.composerExtraHeight);

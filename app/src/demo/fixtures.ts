@@ -213,7 +213,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       cwd: demoPaths.zeron,
       branch: 'main',
       config: { harness: 'claude', model: 'sonnet', modelOptions: {} },
-      lastMessagePreview: 'The subagent found three call sites.',
+      lastMessagePreview: 'The Explorer found three call sites.',
       lastMessageAt: nowMs - 50 * 3_600_000,
       createdAt: BASE_MS - 6 * 86_400_000,
       roomGen: 2,
@@ -525,13 +525,25 @@ const toolsTranscript = (nowMs: number): Record<string, unknown>[] => [
       {
         kind: 'tool',
         id: 't-sub',
-        call: { kind: 'search', pattern: 'header', path: '/demo/src' },
+        call: {
+          kind: 'unknown',
+          name: 'Agent: Explore composer UI',
+          input: { subagent_type: 'Explore' },
+        },
         isError: false,
         resolved: true,
-        output: '3 matches',
         subagentStatus: 'done',
-        subagentTail:
-          'Explorer: found header styles in HomeScreen, SessionScreen, Composer.',
+      },
+      {
+        kind: 'tool',
+        id: 't-sub-run',
+        call: {
+          kind: 'unknown',
+          name: 'Agent: Trace header styles',
+          input: { subagent_type: 'Explore' },
+        },
+        resolved: false,
+        subagentStatus: 'running',
       },
       {
         kind: 'tool',
@@ -542,7 +554,7 @@ const toolsTranscript = (nowMs: number): Record<string, unknown>[] => [
         output: 'ENOENT: no such file (simulated)',
       },
       textPart(
-        'The search subagent found three call sites; one read failed on a moved file — shown above as an errored tool.',
+        'The Explorer found three call sites; one read failed on a moved file — shown above as an errored tool.',
       ),
     ],
     nowMs - 50 * 3_600_000 + 60_000,
