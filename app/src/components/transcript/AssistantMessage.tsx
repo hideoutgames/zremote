@@ -6,15 +6,7 @@
 // ReadAttachmentChunk in a later stage).
 
 import React, { useMemo } from 'react';
-import {
-  Linking,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ContextMenu from 'zeego/context-menu';
 import type { MessageEntry, MessagePart } from '../../zeron/protocol/types';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
@@ -34,6 +26,7 @@ import type { TurnChange } from './turnChanges';
 import { PlanCard } from './PlanCard';
 import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
+import { MessageCopyMenu } from './MessageCopyMenu';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
@@ -194,7 +187,6 @@ export const AssistantMessage = React.memo(function ({
   phase,
   onOpenReasoning,
   onFetchOutput,
-  chatId,
   onOpenPlan,
   onOpenFileDiff,
 }: {
@@ -281,34 +273,7 @@ export const AssistantMessage = React.memo(function ({
           ) : null}
         </View>
       </ContextMenu.Trigger>
-      <ContextMenu.Content>
-        <ContextMenu.Item
-          key="copy"
-          onSelect={() => Clipboard.setStringAsync(fullText).catch(() => {})}
-        >
-          <ContextMenu.ItemTitle>{t('common.copyText')}</ContextMenu.ItemTitle>
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          key="share"
-          onSelect={() => Share.share({ message: fullText }).catch(() => {})}
-        >
-          <ContextMenu.ItemTitle>{t('common.share')}</ContextMenu.ItemTitle>
-        </ContextMenu.Item>
-        {chatId !== undefined ? (
-          <ContextMenu.Item
-            key="link"
-            onSelect={() =>
-              Clipboard.setStringAsync(`zeron://session/${chatId}`).catch(
-                () => {},
-              )
-            }
-          >
-            <ContextMenu.ItemTitle>
-              {t('common.copyLink')}
-            </ContextMenu.ItemTitle>
-          </ContextMenu.Item>
-        ) : null}
-      </ContextMenu.Content>
+      <MessageCopyMenu text={fullText} />
     </ContextMenu.Root>
   );
 });

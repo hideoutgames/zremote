@@ -98,6 +98,11 @@ compact pager's `Freeze` only applies when the session page is not visible.
 On iPhone the session overflow menu opens Changes / Files as overlays; the
 Terminal row is visible but disabled.
 
+Compact `RootPager` has `scrollEnabled={false}` — opening a session is tap
+only. Back to threads is a leading-edge pan (~24pt, iOS interactive-pop
+width) on the session page; a mid-screen swipe does not page Home. Regular
+width has no pager (sidebar + detail).
+
 **Hardware keyboard gaps:** RN 0.86's `TextInput.onKeyPress` reports `key`
 but exposes no modifier flags on iOS, so Cmd+Enter cannot be distinguished
 from Enter in JS — documented gap; Escape-to-dismiss sheets is likewise not
@@ -109,6 +114,10 @@ anchoring — its `anchor`/`anchorOffset` props only center/align the sheet on
 web. So on regular width `ModelPickerSheet` renders inside a `Modal` with
 `presentationStyle="formSheet"`; checkout selection already uses a Zeego
 dropdown (popover-anchored natively).
+
+A started session is bound to `chat.config.harness`. The composer recent
+menu and More sheet list that provider's models only; New Session is where
+the provider is picked.
 
 ## Workspace tools (Changes / Files)
 
