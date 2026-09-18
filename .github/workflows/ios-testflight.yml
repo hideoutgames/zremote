@@ -1,7 +1,8 @@
 # iOS TestFlight — signed archive + App Store Connect upload via the ASC
-# API key (cloud-managed signing; no certificates or profiles in the repo).
-# Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the
-# .p8 file contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID.
+# API key. Uses the team's one cloud-managed Apple Distribution certificate
+# (no per-runner development certs, no profiles in the repo). Requires repo
+# secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the .p8 file
+# contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID.
 # Optional variables IOS_BUNDLE_ID (default no.hideout.zremote) /
 # ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
 
@@ -91,6 +92,18 @@ jobs:
           COCOAPODS_DISABLE_STATS: "1"
         run: bundle exec pod install
 
+      # Expo prebuild leaves ZRemote / ExpoWidgetsTarget on Automatic +
+      # Apple Development. Passing Apple Distribution as an xcarg instead
+      # conflicts ("automatically signed for development") and also leaks
+      # onto CocoaPods targets. Rewrite the app xcodeproj only.
+      - name: Pin app targets to Apple Distribution
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          python3 ../.github/scripts/configure-ios-distribution-signing.py --self-test
+          python3 ../.github/scripts/configure-ios-distribution-signing.py \
+            ios/ZRemote.xcodeproj/project.pbxproj
+
       - name: Write App Store Connect API key
         env:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
@@ -105,24 +118,28 @@ jobs:
           chmod 600 "$key"
           grep -q "BEGIN PRIVATE KEY" "$key" || { echo "ASC_PRIVATE_KEY is not a valid .p8"; exit 1; }
 
-      - name: Archive (cloud signing)
+      - name: Archive (distribution signing)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -o pipefail
+          # Do not pass CODE_SIGN_IDENTITY / CODE_SIGN_STYLE here: xcargs
+          # apply to every target in the workspace, including Pods, and
+          # Xcode 26 treats that as a hard provisioning conflict.
+          # Do not pass -allowProvisioningDeviceRegistration: that mints a
+          # new Apple Development certificate on each ephemeral runner
+          # until the team hits the 3-certificate cap.
           xcodebuild -workspace ios/ZRemote.xcworkspace \
             -scheme ZRemote -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
             -allowProvisioningUpdates \
-            -allowProvisioningDeviceRegistration \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
             archive -quiet 2>&1 | tee build.log || {
               grep -E "error:" build.log || true
               exit 1
@@ -143,6 +160,8 @@ jobs:
             <string>upload</string>
             <key>signingStyle</key>
             <string>automatic</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
             <key>teamID</key>
             <string>${APPLE_TEAM_ID}</string>
             <key>uploadSymbols</key>
