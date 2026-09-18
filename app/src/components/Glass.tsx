@@ -20,12 +20,15 @@ type GlassProps = ViewProps & {
   // Base tint of the glass; lifts it off pure black when there is little
   // content behind it to frost.
   tintColor?: ColorValue;
+  // `clear` for nested chips (model/effort pills); `regular` for surfaces.
+  effect?: 'clear' | 'regular';
 };
 
 // Real liquid glass on iOS 26+, a plain rounded surface everywhere else.
 export function Glass({
   interactive,
   tintColor,
+  effect = 'regular',
   style,
   children,
   ...rest
@@ -47,7 +50,7 @@ export function Glass({
     return (
       <LiquidGlassView
         interactive={interactive}
-        effect="regular"
+        effect={effect}
         colorScheme={theme.scheme}
         tintColor={tintColor}
         style={style}

@@ -41,6 +41,7 @@ import { AppServicesContext, type AppServices } from './runtimeContext';
 import { SignInScreen } from '../screens/SignInScreen';
 import { OrgGateScreen } from '../screens/OrgGateScreen';
 import { AdaptiveShell } from '../navigation/AdaptiveShell';
+import BootSplash from 'react-native-bootsplash';
 
 const log = createLog();
 
@@ -253,6 +254,7 @@ export function ZeronApp() {
           },
         ]}
       >
+        <BootSplash.HideOnDraw fade />
         <StatusBar
           barStyle={theme.scheme === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor="transparent"

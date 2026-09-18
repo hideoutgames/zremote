@@ -75,8 +75,16 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
       roomState="connected"
       harness={undefined}
       capabilities={new Set()}
-      modelLabel="Agent · Default"
-      onOpenModelPicker={() => {}}
+      modelShortLabel="Default"
+      modelProvider="generic"
+      models={[]}
+      agents={[]}
+      harnessLocked={false}
+      effortLevels={[]}
+      onPickModel={() => {}}
+      onPickAgent={() => {}}
+      onPickEffort={() => {}}
+      onOpenMore={() => {}}
       onOpenQueue={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
@@ -100,7 +108,56 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   expect(labels.some(l => l.label === 'Dictate' || /dict/i.test(l.label))).toBe(
     true,
   );
-  expect(labels.some(l => l.label === 'Agent · Default')).toBe(true);
+  expect(labels.some(l => l.label === 'Default')).toBe(true);
+});
+
+test('composer: Devin shows separate model and effort buttons', async () => {
+  const tree = await render(
+    <Composer
+      chatId="c1"
+      phase="idle"
+      roomState="connected"
+      harness={{
+        id: 'devin',
+        name: 'Devin',
+        supportsSteering: true,
+        steeringMode: 'turn-boundary',
+      }}
+      capabilities={new Set()}
+      modelShortLabel="Devin 2"
+      modelProvider="devin"
+      models={[{ id: 'devin-2', label: 'Devin 2', provider: 'devin' }]}
+      selectedModelId="devin-2"
+      agents={[{ id: 'devin', name: 'Devin' }]}
+      selectedAgentId="devin"
+      harnessLocked={false}
+      effortLevels={['low', 'medium', 'high']}
+      effortValue="high"
+      onPickModel={() => {}}
+      onPickAgent={() => {}}
+      onPickEffort={() => {}}
+      onOpenMore={() => {}}
+      onOpenQueue={() => {}}
+      dictation={dictationUnavailable}
+      onSend={() => {}}
+      onSteer={() => {}}
+      onQueue={() => {}}
+      onStop={() => {}}
+      onCancel={() => {}}
+      onSendAttachments={() => Promise.resolve('sent' as never)}
+      onRespondInput={() => {}}
+      onSendBlocked={() => {}}
+      composerRef={{ current: null }}
+      onLayout={() => {}}
+    />,
+  );
+  const labels = labelled(tree.root);
+  expect(labels.some(l => l.role === 'button' && l.label === 'Devin 2')).toBe(
+    true,
+  );
+  expect(
+    labels.some(l => l.role === 'button' && l.label === 'Effort, High'),
+  ).toBe(true);
 });
 
 test('session row: role button, label contains title + status + host', async () => {

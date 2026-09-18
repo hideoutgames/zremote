@@ -1,122 +1,255 @@
-// EffortSlider — discrete detents over the harness's advertised reasoning
-// levels (modelPicker.ts helpers drive the math; expo-haptics ticks when a
-// drag crosses a detent; accessibilityRole="adjustable" with
-// increment/decrement).
+// Discrete effort slider — Cherry Studio two-layer capsule (64dp outer,
+// 44dp progress pill, 36dp thumb, 10dp ticks), tap-to-seek, drag magnetism,
+// 200ms ease-out snap. Gestures use RN responders + Reanimated (no RNGH).
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Pressable,
   StyleSheet,
-  Text,
   View,
   type GestureResponderEvent,
+  type LayoutChangeEvent,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { selectionTick } from '../zeron/native/haptics';
 import { useTheme } from '../theme';
-import { detentForValue, nearestDetent } from './modelPicker';
+import { detentForValue } from './modelPicker';
+import {
+  effortSliderMagnetRadius,
+  effortSliderProgressHeight,
+  effortSliderThumbInset,
+  effortSliderThumbSize,
+  effortSliderTickSize,
+  effortSliderTrackHeight,
+  getEffortSliderTrackGeometry,
+  magnetize,
+  nearestStopIndex,
+  stopFraction,
+  trackXToFraction,
+} from './effortSliderMath';
 
 export interface EffortSliderProps {
   levels: readonly string[];
   value: string | undefined;
   onChange: (level: string) => void;
+  disabled?: boolean;
 }
 
-const capitalize = (s: string): string =>
-  s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+const SNAP = { duration: 200, easing: Easing.out(Easing.cubic) } as const;
 
-export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
+export function EffortSlider({
+  levels,
+  value,
+  onChange,
+  disabled = false,
+}: EffortSliderProps) {
   const theme = useTheme();
-  const trackWidth = useRef(0);
-  const current = detentForValue(levels, value);
+  const reducedMotion = useReducedMotion();
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const widthRef = useRef(0);
+  const stopCount = levels.length;
+  const valueIndex = detentForValue(levels, value);
+  const indexRef = useRef(valueIndex);
+  indexRef.current = valueIndex;
 
-  const moveTo = useCallback(
-    (x: number) => {
-      const next = nearestDetent(x, trackWidth.current, levels.length);
-      if (next !== current && levels[next] !== undefined) {
-        Haptics.selectionAsync().catch(() => {});
-        onChange(levels[next]);
-      }
+  const visualScale = 1;
+  const thumbCenterInset =
+    (effortSliderThumbInset + effortSliderThumbSize / 2) * visualScale;
+  const position = useSharedValue(stopFraction(valueIndex, stopCount));
+  const pressed = useRef(false);
+
+  useEffect(() => {
+    if (pressed.current) return;
+    const target = stopFraction(valueIndex, stopCount);
+    position.value = reducedMotion ? target : withTiming(target, SNAP);
+  }, [position, reducedMotion, stopCount, valueIndex]);
+
+  const commit = useCallback(
+    (index: number) => {
+      const level = levels[index];
+      if (level === undefined || index === indexRef.current) return;
+      selectionTick();
+      onChange(level);
     },
-    [current, levels, onChange],
+    [levels, onChange],
   );
 
-  const onTouch = useCallback(
-    (e: GestureResponderEvent) => moveTo(e.nativeEvent.locationX),
-    [moveTo],
+  const seek = useCallback(
+    (x: number) => {
+      if (disabled || stopCount < 2) return;
+      const width = Math.max(widthRef.current, 1);
+      const raw = trackXToFraction(x, width, thumbCenterInset);
+      const snapIndex = nearestStopIndex(raw, stopCount);
+      position.value = magnetize(raw, stopCount, effortSliderMagnetRadius);
+      commit(snapIndex);
+    },
+    [commit, disabled, position, stopCount, thumbCenterInset],
   );
+
+  const onGrant = useCallback(
+    (e: GestureResponderEvent) => {
+      pressed.current = true;
+      seek(e.nativeEvent.locationX);
+    },
+    [seek],
+  );
+  const onMove = useCallback(
+    (e: GestureResponderEvent) => seek(e.nativeEvent.locationX),
+    [seek],
+  );
+  const onRelease = useCallback(() => {
+    pressed.current = false;
+    const target = nearestStopIndex(position.value, stopCount);
+    const targetFrac = stopFraction(target, stopCount);
+    position.value = reducedMotion ? targetFrac : withTiming(targetFrac, SNAP);
+    commit(target);
+  }, [commit, position, reducedMotion, stopCount]);
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const width = e.nativeEvent.layout.width;
+    widthRef.current = width;
+    setMeasuredWidth(cur => (cur === width ? cur : width));
+  }, []);
+
+  const { thumbCenterStart, tickCenters, travelDistance } =
+    getEffortSliderTrackGeometry(
+      measuredWidth,
+      stopCount,
+      effortSliderThumbSize,
+      effortSliderThumbInset,
+    );
+  const progressInset = thumbCenterStart - effortSliderProgressHeight / 2;
+  const capsule = theme.scheme === 'dark' ? '#2C2C2E' : '#FFFFFF';
+  const fill = theme.text;
+  const thumb = theme.scheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
+  const tickMuted =
+    theme.scheme === 'dark' ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.22)';
+  const tickOnFill =
+    theme.scheme === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.45)';
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: effortSliderProgressHeight + travelDistance * position.value,
+  }));
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: effortSliderThumbInset + travelDistance * position.value },
+    ],
+  }));
 
   return (
-    <View style={styles.wrap}>
-      <Text style={[styles.value, { color: theme.text }]}>
-        {capitalize(levels[current] ?? '')}
-      </Text>
-      <View
-        style={[styles.track, { backgroundColor: theme.border }]}
-        onLayout={e => (trackWidth.current = e.nativeEvent.layout.width)}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderGrant={onTouch}
-        onResponderMove={onTouch}
-        accessibilityRole="adjustable"
-        accessibilityValue={{ text: levels[current] }}
-        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-        onAccessibilityAction={e => {
-          const dir = e.nativeEvent.actionName === 'increment' ? 1 : -1;
-          const next = Math.min(Math.max(current + dir, 0), levels.length - 1);
-          if (next !== current && levels[next] !== undefined)
-            onChange(levels[next]);
-        }}
+    <View
+      style={[
+        styles.track,
+        { backgroundColor: capsule, opacity: measuredWidth === 0 ? 0 : 1 },
+      ]}
+      onLayout={onLayout}
+      onStartShouldSetResponder={() => !disabled && stopCount >= 2}
+      onMoveShouldSetResponder={() => !disabled && stopCount >= 2}
+      onResponderGrant={onGrant}
+      onResponderMove={onMove}
+      onResponderRelease={onRelease}
+      onResponderTerminate={onRelease}
+      accessibilityRole="adjustable"
+      accessibilityValue={{ text: levels[valueIndex] }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={e => {
+        const dir = e.nativeEvent.actionName === 'increment' ? 1 : -1;
+        const next = Math.min(Math.max(valueIndex + dir, 0), stopCount - 1);
+        if (next !== valueIndex && levels[next] !== undefined)
+          onChange(levels[next]);
+      }}
+    >
+      {tickCenters.map((centerX, i) => (
+        <View
+          key={`tick-${i}`}
+          pointerEvents="none"
+          style={[
+            styles.tick,
+            {
+              backgroundColor: tickMuted,
+              left: centerX - effortSliderTickSize / 2,
+            },
+          ]}
+        />
+      ))}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.fill,
+          {
+            backgroundColor: fill,
+            left: progressInset,
+          },
+          fillStyle,
+        ]}
       >
-        {levels.map((l, i) => (
-          <Pressable
-            key={l}
+        {tickCenters.map((centerX, i) => (
+          <View
+            key={`fill-tick-${i}`}
             style={[
-              styles.detent,
+              styles.fillTick,
               {
-                backgroundColor:
-                  i === current ? theme.accent : theme.textSecondary,
+                backgroundColor: tickOnFill,
+                left: centerX - progressInset - effortSliderTickSize / 2,
               },
             ]}
-            onPress={() => {
-              if (i !== current) {
-                Haptics.selectionAsync().catch(() => {});
-                onChange(l);
-              }
-            }}
           />
         ))}
-      </View>
-      <View style={styles.labels}>
-        {levels.map(l => (
-          <Text
-            key={l}
-            style={[styles.label, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {capitalize(l)}
-          </Text>
-        ))}
-      </View>
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.thumb,
+          { backgroundColor: thumb, shadowColor: '#000000' },
+          thumbStyle,
+        ]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8 },
-  value: { fontSize: 20, fontWeight: '600' },
   track: {
-    height: 4,
-    borderRadius: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
+    height: effortSliderTrackHeight,
+    borderRadius: effortSliderTrackHeight / 2,
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
-  detent: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  fill: {
+    position: 'absolute',
+    overflow: 'hidden',
+    height: effortSliderProgressHeight,
+    borderRadius: effortSliderProgressHeight / 2,
+    top: (effortSliderTrackHeight - effortSliderProgressHeight) / 2,
   },
-  labels: { flexDirection: 'row', justifyContent: 'space-between' },
-  label: { fontSize: 11 },
+  tick: {
+    position: 'absolute',
+    width: effortSliderTickSize,
+    height: effortSliderTickSize,
+    borderRadius: effortSliderTickSize / 2,
+    top: (effortSliderTrackHeight - effortSliderTickSize) / 2,
+  },
+  fillTick: {
+    position: 'absolute',
+    width: effortSliderTickSize,
+    height: effortSliderTickSize,
+    borderRadius: effortSliderTickSize / 2,
+    top: (effortSliderProgressHeight - effortSliderTickSize) / 2,
+  },
+  thumb: {
+    position: 'absolute',
+    width: effortSliderThumbSize,
+    height: effortSliderThumbSize,
+    borderRadius: effortSliderThumbSize / 2,
+    top: (effortSliderTrackHeight - effortSliderThumbSize) / 2,
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 1.5,
+  },
 });

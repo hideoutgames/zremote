@@ -59,3 +59,17 @@ export const revalidateSelection = (
     catalog.reasoningLevels.includes(config.reasoning);
   return { agentOk, modelOk, effortOk };
 };
+
+/** Keep the current effort when the new model still advertises it; otherwise
+ * drop it so a stale level can't linger. */
+export const patchOnModelPick = (
+  reasoning: string | undefined,
+  modelId: string,
+  nextLevels: readonly string[],
+): Pick<ChatConfig, 'model' | 'reasoning'> => ({
+  model: modelId,
+  reasoning:
+    reasoning !== undefined && nextLevels.includes(reasoning)
+      ? reasoning
+      : undefined,
+});

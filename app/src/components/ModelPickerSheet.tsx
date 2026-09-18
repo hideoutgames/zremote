@@ -39,7 +39,8 @@ import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
 import { EffortSlider } from './EffortSlider';
-import { revalidateSelection } from './modelPicker';
+import { patchOnModelPick, revalidateSelection } from './modelPicker';
+import { capitalizeEffort } from './modelLabel';
 
 export interface ModelPickerSheetProps {
   runtime: AppRuntime;
@@ -238,7 +239,15 @@ export function ModelPickerSheet({
             { borderColor: theme.border },
             m.id === config?.model && { borderColor: theme.accent },
           ]}
-          onPress={() => apply({ model: m.id })}
+          onPress={() =>
+            apply(
+              patchOnModelPick(
+                config?.reasoning,
+                m.id,
+                reasoningLevelsFor(deviceId, harnessId ?? '', m.id),
+              ),
+            )
+          }
           accessibilityRole="button"
           accessibilityLabel={m.label}
           accessibilityState={{ selected: m.id === config?.model }}
@@ -272,11 +281,16 @@ export function ModelPickerSheet({
           {t('picker.effortUnsupported')}
         </Text>
       ) : (
-        <EffortSlider
-          levels={levels}
-          value={config?.reasoning}
-          onChange={level => apply({ reasoning: level })}
-        />
+        <View style={styles.effortBlock}>
+          <Text style={[styles.rowText, { color: theme.text }]}>
+            {capitalizeEffort(config?.reasoning ?? levels[0] ?? '')}
+          </Text>
+          <EffortSlider
+            levels={levels}
+            value={config?.reasoning}
+            onChange={level => apply({ reasoning: level })}
+          />
+        </View>
       )}
 
       {/* Model options — segmented rows; untouched choices round-trip. */}
@@ -435,6 +449,7 @@ export function ModelPickerSheet({
 const styles = StyleSheet.create({
   modalFill: { flex: 1 },
   content: { padding: 20, gap: 10 },
+  effortBlock: { gap: 10 },
   title: { fontSize: 20, fontWeight: '700' },
   section: { fontSize: 12, fontWeight: '600', marginTop: 10 },
   note: { fontSize: 12 },

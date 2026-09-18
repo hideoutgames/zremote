@@ -1,8 +1,11 @@
 // Expo Go preview shim — not used in production builds.
 // react-native-bootsplash is not bundled in Expo Go and its module calls
 // TurboModuleRegistry.getEnforcing at import time, so it must never reach the
-// bundle. The app only renders <BootSplash.HideOnDraw fade />; the native
-// splash isn't ours in Go anyway, so every API is a no-op.
+// Expo Go preview shim — not used in production builds.
+// react-native-bootsplash is not bundled in Expo Go and its module calls
+// TurboModuleRegistry.getEnforcing at import time, so it must never reach the
+// bundle. The app only renders <BootSplash.HideOnDraw fade /> from ZeronApp;
+// the native splash isn't ours in Go anyway, so every API is a no-op.
 
 const HideOnDraw = (_props: { fade?: boolean }): null => null;
 

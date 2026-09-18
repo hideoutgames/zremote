@@ -3,7 +3,8 @@
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
 //   lower tier: [+] attachment menu · live Queue/Steer pill ·
-//     [Agent · Model] button · mic · right circle (send/stop/stopping/cancel).
+//     model menu · effort overlay · mic · right circle
+//     (send/stop/stopping/cancel).
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
 // legacy upload-first — never a device-local URI on the wire).
@@ -58,12 +59,30 @@ import { composerAction, harnessSteers, liveAction } from './composerAction';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
+import { EffortOverlay } from './EffortOverlay';
+import { ProviderMark } from './ProviderMark';
+import {
+  capitalizeEffort,
+  composerShowsEffort,
+  type ProviderKind,
+} from './modelLabel';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
 // lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
 const INPUT_MAX_HEIGHT_COMPACT = 148;
 const INPUT_MAX_HEIGHT_REGULAR = 214;
 const THUMBS_ANIM_MS = 220;
+
+export interface ComposerModelChoice {
+  id: string;
+  label: string;
+  provider: ProviderKind;
+}
+
+export interface ComposerAgentChoice {
+  id: string;
+  name: string;
+}
 
 export interface ComposerProps {
   chatId: string;
@@ -72,9 +91,19 @@ export interface ComposerProps {
   harness?: HarnessDescriptor;
   /** Host capability strings (message-queue-v1 et al). */
   capabilities: ReadonlySet<string>;
-  /** e.g. "Claude · Opus 4.7" for the lower-tier picker button. */
-  modelLabel: string;
-  onOpenModelPicker: () => void;
+  modelShortLabel: string;
+  modelProvider: ProviderKind;
+  models: readonly ComposerModelChoice[];
+  selectedModelId?: string;
+  agents: readonly ComposerAgentChoice[];
+  selectedAgentId?: string;
+  harnessLocked: boolean;
+  effortLevels: readonly string[];
+  effortValue?: string;
+  onPickModel: (id: string) => void;
+  onPickAgent: (id: string) => void;
+  onPickEffort: (level: string) => void;
+  onOpenMore: () => void;
   onOpenQueue: () => void;
   dictation: DictationPort;
   onSend: (text: string) => void;
@@ -102,8 +131,19 @@ export const Composer = React.memo(function ({
   roomState,
   harness,
   capabilities,
-  modelLabel,
-  onOpenModelPicker,
+  modelShortLabel,
+  modelProvider,
+  models,
+  selectedModelId,
+  agents,
+  selectedAgentId,
+  harnessLocked,
+  effortLevels,
+  effortValue,
+  onPickModel,
+  onPickAgent,
+  onPickEffort,
+  onOpenMore,
   onOpenQueue,
   dictation,
   onSend,
@@ -139,6 +179,7 @@ export const Composer = React.memo(function ({
   );
 
   // ── Dictation ─────────────────────────────────────────────────────────
+  const [effortOpen, setEffortOpen] = useState(false);
   const [dictationSupported, setDictationSupported] = useState(false);
   const [dictating, setDictating] = useState(false);
   const baseRef = useRef('');
@@ -474,24 +515,89 @@ export const Composer = React.memo(function ({
               </DropdownMenu.Root>
             ) : null}
 
-            <Pressable
-              style={[
-                styles.modelBtn,
-                { backgroundColor: theme.inputBackground },
-              ]}
-              onPress={onOpenModelPicker}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={modelLabel}
-            >
-              <Text
-                style={[styles.modelText, { color: theme.text }]}
-                numberOfLines={1}
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <View
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel={modelShortLabel}
+                >
+                  <Glass effect="clear" style={styles.modelBtn}>
+                    <ProviderMark kind={modelProvider} size={14} />
+                    <Text
+                      style={[styles.modelText, { color: theme.text }]}
+                      numberOfLines={1}
+                    >
+                      {modelShortLabel}
+                    </Text>
+                    <Icon
+                      name="chevron.down"
+                      size={11}
+                      color={theme.textSecondary}
+                    />
+                  </Glass>
+                </View>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                {!harnessLocked && agents.length > 0 ? (
+                  <DropdownMenu.Sub>
+                    <DropdownMenu.SubTrigger key="agents">
+                      <DropdownMenu.ItemTitle>
+                        {t('composer.agents')}
+                      </DropdownMenu.ItemTitle>
+                    </DropdownMenu.SubTrigger>
+                    <DropdownMenu.SubContent>
+                      {agents.map(a => (
+                        <DropdownMenu.Item
+                          key={a.id}
+                          onSelect={() => onPickAgent(a.id)}
+                        >
+                          <DropdownMenu.ItemTitle>
+                            {a.id === selectedAgentId ? `✓ ${a.name}` : a.name}
+                          </DropdownMenu.ItemTitle>
+                        </DropdownMenu.Item>
+                      ))}
+                    </DropdownMenu.SubContent>
+                  </DropdownMenu.Sub>
+                ) : null}
+                {models.map(m => (
+                  <DropdownMenu.Item
+                    key={m.id}
+                    onSelect={() => onPickModel(m.id)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {m.id === selectedModelId ? `✓ ${m.label}` : m.label}
+                    </DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                ))}
+                <DropdownMenu.Item key="more" onSelect={onOpenMore}>
+                  <DropdownMenu.ItemTitle>
+                    {t('composer.more')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+
+            {composerShowsEffort(effortLevels) ? (
+              <Pressable
+                onPress={() => setEffortOpen(true)}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={`${t(
+                  'composer.effort',
+                )}, ${capitalizeEffort(effortValue ?? effortLevels[0] ?? '')}`}
               >
-                {modelLabel}
-              </Text>
-              <Icon name="chevron.down" size={11} color={theme.textSecondary} />
-            </Pressable>
+                <Glass effect="clear" style={styles.modelBtn}>
+                  <Icon name={'gauge' as never} size={14} color={theme.text} />
+                  <Text
+                    style={[styles.modelText, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {capitalizeEffort(effortValue ?? effortLevels[0] ?? '')}
+                  </Text>
+                </Glass>
+              </Pressable>
+            ) : null}
 
             {session.queue.length > 0 ? (
               <Pressable
@@ -638,6 +744,15 @@ export const Composer = React.memo(function ({
           {t('session.workingHint')}
         </Text>
       ) : null}
+
+      <EffortOverlay
+        visible={effortOpen}
+        levels={effortLevels}
+        value={effortValue}
+        modelShortLabel={modelShortLabel}
+        onChange={onPickEffort}
+        onClose={() => setEffortOpen(false)}
+      />
     </View>
   );
 });
@@ -739,7 +854,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 10,
     gap: 4,
-    maxWidth: '46%',
+    maxWidth: 160,
   },
   modelText: { fontSize: 13 },
   spacer: { flex: 1 },

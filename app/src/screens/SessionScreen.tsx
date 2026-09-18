@@ -37,7 +37,6 @@ import {
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
-import BootSplash from 'react-native-bootsplash';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
@@ -47,14 +46,23 @@ import {
   hostLabel,
   checkoutLabel,
 } from '../zeron/state/sessionTruth';
-import { setChatArchived, renameChat } from '../zeron/runtime/workspaceActions';
+import {
+  setChatArchived,
+  renameChat,
+  setChatConfig,
+} from '../zeron/runtime/workspaceActions';
 import { restoreFailedSend } from '../zeron/state/draftStore';
 import { edgeFetchBytes } from '../zeron/transport/edgeHttp';
 import { blobUrl } from '../zeron/transport/edge';
-import { catalogStore } from '../zeron/state/catalogStore';
-import { loadCatalog } from '../zeron/runtime/catalog';
+import {
+  catalogStore,
+  modelsFor,
+  reasoningLevelsFor,
+  selectableHarnesses,
+} from '../zeron/state/catalogStore';
+import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
-import type { MessageEntry } from '../zeron/protocol/types';
+import type { ChatConfig, MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass, GlassContainer } from '../components/Glass';
 import { Composer } from '../components/Composer';
@@ -75,6 +83,8 @@ import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import { patchOnModelPick } from '../components/modelPicker';
+import { providerKind, shortModelLabel } from '../components/modelLabel';
 import { ChangesScreen } from './ChangesScreen';
 import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
@@ -153,6 +163,38 @@ export function SessionScreen({
       );
   }, [runtime, hostDeviceId, catalog]);
   const harness = catalog?.harnesses.find(h => h.id === chat?.config?.harness);
+  const harnessId = chat?.config?.harness;
+  const catalogTick = catalog?.loadedAt ?? 0;
+  const pickerModels = useMemo(
+    () =>
+      hostDeviceId === undefined || harnessId === undefined
+        ? []
+        : modelsFor(hostDeviceId, harnessId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hostDeviceId, harnessId, catalogTick],
+  );
+  const effortLevels = useMemo(
+    () =>
+      hostDeviceId === undefined || harnessId === undefined
+        ? []
+        : reasoningLevelsFor(hostDeviceId, harnessId, chat?.config?.model),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hostDeviceId, harnessId, chat?.config?.model, catalogTick],
+  );
+  const pickerAgents = useMemo(
+    () => (hostDeviceId === undefined ? [] : selectableHarnesses(hostDeviceId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hostDeviceId, catalogTick],
+  );
+  useEffect(() => {
+    if (
+      runtime !== null &&
+      hostDeviceId !== undefined &&
+      harnessId !== undefined &&
+      pickerModels.length === 0
+    )
+      loadModels(runtime, hostDeviceId, harnessId).catch(() => {});
+  }, [runtime, hostDeviceId, harnessId, pickerModels.length]);
 
   const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -360,9 +402,41 @@ export function SessionScreen({
       mounted = false;
     };
   }, []);
-  const modelLabel = `${harness?.name ?? t('picker.agent')} · ${
-    chat?.config?.model ?? t('picker.default')
-  }`;
+  const selectedModel = pickerModels.find(m => m.id === chat?.config?.model);
+  const modelShort = shortModelLabel(
+    selectedModel?.label,
+    chat?.config?.model ?? t('picker.default'),
+  );
+  const modelProvider = providerKind(harnessId, chat?.config?.model);
+  const applyConfig = useCallback(
+    (patch: Partial<ChatConfig>) => {
+      if (runtime === null || chat === undefined) return;
+      const next: ChatConfig = {
+        harness: chat.config?.harness ?? '',
+        modelOptions: chat.config?.modelOptions ?? {},
+        ...chat.config,
+        ...patch,
+      };
+      setChatConfig(runtime, chat.id, next);
+    },
+    [runtime, chat],
+  );
+  const onPickModel = useCallback(
+    (modelId: string) => {
+      if (hostDeviceId === undefined || harnessId === undefined) return;
+      const nextLevels = reasoningLevelsFor(hostDeviceId, harnessId, modelId);
+      applyConfig(
+        patchOnModelPick(chat?.config?.reasoning, modelId, nextLevels),
+      );
+    },
+    [applyConfig, chat?.config?.reasoning, harnessId, hostDeviceId],
+  );
+  const onPickAgent = useCallback(
+    (id: string) => {
+      applyConfig({ harness: id, model: undefined, reasoning: undefined });
+    },
+    [applyConfig],
+  );
   const keyboardOffset = { opened: insets.bottom };
   const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
     .filter(Boolean)
@@ -370,8 +444,6 @@ export function SessionScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <BootSplash.HideOnDraw fade />
-
       <KeyboardAwareLegendList
         ref={listRef}
         style={styles.fill}
@@ -628,8 +700,23 @@ export function SessionScreen({
             roomState={session.room}
             harness={harness}
             capabilities={capabilities}
-            modelLabel={modelLabel}
-            onOpenModelPicker={() => setPickerOpen(true)}
+            modelShortLabel={modelShort}
+            modelProvider={modelProvider}
+            models={pickerModels.map(m => ({
+              id: m.id,
+              label: shortModelLabel(m.label, m.id),
+              provider: providerKind(harnessId, m.id),
+            }))}
+            selectedModelId={chat?.config?.model}
+            agents={pickerAgents.map(a => ({ id: a.id, name: a.name }))}
+            selectedAgentId={harnessId}
+            harnessLocked={entries.length > 0}
+            effortLevels={effortLevels}
+            effortValue={chat?.config?.reasoning}
+            onPickModel={onPickModel}
+            onPickAgent={onPickAgent}
+            onPickEffort={level => applyConfig({ reasoning: level })}
+            onOpenMore={() => setPickerOpen(true)}
             onOpenQueue={() => setQueueOpen(true)}
             dictation={dictation}
             onSend={doSend}

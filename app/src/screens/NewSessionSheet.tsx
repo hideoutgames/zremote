@@ -43,6 +43,9 @@ import type {
 } from '../zeron/protocol/types';
 import { useRuntime } from '../app/runtimeContext';
 import { Icon } from '../components/Icon';
+import { EffortSlider } from '../components/EffortSlider';
+import { ProviderMark } from '../components/ProviderMark';
+import { providerKind, shortModelLabel } from '../components/modelLabel';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
@@ -382,9 +385,15 @@ export function NewSessionSheet({
                     setSel(s => ({ ...s, model: m.id, reasoning: undefined }))
                   }
                 >
-                  <Text style={[styles.chipText, { color: theme.text }]}>
-                    {m.label}
-                  </Text>
+                  <View style={styles.chipInner}>
+                    <ProviderMark
+                      kind={providerKind(harness?.id, m.id)}
+                      size={14}
+                    />
+                    <Text style={[styles.chipText, { color: theme.text }]}>
+                      {shortModelLabel(m.label, m.id)}
+                    </Text>
+                  </View>
                 </Pressable>
               ))}
             </View>
@@ -392,27 +401,15 @@ export function NewSessionSheet({
         ) : null}
         {effortLevels.length > 0 ? (
           <>
-            <Row label={t('newSession.effort')} value={sel.reasoning} />
-            <View style={styles.chips}>
-              {effortLevels.map(level => (
-                <Pressable
-                  key={level}
-                  style={[
-                    styles.chip,
-                    { borderColor: theme.border },
-                    sel.reasoning === level && {
-                      borderColor: theme.accent,
-                      backgroundColor: theme.accent + '22',
-                    },
-                  ]}
-                  onPress={() => setSel(s => ({ ...s, reasoning: level }))}
-                >
-                  <Text style={[styles.chipText, { color: theme.text }]}>
-                    {level}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <Row
+              label={t('newSession.effort')}
+              value={sel.reasoning ?? effortLevels[0]}
+            />
+            <EffortSlider
+              levels={effortLevels}
+              value={sel.reasoning}
+              onChange={level => setSel(s => ({ ...s, reasoning: level }))}
+            />
           </>
         ) : null}
 
@@ -544,6 +541,7 @@ const styles = StyleSheet.create({
   rowValue: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowText: { fontSize: 14, fontWeight: '500' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chipInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chip: {
     borderWidth: 1,
     borderRadius: 16,

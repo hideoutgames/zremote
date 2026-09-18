@@ -245,6 +245,9 @@ const en = {
   'composer.dictate': 'Dictate',
   'composer.dictationUnavailable': 'Dictation unavailable on this build',
   'composer.removeAttachment': 'Remove {name}',
+  'composer.effort': 'Effort',
+  'composer.more': 'More…',
+  'composer.agents': 'Agents',
 
   // Shared message queue
   'queue.title': 'Queued messages',

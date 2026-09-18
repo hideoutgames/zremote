@@ -11,20 +11,39 @@ jest.mock('react-native-reanimated', () => ({
   // The upstream mock is missing this hook ("ADD ME IF NEEDED").
   useReducedMotion: () => false,
 }));
-jest.mock('react-native-keyboard-controller', () =>
-  require('react-native-keyboard-controller/jest'),
-);
+jest.mock('react-native-keyboard-controller', () => {
+  const actual = require('react-native-keyboard-controller/jest');
+  const RN = require('react-native');
+  const ReactLib = require('react');
+  return {
+    ...actual,
+    OverKeyboardView: ({
+      children,
+      visible,
+    }: {
+      children?: unknown,
+      visible?: boolean,
+    }) => (visible ? ReactLib.createElement(RN.View, null, children) : null),
+  };
+});
 // The package's own mock exports the whole module as a default export.
 jest.mock(
   'react-native-safe-area-context',
   () => require('react-native-safe-area-context/jest/mock').default,
 );
 
-jest.mock('react-native-bootsplash', () => ({
-  __esModule: true,
-  default: { hide: jest.fn(), isVisible: jest.fn(() => false) },
-  HideOnDraw: () => null,
-}));
+jest.mock('react-native-bootsplash', () => {
+  const HideOnDraw = () => null;
+  return {
+    __esModule: true,
+    default: {
+      hide: jest.fn(),
+      isVisible: jest.fn(() => false),
+      HideOnDraw,
+    },
+    HideOnDraw,
+  };
+});
 
 jest.mock('@callstack/liquid-glass', () => ({
   isLiquidGlassSupported: false,
