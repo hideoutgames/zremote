@@ -10,11 +10,13 @@ Two workflows under `.github/workflows/`:
     optional `notes`) or `v*` tag push. Signed archive + upload to App Store
   Connect via the App Store Connect API key and the team's **one
   cloud-managed Apple Distribution certificate**. Expo prebuild's
-  Automatic / Apple Development settings are rewritten on the app and
-  widget targets only (never as workspace-wide `xcodebuild` xcargs) to
-  **Automatic + Apple Distribution** so Xcode can still mint App Store
-  profiles. Manual style without a profile specifier fails the archive.
-  No certificates, profiles, or key material are committed.
+  Automatic / Apple Development identity is **stripped** on the app and
+  widget targets (and the project-level `iPhone Developer` setting) so
+  Xcode 26 Automatic cloud signing can pick Distribution for a generic
+  iOS archive. Setting Apple Distribution as an xcarg **or** in the
+  pbxproj conflicts ("automatically signed for development"); Manual
+  style needs a local cert the runner does not have. No certificates,
+  profiles, or key material are committed.
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
@@ -112,12 +114,14 @@ The archive step does **not** pass `CODE_SIGN_IDENTITY` or
 in the workspace (including CocoaPods), which on Xcode 26 produces
 "ZRemote is automatically signed for development, but a conflicting
 code signing identity Apple Distribution has been manually specified."
-`ZRemote` and `ExpoWidgetsTarget` stay on **Automatic** signing in the
-generated `project.pbxproj` (required for `-allowProvisioningUpdates`
-to select an App Store profile with App Groups / Associated Domains /
-Push Notifications) with their identity rewritten to Apple
-Distribution. Manual style without `PROVISIONING_PROFILE_SPECIFIER`
-fails: "requires a provisioning profile".
+The same conflict happens if Apple Distribution is written into the
+generated `project.pbxproj` while `CODE_SIGN_STYLE` stays Automatic —
+Xcode 26 classifies Automatic as development signing. Manual style
+without a local Distribution cert fails with "requires a provisioning
+profile". After prebuild, `ZRemote` and `ExpoWidgetsTarget` stay on
+**Automatic** and their `CODE_SIGN_IDENTITY` (plus the project-level
+`iPhone Developer` setting) is removed so cloud signing can pick the
+Distribution cert for the archive.
 
 ## 5. First-run expectations
 
