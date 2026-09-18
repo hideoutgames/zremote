@@ -31,7 +31,9 @@ export const simulatedVoiceLevels = (
   for (let i = 0; i < n; i++) {
     const a = Math.sin(nowMs / 180 + i * 0.7);
     const b = Math.sin(nowMs / 310 + i * 1.3);
-    out.push(Math.min(1, 0.22 + 0.45 * Math.abs(a) + 0.25 * Math.abs(b) + speech));
+    out.push(
+      Math.min(1, 0.22 + 0.45 * Math.abs(a) + 0.25 * Math.abs(b) + speech),
+    );
   }
   return out;
 };

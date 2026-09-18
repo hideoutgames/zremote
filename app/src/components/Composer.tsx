@@ -614,72 +614,75 @@ export const Composer = React.memo(function ({
               />
 
               <Pressable
-              onPress={
-                right === 'stop'
-                  ? onStop
-                  : right === 'cancel'
-                  ? onCancel
-                  : right === 'send'
-                  ? submit
-                  : undefined
-              }
-              disabled={
-                right === 'stopping' ||
-                (right === 'send' && action.primary !== 'send')
-              }
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={
-                right === 'stop'
-                  ? t('session.stop')
-                  : right === 'stopping'
-                  ? t('session.stopping')
-                  : right === 'cancel'
-                  ? t('session.cancel')
-                  : t('session.send')
-              }
-              accessibilityState={{
-                disabled:
+                onPress={
+                  right === 'stop'
+                    ? onStop
+                    : right === 'cancel'
+                    ? onCancel
+                    : right === 'send'
+                    ? submit
+                    : undefined
+                }
+                disabled={
                   right === 'stopping' ||
-                  (right === 'send' && action.primary !== 'send'),
-                busy: right === 'stopping',
-              }}
-              style={styles.minTarget}
-            >
-              <View
-                style={[
-                  styles.circle,
-                  {
-                    backgroundColor:
-                      right === 'send' && action.primary !== 'send'
-                        ? theme.sendInactive
-                        : theme.sendActive,
-                  },
-                ]}
+                  (right === 'send' && action.primary !== 'send')
+                }
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  right === 'stop'
+                    ? t('session.stop')
+                    : right === 'stopping'
+                    ? t('session.stopping')
+                    : right === 'cancel'
+                    ? t('session.cancel')
+                    : t('session.send')
+                }
+                accessibilityState={{
+                  disabled:
+                    right === 'stopping' ||
+                    (right === 'send' && action.primary !== 'send'),
+                  busy: right === 'stopping',
+                }}
+                style={styles.minTarget}
               >
-                {right === 'stopping' ? (
-                  <ActivityIndicator size="small" color={theme.textSecondary} />
-                ) : (
-                  <Icon
-                    name={
-                      right === 'stop'
-                        ? 'stop.fill'
-                        : right === 'cancel'
-                        ? 'xmark'
-                        : 'arrow.up'
-                    }
-                    size={right === 'send' ? 17 : 15}
-                    color={
-                      right === 'send' && action.primary !== 'send'
-                        ? '#FFFFFF'
-                        : theme.scheme === 'dark'
-                        ? '#000000'
-                        : '#FFFFFF'
-                    }
-                  />
-                )}
-              </View>
-            </Pressable>
+                <View
+                  style={[
+                    styles.circle,
+                    {
+                      backgroundColor:
+                        right === 'send' && action.primary !== 'send'
+                          ? theme.sendInactive
+                          : theme.sendActive,
+                    },
+                  ]}
+                >
+                  {right === 'stopping' ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.textSecondary}
+                    />
+                  ) : (
+                    <Icon
+                      name={
+                        right === 'stop'
+                          ? 'stop.fill'
+                          : right === 'cancel'
+                          ? 'xmark'
+                          : 'arrow.up'
+                      }
+                      size={right === 'send' ? 17 : 15}
+                      color={
+                        right === 'send' && action.primary !== 'send'
+                          ? '#FFFFFF'
+                          : theme.scheme === 'dark'
+                          ? '#000000'
+                          : '#FFFFFF'
+                      }
+                    />
+                  )}
+                </View>
+              </Pressable>
             </View>
           </View>
 
