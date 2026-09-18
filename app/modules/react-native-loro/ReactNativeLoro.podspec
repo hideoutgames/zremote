@@ -16,6 +16,10 @@ Pod::Spec.new do |s|
   s.source_files = 'ios/**/*.swift', 'vendor/loro-swift/Sources/Loro/**/*.swift'
   # The FFI binary (downloaded + checksum-verified by scripts/fetch-loro-ffi.sh).
   s.vendored_frameworks = 'vendor/loroFFI.xcframework'
+  # The Swift→C++ interop header (ReactNativeLoro-Swift.h) exposes the
+  # vendored UniFFI types, which reference the C `RustBuffer`; declare it
+  # ahead of every C/C++/ObjC++ compile unit in this pod.
+  s.prefix_header_contents = '#include <loroFFI/loroFFI.h>'
 
   s.dependency 'React-Core'
   s.dependency 'NitroModules'
