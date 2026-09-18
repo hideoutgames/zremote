@@ -1,15 +1,38 @@
 #!/usr/bin/env python3
-"""Pin TestFlight app targets to one Apple Distribution certificate.
+"""Prepare TestFlight app targets for Automatic cloud signing.
 
 Expo prebuild leaves ZRemote / ExpoWidgetsTarget on Automatic + Apple
-Development. Combined with xcodebuild -allowProvisioningUpdates that mints a
-new development certificate on every GitHub-hosted runner until the team hits
-Apple's 3-certificate cap.
+Development, and the project-level Release config on iPhone Developer.
+Xcode 26 then treats the target as "automatically signed for development".
 
-This script rewrites only the generated app xcodeproj (never Pods): those
-native app/extension targets become Manual + Apple Distribution. xcodebuild
-must then NOT pass CODE_SIGN_IDENTITY as a workspace-wide xcarg — that leaks
-onto CocoaPods targets and Xcode 26 errors with conflicting provisioning.
+Three overrides already failed on this repo:
+
+* CODE_SIGN_IDENTITY=Apple Distribution as an xcodebuild xcarg — conflict
+  ("automatically signed for development") and it leaks onto CocoaPods.
+* Manual + Apple Distribution with no profile specifier — archive dies
+  with "requires a provisioning profile with the App Groups…".
+* Automatic + Apple Distribution in the app xcodeproj — same conflict as
+  the xcarg. Xcode 26 classifies Automatic style as development signing,
+  so any Distribution identity is "manually specified".
+
+Manual signing also cannot work on an ephemeral runner: the team's
+cloud-managed Apple Distribution private key stays at Apple. The App
+Store Connect API key + -allowProvisioningUpdates is how xcodebuild
+uses that cert, and that path requires Automatic signing.
+
+So this script rewrites only the generated app xcodeproj (never Pods):
+
+* Keep CODE_SIGN_STYLE / ProvisioningStyle = Automatic.
+* Strip CODE_SIGN_IDENTITY (including sdk-specific) from app targets and
+  project-level configs so archive is not pinned to Apple Development.
+  xcodebuild then picks the cloud-managed Distribution cert for a
+  generic iOS archive.
+* Set DEVELOPMENT_TEAM from APPLE_TEAM_ID.
+
+xcodebuild must NOT pass CODE_SIGN_IDENTITY / CODE_SIGN_STYLE as
+workspace-wide xcargs, and must NOT pass
+-allowProvisioningDeviceRegistration (that mints a new Apple
+Development cert on every runner until the 3-certificate cap).
 """
 
 from __future__ import annotations
@@ -26,9 +49,17 @@ APP_PRODUCT_TYPES = (
     "com.apple.product-type.widgetkit-extension",
 )
 
+IDENTITY_KEYS = (
+    "CODE_SIGN_IDENTITY",
+    '"CODE_SIGN_IDENTITY[sdk=iphoneos*]"',
+)
+
 ID_RE = r"[A-Fa-f0-9]{24}"
 NATIVE_TARGET_RE = re.compile(
     r"(" + ID_RE + r") /\* ([^*]+) \*/ = \{\s*isa = PBXNativeTarget;"
+)
+PROJECT_BLOCK_RE = re.compile(
+    r"(" + ID_RE + r") /\* [^*]+ \*/ = \{\s*isa = PBXProject;"
 )
 PRODUCT_TYPE_RE = re.compile(r'productType = "([^"]+)";')
 CONFIG_LIST_RE = re.compile(
@@ -84,6 +115,28 @@ def _set_build_setting(settings: str, key: str, value: str) -> str:
     return settings[:insert_at] + f"\n{indent}{assignment}" + settings[insert_at:]
 
 
+def _remove_build_setting(settings: str, key: str) -> str:
+    return re.sub(
+        rf"^[ \t]*{re.escape(key)} = [^;]*;\n?",
+        "",
+        settings,
+        flags=re.M,
+    )
+
+
+def _strip_identities(settings: str) -> str:
+    updated = settings
+    for key in IDENTITY_KEYS:
+        updated = _remove_build_setting(updated, key)
+    updated = re.sub(
+        r"^[ \t]*PROVISIONING_PROFILE(?:_SPECIFIER)? = [^;]*;\n",
+        "",
+        updated,
+        flags=re.M,
+    )
+    return updated
+
+
 def _target_config_ids(text: str, list_id: str) -> list[str]:
     for obj_id, _open, _close, body in _iter_objects(text, CONFIG_LIST_BLOCK_RE):
         if obj_id != list_id:
@@ -102,6 +155,16 @@ def _target_config_ids(text: str, list_id: str) -> list[str]:
                     ids.append(found.group(1))
         return ids
     raise ValueError(f"XCConfigurationList {list_id} not found")
+
+
+def _project_config_ids(text: str) -> set[str]:
+    ids: set[str] = set()
+    for _obj_id, _open, _close, body in _iter_objects(text, PROJECT_BLOCK_RE):
+        list_match = CONFIG_LIST_RE.search(body)
+        if not list_match:
+            continue
+        ids.update(_target_config_ids(text, list_match.group(1)))
+    return ids
 
 
 def _patch_target_attributes(text: str, target_ids: set[str], team_id: str) -> str:
@@ -125,11 +188,11 @@ def _patch_target_attributes(text: str, target_ids: set[str], team_id: str) -> s
         if re.search(r"ProvisioningStyle = ", updated):
             updated = re.sub(
                 r"ProvisioningStyle = \w+;",
-                "ProvisioningStyle = Manual;",
+                "ProvisioningStyle = Automatic;",
                 updated,
             )
         else:
-            updated = f"\n{indent}ProvisioningStyle = Manual;" + updated
+            updated = f"\n{indent}ProvisioningStyle = Automatic;" + updated
         if re.search(r"DevelopmentTeam = ", updated):
             updated = re.sub(
                 r"DevelopmentTeam = \w+;",
@@ -147,7 +210,7 @@ def configure(text: str, team_id: str) -> tuple[str, list[str]]:
         raise ValueError("APPLE_TEAM_ID must be the 10-character Apple Team ID")
 
     target_ids: set[str] = set()
-    config_ids: set[str] = set()
+    app_config_ids: set[str] = set()
     names: list[str] = []
 
     for target_id, _open, _close, body in _iter_objects(text, NATIVE_TARGET_RE):
@@ -166,43 +229,30 @@ def configure(text: str, team_id: str) -> tuple[str, list[str]]:
             raise ValueError(f"no buildConfigurationList for target {target_id}")
         names.append(name or target_id)
         target_ids.add(target_id)
-        config_ids.update(_target_config_ids(text, list_match.group(1)))
+        app_config_ids.update(_target_config_ids(text, list_match.group(1)))
 
-    if not config_ids:
+    if not app_config_ids:
         raise ValueError("no app/extension targets found to configure")
+
+    project_config_ids = _project_config_ids(text)
+    rewrite_ids = app_config_ids | project_config_ids
 
     pieces: list[str] = []
     last = 0
     for obj_id, open_idx, close_idx, body in _iter_objects(text, BUILD_CONFIG_BLOCK_RE):
-        if obj_id not in config_ids:
+        if obj_id not in rewrite_ids:
             continue
         settings_match = re.search(r"buildSettings = \{", body)
         if not settings_match:
             raise ValueError(f"no buildSettings in configuration {obj_id}")
-        # settings are relative to body, which itself is inside the object.
         settings_header_abs = open_idx + 1 + settings_match.start()
         settings_body, settings_open, settings_close = _block_body(
             text, settings_header_abs
         )
-        updated = settings_body
-        updated = _set_build_setting(updated, "CODE_SIGN_STYLE", "Manual")
-        updated = _set_build_setting(
-            updated, "CODE_SIGN_IDENTITY", '"Apple Distribution"'
-        )
-        updated = _set_build_setting(
-            updated,
-            '"CODE_SIGN_IDENTITY[sdk=iphoneos*]"',
-            '"Apple Distribution"',
-        )
-        updated = _set_build_setting(updated, "DEVELOPMENT_TEAM", team_id)
-        # Profile names stay out of the repo; -allowProvisioningUpdates
-        # downloads the App Store profiles that already match this cert.
-        updated = re.sub(
-            r"^[ \t]*PROVISIONING_PROFILE(?:_SPECIFIER)? = [^;]*;\n",
-            "",
-            updated,
-            flags=re.M,
-        )
+        updated = _strip_identities(settings_body)
+        if obj_id in app_config_ids:
+            updated = _set_build_setting(updated, "CODE_SIGN_STYLE", "Automatic")
+            updated = _set_build_setting(updated, "DEVELOPMENT_TEAM", team_id)
         pieces.append(text[last:settings_open + 1])
         pieces.append(updated)
         last = settings_close
@@ -244,6 +294,7 @@ def _self_test() -> None:
 					};
 				};
 			};
+			buildConfigurationList = 83CBBA201A601CBA00E9B192 /* project configs */;
 		};
 		13B07F931A680F5B00A75B9A /* list */ = {
 			isa = XCConfigurationList;
@@ -262,6 +313,12 @@ def _self_test() -> None:
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BB0000000000000000000003 /* Release */,
+			);
+		};
+		83CBBA201A601CBA00E9B192 /* project configs */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				83CBBA211A601CBA00E9B192 /* Release */,
 			);
 		};
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -308,12 +365,12 @@ def _self_test() -> None:
 """
     out, names = configure(fixture, "ABCDE12345")
     assert names == ["ZRemote", "ExpoWidgetsTarget"], names
-    assert out.count('CODE_SIGN_IDENTITY = "Apple Distribution";') >= 2
-    assert "CODE_SIGN_STYLE = Manual;" in out
+    assert "Apple Distribution" not in out
+    assert "CODE_SIGN_STYLE = Manual;" not in out
     assert "DEVELOPMENT_TEAM = ABCDE12345;" in out
-    assert "ProvisioningStyle = Manual;" in out
+    assert "ProvisioningStyle = Automatic;" in out
+    assert "ProvisioningStyle = Manual;" not in out
     assert "old-dev-profile" not in out
-    # Pods + project-level configs must stay untouched.
     pod = out.split("BB0000000000000000000003 /* Release */ = {")[1].split(
         "83CBBA211A601CBA00E9B192"
     )[0]
@@ -325,10 +382,14 @@ def _self_test() -> None:
     widget = out.split("AA0000000000000000000003 /* Release */ = {")[1].split(
         "BB0000000000000000000003"
     )[0]
-    assert "CODE_SIGN_STYLE = Manual;" in zremote_release
-    assert "CODE_SIGN_STYLE = Manual;" in widget
+    project_release = out.split("83CBBA211A601CBA00E9B192 /* Release */ = {")[1]
+    assert "CODE_SIGN_STYLE = Automatic;" in zremote_release
+    assert "CODE_SIGN_STYLE = Automatic;" in widget
+    assert "CODE_SIGN_IDENTITY" not in zremote_release
+    assert "CODE_SIGN_IDENTITY" not in widget
     assert "Apple Development" not in zremote_release
     assert "Apple Development" not in widget
+    assert "iPhone Developer" not in project_release
     print("self-test ok")
 
 
@@ -352,7 +413,7 @@ def main() -> int:
     if patched == original:
         print("pbxproj already configured", file=sys.stderr)
     open(path, "w", encoding="utf-8").write(patched)
-    print("manual Apple Distribution signing: " + ", ".join(names))
+    print("automatic cloud signing (no identity override): " + ", ".join(names))
     return 0
 
 
