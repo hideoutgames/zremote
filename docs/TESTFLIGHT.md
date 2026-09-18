@@ -7,12 +7,14 @@ Two workflows under `.github/workflows/`:
   (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
   `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
 - **`ios-testflight.yml` — iOS TestFlight.** Manual (`workflow_dispatch`,
-  optional `notes`) or `v*` tag push. Signed archive + upload to App Store
+    optional `notes`) or `v*` tag push. Signed archive + upload to App Store
   Connect via the App Store Connect API key and the team's **one
   cloud-managed Apple Distribution certificate**. Expo prebuild's
   Automatic / Apple Development settings are rewritten on the app and
-  widget targets only (never as workspace-wide `xcodebuild` xcargs). No
-  certificates, profiles, or key material are committed.
+  widget targets only (never as workspace-wide `xcodebuild` xcargs) to
+  **Automatic + Apple Distribution** so Xcode can still mint App Store
+  profiles. Manual style without a profile specifier fails the archive.
+  No certificates, profiles, or key material are committed.
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
@@ -110,8 +112,12 @@ The archive step does **not** pass `CODE_SIGN_IDENTITY` or
 in the workspace (including CocoaPods), which on Xcode 26 produces
 "ZRemote is automatically signed for development, but a conflicting
 code signing identity Apple Distribution has been manually specified."
-Signing style is set on `ZRemote` and `ExpoWidgetsTarget` in the
-generated `project.pbxproj` instead.
+`ZRemote` and `ExpoWidgetsTarget` stay on **Automatic** signing in the
+generated `project.pbxproj` (required for `-allowProvisioningUpdates`
+to select an App Store profile with App Groups / Associated Domains /
+Push Notifications) with their identity rewritten to Apple
+Distribution. Manual style without `PROVISIONING_PROFILE_SPECIFIER`
+fails: "requires a provisioning profile".
 
 ## 5. First-run expectations
 

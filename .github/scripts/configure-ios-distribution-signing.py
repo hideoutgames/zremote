@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Pin TestFlight app targets to one Apple Distribution certificate.
+"""Pin TestFlight app targets to Automatic + Apple Distribution.
 
 Expo prebuild leaves ZRemote / ExpoWidgetsTarget on Automatic + Apple
-Development. Combined with xcodebuild -allowProvisioningUpdates that mints a
-new development certificate on every GitHub-hosted runner until the team hits
-Apple's 3-certificate cap.
+Development. Passing CODE_SIGN_IDENTITY=Apple Distribution as an xcodebuild
+xcarg then conflicts ("automatically signed for development") and leaks onto
+CocoaPods. Switching those targets to Manual without a profile specifier
+fails immediately: "requires a provisioning profile with the App Groups…"
 
-This script rewrites only the generated app xcodeproj (never Pods): those
-native app/extension targets become Manual + Apple Distribution. xcodebuild
-must then NOT pass CODE_SIGN_IDENTITY as a workspace-wide xcarg — that leaks
-onto CocoaPods targets and Xcode 26 errors with conflicting provisioning.
+Keep Automatic so -allowProvisioningUpdates can create/select App Store
+profiles, but rewrite the generated app xcodeproj (never Pods) so the
+targets themselves use Apple Distribution. xcodebuild must then NOT pass
+CODE_SIGN_IDENTITY / CODE_SIGN_STYLE as workspace-wide xcargs, and must
+NOT pass -allowProvisioningDeviceRegistration (that mints a new Apple
+Development cert on every ephemeral runner until the 3-certificate cap).
 """
 
 from __future__ import annotations
@@ -125,11 +128,11 @@ def _patch_target_attributes(text: str, target_ids: set[str], team_id: str) -> s
         if re.search(r"ProvisioningStyle = ", updated):
             updated = re.sub(
                 r"ProvisioningStyle = \w+;",
-                "ProvisioningStyle = Manual;",
+                "ProvisioningStyle = Automatic;",
                 updated,
             )
         else:
-            updated = f"\n{indent}ProvisioningStyle = Manual;" + updated
+            updated = f"\n{indent}ProvisioningStyle = Automatic;" + updated
         if re.search(r"DevelopmentTeam = ", updated):
             updated = re.sub(
                 r"DevelopmentTeam = \w+;",
@@ -185,7 +188,9 @@ def configure(text: str, team_id: str) -> tuple[str, list[str]]:
             text, settings_header_abs
         )
         updated = settings_body
-        updated = _set_build_setting(updated, "CODE_SIGN_STYLE", "Manual")
+        # Automatic is required so -allowProvisioningUpdates can mint the
+        # App Store profile (Manual with no specifier fails the archive).
+        updated = _set_build_setting(updated, "CODE_SIGN_STYLE", "Automatic")
         updated = _set_build_setting(
             updated, "CODE_SIGN_IDENTITY", '"Apple Distribution"'
         )
@@ -195,8 +200,8 @@ def configure(text: str, team_id: str) -> tuple[str, list[str]]:
             '"Apple Distribution"',
         )
         updated = _set_build_setting(updated, "DEVELOPMENT_TEAM", team_id)
-        # Profile names stay out of the repo; -allowProvisioningUpdates
-        # downloads the App Store profiles that already match this cert.
+        # Automatic manages the profile; a leftover specifier would force
+        # Manual-style lookup and break the archive.
         updated = re.sub(
             r"^[ \t]*PROVISIONING_PROFILE(?:_SPECIFIER)? = [^;]*;\n",
             "",
@@ -309,9 +314,10 @@ def _self_test() -> None:
     out, names = configure(fixture, "ABCDE12345")
     assert names == ["ZRemote", "ExpoWidgetsTarget"], names
     assert out.count('CODE_SIGN_IDENTITY = "Apple Distribution";') >= 2
-    assert "CODE_SIGN_STYLE = Manual;" in out
+    assert "CODE_SIGN_STYLE = Manual;" not in out
     assert "DEVELOPMENT_TEAM = ABCDE12345;" in out
-    assert "ProvisioningStyle = Manual;" in out
+    assert "ProvisioningStyle = Automatic;" in out
+    assert "ProvisioningStyle = Manual;" not in out
     assert "old-dev-profile" not in out
     # Pods + project-level configs must stay untouched.
     pod = out.split("BB0000000000000000000003 /* Release */ = {")[1].split(
@@ -325,8 +331,10 @@ def _self_test() -> None:
     widget = out.split("AA0000000000000000000003 /* Release */ = {")[1].split(
         "BB0000000000000000000003"
     )[0]
-    assert "CODE_SIGN_STYLE = Manual;" in zremote_release
-    assert "CODE_SIGN_STYLE = Manual;" in widget
+    assert "CODE_SIGN_STYLE = Automatic;" in zremote_release
+    assert "CODE_SIGN_STYLE = Automatic;" in widget
+    assert 'CODE_SIGN_IDENTITY = "Apple Distribution";' in zremote_release
+    assert 'CODE_SIGN_IDENTITY = "Apple Distribution";' in widget
     assert "Apple Development" not in zremote_release
     assert "Apple Development" not in widget
     print("self-test ok")
@@ -352,7 +360,7 @@ def main() -> int:
     if patched == original:
         print("pbxproj already configured", file=sys.stderr)
     open(path, "w", encoding="utf-8").write(patched)
-    print("manual Apple Distribution signing: " + ", ".join(names))
+    print("automatic Apple Distribution signing: " + ", ".join(names))
     return 0
 
 

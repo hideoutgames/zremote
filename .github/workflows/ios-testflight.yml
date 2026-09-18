@@ -1,10 +1,12 @@
 # iOS TestFlight — signed archive + App Store Connect upload via the ASC
 # API key. Uses the team's one cloud-managed Apple Distribution certificate
-# (no per-runner development certs, no profiles in the repo). Requires repo
-# secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the .p8 file
-# contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID.
-# Optional variables IOS_BUNDLE_ID (default no.hideout.zremote) /
-# ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
+# (no per-runner development certs, no profiles in the repo). App targets
+# stay on Automatic signing so -allowProvisioningUpdates can select App
+# Store profiles; identity is pinned to Apple Distribution in the generated
+# xcodeproj only. Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID /
+# ASC_PRIVATE_KEY (the .p8 file contents, pasted as-is; base64 also
+# accepted) / APPLE_TEAM_ID. Optional variables IOS_BUNDLE_ID (default
+# no.hideout.zremote) / ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
 
 name: iOS TestFlight
 
@@ -95,13 +97,19 @@ jobs:
       # Expo prebuild leaves ZRemote / ExpoWidgetsTarget on Automatic +
       # Apple Development. Passing Apple Distribution as an xcarg instead
       # conflicts ("automatically signed for development") and also leaks
-      # onto CocoaPods targets. Rewrite the app xcodeproj only.
+      # onto CocoaPods targets. Manual style without a profile specifier
+      # fails with "requires a provisioning profile". Rewrite the app
+      # xcodeproj only: keep Automatic (so -allowProvisioningUpdates can
+      # manage App Store profiles) and pin the identity to Apple
+      # Distribution so archive does not mint per-runner development certs.
       - name: Pin app targets to Apple Distribution
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           python3 ../.github/scripts/configure-ios-distribution-signing.py --self-test
           python3 ../.github/scripts/configure-ios-distribution-signing.py \
+            ios/ZRemote.xcodeproj/project.pbxproj
+          grep -E "CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|ProvisioningStyle|PROVISIONING_PROFILE" \
             ios/ZRemote.xcodeproj/project.pbxproj
 
       - name: Write App Store Connect API key
@@ -127,7 +135,8 @@ jobs:
           set -o pipefail
           # Do not pass CODE_SIGN_IDENTITY / CODE_SIGN_STYLE here: xcargs
           # apply to every target in the workspace, including Pods, and
-          # Xcode 26 treats that as a hard provisioning conflict.
+          # Xcode 26 treats an identity override on Automatic development
+          # targets as a hard provisioning conflict.
           # Do not pass -allowProvisioningDeviceRegistration: that mints a
           # new Apple Development certificate on each ephemeral runner
           # until the team hits the 3-certificate cap.
