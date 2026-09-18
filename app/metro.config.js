@@ -22,7 +22,6 @@ if (process.env.EXPO_GO === '1') {
     '@lodev09/react-native-true-sheet': shim('trueSheet.tsx'),
     'zeego/dropdown-menu': shim('zeegoDropdown.ts'),
     'zeego/context-menu': shim('zeegoContext.ts'),
-    '@legendapp/list/keyboard': shim('legendKeyboard.tsx'),
     'react-freeze': shim('reactFreeze.tsx'),
     'react-native-image-picker': shim('imagePicker.ts'),
     'react-native-bootsplash': shim('bootsplash.tsx'),

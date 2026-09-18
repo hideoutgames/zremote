@@ -60,9 +60,6 @@ Windows).
   `ActionSheetIOS`/`Alert`. Same actions, lower fidelity.
 - **Markdown** — `react-native-enriched-markdown` →
   `react-native-markdown-display` (pure JS); `streamingAnimation` ignored.
-- **KeyboardAware list** — `@legendapp/list/keyboard` → plain `LegendList`
-  - `KeyboardStickyView` shim (RN `Keyboard` events); the chat-tail
-    behaviors degrade.
 - **Offline queueing / doc persistence** — relay mode keeps no local
   session doc; the host is authoritative (drafts still persist).
 - **Universal-link sign-in**, deep links into the app.
