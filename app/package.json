@@ -114,5 +114,12 @@
       "react-native-ios-utilities": "$react-native-ios-utilities"
     },
     "react-dom": "19.2.3"
+  },
+  "expo": {
+    "autolinking": {
+      "exclude": [
+        "zeron-split-view"
+      ]
+    }
   }
 }

@@ -94,9 +94,11 @@ inspector). Spec `src/ZeronSplitViewNativeComponent.ts` (codegen:
    responder-chain `reactViewController()` lookup and safe-area behavior.
 4. `presentsWithGesture` / display-mode callbacks on real iPad rotation and
    multitasking (50/50, slide-over).
-5. Only then add `"zeron-split-view": "file:./modules/zeron-split-view"` to
-   app deps so autolinking + codegen pick it up (deliberately NOT a dep yet
-   — an unverified codegen/podspec must not break prebuild).
+5. Only then remove `zeron-split-view` from `expo.autolinking.exclude` in
+   `app/package.json`. Expo autolinks every module under `app/modules/`
+   whether or not it is a dependency — the first CI archive (run 35354571645) compiled it and failed in `ZeronSplitView.mm` (the Swift
+   bridging header / codegen names don't line up), so it is excluded until
+   verified.
 
 ## macOS build steps
 
