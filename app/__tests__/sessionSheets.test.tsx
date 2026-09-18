@@ -41,18 +41,6 @@ const device: DeviceRow = {
   version: '0.2.72',
 };
 
-const render = async (element: React.ReactElement) => {
-  let tree: TestRenderer.ReactTestRenderer | undefined;
-  await act(async () => {
-    tree = TestRenderer.create(
-      <AppServicesContext.Provider value={services}>
-        {element}
-      </AppServicesContext.Provider>,
-    );
-  });
-  return tree!;
-};
-
 const texts = (root: TestRenderer.ReactTestInstance): string[] =>
   root.findAllByType(Text).flatMap(n => {
     const c = n.props.children;
@@ -64,29 +52,52 @@ const named = (root: TestRenderer.ReactTestInstance, name: string) =>
   root.findAll(n => n.props.name === name);
 
 const byTestId = (root: TestRenderer.ReactTestInstance, id: string) =>
-  root.findAll(n => n.props.testID === id);
+  root.findAll(n => n.props.testID === id && typeof n.type === 'string');
 
 beforeEach(() => {
-  workspaceStore.setState({
-    devices: [device],
-    spaces: [],
-    chats: [chat],
-    sessions: {},
-    presence: {},
-    connection: 'connected',
-    lastSyncAt: undefined,
+  act(() => {
+    workspaceStore.setState({
+      devices: [device],
+      spaces: [],
+      chats: [chat],
+      sessions: {},
+      presence: {},
+      connection: 'connected',
+      lastSyncAt: undefined,
+    });
+    changeRequestStore.setState({ byChat: {}, diffByChat: {} });
+    getSessionStore('c1').setState({
+      entries: [],
+      commands: [],
+      queue: [],
+      meta: {},
+      pendingSends: [],
+      failedSends: [],
+      unsyncedCommandIds: [],
+      room: 'idle',
+      queueActionsPending: new Set(),
+    });
   });
-  changeRequestStore.setState({ byChat: {}, diffByChat: {} });
-  getSessionStore('c1').setState({
-    entries: [],
-    commands: [],
-    queue: [],
-    meta: {},
-    pendingSends: [],
-    failedSends: [],
-    unsyncedCommandIds: [],
-    room: 'idle',
-    queueActionsPending: new Set(),
+});
+
+const trees: TestRenderer.ReactTestRenderer[] = [];
+const render = async (element: React.ReactElement) => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AppServicesContext.Provider value={services}>
+        {element}
+      </AppServicesContext.Provider>,
+    );
+  });
+  trees.push(tree!);
+  return tree!;
+};
+
+afterEach(() => {
+  act(() => {
+    for (const tree of trees) tree.unmount();
+    trees.length = 0;
   });
 });
 
@@ -102,9 +113,7 @@ test('view details has no x close button and uses the session sheet', async () =
   );
   expect(named(tree.root, 'xmark')).toHaveLength(0);
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(1);
-  expect(tree.root.findByProps({ testID: 'TrueSheet' }).props.detents).toEqual([
-    0.75, 1,
-  ]);
+  expect(byTestId(tree.root, 'TrueSheet')[0].props.detents).toEqual([0.75, 1]);
   expect(texts(tree.root)).toContain('Demo thread');
 });
 
@@ -117,21 +126,23 @@ test('sub-agents has no x close button', async () => {
 });
 
 test('history lists the checkout PR and opens it on press', async () => {
-  setChangeRequestForChat('c1', {
-    checkoutId: 'ck',
-    deviceId: 'h1',
-    cwd: '/repo',
-    branch: 'feat',
-    changeRequest: {
-      provider: 'github',
-      number: 9,
-      title: 'Session sheets',
-      url: 'https://github.com/hideoutgames/zremote/pull/9',
-      state: 'open',
-      baseRef: 'main',
-      headRef: 'feat',
-    },
-    updatedAt: '2026-09-18T00:00:00Z',
+  act(() => {
+    setChangeRequestForChat('c1', {
+      checkoutId: 'ck',
+      deviceId: 'h1',
+      cwd: '/repo',
+      branch: 'feat',
+      changeRequest: {
+        provider: 'github',
+        number: 9,
+        title: 'Session sheets',
+        url: 'https://github.com/hideoutgames/zremote/pull/9',
+        state: 'open',
+        baseRef: 'main',
+        headRef: 'feat',
+      },
+      updatedAt: '2026-09-18T00:00:00Z',
+    });
   });
   const opened: PrBadgeModel[] = [];
   const tree = await render(

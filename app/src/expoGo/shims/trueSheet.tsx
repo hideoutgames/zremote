@@ -10,6 +10,7 @@ import {
   StyleSheet,
   View,
   type ColorValue,
+  type DimensionValue,
 } from 'react-native';
 
 export interface TrueSheetProps {
@@ -29,17 +30,6 @@ export interface TrueSheetRef {
   dismiss(): Promise<void>;
 }
 
-const detentHeight = (
-  detents: TrueSheetProps['detents'],
-  initialDetentIndex: number | undefined,
-  maxContentHeight: number | undefined,
-): string | number => {
-  const detent = detents?.[initialDetentIndex ?? 0];
-  if (typeof detent === 'number') return `${Math.round(detent * 100)}%`;
-  if (maxContentHeight !== undefined) return maxContentHeight;
-  return '85%';
-};
-
 export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
   (
     {
@@ -57,8 +47,10 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
       present: async () => {},
       dismiss: async () => onDidDismiss?.(),
     }));
-    const height = detentHeight(detents, initialDetentIndex, maxContentHeight);
-    const sized = typeof height === 'string';
+    const detent = detents?.[initialDetentIndex ?? 0];
+    const fraction: DimensionValue | undefined =
+      typeof detent === 'number' ? `${Math.round(detent * 100)}%` : undefined;
+    const maxHeight: DimensionValue = fraction ?? maxContentHeight ?? '85%';
     return (
       <Modal
         visible
@@ -77,8 +69,8 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
             styles.sheet,
             {
               backgroundColor: backgroundColor ?? '#1c1c1e',
-              height: sized ? height : undefined,
-              maxHeight: sized ? height : height,
+              height: fraction,
+              maxHeight,
             },
           ]}
         >

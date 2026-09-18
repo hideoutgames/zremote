@@ -86,8 +86,8 @@ jest.mock('@lodev09/react-native-true-sheet', () => ({
     children,
     ...props
   }: {
-    children?: unknown;
-    detents?: unknown;
+    children?: unknown,
+    detents?: unknown,
   }) =>
     require('react').createElement(
       require('react-native').View,

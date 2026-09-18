@@ -4,7 +4,6 @@
 
 import React, { type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useTheme } from '../theme';
 
@@ -23,7 +22,6 @@ export function SessionSheet({
   fill?: boolean;
 }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
 
   return (
     <TrueSheet
@@ -33,13 +31,7 @@ export function SessionSheet({
       grabber
       backgroundColor={theme.background}
     >
-      <View
-        testID="session-sheet"
-        style={[
-          fill ? styles.fill : undefined,
-          { paddingBottom: fill ? insets.bottom : 0 },
-        ]}
-      >
+      <View testID="session-sheet" style={fill ? styles.fill : undefined}>
         {title !== undefined ? (
           <Text
             style={[styles.title, { color: theme.text }]}
