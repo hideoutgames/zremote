@@ -139,10 +139,12 @@ class HybridDictation: HybridDictationSpec {
 
       let center = NotificationCenter.default
       self.interruptionObserver = center.addObserver(
-        forName: AVAudioSession.interruptionNotification, object: nil
+        forName: AVAudioSession.interruptionNotification, object: nil,
+        queue: nil
       ) { [weak self] _ in self?.teardown() }
       self.routeObserver = center.addObserver(
-        forName: AVAudioSession.routeChangeNotification, object: nil
+        forName: AVAudioSession.routeChangeNotification, object: nil,
+        queue: nil
       ) { [weak self] _ in self?.teardown() }
     }
   }
