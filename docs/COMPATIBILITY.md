@@ -59,6 +59,8 @@ templates. Their only deliberate customisations are:
 3. `platform :ios, '16.4'` in the `Podfile`.
 4. `patch-package` patches under `app/patches/` (bootsplash `HideOnDraw`, keyboard-controller, nitro-symbols, ios-utilities) — these patch `node_modules`, not the native projects, and are kept as-is.
 
+`react-native-keyboard-controller` is intentionally pinned to **1.21.12** (JS) over Expo Go's bundled 1.21.9 native: 1.21.9's KeyboardChatScrollView emits `contentOffset {0,0}` on first `animatedProps` evaluation, which feedback-loops the JS thread when a streaming chat opens (fixed upstream in 1.21.12; the fix is pure JS, no `ios/` changes). `expo install --check` flags the version mismatch — that is expected.
+
 Decision: move to **Expo Continuous Native Generation** with `app.config.ts`
 and config plugins. Each customisation above is encoded as a plugin (the
 bootsplash Expo plugin, a local `withPodfileMods` plugin for SDWebImage,

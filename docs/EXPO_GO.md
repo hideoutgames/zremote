@@ -46,7 +46,13 @@ Windows).
 - Attachments upload over the relay — expected to work; not yet exercised
   end-to-end in Go.
 - Composer keyboard handling, pager, Skia border beam — those modules are
-  bundled in Expo Go and resolve unchanged.
+  bundled in Expo Go and resolve unchanged. One deliberate exception:
+  `react-native-keyboard-controller` is pinned to **1.21.12** (JS side)
+  over Expo Go's bundled 1.21.9 native — 1.21.9's KeyboardChatScrollView
+  emits a `contentOffset {0,0}` on first `animatedProps` evaluation that
+  feedback-loops the JS thread on open (fixed upstream in 1.21.12, and the
+  fix is pure JS). `expo install --check` flags the mismatch; that is
+  expected.
 
 ## What differs or doesn't
 
