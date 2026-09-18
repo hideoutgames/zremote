@@ -11,7 +11,6 @@
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as Clipboard from 'expo-clipboard';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
 import { METHODS } from '../zeron/protocol/rpc';
@@ -40,10 +40,13 @@ import { t } from '../i18n/strings';
 export function ChangesScreen({
   chatId,
   embedded,
+  onOpenHistory,
 }: {
   chatId: string;
   /** Inside the iPad inspector — skip the standalone-screen chrome. */
   embedded?: boolean;
+  /** Header "History" button → git history for this checkout. */
+  onOpenHistory?: () => void;
 }) {
   const theme = useTheme();
   const runtime = useRuntime();
@@ -135,10 +138,8 @@ export function ChangesScreen({
     [state, runtime],
   );
 
-  const copy = useCallback((label: string, value: string) => {
-    // @react-native-clipboard is not yet a dependency (same gap as
-    // session.copyId) — show the value so it stays copyable.
-    Alert.alert(label, value);
+  const copy = useCallback((_label: string, value: string) => {
+    Clipboard.setStringAsync(value).catch(() => {});
   }, []);
 
   let body: React.ReactNode;
@@ -261,9 +262,40 @@ export function ChangesScreen({
     );
   }
 
-  if (embedded) return <View style={styles.root}>{body}</View>;
+  if (embedded)
+    return (
+      <View style={styles.root}>
+        {onOpenHistory !== undefined ? (
+          <Pressable
+            onPress={onOpenHistory}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('history.title')}
+            style={styles.historyBtn}
+          >
+            <Text style={[styles.historyLink, { color: theme.accent }]}>
+              {t('history.title')}
+            </Text>
+          </Pressable>
+        ) : null}
+        {body}
+      </View>
+    );
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {onOpenHistory !== undefined ? (
+        <Pressable
+          onPress={onOpenHistory}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('history.title')}
+          style={styles.historyBtn}
+        >
+          <Text style={[styles.historyLink, { color: theme.accent }]}>
+            {t('history.title')}
+          </Text>
+        </Pressable>
+      ) : null}
       {body}
     </View>
   );
@@ -290,6 +322,13 @@ const styles = StyleSheet.create({
   },
   glyph: { fontFamily: 'monospace', fontSize: 12, width: 14 },
   path: { flex: 1, fontSize: 13 },
+  historyLink: { fontSize: 13 },
+  historyBtn: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
   diff: { paddingHorizontal: 8, paddingBottom: 8 },
   truncated: { padding: 12, fontSize: 12 },
 });

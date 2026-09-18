@@ -84,7 +84,7 @@ window width to a plan:
 - **≥ 700pt** → `regular`: Sidebar (`HomeScreen` at 300–360pt) + Detail
   (`SessionScreen`) + optional Inspector (360–480pt). The inspector appears
   at ≥1100pt or when toggled from the session header; tabs are Changes /
-  Files / a disabled "Terminal — next build" placeholder (removed in 8b).
+  Files / Terminal / History.
   Transcript and composer are capped at ~720pt and centered.
 
 Selection (`chatId`), sidebar collapse, inspector tab and drafts persist
@@ -119,8 +119,7 @@ Both are thin screens over host-relayed RPCs — nothing runs on the phone.
   `crates/proto/src/entities.rs` L657-746 (`CheckoutDiff`,
   `DiffFileSummary`, `CheckoutFileDiffText`), dispatch
   `crates/engine/src/rpc.rs` ~L1639-1730. No commit/stage RPCs exist, so the
-  screen offers none (copy path / copy patch only — and Clipboard is still
-  not a dependency, so copy shows an Alert, same gap as `session.copyId`).
+  screen offers none (copy path / copy patch only, via `expo-clipboard`).
 - **Files** (`screens/FilesScreen.tsx`, `screens/FileEditorScreen.tsx`,
   `zeron/files/filesClient.ts`): `ListWorkspaceDirectory` (+ `includeIgnored`
   toggle; `.git` is never listed — filtered host-side and client-side),
@@ -131,3 +130,51 @@ Both are thin screens over host-relayed RPCs — nothing runs on the phone.
   the listing and honors `resyncRequired`. Shapes:
   `crates/proto/src/entities.rs` L384-640; dispatch `rpc.rs` ~L2089-2144.
   Path-jail errors surface verbatim.
+- **Terminal** (`screens/TerminalScreen.tsx`, `zeron/terminal/ansi.ts`,
+  `zeron/terminal/client.ts`): `OpenTerminal {chatId, cols, rows}` opens a PTY
+  in the chat's checkout cwd on the host (rpc.rs L294-332); the phone only
+  renders and sends input bytes. `SubscribeTerminal {terminalId, afterSeq?}`
+  replays a bounded 1MB window from `afterSeq` then tails (terminals.rs
+  L296-322) — reconnects resume from the last seen seq and never open a new
+  shell; exiting the screen cancels the subscription but leaves the PTY
+  running (exited shells retain replay state under a 30-min TTL,
+  terminals.rs L37). `WriteTerminal` sends base64 input coalesced 12ms like
+  desktop (view.rs L33); `ResizeTerminal` debounces 80ms on layout;
+  `CloseTerminal` runs only from the confirmed "Close shell" action. The
+  renderer is a justified specialist renderer: a pure screen model
+  (`AnsiScreen`, fully unit-tested) implements a fixed cols×rows grid, cursor
+  movement (CUP/CUU/CUD/CUF/CUB/CHA/VPA), ED/EL erase, SGR (bold/dim/italic/
+  underline/inverse, 16/256/truecolor fg/bg), 5k-line scrollback, CR/LF/BS/
+  TAB, wrap, `?25l/h` cursor visibility, OSC 0/2 title, and safely ignores
+  other CSI/OSC/DCS. Rows render as monospace Text runs with a cursor block.
+  Input is a hidden TextInput plus a key bar (Esc, Ctrl, arrows, Tab, Ctrl-C)
+  mapping to byte sequences. Tabs allow multiple shells per session; exited
+  shells show "exited (code)" with the TTL note.
+- **History** (`screens/HistoryScreen.tsx`, `zeron/history/history.ts`):
+  `ListGitHistory {cwd, cursor, limit}` paged rows (subject, author,
+  relative date, short sha), debounced `SearchGitHistory`, optional
+  `ResolveGitAvatars` (initials fallback), `FetchAll {repoPath}` header
+  action. Entry: the Changes header button and the session overflow.
+- **Previews** (`screens/PreviewsScreen.tsx`): `WatchPreviews {chatId}`
+  stream → `PreviewSnapshot {services, proxyPort}` (proto preview.rs L34-56);
+  each service's URL is `http://{hostname}:{proxyPort}` (preview.rs L28-32)
+  and opens in an in-app SFSafariViewController. The edge `/preview/{org}/ws`
+  route is the device-registration channel gated on the edge JWT
+  (edge/src/preview-route.ts) — preview content URLs are plain HTTP on the
+  host proxy, so no bearer is needed to view them.
+- **Agent accounts** (`screens/AgentAccountsScreen.tsx`,
+  `zeron/accounts/accounts.ts`, under Settings → device): per-device
+  `ListAgentAccounts` provider cards (active, plan label, usage meters at
+  desktop thresholds — amber ≥80%, red ≥95%, compact reset time),
+  `ActivateAgentAccount`, confirm-gated `ForgetAgentAccount`, and the add
+  flow (`StartAgentLogin` → paste-code `CompleteAgentLogin`, or browser-poll
+  `PollAgentLogin` until done + `CancelAgentLogin`). All calls run on the
+  chosen host device; app WorkOS auth is never reused.
+- **Device settings** (`screens/SettingsScreen.tsx` device page): rename via
+  `Mutate {op:'renameDevice'}` (rpc.rs L895), `UpdateStatus` stream +
+  confirm-gated `ApplyUpdate` (rpc.rs L1625-1633), and per-device
+  `GetTitleSettings`/`SetTitleSettings` (registry.rs L110).
+- **Clipboard/share**: `expo-clipboard` everywhere copy existed before
+  (session id, diff paths/patches, commit sha, preview URLs); assistant
+  messages share via `Share.share`; transcript rows have a context menu
+  (copy text, share, `zeron://session/{id}` link).

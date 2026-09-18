@@ -30,6 +30,7 @@ import {
   useKeyboardScrollToEnd,
 } from '@legendapp/list/keyboard';
 import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
 import BootSplash from 'react-native-bootsplash';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
@@ -71,6 +72,9 @@ import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { ChangesScreen } from './ChangesScreen';
 import { FilesScreen } from './FilesScreen';
+import { TerminalScreen } from './TerminalScreen';
+import { HistoryScreen } from './HistoryScreen';
+import { PreviewsScreen } from './PreviewsScreen';
 import { createLog } from '../zeron/log';
 
 const log = createLog();
@@ -163,16 +167,17 @@ export function SessionScreen({
   const renderEntry = useCallback(
     ({ item }: { item: MessageEntry }) =>
       item.role === 'user' ? (
-        <UserMessage entry={item} />
+        <UserMessage entry={item} chatId={chatId} />
       ) : (
         <AssistantMessage
           entry={item}
           phase={phase}
           onOpenReasoning={openReasoning}
           onFetchOutput={onFetchOutput}
+          chatId={chatId}
         />
       ),
-    [phase, openReasoning, onFetchOutput],
+    [phase, openReasoning, onFetchOutput, chatId],
   );
 
   const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
@@ -291,9 +296,7 @@ export function SessionScreen({
   }, [runtime, chat, chatId]);
 
   const onCopyId = useCallback(() => {
-    // Clipboard is @react-native-clipboard — not yet a dep; the id is in the
-    // overflow subtitle so it stays copyable. Later stage wires Clipboard.
-    Alert.alert(chatId);
+    Clipboard.setStringAsync(chatId).catch(() => {});
   }, [chatId]);
 
   const host = useStore(workspaceStore, s =>
@@ -312,9 +315,9 @@ export function SessionScreen({
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [toolOverlay, setToolOverlay] = useState<'changes' | 'files' | null>(
-    null,
-  );
+  const [toolOverlay, setToolOverlay] = useState<
+    'changes' | 'files' | 'terminal' | 'history' | 'previews' | null
+  >(null);
 
   // Announce run-phase transitions for VoiceOver (working → awaiting
   // input / completed / failed).
@@ -507,9 +510,28 @@ export function SessionScreen({
                 {t('session.files')}
               </DropdownMenu.ItemTitle>
             </DropdownMenu.Item>
-            <DropdownMenu.Item key="terminal" disabled>
+            <DropdownMenu.Item
+              key="terminal"
+              onSelect={() => setToolOverlay('terminal')}
+            >
               <DropdownMenu.ItemTitle>
-                {t('session.terminalNextBuild')}
+                {t('session.terminal')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              key="history"
+              onSelect={() => setToolOverlay('history')}
+            >
+              <DropdownMenu.ItemTitle>
+                {t('session.history')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              key="previews"
+              onSelect={() => setToolOverlay('previews')}
+            >
+              <DropdownMenu.ItemTitle>
+                {t('session.previews')}
               </DropdownMenu.ItemTitle>
             </DropdownMenu.Item>
             <DropdownMenu.Item key="archive" onSelect={onArchive}>
@@ -680,14 +702,29 @@ export function SessionScreen({
             <Text style={[styles.title, { color: theme.text }]}>
               {toolOverlay === 'changes'
                 ? t('session.changes')
-                : t('session.files')}
+                : toolOverlay === 'files'
+                ? t('session.files')
+                : toolOverlay === 'terminal'
+                ? t('session.terminal')
+                : toolOverlay === 'history'
+                ? t('session.history')
+                : t('session.previews')}
             </Text>
           </View>
           <View style={styles.fill}>
             {toolOverlay === 'changes' ? (
-              <ChangesScreen chatId={chatId} />
-            ) : (
+              <ChangesScreen
+                chatId={chatId}
+                onOpenHistory={() => setToolOverlay('history')}
+              />
+            ) : toolOverlay === 'files' ? (
               <FilesScreen chatId={chatId} />
+            ) : toolOverlay === 'terminal' ? (
+              <TerminalScreen chatId={chatId} />
+            ) : toolOverlay === 'history' ? (
+              <HistoryScreen chatId={chatId} />
+            ) : (
+              <PreviewsScreen chatId={chatId} />
             )}
           </View>
         </View>

@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +24,13 @@ import { catalogStore } from '../zeron/state/catalogStore';
 import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
 import { appConfig } from '../zeron/native/appConfig';
 import { useAppServices, useRuntime } from '../app/runtimeContext';
-import type { DeviceRow } from '../zeron/protocol/types';
+import type {
+  DeviceRow,
+  TitleSettings,
+  UpdateStatus,
+} from '../zeron/protocol/types';
+import { METHODS } from '../zeron/protocol/rpc';
+import { AgentAccountsScreen } from './AgentAccountsScreen';
 import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
@@ -63,12 +70,103 @@ const AgentsPage = ({
   const theme = useTheme();
   const runtime = useRuntime();
   const catalog = useStore(catalogStore, s => s.byDevice[device.id]);
+  const [update, setUpdate] = useState<UpdateStatus | undefined>(undefined);
+  const [applying, setApplying] = useState(false);
+  const [title, setTitle] = useState<TitleSettings>({});
+  const [titleLoaded, setTitleLoaded] = useState(false);
 
   useEffect(() => {
     if (runtime !== null)
       loadCatalog(runtime, device.id, { allowMockHarness: true }).catch(e =>
         log.warn(`catalog: ${e}`),
       );
+  }, [runtime, device.id]);
+
+  // UpdateStatus is a stream whose first item is the current status
+  // (rpc.rs L1625 watch_stream). Errors mean updates unavailable.
+  useEffect(() => {
+    if (runtime === null) return;
+    let cancelled = false;
+    let stream: { cancel(): void } | undefined;
+    runtime
+      .relayFor(device.id)
+      .stream<UpdateStatus>(METHODS.UPDATE_STATUS, {})
+      .then(async s => {
+        if (cancelled) {
+          s.cancel();
+          return;
+        }
+        stream = s;
+        for await (const u of s.items) if (!cancelled) setUpdate(u);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      stream?.cancel();
+    };
+  }, [runtime, device.id]);
+
+  // Per-device title settings (registry.rs TitleSettings: harness + model).
+  useEffect(() => {
+    if (runtime === null) return;
+    runtime
+      .relayFor(device.id)
+      .call<TitleSettings>(METHODS.GET_TITLE_SETTINGS, {})
+      .then(s => {
+        setTitle(s);
+        setTitleLoaded(true);
+      })
+      .catch(() => {});
+  }, [runtime, device.id]);
+
+  const saveTitle = useCallback(
+    (next: TitleSettings) => {
+      setTitle(next);
+      runtime
+        ?.relayFor(device.id)
+        .call(METHODS.SET_TITLE_SETTINGS, { ...next })
+        .catch(e => log.warn(`SetTitleSettings: ${e}`));
+    },
+    [runtime, device.id],
+  );
+
+  const rename = useCallback(() => {
+    Alert.prompt(
+      t('settings.renameDevice'),
+      undefined,
+      text => {
+        const name = text.trim();
+        if (name === '' || runtime === null) return;
+        runtime
+          .relayFor(device.id)
+          .call(METHODS.MUTATE, {
+            op: 'renameDevice',
+            deviceId: device.id,
+            name,
+          })
+          .catch(e => log.warn(`renameDevice: ${e}`));
+      },
+      'plain-text',
+      device.name,
+    );
+  }, [runtime, device.id, device.name]);
+
+  const applyUpdate = useCallback(() => {
+    if (runtime === null) return;
+    Alert.alert(t('settings.updateApply'), t('settings.updateApplyConfirm'), [
+      { text: t('home.row.cancel'), style: 'cancel' },
+      {
+        text: t('settings.updateApply'),
+        onPress: () => {
+          setApplying(true);
+          runtime
+            .relayFor(device.id)
+            .call(METHODS.APPLY_UPDATE, {})
+            .catch(e => log.warn(`ApplyUpdate: ${e}`))
+            .finally(() => setApplying(false));
+        },
+      },
+    ]);
   }, [runtime, device.id]);
 
   const toggle = useCallback(
@@ -89,6 +187,112 @@ const AgentsPage = ({
           {device.name}
         </Text>
       </Pressable>
+
+      {/* Rename + version/capabilities/last-seen are in the row subtitle on
+          the parent list; rename via Mutate op renameDevice (rpc.rs L895). */}
+      <Pressable
+        onPress={rename}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('settings.renameDevice')}
+        style={styles.agentRowBtn}
+      >
+        <Text style={[styles.agentName, { color: theme.accent }]}>
+          {t('settings.renameDevice')}
+        </Text>
+      </Pressable>
+
+      {update !== undefined ? (
+        <View
+          style={[
+            styles.agentRow,
+            {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <View style={styles.agentText}>
+            <Text style={[styles.agentName, { color: theme.text }]}>
+              {`v${update.currentVersion}`}
+              {update.updateAvailable && update.latestVersion !== undefined
+                ? ` → v${update.latestVersion}`
+                : ''}
+            </Text>
+            {update.error !== undefined ? (
+              <Text style={[styles.agentSub, { color: theme.danger }]}>
+                {update.error}
+              </Text>
+            ) : null}
+          </View>
+          {update.updateAvailable ? (
+            <Pressable
+              onPress={applyUpdate}
+              disabled={applying}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.updateApply')}
+            >
+              {applying ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Text style={{ color: theme.accent }}>
+                  {t('settings.updateApply')}
+                </Text>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {titleLoaded ? (
+        <View
+          style={[
+            styles.agentRow,
+            {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <View style={styles.agentText}>
+            <Text style={[styles.agentName, { color: theme.text }]}>
+              {t('settings.titleSettings')}
+            </Text>
+            <TextInput
+              value={title.harness ?? ''}
+              onChangeText={v =>
+                saveTitle({ ...title, harness: v || undefined })
+              }
+              placeholder={t('settings.titleHarness')}
+              placeholderTextColor={theme.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.titleInput, { color: theme.text }]}
+              accessibilityLabel={t('settings.titleHarness')}
+            />
+            <TextInput
+              value={title.model ?? ''}
+              onChangeText={v => saveTitle({ ...title, model: v || undefined })}
+              placeholder={t('settings.titleModel')}
+              placeholderTextColor={theme.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.titleInput, { color: theme.text }]}
+              accessibilityLabel={t('settings.titleModel')}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('settings.agentAccounts')}
+      </Text>
+      <AgentAccountsScreen deviceId={device.id} />
+
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('settings.agents')}
+      </Text>
       {catalog === undefined || catalog.loading ? (
         <ActivityIndicator color={theme.textSecondary} />
       ) : catalog.error !== undefined ? (
@@ -476,5 +680,11 @@ const styles = StyleSheet.create({
   agentText: { flex: 1 },
   agentName: { fontSize: 15, fontWeight: '500' },
   agentSub: { fontSize: 12 },
+  agentRowBtn: { minHeight: 44, justifyContent: 'center' },
+  titleInput: {
+    fontSize: 13,
+    fontFamily: 'monospace',
+    paddingVertical: 4,
+  },
   error: { fontSize: 13 },
 });

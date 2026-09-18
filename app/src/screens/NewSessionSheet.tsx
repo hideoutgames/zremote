@@ -102,9 +102,12 @@ const Row = ({
 export function NewSessionSheet({
   onClose,
   onCreated,
+  initialSpaceId,
 }: {
   onClose: () => void;
   onCreated: (chatId: string) => void;
+  /** Preselect this space ("New session in this space" from the filter). */
+  initialSpaceId?: string;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -113,7 +116,19 @@ export function NewSessionSheet({
   const spaces = useStore(workspaceStore, s => s.spaces);
   const presence = useStore(workspaceStore, s => s.presence);
 
-  const [sel, setSel] = useState<Selection>({ checkout: 'local' });
+  const [sel, setSel] = useState<Selection>(() => {
+    if (initialSpaceId === undefined) return { checkout: 'local' };
+    const space = workspaceStore
+      .getState()
+      .spaces.find(s => s.id === initialSpaceId);
+    const device =
+      space === undefined
+        ? undefined
+        : workspaceStore.getState().devices.find(d => d.id === space.deviceId);
+    return space === undefined || device === undefined
+      ? { checkout: 'local' }
+      : { space, device, checkout: 'local' };
+  });
   const [refs, setRefs] = useState<RepoRef[] | undefined>(undefined);
   const error: string | null = null;
 

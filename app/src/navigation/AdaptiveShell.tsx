@@ -23,6 +23,8 @@ import { SessionScreen } from '../screens/SessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ChangesScreen } from '../screens/ChangesScreen';
 import { FilesScreen } from '../screens/FilesScreen';
+import { TerminalScreen } from '../screens/TerminalScreen';
+import { HistoryScreen } from '../screens/HistoryScreen';
 import { useTheme } from '../theme';
 import { Icon } from '../components/Icon';
 import { layoutFor, type LayoutPrefs } from './layout';
@@ -33,7 +35,7 @@ import { t } from '../i18n/strings';
  *  `ZeronSplitView` from modules/zeron-split-view. */
 export const USE_NATIVE_SPLIT_VIEW = false;
 
-type InspectorTab = 'changes' | 'files' | 'terminal';
+type InspectorTab = 'changes' | 'files' | 'terminal' | 'history';
 
 export function AdaptiveShell({
   requestedChat,
@@ -102,23 +104,22 @@ export function AdaptiveShell({
           ]}
         >
           <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
-            {(['changes', 'files', 'terminal'] as const).map(tab => {
+            {(['changes', 'files', 'terminal', 'history'] as const).map(tab => {
               const label =
                 tab === 'changes'
                   ? t('inspector.changes')
                   : tab === 'files'
                   ? t('inspector.files')
-                  : t('inspector.terminal');
-              const disabled = tab === 'terminal';
+                  : tab === 'terminal'
+                  ? t('inspector.terminal')
+                  : t('inspector.history');
               return (
                 <Pressable
                   key={tab}
-                  disabled={disabled}
                   onPress={() => setInspectorTab(tab)}
                   accessibilityRole="tab"
                   accessibilityState={{
                     selected: inspectorTab === tab,
-                    disabled,
                   }}
                   style={styles.tab}
                   hitSlop={8}
@@ -128,14 +129,8 @@ export function AdaptiveShell({
                     style={[
                       styles.tabLabel,
                       {
-                        color:
-                          inspectorTab === tab
-                            ? theme.accent
-                            : disabled
-                            ? theme.textSecondary
-                            : theme.text,
+                        color: inspectorTab === tab ? theme.accent : theme.text,
                       },
-                      disabled ? styles.tabDisabled : undefined,
                     ]}
                   >
                     {label}
@@ -145,19 +140,22 @@ export function AdaptiveShell({
             })}
           </View>
           {inspectorTab === 'changes' && chatId !== null ? (
-            <ChangesScreen chatId={chatId} embedded />
+            <ChangesScreen
+              chatId={chatId}
+              embedded
+              onOpenHistory={() => setInspectorTab('history')}
+            />
           ) : null}
           {inspectorTab === 'files' && chatId !== null ? (
             <FilesScreen chatId={chatId} embedded />
           ) : null}
-          {inspectorTab === 'terminal' ? (
-            <View style={styles.emptyDetail}>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                {t('inspector.terminalPlaceholder')}
-              </Text>
-            </View>
+          {inspectorTab === 'terminal' && chatId !== null ? (
+            <TerminalScreen chatId={chatId} />
           ) : null}
-          {chatId === null && inspectorTab !== 'terminal' ? (
+          {inspectorTab === 'history' && chatId !== null ? (
+            <HistoryScreen chatId={chatId} />
+          ) : null}
+          {chatId === null ? (
             <View style={styles.emptyDetail}>
               <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                 {t('inspector.noSession')}

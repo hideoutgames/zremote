@@ -27,6 +27,7 @@ const SF_TO_MDI: Record<string, string> = {
   'hand.thumbsup': 'thumb-up-outline',
   'hand.thumbsdown': 'thumb-down-outline',
   'arrow.clockwise': 'refresh',
+  safari: 'compass-outline',
   xmark: 'close',
   magnifyingglass: 'magnify',
   gearshape: 'cog-outline',

@@ -5,6 +5,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -62,7 +63,7 @@ const indicatorColor = (theme: Theme, i: ChatIndicator): string | null => {
   }
 };
 
-const relativeTime = (at: number, now: number): string => {
+export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -169,6 +170,16 @@ const ChatRow = React.memo(function ({
                 .filter(Boolean)
                 .join(' · ')}
             </Text>
+            {chat.lastMessagePreview !== undefined &&
+            chat.lastMessagePreview !== '' ? (
+              <Text
+                style={[styles.preview, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.6}
+              >
+                {chat.lastMessagePreview}
+              </Text>
+            ) : null}
           </View>
           <View
             style={[
@@ -212,6 +223,16 @@ export function HomeScreen({
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const runtime = useRuntime();
+
+  // Pull-to-refresh kicks the registry + open session rooms (same path the
+  // foreground handler uses — appRuntime.onForeground L270).
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    runtime?.onForeground();
+    setTimeout(() => setRefreshing(false), 600);
+  }, [runtime]);
 
   const overview = useOverviewChats();
   const archived = useArchivedChats(spaceFilter);
@@ -284,6 +305,16 @@ export function HomeScreen({
                 {t('home.allSpaces')}
               </DropdownMenu.ItemTitle>
             </DropdownMenu.Item>
+            {spaceFilter !== undefined ? (
+              <DropdownMenu.Item
+                key="newHere"
+                onSelect={() => setSheetOpen(true)}
+              >
+                <DropdownMenu.ItemTitle>
+                  {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
+                </DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+            ) : null}
             {devices.map(device => {
               const deviceSpaces = spaces.filter(s => s.deviceId === device.id);
               if (deviceSpaces.length === 0) return null;
@@ -322,6 +353,9 @@ export function HomeScreen({
         keyExtractor={item => item.id}
         estimatedItemSize={66}
         recycleItems
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListHeaderComponent={
           <Text style={[styles.section, { color: theme.textSecondary }]}>
             {t('home.sessions')}
@@ -385,6 +419,7 @@ export function HomeScreen({
 
       {sheetOpen ? (
         <NewSessionSheet
+          initialSpaceId={spaceFilter}
           onClose={() => setSheetOpen(false)}
           onCreated={id => {
             setSheetOpen(false);
@@ -460,6 +495,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '500' },
   unseen: { fontWeight: '700' },
   subtitle: { fontSize: 14 },
+  preview: { fontSize: 13 },
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
   archivedHeader: {
     flexDirection: 'row',

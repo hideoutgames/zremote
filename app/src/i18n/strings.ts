@@ -94,13 +94,12 @@ const en = {
   'session.queuedLocally': 'Queued',
   'session.changes': 'Changes',
   'session.files': 'Files',
-  'session.terminalNextBuild': 'Terminal — next build',
 
   // Inspector (iPad)
   'inspector.changes': 'Changes',
   'inspector.files': 'Files',
-  'inspector.terminal': 'Terminal — next build',
-  'inspector.terminalPlaceholder': 'Terminal — next build',
+  'inspector.terminal': 'Terminal',
+  'inspector.history': 'History',
   'inspector.noSession': 'Select a session',
   'inspector.toggle': 'Toggle inspector',
   'sidebar.toggle': 'Toggle sidebar',
@@ -133,6 +132,60 @@ const en = {
   'session.announce.awaitingInput': 'The agent needs your input',
   'session.announce.completed': 'Run completed',
   'session.announce.errored': 'Run failed',
+
+  // Terminal
+  'terminal.new': 'New shell',
+  'terminal.close': 'Close',
+  'terminal.closeShell': 'Close shell',
+  'terminal.screen': 'Terminal screen',
+  'terminal.input': 'Terminal input',
+  'terminal.exitedNote':
+    'Exited shells stay listed for 30 minutes on the host.',
+
+  // History
+  'history.title': 'History',
+  'history.search': 'Search commits…',
+  'history.fetch': 'Fetch all',
+  'history.copySha': 'Copy SHA',
+
+  // Accounts
+  'accounts.title': 'Agent accounts',
+  'accounts.add': 'Add account',
+  'accounts.switch': 'Switch',
+  'accounts.forget': 'Forget',
+  'accounts.forgetConfirm': 'Forget this account on the host?',
+  'accounts.pasteCode': 'Paste the code shown in the browser',
+  'accounts.completeLogin': 'Complete sign-in',
+  'accounts.cancelLogin': 'Cancel',
+  'accounts.used': 'used',
+  'accounts.active': 'Active',
+
+  // Devices
+  'devices.title': 'Devices',
+  'devices.rename': 'Rename',
+  'devices.update': 'Update',
+  'devices.updateConfirm':
+    'Download and apply the update on this host? It restarts the Zeron service.',
+  'devices.upToDate': 'Up to date',
+  'devices.lastSeen': 'Last seen',
+
+  // Previews
+  'previews.title': 'Previews',
+  'previews.empty': 'No previews on this checkout',
+  'previews.error': 'Preview discovery unavailable',
+  'previews.open': 'Open in browser',
+  'previews.copyUrl': 'Copy URL',
+  'previews.zeronOwned': 'zeron-managed',
+  'session.previews': 'Previews',
+  'session.terminal': 'Terminal',
+  'session.history': 'History',
+
+  // Misc
+  'common.copy': 'Copy',
+  'common.share': 'Share',
+  'common.copyLink': 'Copy session link',
+  'common.copyText': 'Copy text',
+  'home.newSessionIn': 'New session in',
   'session.synchronized': 'Sent',
   'session.stale': 'Connection lost',
   'session.errored': 'Error',
@@ -163,6 +216,14 @@ const en = {
   'settings.dictationDownloading': 'downloading',
   'settings.dictationUnsupported': 'unsupported on this device',
   'settings.dictationUnavailable': 'dictation module not built',
+  'settings.renameDevice': 'Rename device',
+  'settings.updateApply': 'Apply update',
+  'settings.updateApplyConfirm':
+    'Download and apply the update on this host? The Zeron service restarts.',
+  'settings.titleSettings': 'Session titles',
+  'settings.titleHarness': 'title harness',
+  'settings.titleModel': 'title model',
+  'settings.agentAccounts': 'Agent accounts',
 
   // Composer attachment menu
   'composer.camera': 'Camera',

@@ -6,7 +6,16 @@
 // ReadAttachmentChunk in a later stage).
 
 import React, { useMemo } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Linking,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import * as ContextMenu from 'zeego/context-menu';
 import type { MessageEntry, MessagePart } from '../../zeron/protocol/types';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import { markdownStyleFor } from '../../markdownStyle';
@@ -21,7 +30,8 @@ import type { SFSymbol } from 'sf-symbols-typescript';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
-  { kind: 'part'; part: MessagePart } | { kind: 'tools'; parts: ToolPart[] };
+  | { kind: 'part'; part: MessagePart }
+  | { kind: 'tools'; parts: ToolPart[] };
 
 const groupParts = (parts: MessagePart[]): Item[] => {
   const items: Item[] = [];
@@ -163,11 +173,13 @@ export const AssistantMessage = React.memo(function ({
   phase,
   onOpenReasoning,
   onFetchOutput,
+  chatId,
 }: {
   entry: MessageEntry;
   phase: string;
   onOpenReasoning: (text: string) => void;
   onFetchOutput?: (partId: string) => void;
+  chatId?: string;
 }) {
   const theme = useTheme();
   const streaming = entry.status === 'streaming';
@@ -178,51 +190,87 @@ export const AssistantMessage = React.memo(function ({
   const waiting =
     streaming && !entry.parts.some(p => p.kind === 'text' && p.text !== '');
 
+  const fullText = entry.parts
+    .filter(p => p.kind === 'text')
+    .map(p => (p as { text: string }).text)
+    .join('\n');
   return (
-    <View style={styles.row}>
-      {waiting ? (
-        <View style={styles.statusRow} accessibilityLiveRegion="polite">
-          <Icon
-            name={
-              (phase === 'working' ? 'sparkles' : 'text.bubble') as SFSymbol
-            }
-            size={15}
-            color={theme.textSecondary}
-          />
-          <ShimmerText
-            text={phaseLabel(phase)}
-            width={140}
-            fontSize={16}
-            maxLines={1}
-            align="left"
-          />
-        </View>
-      ) : (
-        items.map((item, i) =>
-          item.kind === 'tools' ? (
-            <ToolActivity
-              key={`tools-${i}`}
-              parts={item.parts}
-              onFetchOutput={onFetchOutput}
-            />
+    <ContextMenu.Root>
+      <ContextMenu.Trigger>
+        <View style={styles.row}>
+          {waiting ? (
+            <View style={styles.statusRow} accessibilityLiveRegion="polite">
+              <Icon
+                name={
+                  (phase === 'working' ? 'sparkles' : 'text.bubble') as SFSymbol
+                }
+                size={15}
+                color={theme.textSecondary}
+              />
+              <ShimmerText
+                text={phaseLabel(phase)}
+                width={140}
+                fontSize={16}
+                maxLines={1}
+                align="left"
+              />
+            </View>
           ) : (
-            <PartView
-              key={item.part.id}
-              part={item.part}
-              streaming={streaming}
-              isLastText={item.part.id === lastTextId}
-              onOpenReasoning={onOpenReasoning}
-              onFetchOutput={onFetchOutput}
-            />
-          ),
-        )
-      )}
-      {entry.status === 'aborted' ? (
-        <Text style={[styles.error, { color: theme.danger }]}>
-          {t('session.interrupted')}
-        </Text>
-      ) : null}
-    </View>
+            items.map((item, i) =>
+              item.kind === 'tools' ? (
+                <ToolActivity
+                  key={`tools-${i}`}
+                  parts={item.parts}
+                  onFetchOutput={onFetchOutput}
+                />
+              ) : (
+                <PartView
+                  key={item.part.id}
+                  part={item.part}
+                  streaming={streaming}
+                  isLastText={item.part.id === lastTextId}
+                  onOpenReasoning={onOpenReasoning}
+                  onFetchOutput={onFetchOutput}
+                />
+              ),
+            )
+          )}
+          {entry.status === 'aborted' ? (
+            <Text style={[styles.error, { color: theme.danger }]}>
+              {t('session.interrupted')}
+            </Text>
+          ) : null}
+        </View>
+      </ContextMenu.Trigger>
+      <ContextMenu.Content>
+        <ContextMenu.Item
+          key="copy"
+          onSelect={() => Clipboard.setStringAsync(fullText).catch(() => {})}
+        >
+          <ContextMenu.ItemTitle>{t('common.copyText')}</ContextMenu.ItemTitle>
+        </ContextMenu.Item>
+        <ContextMenu.Item
+          key="share"
+          onSelect={() => Share.share({ message: fullText }).catch(() => {})}
+        >
+          <ContextMenu.ItemTitle>{t('common.share')}</ContextMenu.ItemTitle>
+        </ContextMenu.Item>
+        {chatId !== undefined ? (
+          <ContextMenu.Item
+            key="link"
+            onSelect={() =>
+              Clipboard.setStringAsync(`zeron://session/${chatId}`).catch(
+                () => {},
+              )
+            }
+          >
+            <ContextMenu.ItemTitle>
+              {t('common.copyLink')}
+            </ContextMenu.ItemTitle>
+          </ContextMenu.Item>
+        ) : null}
+      </ContextMenu.Content>
+    </ContextMenu.Root>
   );
 });
 

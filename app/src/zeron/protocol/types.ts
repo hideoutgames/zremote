@@ -482,3 +482,137 @@ export interface CheckoutFileDiffText {
   truncated: boolean;
   stale: boolean;
 }
+
+// ── Terminals (entities.rs L866-890; engine params rpc.rs L294-332) ─────────
+
+/** `OpenTerminal` reply. */
+export interface TerminalSession {
+  id: string;
+  cwd: string;
+  shell: string;
+}
+
+/** `SubscribeTerminal` stream item — `#[serde(tag = "type")]`. */
+export type TerminalEvent =
+  | { type: 'data'; seq: number; /** base64 PTY bytes. */ data: string }
+  | { type: 'exit'; seq: number; exitCode: number; signal?: string };
+
+// ── Git history (entities.rs L267-315; rpc.rs L1942-2037) ───────────────────
+
+export interface GitHistoryRef {
+  kind: string;
+  label: string;
+}
+
+export interface GitHistoryCommit {
+  sha: string;
+  parentShas: string[];
+  subject: string;
+  authorName: string;
+  authorEmail: string;
+  authoredAt: string;
+  refs: GitHistoryRef[];
+}
+
+export interface GitHistoryPage {
+  commits: GitHistoryCommit[];
+  branchTips: GitHistoryCommit[];
+  headSha?: string;
+  nextCursor?: number;
+  totalCount?: number;
+  headCount?: number;
+}
+
+// ── Agent accounts (entities.rs L764-865) ───────────────────────────────────
+
+export interface AgentUsageWindow {
+  label: string;
+  /** 0.0..=1.0 */
+  usedFraction: number;
+  resetsAt?: string;
+}
+
+export type AgentAuthKind = 'oauth' | 'api-key';
+
+export interface AgentAccount {
+  id: string;
+  harness: string;
+  email?: string;
+  planLabel?: string;
+  active: boolean;
+  usageWindows: AgentUsageWindow[];
+  displayName?: string;
+  organization?: string;
+  authKind?: AgentAuthKind;
+  switchable: boolean;
+  savedAt?: number;
+}
+
+export interface AgentAccountWarning {
+  harness: string;
+  message: string;
+}
+
+export interface AgentAccountsSnapshot {
+  accounts: AgentAccount[];
+  warnings: AgentAccountWarning[];
+}
+
+export type AgentLoginMode = 'paste-code' | 'browser';
+
+export interface AgentLoginStart {
+  loginId: string;
+  url: string;
+  mode: AgentLoginMode;
+}
+
+export type AgentLoginStatus = 'pending' | 'done' | 'error';
+
+export interface AgentLoginPoll {
+  status: AgentLoginStatus;
+  message?: string;
+  url?: string;
+}
+
+// ── Previews (proto/preview.rs) ──────────────────────────────────────────────
+
+export interface PreviewService {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectCwd: string;
+  deviceId: string;
+  deviceName: string;
+  hostname: string;
+  name: string;
+  port: number;
+  pid: number;
+  cwd: string;
+  startedAt: number;
+  zeronOwned: boolean;
+}
+
+export interface PreviewSnapshot {
+  services: PreviewService[];
+  proxyPort: number;
+  error?: string;
+  projectName?: string;
+  remote: boolean;
+}
+
+// ── Updates (crates/update/src/lib.rs L598) ──────────────────────────────────
+
+export interface UpdateStatus {
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  checkedAt?: number;
+  error?: string;
+}
+
+// ── Title settings (engine registry.rs L110) ─────────────────────────────────
+
+export interface TitleSettings {
+  harness?: string;
+  model?: string;
+}
