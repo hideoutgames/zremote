@@ -71,7 +71,9 @@ export function VoicePill({
       const start = startedAt.current ?? Date.now();
       setElapsed(formatVoiceElapsed(Date.now() - start));
       if (!reduceMotion) {
-        setLevels(simulatedVoiceLevels(Date.now(), VOICE_PILL_BAR_COUNT, levelTick));
+        setLevels(
+          simulatedVoiceLevels(Date.now(), VOICE_PILL_BAR_COUNT, levelTick),
+        );
       }
     };
     tick();
@@ -109,7 +111,8 @@ export function VoicePill({
   ).current;
 
   const pillStyle = useAnimatedStyle(() => ({
-    width: VOICE_PILL_SIZE + (VOICE_PILL_OPEN_WIDTH - VOICE_PILL_SIZE) * open.value,
+    width:
+      VOICE_PILL_SIZE + (VOICE_PILL_OPEN_WIDTH - VOICE_PILL_SIZE) * open.value,
     transform: [{ translateX: slide.value }],
   }));
 
@@ -141,7 +144,9 @@ export function VoicePill({
       accessibilityRole="button"
       accessibilityLabel={t('composer.dictate')}
       accessibilityState={{ disabled: !supported, busy: active }}
-      accessibilityHint={supported ? undefined : t('composer.dictationUnavailable')}
+      accessibilityHint={
+        supported ? undefined : t('composer.dictationUnavailable')
+      }
       style={styles.hit}
     >
       <Animated.View
@@ -178,7 +183,11 @@ export function VoicePill({
           </View>
         ) : null}
         <View style={styles.iconSlot}>
-          <Icon name={active ? 'stop.fill' : 'mic'} size={active ? 13 : 17} color={iconColor} />
+          <Icon
+            name={active ? 'stop.fill' : 'mic'}
+            size={active ? 13 : 17}
+            color={iconColor}
+          />
         </View>
       </Animated.View>
     </Pressable>
