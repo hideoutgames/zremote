@@ -807,10 +807,12 @@ export class DemoEdge {
     }
     chat.transcriptWatchers.add(end);
     streams.set(end.id, () => chat.transcriptWatchers.delete(end));
-    streamItem(end, {
+    const reset = {
       reset: chat.entries,
       contextUsage: chat.contextUsage,
-    });
+    };
+    this.transcriptFrames.push(JSON.parse(JSON.stringify(reset)));
+    streamItem(end, reset);
     // A chat whose row says `working` resumes streaming on first watch.
     if (
       chat.run === undefined &&
@@ -837,15 +839,23 @@ export class DemoEdge {
     return tail === undefined ? null : String(tail.id);
   }
 
+  /** Every transcript frame emitted (test hook — lets Jest replay frames
+   * through applyTranscriptFrame without standing up a socket). */
+  public readonly transcriptFrames: Record<string, unknown>[] = [];
+
   private emit(chat: ChatSim, frame: Record<string, unknown>): void {
+    const payload = {
+      upsert: [],
+      append: [],
+      remove: [],
+      count: chat.entries.length,
+      ...frame,
+    };
+    // Snapshot: entries/parts are mutated by later steps — the watcher would
+    // otherwise record frames as they look at the END of the run.
+    this.transcriptFrames.push(JSON.parse(JSON.stringify(payload)));
     for (const end of chat.transcriptWatchers) {
-      streamItem(end, {
-        upsert: [],
-        append: [],
-        remove: [],
-        count: chat.entries.length,
-        ...frame,
-      });
+      streamItem(end, payload);
     }
   }
 

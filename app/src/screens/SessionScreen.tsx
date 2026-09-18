@@ -419,8 +419,12 @@ export function SessionScreen({
         }
       />
 
-      {/* Header: back, title (tap → rename), subtitle host · branch, overflow. */}
-      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+      {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
+          box-none: taps in the transparent gaps reach the transcript. */}
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
+        pointerEvents="box-none"
+      >
         <Pressable
           onPress={onBack}
           hitSlop={8}

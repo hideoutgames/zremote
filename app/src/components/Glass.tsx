@@ -73,6 +73,7 @@ export function Glass({
           }
           intensity={60}
           style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
         {children}
       </View>

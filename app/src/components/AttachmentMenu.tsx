@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { Icon } from './Icon';
-import { theme } from '../theme';
+import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 
 type AttachmentMenuProps = {
@@ -16,15 +16,16 @@ export function AttachmentMenu({
   onPickCamera,
   onPickFiles,
 }: AttachmentMenuProps) {
+  const theme = useTheme();
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         <Pressable
           hitSlop={6}
-          style={styles.btn}
+          style={[styles.btn, { backgroundColor: theme.inputBackground }]}
           accessibilityLabel={t('composer.attach')}
         >
-          <Icon name="plus" size={22} color={theme.text} />
+          <Icon name="plus" size={18} color={theme.text} />
         </Pressable>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
@@ -50,5 +51,13 @@ export function AttachmentMenu({
 }
 
 const styles = StyleSheet.create({
-  btn: { padding: 4 },
+  // 32pt subtle-fill circle inside the composer's single glass surface
+  // (44pt hit target comes from the hitSlop, matching the sibling controls).
+  btn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

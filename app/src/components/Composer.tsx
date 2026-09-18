@@ -17,6 +17,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -58,7 +59,10 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 
-const INPUT_MAX_HEIGHT = 120;
+// Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
+// lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
+const INPUT_MAX_HEIGHT_COMPACT = 148;
+const INPUT_MAX_HEIGHT_REGULAR = 214;
 const THUMBS_ANIM_MS = 220;
 
 export interface ComposerProps {
@@ -115,6 +119,9 @@ export const Composer = React.memo(function ({
 }: ComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const inputMaxHeight =
+    windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT;
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
   const session = useSessionState(chatId);
@@ -412,7 +419,7 @@ export const Composer = React.memo(function ({
             placeholderTextColor={theme.textSecondary}
             style={[
               styles.input,
-              { color: theme.text },
+              { color: theme.text, maxHeight: inputMaxHeight },
               question !== undefined ? styles.inputDimmed : undefined,
             ]}
             multiline
@@ -422,10 +429,8 @@ export const Composer = React.memo(function ({
             // modifier gap is documented in docs/ARCHITECTURE.md.
           />
 
-          {/* ── Hairline tier separator ────────────────────────────────── */}
-          <View style={[styles.hairline, { backgroundColor: theme.border }]} />
-
-          {/* ── Lower tier: [+] · queue/steer pill · model · mic · right ─ */}
+          {/* ── Lower tier: [+] · queue/steer pill · model · mic · right ─
+              (no separator — spacing only, per the single-surface design) ── */}
           <View style={styles.lowerRow}>
             <AttachmentMenu
               onPickPhotos={pickImages}
@@ -470,23 +475,22 @@ export const Composer = React.memo(function ({
             ) : null}
 
             <Pressable
-              style={styles.modelBtn}
+              style={[
+                styles.modelBtn,
+                { backgroundColor: theme.inputBackground },
+              ]}
               onPress={onOpenModelPicker}
               hitSlop={4}
               accessibilityRole="button"
               accessibilityLabel={modelLabel}
             >
               <Text
-                style={[styles.modelText, { color: theme.textSecondary }]}
+                style={[styles.modelText, { color: theme.text }]}
                 numberOfLines={1}
               >
                 {modelLabel}
               </Text>
-              <Icon
-                name="chevron.up.chevron.down"
-                size={10}
-                color={theme.textSecondary}
-              />
+              <Icon name="chevron.down" size={11} color={theme.textSecondary} />
             </Pressable>
 
             {session.queue.length > 0 ? (
@@ -505,6 +509,8 @@ export const Composer = React.memo(function ({
               </Pressable>
             ) : null}
 
+            <View style={styles.spacer} />
+
             <Pressable
               onPress={toggleDictation}
               disabled={!dictationSupported}
@@ -520,18 +526,26 @@ export const Composer = React.memo(function ({
                   ? undefined
                   : t('composer.dictationUnavailable')
               }
+              style={styles.minTarget}
             >
-              <Icon
-                name={dictating ? 'stop.circle.fill' : 'mic'}
-                size={18}
-                color={
-                  !dictationSupported
-                    ? theme.sendInactive
-                    : dictating
-                    ? theme.danger
-                    : theme.textSecondary
-                }
-              />
+              <View
+                style={[
+                  styles.circle,
+                  { backgroundColor: theme.inputBackground },
+                ]}
+              >
+                <Icon
+                  name={dictating ? 'stop.circle.fill' : 'mic'}
+                  size={17}
+                  color={
+                    !dictationSupported
+                      ? theme.sendInactive
+                      : dictating
+                      ? theme.danger
+                      : theme.textSecondary
+                  }
+                />
+              </View>
             </Pressable>
 
             <Pressable
@@ -589,7 +603,7 @@ export const Composer = React.memo(function ({
                         ? 'xmark'
                         : 'arrow.up'
                     }
-                    size={right === 'send' ? 20 : 15}
+                    size={right === 'send' ? 17 : 15}
                     color={
                       right === 'send' && action.primary !== 'send'
                         ? '#FFFFFF'
@@ -606,7 +620,7 @@ export const Composer = React.memo(function ({
         <BorderBeam
           width={glassSize.w}
           height={glassSize.h}
-          radius={28}
+          radius={24}
           runPhase={phase}
           roomState={roomState}
           reduceMotion={reduceMotion}
@@ -634,27 +648,22 @@ const formatBytes = (n: number): string => {
   return `${n} B`;
 };
 
-const CIRCLE = 36;
+const CIRCLE = 32;
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
   glassWrap: { position: 'relative' },
   glass: {
-    borderRadius: 28,
+    borderRadius: 24,
     overflow: 'hidden',
-    paddingTop: 8,
   },
   lowerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  hairline: {
-    height: StyleSheet.hairlineWidth,
-    opacity: 0.4,
-    marginHorizontal: 14,
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
   minTarget: {
     minWidth: 44,
@@ -671,11 +680,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   input: {
-    fontSize: 16,
+    fontSize: 17,
+    lineHeight: 22,
     paddingHorizontal: 16,
-    paddingTop: 2,
-    paddingBottom: 8,
-    maxHeight: INPUT_MAX_HEIGHT,
+    paddingTop: 12,
+    paddingBottom: 4,
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
   inputDimmed: { opacity: 0.45 },
   stripClip: { overflow: 'hidden' },
@@ -722,13 +733,16 @@ const styles = StyleSheet.create({
   },
   livePillText: { fontSize: 12, fontWeight: '600' },
   modelBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 10,
     gap: 4,
+    maxWidth: '46%',
   },
   modelText: { fontSize: 13 },
+  spacer: { flex: 1 },
   queueBadge: { fontSize: 13, fontWeight: '700' },
   hint: { fontSize: 12, textAlign: 'center' },
 });

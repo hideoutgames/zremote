@@ -161,6 +161,9 @@ export interface RelaySessionDeps {
 }
 
 const REOPEN_MS = 1_000;
+/** Reopen backoff cap — a stream that desyncs on every reset must not hot-
+ * loop resubscribes. */
+const REOPEN_MAX_MS = 10_000;
 /** Terminal host-reported session statuses that release `stopping`. */
 const NOT_WORKING = new Set(['idle', 'completed', 'errored', 'aborted']);
 
@@ -176,6 +179,7 @@ export class RelaySessionSource {
   private readonly entries: MessageEntry[] = [];
   private streams: { items: AsyncIterable<unknown>; cancel(): void }[] = [];
   private reopenTimer: unknown;
+  private reopenDelay = REOPEN_MS;
   private stopped = false;
   private started = false;
   private desynced = false;
@@ -280,17 +284,25 @@ export class RelaySessionSource {
     });
   }
 
-  private scheduleReopen(): void {
+  /** Current delay, then double for the next failure (cap REOPEN_MAX_MS). */
+  private nextReopenDelay(): number {
+    const delay = this.reopenDelay;
+    this.reopenDelay = Math.min(this.reopenDelay * 2, REOPEN_MAX_MS);
+    return delay;
+  }
+
+  private scheduleReopen(delay?: number): void {
     if (this.stopped || this.reopenTimer !== undefined) return;
     // Teardown: the next open re-subscribes; the stream's first frame is a
     // full reset, so replacement (not merge) is the reconnect semantic.
     for (const s of this.streams) s.cancel();
     this.streams = [];
     getSessionStore(this.chatId).setState({ room: 'disconnected' });
+    const ms = delay ?? this.nextReopenDelay();
     this.reopenTimer = this.deps.clock.setTimeout(() => {
       this.reopenTimer = undefined;
       this.openStreams();
-    }, REOPEN_MS);
+    }, ms);
   }
 
   private onTranscript(value: unknown): void {
@@ -298,6 +310,8 @@ export class RelaySessionSource {
       const update = parseTranscriptUpdate(value);
       applyTranscriptFrame(this.entries, frameOf(update));
       this.desynced = false;
+      // A clean frame proves the stream is healthy — reset the backoff.
+      this.reopenDelay = REOPEN_MS;
       const store = getSessionStore(this.chatId);
       const entryIds = new Set(this.entries.map(e => e.id));
       const s = store.getState();
@@ -338,8 +352,11 @@ export class RelaySessionSource {
         // Diverged copy is unsafe: drop it and resubscribe for a reset.
         this.desynced = true;
         this.entries.length = 0;
-        this.deps.log?.(`transcript desync: ${e.message}`);
-        this.scheduleReopen();
+        const delay = this.nextReopenDelay();
+        this.deps.log?.(
+          `relay-session: desync (${e.message}) — resubscribing in ${delay}ms`,
+        );
+        this.scheduleReopen(delay);
       } else {
         throw e;
       }

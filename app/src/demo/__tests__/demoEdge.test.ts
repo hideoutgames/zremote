@@ -15,6 +15,8 @@ import {
 import { FakeClock } from '../../zeron/transport/clock';
 import { staticTokenSource } from '../../zeron/transport/tokenSource';
 import { flush, memDisk } from '../../zeron/testing/memDisk';
+import { applyTranscriptFrame } from '../../zeron/runtime/relaySessionSource';
+import type { MessageEntry } from '../../zeron/protocol/types';
 import { DemoEdge } from '../demoEdge';
 import {
   CHAT_INPUT,
@@ -50,7 +52,7 @@ const makeRuntime = async () => {
     },
     sessionMode: 'relay',
   });
-  return { rt, clock };
+  return { rt, clock, edge };
 };
 
 afterEach(() => {
@@ -219,5 +221,35 @@ test('registry write round-trip: rename pushes, acks, and reflects', async () =>
   const chat = workspaceStore.getState().chats.find(c => c.id === CHAT_LONG);
   expect(chat?.title).toBe('Renamed in demo');
   expect(rt.registryDoc.pendingCount).toBe(0);
+  rt.stop();
+});
+
+test('every emitted transcript frame replays through applyTranscriptFrame without desync', async () => {
+  const { rt, clock, edge } = await makeRuntime();
+  rt.start();
+  await flush();
+  const controller = rt.openSession(CHAT_LONG);
+  await flush();
+
+  // Keep the reset frame: delta anchors only resolve on top of it.
+  controller.sendRun('frame replay', CHAT);
+  await flush();
+  clock.advance(6_000);
+  await flush();
+
+  expect(edge.transcriptFrames.length).toBeGreaterThan(0);
+  const entries: MessageEntry[] = [];
+  for (const update of edge.transcriptFrames) {
+    // Desync (bad anchor, bad len, count mismatch) throws — any failure here
+    // would hot-loop resubscribes on a live client.
+    applyTranscriptFrame(entries, update as never);
+  }
+  const replayed = entries.at(-1);
+  expect(replayed?.role).toBe('assistant');
+  expect(replayed?.status).toBe('complete');
+  expect(replayed?.parts.map(p => p.kind)).toContain('tool');
+
+  controller.release();
+  rt.closeSession(CHAT_LONG);
   rt.stop();
 });

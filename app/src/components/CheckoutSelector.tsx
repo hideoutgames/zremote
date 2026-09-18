@@ -168,8 +168,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    alignSelf: 'center',
-    paddingVertical: 2,
+    alignSelf: 'flex-start',
+    height: 28,
+    // Aligns with the composer input's text edge (12 container + 16 inner).
+    marginLeft: 28,
+    marginBottom: 6,
   },
   label: { fontSize: 12, maxWidth: 260 },
 });

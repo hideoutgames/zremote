@@ -334,6 +334,7 @@ export function HomeScreen({
       <View
         style={[styles.topBar, { paddingTop: insets.top + 8 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
+        pointerEvents="box-none"
       >
         <View style={styles.topRow}>
           <View
@@ -431,6 +432,7 @@ export function HomeScreen({
       <View
         style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
         onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+        pointerEvents="box-none"
       >
         <Pressable
           style={styles.newChatWrap}
