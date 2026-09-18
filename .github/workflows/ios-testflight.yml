@@ -1,12 +1,13 @@
 # iOS TestFlight — signed archive + App Store Connect upload via the ASC
-# API key. Uses the team's one cloud-managed Apple Distribution certificate
-# (no per-runner development certs, no profiles in the repo). App targets
-# stay on Automatic signing with CODE_SIGN_IDENTITY stripped so Xcode 26
-# can cloud-sign the archive; identity is never passed as an xcarg.
-# Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the
-# .p8 file contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID.
-# Optional variables IOS_BUNDLE_ID (default no.hideout.zremote) /
-# ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
+# API key. Manual only (workflow_dispatch); tag pushes do not start it.
+# Uses the team's one cloud-managed Apple Distribution certificate (no
+# per-runner development certs, no profiles in the repo). App targets stay
+# on Automatic signing with CODE_SIGN_IDENTITY stripped so Xcode 26 can
+# cloud-sign the archive; identity is never passed as an xcarg. Requires
+# repo secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the .p8 file
+# contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID. Optional
+# variables IOS_BUNDLE_ID (default no.hideout.zremote) / ZERON_EDGE_URL
+# (see docs/TESTFLIGHT.md).
 
 name: iOS TestFlight
 
@@ -17,8 +18,6 @@ on:
         description: "Release notes (informational only)"
         required: false
         type: string
-  push:
-    tags: ["v*"]
 
 permissions:
   contents: read

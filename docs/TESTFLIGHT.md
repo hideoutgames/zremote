@@ -6,9 +6,9 @@ Two workflows under `.github/workflows/`:
   `main` touching `app/**` or the iOS workflows. Unsigned Release build
   (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
   `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
-- **`ios-testflight.yml` — iOS TestFlight.** Manual (`workflow_dispatch`,
-    optional `notes`) or `v*` tag push. Signed archive + upload to App Store
-  Connect via the App Store Connect API key and the team's **one
+- **`ios-testflight.yml` — iOS TestFlight.** Manual only
+  (`workflow_dispatch`, optional `notes`). Signed archive + upload to App
+  Store Connect via the App Store Connect API key and the team's **one
   cloud-managed Apple Distribution certificate**. Expo prebuild's
   Automatic / Apple Development identity is **stripped** on the app and
   widget targets (and the project-level `iPhone Developer` setting) so
@@ -103,8 +103,7 @@ gated. The job's first step fails with a clear list of missing secret
 
 ## 4. Run
 
-- Actions → **iOS TestFlight** → Run workflow, or
-- `git tag v0.1.0 && git push --tags`.
+- Actions → **iOS TestFlight** → Run workflow.
 
 `IOS_BUILD_NUMBER` is the workflow run number; `aps-environment` stays
 `development` in the entitlements file — Xcode swaps it to `production`
