@@ -1,10 +1,15 @@
-// More-models sheet: Cursor Mobile-style list (search, Active / More) with
-// sandbox and auto-approve kept as a quieter footer. Effort / Fast stay on
-// the composer.
+// Full-model sheet: providers in catalog order, checkmark on the current
+// model, composer effort chip + Fast control inline. No Active/More split,
+// no sandbox/auto-approve footer.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +22,12 @@ import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
-import type { Chat, ChatConfig, Model } from '../zeron/protocol/types';
+import {
+  FULL_ACCESS_SANDBOX,
+  type Chat,
+  type ChatConfig,
+  type Model,
+} from '../zeron/protocol/types';
 import {
   catalogStore,
   modelsFor,
@@ -25,17 +35,21 @@ import {
 } from '../zeron/state/catalogStore';
 import { loadModels } from '../zeron/runtime/catalog';
 import { setChatConfig } from '../zeron/runtime/workspaceActions';
-import {
-  rememberModelPick,
-  setAutoApprove,
-  useAutoApprove,
-} from '../zeron/state/uiPrefs';
+import { rememberModelPick } from '../zeron/state/uiPrefs';
 import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
-import { revalidateSelection } from './modelPicker';
-import * as DropdownMenu from './menus/dropdown-menu';
+import {
+  effortLevelsForModel,
+  modelRowKey,
+  revalidateSelection,
+} from './modelPicker';
+import { FastMenuButton } from './FastMenuButton';
+import { ComposerMenuChip } from './ComposerMenuChip';
+import { EffortOverlay } from './EffortOverlay';
+import { capitalizeLevel } from './effortSliderMath';
+import { fastOptionForModel, isFastEnabled } from './fastMode';
 import { MenuDismissShield } from './menus/MenuDismissShield';
 
 export interface ModelPickerSheetProps {
@@ -50,41 +64,52 @@ export interface ModelPickerSheetProps {
   onApplyConfig?: (config: ChatConfig) => void;
 }
 
-const SANDBOX_LEVELS = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const;
-
 const CLOSE = 32;
 
 function ModelRow({
   label,
   selected,
   unavailable,
-  description,
+  effortLabel,
+  effortSupported,
   onSelect,
+  onOpenEffort,
+  fastSupported,
+  fastEnabled,
+  fastOption,
+  fastChoice,
+  onSelectFast,
   last,
   borderColor,
   textColor,
   secondaryColor,
   dangerColor,
   accentColor,
+  onLayout,
 }: {
   label: string;
   selected: boolean;
   unavailable?: boolean;
-  description?: string;
+  effortLabel?: string;
+  effortSupported: boolean;
   onSelect: () => void;
+  onOpenEffort: () => void;
+  fastSupported: boolean;
+  fastEnabled: boolean;
+  fastOption?: Parameters<typeof FastMenuButton>[0]['option'];
+  fastChoice?: string;
+  onSelectFast: (choiceId: string) => void;
   last: boolean;
   borderColor: string;
   textColor: string;
   secondaryColor: string;
   dangerColor: string;
   accentColor: string;
+  onLayout?: (y: number) => void;
 }) {
   return (
     <View
+      onLayout={e => onLayout?.(e.nativeEvent.layout.y)}
       style={[
         styles.row,
         last
@@ -106,28 +131,29 @@ function ModelRow({
           {label}
         </Text>
       </Pressable>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
-          <Pressable
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`${label} ${t('session.overflow')}`}
-            style={styles.ellipsisHit}
-          >
-            <Icon name="ellipsis" size={16} color={secondaryColor} />
-          </Pressable>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content>
-          {description !== undefined && description !== '' ? (
-            <DropdownMenu.Item key="about" onSelect={() => {}}>
-              <DropdownMenu.ItemTitle>{description}</DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-          ) : null}
-          <DropdownMenu.Item key="select" onSelect={onSelect}>
-            <DropdownMenu.ItemTitle>{label}</DropdownMenu.ItemTitle>
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+      {effortSupported && effortLabel !== undefined ? (
+        <Pressable
+          onPress={onOpenEffort}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={effortLabel}
+        >
+          <ComposerMenuChip
+            label={effortLabel}
+            color={textColor}
+            chevronColor={secondaryColor}
+            limitWidth={false}
+          />
+        </Pressable>
+      ) : null}
+      {fastSupported ? (
+        <FastMenuButton
+          enabled={fastEnabled}
+          option={fastOption}
+          value={fastChoice}
+          onSelect={onSelectFast}
+        />
+      ) : null}
       {unavailable ? (
         <Text style={[styles.badge, { color: dangerColor }]}>
           {t('picker.unavailable')}
@@ -156,6 +182,15 @@ export function ModelPickerSheet({
   const catalog = useStore(catalogStore, s => s.byDevice[deviceId]);
   const catalogTick = catalog?.loadedAt ?? 0;
   const [query, setQuery] = useState('');
+  const [effort, setEffort] = useState<{
+    harness: string;
+    model: string;
+    levels: string[];
+  }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const rowY = useRef<Record<string, number>>({});
+  const groupY = useRef<Record<string, number>>({});
+  const scrolled = useRef(false);
 
   const harnesses = useMemo(
     () => selectableHarnesses(deviceId),
@@ -205,21 +240,27 @@ export function ModelPickerSheet({
   });
 
   const live = phase === 'working' || phase === 'stopping';
-  const autoApprove = useAutoApprove(chat.id);
-  const toggleAutoApprove = useCallback(() => {
-    if (autoApprove) {
-      setAutoApprove(chat.id, false);
+  const selectedKey =
+    harnessId !== undefined && config?.model !== undefined
+      ? modelRowKey(harnessId, config.model)
+      : undefined;
+
+  const scrollToSelected = useCallback(() => {
+    if (
+      selectedKey === undefined ||
+      harnessId === undefined ||
+      scrolled.current
+    )
       return;
-    }
-    Alert.alert(t('picker.autoApproveConfirm'), undefined, [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.enable'),
-        style: 'destructive',
-        onPress: () => setAutoApprove(chat.id, true),
-      },
-    ]);
-  }, [autoApprove, chat.id]);
+    const y = rowY.current[selectedKey];
+    const groupTop = groupY.current[harnessId];
+    if (y === undefined || groupTop === undefined) return;
+    scrolled.current = true;
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, groupTop + y - 12),
+      animated: false,
+    });
+  }, [selectedKey, harnessId]);
 
   const apply = useCallback(
     (patch: Partial<ChatConfig>) => {
@@ -228,6 +269,7 @@ export function ModelPickerSheet({
         modelOptions: config?.modelOptions ?? {},
         ...config,
         ...patch,
+        sandbox: FULL_ACCESS_SANDBOX,
       };
       if (onApplyConfig !== undefined) onApplyConfig(next);
       else setChatConfig(runtime, chat.id, next);
@@ -238,47 +280,28 @@ export function ModelPickerSheet({
   );
 
   const pickModel = useCallback(
-    (harness: string, model: Model) => {
+    (harness: string, model: Model, extra?: Partial<ChatConfig>) => {
       if (locked && harness !== harnessId) return;
-      if (harness !== harnessId) {
-        apply({
-          harness,
-          model: model.id,
-          reasoning: undefined,
-        });
-        return;
-      }
-      apply({ model: model.id });
+      const levels = effortLevelsForModel(
+        model,
+        harnesses.find(h => h.id === harness)?.reasoningLevels,
+      );
+      const keepReasoning =
+        extra?.reasoning ??
+        (harness === harnessId &&
+        config?.reasoning !== undefined &&
+        levels.includes(config.reasoning)
+          ? config.reasoning
+          : levels[0]);
+      apply({
+        harness,
+        model: model.id,
+        reasoning: keepReasoning,
+        ...extra,
+      });
     },
-    [apply, locked, harnessId],
+    [apply, locked, harnessId, harnesses, config?.reasoning],
   );
-
-  const pickSandbox = useCallback(
-    (level: string) => {
-      if (level === 'danger-full-access') {
-        Alert.alert(t('picker.dangerConfirm'), undefined, [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('common.enable'),
-            style: 'destructive',
-            onPress: () => apply({ sandbox: level }),
-          },
-        ]);
-        return;
-      }
-      apply({ sandbox: level });
-    },
-    [apply],
-  );
-
-  const activeLabel =
-    currentModels.find(m => m.id === config?.model)?.label ?? config?.model;
-  const moreGroups = grouped.map(g => ({
-    ...g,
-    models: g.models.filter(
-      m => !(m.id === config?.model && g.harness.id === harnessId),
-    ),
-  }));
 
   const header = (
     <View style={styles.header}>
@@ -301,11 +324,14 @@ export function ModelPickerSheet({
 
   const content = (
     <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
       contentContainerStyle={[
         styles.content,
         { paddingBottom: insets.bottom + 24 },
       ]}
       keyboardShouldPersistTaps="handled"
+      onContentSizeChange={scrollToSelected}
     >
       {live ? (
         <Text style={[styles.note, { color: theme.textSecondary }]}>
@@ -327,36 +353,14 @@ export function ModelPickerSheet({
         />
       </View>
 
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.active')}
-      </Text>
-      {config?.model !== undefined && activeLabel !== undefined ? (
-        <ModelRow
-          label={activeLabel}
-          selected={health.modelOk}
-          unavailable={!health.modelOk}
-          description={
-            currentModels.find(m => m.id === config.model)?.description
-          }
-          onSelect={() => {
-            const model = currentModels.find(m => m.id === config.model);
-            if (model !== undefined && harnessId !== undefined)
-              pickModel(harnessId, model);
+      {grouped.map(({ harness: h, models }) => (
+        <View
+          key={h.id}
+          onLayout={e => {
+            groupY.current[h.id] = e.nativeEvent.layout.y;
+            if (selectedKey?.startsWith(`${h.id}:`)) scrollToSelected();
           }}
-          last
-          borderColor={theme.border}
-          textColor={theme.text}
-          secondaryColor={theme.textSecondary}
-          dangerColor={theme.danger}
-          accentColor={theme.accent}
-        />
-      ) : null}
-
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.more')}
-      </Text>
-      {moreGroups.map(({ harness: h, models }) => (
-        <View key={h.id}>
+        >
           <Text
             style={[styles.groupHead, { color: theme.textSecondary }]}
             accessibilityRole="header"
@@ -364,68 +368,73 @@ export function ModelPickerSheet({
           >
             {h.name}
           </Text>
-          {models.map((m, i) => (
-            <ModelRow
-              key={m.id}
-              label={m.label}
-              selected={m.id === config?.model && h.id === harnessId}
-              description={m.description}
-              onSelect={() => pickModel(h.id, m)}
-              last={i === models.length - 1}
-              borderColor={theme.border}
-              textColor={theme.text}
-              secondaryColor={theme.textSecondary}
-              dangerColor={theme.danger}
-              accentColor={theme.accent}
-            />
-          ))}
+          {models.map((m, i) => {
+            const selected = m.id === config?.model && h.id === harnessId;
+            const levels = effortLevelsForModel(m, h.reasoningLevels);
+            const effortSupported = levels.length > 0;
+            const effortValue =
+              selected &&
+              config?.reasoning !== undefined &&
+              levels.includes(config.reasoning)
+                ? config.reasoning
+                : levels[0];
+            const fastOption = fastOptionForModel(m);
+            const key = modelRowKey(h.id, m.id);
+            return (
+              <ModelRow
+                key={m.id}
+                label={m.label}
+                selected={selected}
+                unavailable={selected && !health.modelOk}
+                effortSupported={effortSupported}
+                effortLabel={
+                  effortSupported && effortValue !== undefined
+                    ? capitalizeLevel(effortValue)
+                    : undefined
+                }
+                onSelect={() => pickModel(h.id, m)}
+                onOpenEffort={() => {
+                  pickModel(h.id, m);
+                  setEffort({ harness: h.id, model: m.id, levels });
+                }}
+                fastSupported={fastOption !== undefined}
+                fastOption={fastOption}
+                fastEnabled={isFastEnabled(
+                  selected ? config?.modelOptions : undefined,
+                  fastOption,
+                )}
+                fastChoice={
+                  fastOption === undefined
+                    ? undefined
+                    : selected &&
+                      typeof config?.modelOptions?.[fastOption.id] === 'string'
+                    ? (config.modelOptions[fastOption.id] as string)
+                    : fastOption.defaultChoice
+                }
+                onSelectFast={choiceId => {
+                  if (fastOption === undefined) return;
+                  pickModel(h.id, m, {
+                    modelOptions: {
+                      ...(config?.modelOptions ?? {}),
+                      [fastOption.id]: choiceId,
+                    },
+                  });
+                }}
+                last={i === models.length - 1}
+                borderColor={theme.border}
+                textColor={theme.text}
+                secondaryColor={theme.textSecondary}
+                dangerColor={theme.danger}
+                accentColor={theme.accent}
+                onLayout={y => {
+                  rowY.current[key] = y;
+                  if (key === selectedKey) scrollToSelected();
+                }}
+              />
+            );
+          })}
         </View>
       ))}
-
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('picker.sandbox')}
-      </Text>
-      <View style={[styles.footerBlock, { borderTopColor: theme.border }]}>
-        {SANDBOX_LEVELS.map(l => {
-          const selected = (config?.sandbox ?? 'workspace-write') === l;
-          return (
-            <Pressable
-              key={l}
-              style={[styles.plainRow, { borderBottomColor: theme.border }]}
-              onPress={() => pickSandbox(l)}
-              accessibilityRole="button"
-              accessibilityLabel={t(`picker.sandbox.${l}`)}
-              accessibilityState={{ selected }}
-            >
-              <Text style={[styles.rowText, { color: theme.text }]}>
-                {t(`picker.sandbox.${l}`)}
-              </Text>
-              {selected ? (
-                <Icon name="checkmark" size={16} color={theme.accent} />
-              ) : null}
-            </Pressable>
-          );
-        })}
-        <Pressable
-          style={styles.plainRow}
-          onPress={toggleAutoApprove}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: autoApprove }}
-          accessibilityLabel={t('picker.autoApprove')}
-        >
-          <Text style={[styles.rowText, { color: theme.text }]}>
-            {t('picker.autoApprove')}
-          </Text>
-          <Text
-            style={[
-              styles.rowSub,
-              { color: autoApprove ? theme.danger : theme.textSecondary },
-            ]}
-          >
-            {autoApprove ? t('common.on') : t('common.off')}
-          </Text>
-        </Pressable>
-      </View>
     </ScrollView>
   );
 
@@ -437,8 +446,8 @@ export function ModelPickerSheet({
     </View>
   );
 
-  if (formSheet === true) {
-    return (
+  const sheet =
+    formSheet === true ? (
       <Modal
         visible
         presentationStyle="formSheet"
@@ -449,24 +458,51 @@ export function ModelPickerSheet({
           {body}
         </View>
       </Modal>
+    ) : (
+      <TrueSheet
+        detents={['auto', 1]}
+        initialDetentIndex={1}
+        onDidDismiss={onClose}
+        grabber
+        backgroundColor={theme.background}
+      >
+        {body}
+      </TrueSheet>
     );
-  }
+
+  const effortLevels = effort?.levels ?? [];
+  const effortValue =
+    effort !== undefined &&
+    config?.harness === effort.harness &&
+    config.model === effort.model
+      ? config.reasoning
+      : effortLevels[0];
+
   return (
-    <TrueSheet
-      detents={['auto', 1]}
-      initialDetentIndex={0}
-      onDidDismiss={onClose}
-      grabber
-      backgroundColor={theme.background}
-    >
-      {body}
-    </TrueSheet>
+    <>
+      {sheet}
+      {effort !== undefined ? (
+        <EffortOverlay
+          levels={effortLevels}
+          value={effortValue}
+          onChange={level =>
+            apply({
+              harness: effort.harness,
+              model: effort.model,
+              reasoning: level,
+            })
+          }
+          onDismiss={() => setEffort(undefined)}
+        />
+      ) : null}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   modalFill: { flex: 1 },
-  sheetBody: { flexGrow: 1 },
+  sheetBody: { flexGrow: 1, flex: 1 },
+  scroll: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -484,13 +520,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 17, fontWeight: '600' },
   content: { paddingHorizontal: 8, paddingBottom: 24, gap: 4 },
-  section: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 4,
-    paddingHorizontal: 12,
-  },
   note: { fontSize: 12, paddingHorizontal: 12, marginBottom: 4 },
   searchWrap: {
     flexDirection: 'row',
@@ -510,7 +539,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 16,
     paddingBottom: 2,
   },
   row: {
@@ -518,30 +547,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 48,
     paddingHorizontal: 12,
-    gap: 8,
+    gap: 4,
   },
   rowHit: { flex: 1, minWidth: 0, justifyContent: 'center' },
-  ellipsisHit: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   rowText: { fontSize: 17, flexShrink: 1 },
-  rowSub: { fontSize: 13 },
   badge: { fontSize: 11, fontWeight: '600' },
   checkSpacer: { width: 16 },
-  footerBlock: {
-    marginTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  plainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 48,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
 });

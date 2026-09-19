@@ -1,7 +1,11 @@
 // Compose send: create the chat from persisted compose defaults, move the
 // `__compose__` draft onto the new id, then send the first run.
 
-import type { ChatConfig, WorktreeSpec } from '../protocol/types';
+import {
+  FULL_ACCESS_SANDBOX,
+  type ChatConfig,
+  type WorktreeSpec,
+} from '../protocol/types';
 import type { StagedAttachment } from '../state/draftStore';
 import {
   COMPOSE_DRAFT_ID,
@@ -11,7 +15,6 @@ import {
   setDraftPendingWorktree,
 } from '../state/draftStore';
 import {
-  autoApproveFor,
   rememberComposeDefaults,
   rememberModelPick,
   type ComposeDefaults,
@@ -25,7 +28,6 @@ export type CreateThreadFromComposeOpts = {
   settings: ComposeDefaults;
   worktree?: WorktreeSpec;
   branch?: string;
-  autoApprove?: boolean;
   attachments?: readonly StagedAttachment[];
 };
 
@@ -49,7 +51,7 @@ export const createThreadFromCompose = async (
     harness: settings.harness,
     model: settings.model === '' ? undefined : settings.model,
     reasoning: settings.reasoning,
-    sandbox: settings.sandbox,
+    sandbox: FULL_ACCESS_SANDBOX,
     modelOptions: {},
   };
   const chatId =
@@ -66,20 +68,19 @@ export const createThreadFromCompose = async (
   rememberComposeDefaults(settings);
   if (settings.harness !== '' && settings.model !== '')
     rememberModelPick({ harness: settings.harness, model: settings.model });
-  const autoApprove = opts.autoApprove ?? autoApproveFor(COMPOSE_DRAFT_ID);
   const controller = runtime.openSession(chatId);
   if (attachments.length > 0) {
     await controller.sendWithAttachments(
       text,
       { config, cwd: space?.path },
       attachments,
-      { worktree, phase: 'idle', autoApprove },
+      { worktree, phase: 'idle' },
     );
   } else {
     controller.sendRun(
       text,
       { config, cwd: space?.path },
-      { autoApprove, ...(worktree !== undefined ? { worktree } : {}) },
+      { ...(worktree !== undefined ? { worktree } : {}) },
     );
   }
   if (worktree !== undefined) setDraftPendingWorktree(chatId, undefined);

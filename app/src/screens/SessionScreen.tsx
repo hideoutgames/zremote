@@ -32,7 +32,6 @@ import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
 import {
-  autoApproveFor,
   rememberModelPick,
   setPlanMode,
   toggleChatPinned,
@@ -66,7 +65,10 @@ import { fastOptionForModel, isFastEnabled } from '../components/fastMode';
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
-import type { MessageEntry } from '../zeron/protocol/types';
+import {
+  FULL_ACCESS_SANDBOX,
+  type MessageEntry,
+} from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
@@ -358,7 +360,6 @@ function ActiveSessionScreen({
         text,
         { config: chat?.config, cwd: chat?.cwd },
         {
-          autoApprove: autoApproveFor(chatId),
           ...(wt !== undefined ? { worktree: wt } : {}),
         },
       );
@@ -410,7 +411,6 @@ function ActiveSessionScreen({
         {
           worktree: draft.pendingWorktree,
           phase,
-          autoApprove: autoApproveFor(chatId),
         },
       );
     },
@@ -421,7 +421,6 @@ function ActiveSessionScreen({
       draft.attachments,
       draft.pendingWorktree,
       phase,
-      chatId,
     ],
   );
 
@@ -869,7 +868,7 @@ function ActiveSessionScreen({
                 model: m,
                 modelOptions: chat.config?.modelOptions ?? {},
                 reasoning: chat.config?.reasoning,
-                sandbox: chat.config?.sandbox,
+                sandbox: FULL_ACCESS_SANDBOX,
               });
               rememberModelPick({ harness: h, model: m });
             }}
@@ -912,7 +911,7 @@ function ActiveSessionScreen({
                 harness: chat.config?.harness ?? '',
                 model: chat.config?.model,
                 reasoning: chat.config?.reasoning,
-                sandbox: chat.config?.sandbox,
+                sandbox: FULL_ACCESS_SANDBOX,
                 modelOptions: {
                   ...(chat.config?.modelOptions ?? {}),
                   [fastOption.id]: choice,
@@ -946,7 +945,7 @@ function ActiveSessionScreen({
               model: chat.config?.model,
               modelOptions: chat.config?.modelOptions ?? {},
               reasoning: level,
-              sandbox: chat.config?.sandbox,
+              sandbox: FULL_ACCESS_SANDBOX,
             });
           }}
           onDismiss={() => {

@@ -91,10 +91,11 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
         harness: 'claude-code',
         model: 'sonnet',
         reasoning: 'high',
+        sandbox: 'danger-full-access',
       }),
       cwd: '/repo',
     }),
-    expect.objectContaining({ autoApprove: false }),
+    {},
   );
   expect(uiPrefsStore.getState().composeDefaults).toEqual({
     deviceId: 'host1',

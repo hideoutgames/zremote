@@ -307,7 +307,6 @@ const en = {
   // Model picker
   'picker.title': 'Model',
   'picker.search': 'Search',
-  'picker.active': 'Active',
   'picker.more': 'More',
   'picker.fastMode': 'Fast mode',
   'picker.agents': 'Agents',
@@ -317,15 +316,6 @@ const en = {
   'picker.harnessLocked': 'The agent is locked once a chat has messages.',
   'picker.unavailable': 'Unavailable',
   'picker.appliesNext': 'Next message',
-  'picker.sandbox': 'Sandbox',
-  'picker.sandbox.read-only': 'Read only',
-  'picker.sandbox.workspace-write': 'Workspace write',
-  'picker.sandbox.danger-full-access': 'Full access',
-  'picker.dangerConfirm':
-    'Full access lets the agent modify anything on the host. Enable it?',
-  'picker.autoApprove': 'Auto-approve',
-  'picker.autoApproveConfirm':
-    'Auto-approve lets the agent run tools on the host without asking you. Enable it?',
   'picker.agent': 'Agent',
   'picker.default': 'default',
 
