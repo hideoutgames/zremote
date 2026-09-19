@@ -64,10 +64,11 @@ Needs a Mac build, a device, or a host in the right state:
   no QR scan/device run was possible from this machine; shim fidelity
   (markdown, sheets, menus, glass) is unverified.
 - **iOS CI/TestFlight pipeline** — `ios-compile.yml` (unsigned compile
-  check, no secrets) and `ios-testflight.yml` (ASC-API-key cloud signing,
-  **manual dispatch only** — not on merge to `main`). The IPA is the
-  dispatched SHA (`version (run_number)` + short SHA in the binary).
-  Dispatch `main` after the work has merged (docs/TESTFLIGHT.md).
+  check, no secrets, **manual dispatch only** — not on merge to `main`)
+  and `ios-testflight.yml` (ASC-API-key cloud signing, **manual dispatch
+  only** — not on merge to `main`). The IPA is the dispatched SHA
+  (`version (run_number)` + short SHA in the binary). Dispatch `main`
+  after the work has merged (docs/TESTFLIGHT.md).
 
 ## Requires host/edge change (`requires-host-edge-change`)
 

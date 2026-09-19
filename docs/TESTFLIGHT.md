@@ -2,11 +2,10 @@
 
 Two workflows under `.github/workflows/`:
 
-- **`ios-compile.yml` — iOS Compile Check.** Runs on pushes to `main`
-  touching `app/**` or the iOS workflows, and via **Actions → iOS Compile
-  Check → Run workflow**. Does **not** run on pull requests (saves macOS
-  runners). Unsigned Release build (`CODE_SIGNING_ALLOWED=NO`, placeholder
-  bundle id `dev.zremote.compilecheck`). Needs **no secrets**.
+- **`ios-compile.yml` — iOS Compile Check.** Manual `workflow_dispatch`
+  only. Merges to `main` and pull requests do **not** start it. Unsigned
+  Release build (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
+  `dev.zremote.compilecheck`). Needs **no secrets**.
 - **`ios-testflight.yml` — iOS TestFlight.** Manual `workflow_dispatch`
   only (optional `notes`). Merges to `main` do **not** start it. Signed
   archive + upload to App Store Connect via the App Store Connect API key
@@ -113,6 +112,8 @@ gated. The job's first step fails with a clear list of missing secret
 
 ## 4. Run
 
+- Actions → **iOS Compile Check** → Run workflow (picks a branch; default
+  `main`). Merges to `main` do not start a compile.
 - Actions → **iOS TestFlight** → Run workflow (picks a branch; default
   `main`). Merges to `main` do not start an archive.
 
