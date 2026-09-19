@@ -40,6 +40,33 @@ test('effort overlay is a centered Modal with a slider and no Fast switch', asyn
   });
 });
 
+test('tapping the effort overlay backdrop dismisses it', async () => {
+  const onDismiss = jest.fn();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <EffortOverlay
+        levels={['low', 'medium', 'high']}
+        value="medium"
+        onChange={() => {}}
+        onDismiss={onDismiss}
+      />,
+    );
+  });
+  const done = tree!.root.findAll(
+    n =>
+      n.props.accessibilityRole === 'button' &&
+      n.props.accessibilityLabel === 'Done',
+  )[0];
+  await act(async () => {
+    done.props.onPress();
+  });
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  act(() => {
+    tree?.unmount();
+  });
+});
+
 test('effort dest rect stays at mid-screen height and centers on an iPad composer column', () => {
   const windowed = effortDestRect(1024, 768);
   expect(windowed.x + windowed.width / 2).toBe(512);

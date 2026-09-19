@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Linking, Share, Text } from 'react-native';
+import { Linking, Share, Text, Modal } from 'react-native';
 import { PrSheet } from '../src/components/PrSheet';
 import {
   AppServicesContext,
@@ -122,6 +122,20 @@ test('overview shows Open badge, checkout stats, title, tabs, and merge', async 
   expect(labels).toContain('What changed');
   expect(labels).toContain('main ← feat/composer');
   expect(tree.root.findByProps({ testID: 'pr-share' })).toBeTruthy();
+});
+
+test('PR pageSheet Modal allows swipe / outside dismiss', async () => {
+  const onDismiss = jest.fn();
+  const tree = await render(
+    <PrSheet chatId="c1" badge={badge()} onDismiss={onDismiss} />,
+  );
+  const modal = tree.root.findByType(Modal);
+  expect(modal.props.presentationStyle).toBe('pageSheet');
+  expect(modal.props.allowSwipeDismissal).toBe(true);
+  await act(async () => {
+    modal.props.onRequestClose();
+  });
+  expect(onDismiss).toHaveBeenCalledTimes(1);
 });
 
 test('drafts open GitHub instead of squash', async () => {

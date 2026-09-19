@@ -31,6 +31,19 @@ export function ImagePreviewModal({
         accessibilityRole="image"
       >
         <Pressable
+          testID="image-preview-backdrop"
+          style={StyleSheet.absoluteFill}
+          onPress={onDismiss}
+          accessible={false}
+        />
+        <View pointerEvents="none" style={styles.image}>
+          <NitroImage
+            image={{ filePath: uri }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+        </View>
+        <Pressable
           onPress={onDismiss}
           hitSlop={12}
           accessibilityRole="button"
@@ -39,11 +52,6 @@ export function ImagePreviewModal({
         >
           <Icon name="xmark" size={18} color="#FFFFFF" />
         </Pressable>
-        <NitroImage
-          image={{ filePath: uri }}
-          style={styles.image}
-          resizeMode="contain"
-        />
       </View>
     </Modal>
   );

@@ -112,20 +112,48 @@ export const setDraftPendingWorktree = (
   pendingWorktree: Draft['pendingWorktree'],
 ): void => patchDraft(chatId, { pendingWorktree });
 
-export const stageAttachment = (
+export type StageAttachmentInput = Omit<
+  StagedAttachment,
+  'id' | 'uploadState'
+> &
+  Partial<Pick<StagedAttachment, 'id' | 'uploadState'>>;
+
+/** Append every item in one store update so batched picks cannot clobber. */
+export const stageAttachments = (
   chatId: string,
-  a: Omit<StagedAttachment, 'id' | 'uploadState'> &
-    Partial<Pick<StagedAttachment, 'id' | 'uploadState'>>,
-): StagedAttachment => {
-  const staged: StagedAttachment = {
+  items: readonly StageAttachmentInput[],
+): StagedAttachment[] => {
+  if (items.length === 0) return [];
+  const staged: StagedAttachment[] = items.map(a => ({
     id: a.id ?? newId(),
     uploadState: 'staged',
     ...a,
-  };
-  const cur = draftStore.getState().byChat[chatId];
-  patchDraft(chatId, { attachments: [...(cur?.attachments ?? []), staged] });
+  }));
+  draftStore.setState(s => {
+    const base = s.byChat[chatId] ?? {
+      text: '',
+      attachments: [],
+      updatedAt: 0,
+    };
+    return {
+      byChat: {
+        ...s.byChat,
+        [chatId]: {
+          ...base,
+          attachments: [...base.attachments, ...staged],
+          updatedAt: Date.now(),
+        },
+      },
+    };
+  });
+  schedulePersist();
   return staged;
 };
+
+export const stageAttachment = (
+  chatId: string,
+  a: StageAttachmentInput,
+): StagedAttachment => stageAttachments(chatId, [a])[0]!;
 
 export const updateAttachment = (
   chatId: string,
