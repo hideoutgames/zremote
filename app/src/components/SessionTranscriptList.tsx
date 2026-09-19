@@ -43,7 +43,6 @@ export const SessionTranscriptList = forwardRef<
   {
     entries: MessageEntry[];
     renderEntry: ({ item }: { item: MessageEntry }) => React.ReactElement;
-    extraHeight: number;
     composerRef: React.RefObject<View | null>;
     contentMaxWidth?: number;
     windowWidth: number;
@@ -57,7 +56,6 @@ export const SessionTranscriptList = forwardRef<
   {
     entries,
     renderEntry,
-    extraHeight,
     composerRef,
     contentMaxWidth,
     windowWidth,
@@ -84,18 +82,12 @@ export const SessionTranscriptList = forwardRef<
     (event: LayoutChangeEvent) => {
       const height = event.nativeEvent.layout.height;
       onComposerHeight(height);
-      reportComposerInset({
-        ...event,
-        nativeEvent: {
-          ...event.nativeEvent,
-          layout: {
-            ...event.nativeEvent.layout,
-            height: Math.max(0, height - extraHeight),
-          },
-        },
-      });
+      // Full sticky stack (chrome + composer, including grabber extra
+      // height). Takes priority over overlaying a resized composer on the
+      // last messages. Home/threads composer layout is unchanged.
+      reportComposerInset(event);
     },
-    [reportComposerInset, extraHeight, onComposerHeight],
+    [reportComposerInset, onComposerHeight],
   );
 
   useImperativeHandle(

@@ -140,13 +140,13 @@ describe('openInputRequest', () => {
 describe('withAttachments', () => {
   it('appends the local-files trailer', () => {
     expect(withAttachments('look at this', ['/tmp/a.png', '/tmp/b.png'])).toBe(
-      'look at this\n\nAttached images (local files — open them to view):\n- /tmp/a.png\n- /tmp/b.png',
+      'look at this\n\nAttached files (local files — open them to view):\n- /tmp/a.png\n- /tmp/b.png',
     );
   });
 
   it('uses the attachment-only body for empty text', () => {
     expect(withAttachments('', ['/tmp/a.png'])).toBe(
-      `${ATTACHMENT_ONLY_TEXT}\n\nAttached images (local files — open them to view):\n- /tmp/a.png`,
+      `${ATTACHMENT_ONLY_TEXT}\n\nAttached files (local files — open them to view):\n- /tmp/a.png`,
     );
     expect(withAttachments('plain', [])).toBe('plain');
   });

@@ -3,8 +3,9 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { TextInput } from 'react-native';
+import { TextInput, StyleSheet } from 'react-native';
 import { Composer } from '../src/components/Composer';
+import { ComposerChromeRow } from '../src/components/ComposerChromeRow';
 import { QuestionPanel } from '../src/components/agentsKit/QuestionPanel';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
@@ -15,6 +16,7 @@ import {
 import { dictationUnavailable } from '../src/zeron/native/dictation';
 import { ModelPickerSheet } from '../src/components/ModelPickerSheet';
 import { QueuePanel } from '../src/components/QueuePanel';
+import { resetDrafts, stageAttachment } from '../src/zeron/state/draftStore';
 import {
   catalogStore,
   type DeviceCatalog,
@@ -50,6 +52,7 @@ const labelled = (root: TestRenderer.ReactTestInstance) =>
     }));
 
 beforeEach(() => {
+  resetDrafts();
   workspaceStore.setState({
     devices: [
       {
@@ -353,4 +356,96 @@ test('queue panel: send now and delete are icon-only labelled buttons', async ()
     true,
   );
   expect(labels.some(l => l.label === 'Reorder')).toBe(true);
+});
+
+test('queued pill is a labelled button', async () => {
+  const mounted = await render(
+    <ComposerChromeRow
+      queueCount={2}
+      onOpenQueue={() => {}}
+      pr={undefined}
+      onOpenPr={() => {}}
+    />,
+  );
+  const labels = labelled(mounted.root);
+  expect(labels.some(l => l.role === 'button' && l.label === '2 Queued')).toBe(
+    true,
+  );
+});
+
+test('queue rows have no fill or card chrome', async () => {
+  const mounted = await render(
+    <QueuePanel
+      queue={[
+        {
+          id: 'q1',
+          text: 'follow up',
+          issuedBy: 'p',
+          issuedAt: 1,
+        },
+      ]}
+      actionsSupported
+      pending={new Set()}
+      canSteer={false}
+      onAction={() => {}}
+      onMove={() => {}}
+    />,
+  );
+  const row = mounted.root.findAll(n => n.props.testID === 'queue-row')[0];
+  expect(row).toBeDefined();
+  const flat = StyleSheet.flatten(row!.props.style);
+  expect(flat.backgroundColor).toBe('transparent');
+  expect(flat.borderWidth === undefined || flat.borderWidth === 0).toBe(true);
+});
+
+test('composer file tiles are square preview buttons', async () => {
+  resetDrafts();
+  stageAttachment('c1', {
+    kind: 'file',
+    name: 'notes.json',
+    mimeType: 'application/json',
+    size: 12,
+    localUri: 'file:///notes.json',
+  });
+  const mounted = await render(
+    <Composer
+      chatId="c1"
+      phase="idle"
+      roomState="connected"
+      harness={undefined}
+      capabilities={new Set()}
+      modelLabel="Default"
+      harnessId="claude-code"
+      recentItems={[
+        { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
+      ]}
+      onPickRecentModel={() => {}}
+      onOpenMoreModels={() => {}}
+      effortLabel="High"
+      effortSupported
+      fastSupported={false}
+      fastEnabled={false}
+      onOpenEffort={() => {}}
+      onToggleFast={() => {}}
+      dictation={dictationUnavailable}
+      onSend={() => {}}
+      onSteer={() => {}}
+      onQueue={() => {}}
+      onStop={() => {}}
+      onCancel={() => {}}
+      onSendAttachments={() => Promise.resolve('sent' as never)}
+      onRespondInput={() => {}}
+      onSendBlocked={() => {}}
+    />,
+  );
+  const labels = labelled(mounted.root);
+  expect(
+    labels.some(l => l.role === 'button' && l.label === 'Preview notes.json'),
+  ).toBe(true);
+  expect(
+    labels.some(l => l.role === 'button' && l.label === 'Remove notes.json'),
+  ).toBe(true);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'attachment-strip').length,
+  ).toBeGreaterThan(0);
 });

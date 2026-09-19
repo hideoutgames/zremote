@@ -34,7 +34,6 @@ import {
   setPlanMode,
   toggleChatPinned,
   useChatPinned,
-  useComposerExtraHeight,
   useRecentModels,
 } from '../zeron/state/uiPrefs';
 import {
@@ -329,8 +328,6 @@ function ActiveSessionScreen({
     [phase, openReasoning, onFetchOutput, chatId],
   );
 
-  const extraHeight = useComposerExtraHeight();
-
   const doSend = useCallback(
     (text: string) => {
       if (controller === undefined) return;
@@ -575,7 +572,6 @@ function ActiveSessionScreen({
         ref={transcriptRef}
         entries={entries}
         renderEntry={renderEntry}
-        extraHeight={extraHeight}
         composerRef={composerRef}
         contentMaxWidth={contentMaxWidth}
         windowWidth={windowWidth}
@@ -774,6 +770,8 @@ function ActiveSessionScreen({
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
         <View
+          ref={composerRef}
+          onLayout={event => transcriptRef.current?.onComposerLayout(event)}
           style={
             composerMaxWidth !== undefined
               ? [styles.measureCap, { maxWidth: composerMaxWidth }]
@@ -855,8 +853,6 @@ function ActiveSessionScreen({
             onSendAttachments={doSendAttachments}
             onRespondInput={doRespond}
             onSendBlocked={onSendBlocked}
-            composerRef={composerRef}
-            onLayout={event => transcriptRef.current?.onComposerLayout(event)}
           />
         </View>
       </KeyboardStickyView>
