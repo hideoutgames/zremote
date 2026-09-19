@@ -264,6 +264,7 @@ const en = {
   'composer.plan': 'Plan',
   'composer.plan.off': 'Turn off Plan mode',
   'composer.plan.on': 'Plan mode',
+  'composer.build': 'Build',
   'composer.context': 'Context',
   'composer.context.a11y': 'Context usage {percent}',
   'composer.context.used': '{used} / {total}',

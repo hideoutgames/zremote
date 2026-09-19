@@ -67,11 +67,12 @@ export const UserMessage = React.memo(function UserMessageInner({
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
-  const { plan, text: visible } = stripPlanPrefix(text);
+  const { kind, text: visible } = stripPlanPrefix(text);
   const images = entry.parts.filter(p => p.kind === 'image');
   const foldable = visible.length > FOLD_CHARS;
   const shown =
     expanded || !foldable ? visible : `${visible.slice(0, FOLD_CHARS)}…`;
+  const showBubble = visible !== '' || kind !== null;
 
   useLayoutEffect(() => {
     if (animateEnter) onEntered?.(entry.id);
@@ -112,24 +113,28 @@ export const UserMessage = React.memo(function UserMessageInner({
                 )}
               </View>
             ) : null}
-            {plan ? (
-              <View style={styles.planWrap}>
-                <PlanBadge />
-              </View>
-            ) : null}
-            {visible !== '' ? (
+            {showBubble ? (
               <View
                 style={[
                   styles.bubble,
                   { backgroundColor: theme.userBubbleBackground },
                 ]}
               >
-                <Text
-                  style={[styles.text, { color: theme.userBubbleText }]}
-                  numberOfLines={expanded ? undefined : FOLD_LINES}
-                >
-                  {shown}
-                </Text>
+                <View style={styles.bubbleInner}>
+                  {kind !== null ? <PlanBadge kind={kind} /> : null}
+                  {shown !== '' ? (
+                    <Text
+                      style={[
+                        styles.text,
+                        styles.bubbleText,
+                        { color: theme.userBubbleText },
+                      ]}
+                      numberOfLines={expanded ? undefined : FOLD_LINES}
+                    >
+                      {shown}
+                    </Text>
+                  ) : null}
+                </View>
                 {foldable ? (
                   <Pressable
                     onPress={() => setExpanded(e => !e)}
@@ -190,7 +195,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
+  bubbleInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   text: { fontSize: 16, lineHeight: 21 },
+  bubbleText: { flex: 1, flexShrink: 1 },
   fold: { fontSize: 13, fontWeight: '500', marginTop: 4 },
-  planWrap: { marginBottom: 6 },
 });

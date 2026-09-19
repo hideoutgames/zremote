@@ -101,6 +101,7 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
+import { applyBuildPrefix, IMPLEMENT_PLAN_TEXT } from '../components/planMode';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
@@ -1030,7 +1031,7 @@ function ActiveSessionScreen({
           onImplement={() => {
             setPlanSheet(null);
             setPlanMode(chatId, false);
-            doSend('Implement the plan.');
+            doSend(applyBuildPrefix(IMPLEMENT_PLAN_TEXT));
           }}
         />
       ) : null}
