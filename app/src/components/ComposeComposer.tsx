@@ -539,10 +539,7 @@ export function ComposeComposer({
   return (
     <>
       {overlay}
-      <KeyboardStickyView
-        offset={{ opened: 0 }}
-        style={styles.sticky}
-      >
+      <KeyboardStickyView offset={{ opened: 0 }} style={styles.sticky}>
         {composer}
       </KeyboardStickyView>
     </>

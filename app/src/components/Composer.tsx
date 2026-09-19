@@ -651,85 +651,84 @@ export const Composer = React.memo(function ({
                   </ScrollView>
                 </ChipRowMask>
                 <View style={styles.trailingCluster} collapsable={false}>
-                    <VoicePill
-                      active={dictating}
-                      supported={dictationSupported}
-                      levelTick={voiceTick}
-                      onToggle={toggleDictation}
-                      onCancel={cancelDictation}
-                    />
-                    <Pressable
-                      onPress={
-                        right === 'stop'
-                          ? onStop
-                          : right === 'cancel'
-                          ? onCancel
-                          : right === 'send'
-                          ? submit
-                          : undefined
-                      }
-                      disabled={
+                  <VoicePill
+                    active={dictating}
+                    supported={dictationSupported}
+                    levelTick={voiceTick}
+                    onToggle={toggleDictation}
+                    onCancel={cancelDictation}
+                  />
+                  <Pressable
+                    onPress={
+                      right === 'stop'
+                        ? onStop
+                        : right === 'cancel'
+                        ? onCancel
+                        : right === 'send'
+                        ? submit
+                        : undefined
+                    }
+                    disabled={
+                      right === 'stopping' || (right === 'send' && !sendArmed)
+                    }
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      right === 'stop'
+                        ? t('session.stop')
+                        : right === 'stopping'
+                        ? t('session.stopping')
+                        : right === 'cancel'
+                        ? t('session.cancel')
+                        : t('session.send')
+                    }
+                    accessibilityState={{
+                      disabled:
                         right === 'stopping' ||
-                        (right === 'send' && !sendArmed)
-                      }
-                      hitSlop={6}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        right === 'stop'
-                          ? t('session.stop')
-                          : right === 'stopping'
-                          ? t('session.stopping')
-                          : right === 'cancel'
-                          ? t('session.cancel')
-                          : t('session.send')
-                      }
-                      accessibilityState={{
-                        disabled:
-                          right === 'stopping' ||
-                          (right === 'send' && !sendArmed),
-                        busy: right === 'stopping',
-                      }}
-                      style={styles.minTarget}
+                        (right === 'send' && !sendArmed),
+                      busy: right === 'stopping',
+                    }}
+                    style={styles.minTarget}
+                  >
+                    <View
+                      style={[
+                        styles.circle,
+                        {
+                          backgroundColor:
+                            right === 'send' && !sendArmed
+                              ? theme.sendInactive
+                              : theme.sendActive,
+                        },
+                      ]}
                     >
-                      <View
-                        style={[
-                          styles.circle,
-                          {
-                            backgroundColor:
+                      {right === 'stopping' ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={theme.textSecondary}
+                        />
+                      ) : (
+                        <View style={styles.iconClip} collapsable={false}>
+                          <Icon
+                            name={
+                              right === 'stop'
+                                ? 'stop.fill'
+                                : right === 'cancel'
+                                ? 'xmark'
+                                : 'arrow.up'
+                            }
+                            size={right === 'send' ? 17 : 15}
+                            color={
                               right === 'send' && !sendArmed
-                                ? theme.sendInactive
-                                : theme.sendActive,
-                          },
-                        ]}
-                      >
-                        {right === 'stopping' ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={theme.textSecondary}
+                                ? '#FFFFFF'
+                                : theme.scheme === 'dark'
+                                ? '#000000'
+                                : '#FFFFFF'
+                            }
                           />
-                        ) : (
-                          <View style={styles.iconClip} collapsable={false}>
-                            <Icon
-                              name={
-                                right === 'stop'
-                                  ? 'stop.fill'
-                                  : right === 'cancel'
-                                  ? 'xmark'
-                                  : 'arrow.up'
-                              }
-                              size={right === 'send' ? 17 : 15}
-                              color={
-                                right === 'send' && !sendArmed
-                                  ? '#FFFFFF'
-                                  : theme.scheme === 'dark'
-                                  ? '#000000'
-                                  : '#FFFFFF'
-                              }
-                            />
-                          </View>
-                        )}
-                      </View>
-                    </Pressable>
+                        </View>
+                      )}
+                    </View>
+                  </Pressable>
                 </View>
               </View>
             </View>

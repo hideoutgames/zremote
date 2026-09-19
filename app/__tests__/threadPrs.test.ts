@@ -1,4 +1,7 @@
-import { collectThreadPrs, badgeFromSummary } from '../src/components/threadPrs';
+import {
+  collectThreadPrs,
+  badgeFromSummary,
+} from '../src/components/threadPrs';
 import type { ChangeRequestSummary } from '../src/zeron/protocol/types';
 
 const summary = (

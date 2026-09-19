@@ -71,9 +71,9 @@ const flattenText = (c: unknown): string => {
 };
 
 const statusOf = (root: TestRenderer.ReactTestInstance, id: string): string => {
-  const node = root.findAll(
-    n => n.props.testID === `thread-status-${id}` && typeof n.type === 'string',
-  )[0];
+  const node = root.findAll(n => n.props.testID === `thread-status-${id}`)[0];
+  const shimmer = node?.findAll(n => typeof n.props.text === 'string')[0];
+  if (shimmer !== undefined) return shimmer.props.text;
   return flattenText(node?.props.children);
 };
 
