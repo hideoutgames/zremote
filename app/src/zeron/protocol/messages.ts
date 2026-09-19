@@ -81,11 +81,11 @@ export const openInputRequest = (
 
 // ── Attachment text transport (use-attachments.ts / Attachments.swift) ──────
 
-/** The body used for image-only sends. */
-export const ATTACHMENT_ONLY_TEXT = 'See the attached image(s).';
+/** The body used when the user sends files with an empty prompt. */
+export const ATTACHMENT_ONLY_TEXT = 'See the attached file(s).';
 
 export const ATTACHMENT_TRAILER_HEADER =
-  'Attached images (local files — open them to view):';
+  'Attached files (local files — open them to view):';
 
 /** `withAttachments`: plain local paths appended to the text — the files are
  * staged on the device that runs the agent. */

@@ -72,6 +72,8 @@ const SF_TO_MDI: Record<string, string> = {
   'paperplane.fill': 'send',
   trash: 'trash-can-outline',
   'arrow.right.doc.on.clipboard': 'clipboard-arrow-right-outline',
+  'slider.horizontal.3': 'tune',
+  'bolt.fill': 'lightning-bolt',
 };
 
 type MdiName = ComponentProps<typeof MaterialDesignIcons>['name'];

@@ -182,6 +182,40 @@ describe('AppRuntime', () => {
     rt.stop();
   });
 
+  it('openSession falls back to relay when loro() throws on construct', async () => {
+    const lines: string[] = [];
+    let loroCalls = 0;
+    const clock = new FakeClock(1_000_000);
+    const hub = new FakeWsHub();
+    const { disk } = memDisk();
+    const rt = await AppRuntime.create({
+      cfg,
+      tokenSource: staticTokenSource('u@o1'),
+      deviceId: 'phone1',
+      deviceName: 'Test Phone',
+      orgId: 'o1',
+      userId: 'u1',
+      wsFactory: hub.factory,
+      clock,
+      docDisk: disk,
+      loro: () => {
+        loroCalls += 1;
+        if (loroCalls === 1) return new LoroCrdtAdapter();
+        throw Object.assign(new Error('boom'), { name: 'LoroError' });
+      },
+      log: line => lines.push(line),
+      fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
+    });
+    expect(loroCalls).toBe(1);
+    const c = rt.openSession('c1');
+    expect(c).toBeDefined();
+    expect(loroCalls).toBe(2);
+    expect(
+      lines.some(l => l.includes('relay') && l.includes('LoroError')),
+    ).toBe(true);
+    rt.stop();
+  });
+
   it('onForeground kicks the registry and every open session', async () => {
     const { rt, hub } = await makeRuntime();
     rt.start();

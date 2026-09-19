@@ -37,7 +37,10 @@ import { updateAttachment, type StagedAttachment } from '../state/draftStore';
 import { withAttachments } from '../protocol/messages';
 import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
 import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
-import { harnessInlinesAttachments } from '../attachments/validate';
+import {
+  harnessInlinesAttachments,
+  isImageMime,
+} from '../attachments/validate';
 import { sendPlan, type SendPlan } from '../attachments/sendPlan';
 import { RelaySessionSource } from './relaySessionSource';
 import { workspaceStore } from '../state/workspaceStore';
@@ -664,9 +667,16 @@ export class SessionController {
     // inline image blocks.
     const body = withAttachments(text, paths);
     const harnessId = chat.config?.harness ?? '';
+    const imagePaths = staged.flatMap((a, i) => {
+      const path = paths[i];
+      return isImageMime(a.mimeType) && path !== undefined ? [path] : [];
+    });
     this.sendRun(body, chat, {
       ...opts,
-      attachments: harnessInlinesAttachments(harnessId) ? paths : undefined,
+      attachments:
+        harnessInlinesAttachments(harnessId) && imagePaths.length > 0
+          ? imagePaths
+          : undefined,
     });
     return 'legacy';
   }

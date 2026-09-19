@@ -231,6 +231,8 @@ const en = {
   'settings.notifications': 'Notifications',
   'settings.notificationsEnabled':
     'Notify when a run finishes or the agent needs input',
+  'settings.haptics': 'Haptics',
+  'settings.hapticsEnabled': 'Haptic feedback',
   'notify.runCompleted': 'Run completed',
   'notify.runFailed': 'Run failed',
   'notify.needsInput': 'The agent needs your input',
@@ -263,6 +265,8 @@ const en = {
   'composer.dictate': 'Dictate',
   'composer.dictationUnavailable': 'Dictation unavailable on this build',
   'composer.removeAttachment': 'Remove {name}',
+  'composer.previewAttachment': 'Preview {name}',
+  'composer.textPreviewFailed': 'Couldn\u2019t read this file as text.',
   'composer.plan': 'Plan',
   'composer.plan.off': 'Turn off Plan mode',
   'composer.plan.on': 'Plan mode',

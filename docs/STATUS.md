@@ -100,7 +100,7 @@ Needs a Mac build, a device, or a host in the right state:
 Queue edit leases · setChatActivity/setChatHost · review comments ·
 change-request badge · session sounds · appearance/theme
 library · in-app browser pane · widgets/composer/files settings pages ·
-image viewer/lightbox · transcript attachment thumbnails · workspace
+transcript attachment thumbnails · workspace
 `zeron-file:` links · new-thread background effects · Watch\*/queue-admin RPC
 set superseded by room sync.
 
