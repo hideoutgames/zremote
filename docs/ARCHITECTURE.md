@@ -75,7 +75,12 @@ side (see `docs/HOST_EDGE_CHANGES.md`); the app only registers per-activity
 push tokens and deep-links back to the exact session. Finish banners are
 separate APNs **alert** pushes on a native device token (`kind: "alert"`):
 the app registers the token, suppresses the banner when that thread is
-already on screen, and opens `zeron://session/{chatId}` on tap.
+already on screen, and opens `zeron://session/{chatId}` on tap. The same
+alert tokens fire when a run flips `working` → `awaitingInput` (body
+"The agent needs your input", no prompt text) so lock-screen question
+alerts work without a background socket. While the app is active the JS
+layer presents that flip locally via `shouldPresentBanner` (covers
+"I'm on another thread").
 
 ## Navigation and adaptive layout
 
@@ -85,12 +90,13 @@ window width to a plan:
 
 - **< 700pt** → `compact`: the original `RootPager` (Home ↔ Session).
 - **≥ 700pt** → `regular`: Sidebar (`HomeScreen` at 300–360pt) + Detail
-  (`SessionScreen`). The iPad right inspector column is gone — History /
-  Files / Terminal open from the session overflow menu as 75% `TrueSheet`s
-  (`SessionSheet`, same chrome as View details / Sub-agents: grabber, no
-  close button, first detent 0.75). Changes and Previews are not in the
-  menu; checkout diffs live in the PR modal.
-  Transcript and composer are capped at ~720pt and centered.
+  (`SessionScreen`). The threads column is Liquid Glass and **pushes** the
+  session (full-width when collapsed). The iPad right inspector column is
+  gone — History / Files / Terminal open from the session overflow menu as
+  75% `TrueSheet`s (`SessionSheet`, same chrome as View details /
+  Sub-agents: grabber, no close button, first detent 0.75). Changes and
+  Previews are not in the menu; checkout diffs live in the PR modal.
+  Transcript is capped at ~720pt; the composer stack at 50% of the window.
 
 Selection (`chatId`), sidebar collapse, and drafts persist
 across size-class changes because they live in the shell or the stores, not
@@ -118,8 +124,29 @@ web. So on regular width `ModelPickerSheet` renders inside a `Modal` with
 dropdown (popover-anchored natively).
 
 A started session is bound to `chat.config.harness`. The composer recent
-menu and More sheet list that provider's models only; New Session is where
-the provider is picked.
+menu and More sheet list that provider's models only.
+
+**Compose** (`Composer` `mode: 'compose'`, draft key `__compose__`): iPhone
+replaces the home "New session" control with the same glass composer;
+iPad's sidebar **New thread** button clears the detail column and mounts
+`SessionScreen` without a `chatId` (empty transcript, composer focused).
+The host / repo / origin dropdowns sit between the grabber and the
+input (`lockHarness={false}` on the model picker). Send creates the chat
+(`createChat` / `createProjectlessChat`), moves the compose draft onto
+the new id, then `sendRun`. Last host/space/model persist in
+`uiPrefs.composeDefaults`. Existing sessions leave host/cwd/branch on
+the thread Details sheet.
+
+## Auth callback
+
+`ZeronApp` waits for `AuthSession.restore()` (SecureStore) before showing
+`SignInScreen`, so a returning user never flashes signed-out. Sign-in uses
+PKCE (`PKCE_ENABLED`) and the HTTPS callback `https://{edge}/auth/cli/callback`
+(AASA + `associatedDomains`). `zeron://` Linking remains a second return
+path. There is no paste-code fallback; cancel/error shows the generic
+message and the user taps Sign in again. Expo Go cannot receive universal
+links — production sign-in is the HTTPS session on a dev/production build
+(demo stays under Advanced).
 
 ## Workspace tools (Files / Terminal / History)
 

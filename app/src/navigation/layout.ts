@@ -15,13 +15,16 @@ export interface LayoutPlan {
   sidebarWidth: number;
   /** inspector width, clamped 360–480. */
   inspectorWidth: number;
-  /** transcript/composer measure cap in the detail column. */
+  /** transcript measure cap in the detail column. */
   measureCap: number;
+  /** Composer stack max width on iPad; omitted on compact (iPhone). */
+  composerMaxWidth?: number;
 }
 
 export const REGULAR_MIN_WIDTH = 700;
 export const INSPECTOR_AUTO_WIDTH = 1100;
 export const MEASURE_CAP = 720;
+export const COMPOSER_MAX_FRACTION = 0.5;
 
 export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
   if (width < REGULAR_MIN_WIDTH) {
@@ -42,5 +45,6 @@ export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
     sidebarWidth: Math.min(360, Math.max(300, Math.round(width * 0.24))),
     inspectorWidth,
     measureCap: MEASURE_CAP,
+    composerMaxWidth: Math.round(width * COMPOSER_MAX_FRACTION),
   };
 };

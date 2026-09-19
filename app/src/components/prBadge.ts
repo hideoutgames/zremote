@@ -9,6 +9,17 @@ import type {
 
 export type PrBadgeTone = 'open' | 'merged' | 'draft';
 
+/** Thread-list PR dot. Closed and missing CRs have no dot. */
+export type ThreadPrDot = 'draft' | 'open' | 'merged';
+
+export const threadPrDot = (
+  summary: ChangeRequestSummary | null | undefined,
+): ThreadPrDot | null => {
+  if (summary == null || summary.state === 'closed') return null;
+  if (summary.state === 'merged') return 'merged';
+  return summary.draft === true ? 'draft' : 'open';
+};
+
 export interface PrBadgeModel {
   tone: PrBadgeTone;
   label: 'viewPr' | 'viewPrDraft';

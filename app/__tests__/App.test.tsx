@@ -34,7 +34,7 @@ test('renders SignInScreen when signed out', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(<App />);
-    await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   });
   const texts = allText(tree!.root);
   expect(texts).toContain('Sign in to ZRemote');
@@ -48,7 +48,7 @@ test('renders SignInScreen when signed out', async () => {
   });
 });
 
-test('Advanced → Try demo mode lands on Home with fixture data + badge', async () => {
+test('Advanced → Try demo mode lands on Home with fixture data', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(<App />);
@@ -62,7 +62,7 @@ test('Advanced → Try demo mode lands on Home with fixture data + badge', async
     for (let i = 0; i < 20; i++) await Promise.resolve();
   });
   const texts = allText(tree!.root);
-  expect(texts).toContain('Demo');
+  expect(texts).not.toContain('Demo');
   expect(texts).toContain('Ship demo mode');
   expect(texts).toContain('Refactor relay reconnect');
   await act(async () => {

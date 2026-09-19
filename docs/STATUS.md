@@ -13,7 +13,7 @@ Exercised against the real edge/engine (`e2e:windows` 13/13 —
 logic:
 
 - **Sync substrate**: registry room, device relay, chat room, presence/dial
-  parking, auth dev-token/paste-code path.
+  parking, auth restore + PKCE HTTPS callback.
 - **Command ledger**: run, steer, interrupt, respondInput,
   cancelOwnCommand; queue enqueue/send-now/steer-now/remove/move.
 - **Registry writes**: createSpace, deleteSpace, createChat, renameChat,
@@ -29,7 +29,7 @@ logic:
   thresholds, catalog toggles.
 - **Navigation logic**: `layoutFor`, deep-link parsing, redacted logging.
 - **Edge patches**: AASA + PKCE + APNs producer (Live Activity + finish
-  banners) — 14 live-activity unit tests in the patch files (was 8);
+  banners + question alerts) — live-activity unit tests in the patch files;
   full edge `test:unit` still needs the worktree. Deployment required.
 - **Relay session mode** (Loro-free, host-authoritative): transcript delta
   reducer ported from `transcript_delta.rs`, `WatchDocMessages`/`WatchQueue`/
@@ -75,6 +75,8 @@ Needs a Mac build, a device, or a host in the right state:
 - Live Activity pushes + push registration routes — same patch + `APNS_*`
   credentials.
 - Finish-banner alerts when a run completes — patch `0002-*` + same
+  `APNS_*` credentials.
+- Question-alert banners when a run asks for input — patch `0003-*` + same
   `APNS_*` credentials.
 
 ## Blocked (`blocked`)

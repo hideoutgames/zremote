@@ -44,6 +44,20 @@ test('recentMenuModels drops recents from other harnesses', () => {
   expect(items.every(i => i.harness === 'cursor')).toBe(true);
 });
 
+test('recentMenuModels lockHarness false includes other providers', () => {
+  const items = recentMenuModels(
+    [{ harness: 'codex', model: 'gpt-5' }],
+    catalog,
+    { harness: 'cursor', model: 'composer' },
+    3,
+    false,
+  );
+  expect(items.map(i => i.harness)).toEqual(
+    expect.arrayContaining(['cursor', 'codex']),
+  );
+  expect(items[0]).toEqual(catalog[3]);
+});
+
 test('recentMenuModels ignores recents missing from the catalog', () => {
   const items = recentMenuModels(
     [{ harness: 'gone', model: 'x' }],

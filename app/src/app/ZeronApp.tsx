@@ -10,7 +10,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthClient } from '../zeron/auth/authClient';
@@ -34,7 +34,6 @@ import { memDocDisk } from '../zeron/native/memDocDisk';
 import { DemoEdge } from '../demo/demoEdge';
 import { exitDemo, useDemoMode } from '../demo/demoMode';
 import { DEMO_ORG, DEMO_PHONE, DEMO_USER } from '../demo/fixtures';
-import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 import { useTheme } from '../theme';
 import { AppServicesContext, type AppServices } from './runtimeContext';
@@ -78,9 +77,14 @@ export function ZeronApp() {
     }
   }, [cfg.edgeUrl]);
 
+  const [authReady, setAuthReady] = useState(false);
+
   useEffect(() => {
     const unbind = bindAuthSession(auth);
-    auth.restore().catch(() => {});
+    auth
+      .restore()
+      .catch(() => {})
+      .finally(() => setAuthReady(true));
     return unbind;
   }, [auth]);
 
@@ -261,7 +265,8 @@ export function ZeronApp() {
   );
 
   let body: React.ReactNode;
-  if (status.state === 'signedOut') body = <SignInScreen />;
+  if (!authReady) body = null;
+  else if (status.state === 'signedOut') body = <SignInScreen />;
   else if (status.state === 'needsOrganization') body = <OrgGateScreen />;
   else
     body = (
@@ -287,19 +292,6 @@ export function ZeronApp() {
           backgroundColor="transparent"
         />
         {body}
-        {demoActive ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.demoBadge,
-              { top: insets.top + 6, backgroundColor: theme.accent },
-            ]}
-          >
-            <Text style={[styles.demoBadgeText, { color: theme.background }]}>
-              {t('demo.badge')}
-            </Text>
-          </View>
-        ) : null}
       </View>
     </AppServicesContext.Provider>
   );
@@ -307,12 +299,4 @@ export function ZeronApp() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  demoBadge: {
-    position: 'absolute',
-    right: 14,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  demoBadgeText: { fontSize: 11, fontWeight: '700' },
 });

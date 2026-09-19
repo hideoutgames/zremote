@@ -23,7 +23,7 @@ export interface UiPrefs {
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
    * Loro init fails, relay mode is selected regardless. */
   forceRelayMode: boolean;
-  /** iPad floating sidebar collapsed (AdaptiveShell, ≥700pt only). */
+  /** iPad threads sidebar collapsed (AdaptiveShell, ≥700pt only). */
   sidebarCollapsed: boolean;
   /** Per-chat composer Plan mode (prefixes the outgoing prompt). */
   planModeByChat: Record<string, boolean>;
@@ -33,6 +33,17 @@ export interface UiPrefs {
   recentModels: RecentModel[];
   /** Local-only pin-to-top (no registry pin field). */
   pinnedChatIds: string[];
+  /** Last compose-composer settings (host/space/model). */
+  composeDefaults?: ComposeDefaults;
+}
+
+export interface ComposeDefaults {
+  deviceId: string;
+  spaceId?: string;
+  harness: string;
+  model: string;
+  reasoning?: string;
+  sandbox?: string;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
@@ -192,3 +203,23 @@ export const usePinnedChatIds = (): string[] =>
 
 export const useChatPinned = (chatId: string): boolean =>
   useStore(uiPrefsStore, s => s.pinnedChatIds.includes(chatId));
+
+export const setComposeDefaults = (patch: Partial<ComposeDefaults>): void => {
+  uiPrefsStore.setState(s => {
+    const base: ComposeDefaults = s.composeDefaults ?? {
+      deviceId: '',
+      harness: '',
+      model: '',
+    };
+    return { composeDefaults: { ...base, ...patch } };
+  });
+  save();
+};
+
+export const rememberComposeDefaults = (defaults: ComposeDefaults): void => {
+  uiPrefsStore.setState({ composeDefaults: defaults });
+  save();
+};
+
+export const useComposeDefaults = (): ComposeDefaults | undefined =>
+  useStore(uiPrefsStore, s => s.composeDefaults);

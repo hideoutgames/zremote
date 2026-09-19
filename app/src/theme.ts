@@ -34,6 +34,7 @@ export interface Theme {
   fastAccent: string;
   prOpen: string;
   prMerged: string;
+  prDraft: string;
   // Diff rows.
   diffAddBackground: string;
   diffDelBackground: string;
@@ -67,6 +68,7 @@ export const darkTheme: Theme = {
   fastAccent: '#FF9F0A',
   prOpen: '#30D158',
   prMerged: '#BF5AF2',
+  prDraft: '#8E8E93',
   diffAddBackground: 'rgba(48,209,88,0.14)',
   diffDelBackground: 'rgba(215,38,61,0.14)',
   diffAddText: '#30D158',
@@ -99,6 +101,7 @@ export const lightTheme: Theme = {
   fastAccent: '#FF9F0A',
   prOpen: '#248A3D',
   prMerged: '#8944AB',
+  prDraft: '#6C6C70',
   diffAddBackground: 'rgba(36,138,61,0.12)',
   diffDelBackground: 'rgba(215,38,61,0.10)',
   diffAddText: '#248A3D',
