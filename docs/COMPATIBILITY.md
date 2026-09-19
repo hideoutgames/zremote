@@ -117,19 +117,20 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
 `http://127.0.0.1:{port}/callback` and the hosted paste-code page
 `{edge}/auth/cli/callback`. The mobile flow:
 
-1. **Primary**: `ASWebAuthenticationSession` with callback scheme
-   `zeron://auth/callback` plus PKCE. WorkOS still uses the already-
-   registered HTTPS redirect `{edge}/auth/cli/callback`. The edge hops
-   iPhone/iPad user-agents to `zeron://auth/callback?code&state`
-   (`patches/zeron-edge/0004`) so the session completes without a paste
-   page. `openAuthSessionAsync` uses `preferUniversalLinks: false` for
-   that custom scheme (true only if an HTTPS callback URL is passed —
-   the default legacy scheme `"https"` fails to start). `zeron://`
-   Linking is a second return path (Safari fallback). There is no in-app
-   paste-code UI; cancel/error shows a generic message and the user taps
-   Sign in again. Desktop CLI `zeron login` still sees the paste-code
-   page.
-2. `state` is minted per attempt, stored until consumed, and bound to the
+1. **Primary**: `ASWebAuthenticationSession` with the WorkOS HTTPS
+   redirect `{edge}/auth/cli/callback` plus PKCE. On iOS 17.4+
+   `openAuthSessionAsync` uses `preferUniversalLinks: true` so Apple's
+   `.https(host:path:)` API intercepts that landing URL and the paste-code
+   page never shows. If HTTPS AuthSession fails to start (iOS 17.0–17.3,
+   where scheme `"https"` cannot start), the app retries with
+   `zeron://auth/callback`. The edge 302-hops iPhone/iPad user-agents and
+   `zr1.`-prefixed pending states to that scheme (`patches/zeron-edge/0004`
+   + `0005`). `zeron://` Linking is a last-resort return path (Safari
+   fallback). There is no in-app paste-code UI; cancel/error shows a
+   generic message and the user taps Sign in again. Desktop CLI
+   `zeron login` still sees the paste-code page.
+2. `state` is minted per attempt with a `zr1.` prefix (so the edge can hop
+   without UA sniffing), stored until consumed, and bound to the
    intercepted code (same CSRF discipline as the engine).
 3. **PKCE**: `PKCE_ENABLED` is on. `SignInScreen` injects `expo-crypto`
    `randomBytes` / `sha256` into `beginSignIn` (Hermes Web Crypto is not

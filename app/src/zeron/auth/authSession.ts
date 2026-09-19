@@ -14,6 +14,7 @@ import {
   decodeJwtPayload,
   generateVerifier,
   parsePastedCode,
+  MOBILE_SIGN_IN_STATE_PREFIX,
   type AuthorizeParams,
 } from './authKit';
 import type { SecureStorePort } from './secureStore';
@@ -46,7 +47,9 @@ interface PendingSignIn {
 }
 
 const randomState = (): string =>
-  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 18)}`;
+  `${MOBILE_SIGN_IN_STATE_PREFIX}${Date.now().toString(36)}${Math.random()
+    .toString(36)
+    .slice(2, 18)}`;
 
 export interface AuthSessionDeps {
   client: AuthClient;

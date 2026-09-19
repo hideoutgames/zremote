@@ -154,17 +154,19 @@ the thread Details sheet.
 `ZeronApp` waits for `AuthSession.restore()` (SecureStore) before showing
 `SignInScreen`, so a returning user never flashes signed-out. Sign-in uses
 PKCE (`PKCE_ENABLED`). WorkOS still redirects to the registered HTTPS URI
-`https://{edge}/auth/cli/callback`. The app starts `ASWebAuthenticationSession`
-with callback `zeron://auth/callback` so the browser actually opens on iOS
-17.0+ (the HTTPS callbackURLScheme path fails to start). The edge hops
-iPhone/iPad user-agents from that HTTPS page to `zeron://auth/callback?code&state`
-(`patches/zeron-edge/0004`). PKCE SHA-256 is `expo-crypto`, injected at
-`beginSignIn`. `zeron://` Linking remains a second return path (Safari
-fallback when AuthSession cannot start). There is no paste-code UI; cancel
-shows the generic message and the user taps Sign in again. Desktop CLI
-`zeron login` still sees the paste-code page. Expo Go uses the same
-AuthSession + scheme hop. AASA (`IOS_APP_IDS`) remains useful for HTTPS
-universal links but is no longer required to start or complete mobile sign-in.
+`https://{edge}/auth/cli/callback`. On iOS 17.4+ the app starts
+`ASWebAuthenticationSession` with that same HTTPS callback
+(`preferUniversalLinks: true`) so the session completes when WorkOS lands
+there — the paste-code HTML never shows. If HTTPS AuthSession fails to start
+(iOS 17.0–17.3), it retries with `zeron://auth/callback`; the edge 302-hops
+iPhone/iPad user-agents and `zr1.`-prefixed pending states to that scheme
+(`patches/zeron-edge/0004` + `0005`). PKCE SHA-256 is `expo-crypto`, injected
+at `beginSignIn`. `zeron://` Linking remains a last-resort return path
+(Safari fallback). There is no paste-code UI; cancel shows the generic
+message and the user taps Sign in again. Desktop CLI `zeron login` still
+sees the paste-code page. Expo Go uses the same HTTPS-first AuthSession.
+AASA (`IOS_APP_IDS`) remains useful for HTTPS universal links but is not
+required for the 17.4+ in-session intercept.
 
 ## Workspace tools (Files / Terminal / History)
 
