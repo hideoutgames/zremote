@@ -144,9 +144,11 @@ menu and More sheet list that provider's models only.
 
 **Compose** (`Composer` `mode: 'compose'`, draft key `__compose__`): both
 iPhone and iPad Home show a right-aligned circular liquid-glass **New thread**
-button (`square.and.pencil`). Compact width (`RootPager`) and regular width
-(sidebar detail) both mount `SessionScreen` without a `chatId` (empty
-transcript, composer focused).
+button (`square.and.pencil`). Compact width (`RootPager`) mounts
+`SessionScreen` without a `chatId` after tapping New thread. Regular width
+(sidebar + detail) launches into that blank compose session (composer
+focused); a `requestedChat` deep link or notification still opens the
+thread instead.
 The host / repo / origin dropdowns sit between the grabber and the
 input (`lockHarness={false}` on the model picker). Send creates the chat
 (`createChat` / `createProjectlessChat`), moves the compose draft onto
