@@ -25,7 +25,7 @@ export interface UiPrefs {
   liveActivityShowHost: boolean;
   /** APNs finish banners (run completed / failed). Off → token DELETE. */
   notificationsEnabled: boolean;
-  /** Composer / system haptics (effort slider detents). Off → no-op. */
+  /** Composer / system haptics (effort slider, run-finished). Off → no-op. */
   hapticsEnabled: boolean;
   /** BCP-47 locale for the dictation model (Settings → Dictation). */
   dictationLocale: string;
