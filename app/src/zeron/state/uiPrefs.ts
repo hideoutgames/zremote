@@ -18,6 +18,8 @@ export interface UiPrefs {
   liveActivityShowHost: boolean;
   /** APNs finish banners (run completed / failed). Off → token DELETE. */
   notificationsEnabled: boolean;
+  /** Composer / system haptics (effort slider detents). Off → no-op. */
+  hapticsEnabled: boolean;
   /** BCP-47 locale for the dictation model (Settings → Dictation). */
   dictationLocale: string;
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
@@ -52,6 +54,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   liveActivitiesEnabled: true,
   liveActivityShowHost: true,
   notificationsEnabled: true,
+  hapticsEnabled: true,
   dictationLocale: 'en-US',
   forceRelayMode: false,
   sidebarCollapsed: false,
@@ -130,6 +133,14 @@ export const setNotificationsEnabled = (v: boolean): void => {
 
 export const useNotificationsEnabled = (): boolean =>
   useStore(uiPrefsStore, s => s.notificationsEnabled);
+
+export const setHapticsEnabled = (v: boolean): void => {
+  uiPrefsStore.setState({ hapticsEnabled: v });
+  save();
+};
+
+export const useHapticsEnabled = (): boolean =>
+  useStore(uiPrefsStore, s => s.hapticsEnabled);
 
 export const setDictationLocale = (v: string): void => {
   uiPrefsStore.setState({ dictationLocale: v });

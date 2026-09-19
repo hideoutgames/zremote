@@ -93,8 +93,10 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
       onOpenMoreModels={() => {}}
       effortLabel="High"
       effortSupported
+      fastSupported={false}
       fastEnabled={false}
       onOpenEffort={() => {}}
+      onToggleFast={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
       onSteer={() => {}}
@@ -119,6 +121,7 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   );
   expect(labels.some(l => l.label === 'Default')).toBe(true);
   expect(labels.some(l => l.label === 'High')).toBe(true);
+  expect(labels.some(l => l.label === 'Fast mode')).toBe(false);
   expect(
     mounted.root.findAll(
       n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
@@ -147,8 +150,10 @@ test('compose composer: repo, origin, and machine sit above the input', async ()
       onOpenMoreModels={() => {}}
       effortLabel="High"
       effortSupported
+      fastSupported={false}
       fastEnabled={false}
       onOpenEffort={() => {}}
+      onToggleFast={() => {}}
       checkout={{
         runtime: {} as never,
         chat: {
@@ -208,6 +213,49 @@ test('compose composer: repo, origin, and machine sit above the input', async ()
       n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
     ),
   ).toHaveLength(1);
+});
+
+test('composer: Fast mode chip is a separate labelled button', async () => {
+  const mounted = await render(
+    <Composer
+      chatId="c1"
+      phase="idle"
+      roomState="connected"
+      harness={undefined}
+      capabilities={new Set()}
+      modelLabel="Default"
+      harnessId="claude-code"
+      recentItems={[
+        { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
+      ]}
+      onPickRecentModel={() => {}}
+      onOpenMoreModels={() => {}}
+      effortLabel="High"
+      effortSupported
+      fastSupported
+      fastEnabled={false}
+      onOpenEffort={() => {}}
+      onToggleFast={() => {}}
+      dictation={dictationUnavailable}
+      onSend={() => {}}
+      onSteer={() => {}}
+      onQueue={() => {}}
+      onStop={() => {}}
+      onCancel={() => {}}
+      onSendAttachments={() => Promise.resolve('sent' as never)}
+      onRespondInput={() => {}}
+      onSendBlocked={() => {}}
+      composerRef={{ current: null }}
+      onLayout={() => {}}
+    />,
+  );
+  const labels = labelled(mounted.root);
+  expect(labels.some(l => l.role === 'button' && l.label === 'Fast mode')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.role === 'button' && l.label === 'High')).toBe(
+    true,
+  );
 });
 
 test('session row: role button, label contains title + status + host', async () => {

@@ -79,7 +79,7 @@ import {
   SessionTranscriptList,
   type SessionTranscriptListHandle,
 } from '../components/SessionTranscriptList';
-import { EffortOverlay } from '../components/EffortOverlay';
+import { EffortOverlay, type EffortOrigin } from '../components/EffortOverlay';
 import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
@@ -452,6 +452,9 @@ function ActiveSessionScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -814,8 +817,34 @@ function ActiveSessionScreen({
             onOpenMoreModels={() => setPickerOpen(true)}
             effortLabel={effortLabel}
             effortSupported={effortLevels.length > 0}
+            fastSupported={fastOption !== undefined}
             fastEnabled={fastEnabled}
-            onOpenEffort={() => setEffortOpen(true)}
+            effortOpen={effortOpen}
+            onOpenEffort={origin => {
+              Keyboard.dismiss();
+              setEffortOrigin(origin);
+              setEffortOpen(true);
+            }}
+            onToggleFast={on => {
+              if (
+                runtime === null ||
+                chat === undefined ||
+                fastOption === undefined
+              )
+                return;
+              setChatConfig(runtime, chat.id, {
+                harness: chat.config?.harness ?? '',
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                sandbox: chat.config?.sandbox,
+                modelOptions: {
+                  ...(chat.config?.modelOptions ?? {}),
+                  [fastOption.id]: on
+                    ? fastOnChoice(fastOption)
+                    : fastOffChoice(fastOption),
+                },
+              });
+            }}
             onFocusChange={setComposerFocused}
             dictation={dictation}
             onSend={doSend}
@@ -831,6 +860,28 @@ function ActiveSessionScreen({
           />
         </View>
       </KeyboardStickyView>
+
+      {effortOpen ? (
+        <EffortOverlay
+          levels={effortLevels}
+          value={chat?.config?.reasoning}
+          origin={effortOrigin}
+          onChange={level => {
+            if (runtime === null || chat === undefined) return;
+            setChatConfig(runtime, chat.id, {
+              harness: chat.config?.harness ?? '',
+              model: chat.config?.model,
+              modelOptions: chat.config?.modelOptions ?? {},
+              reasoning: level,
+              sandbox: chat.config?.sandbox,
+            });
+          }}
+          onDismiss={() => {
+            setEffortOpen(false);
+            setEffortOrigin(undefined);
+          }}
+        />
+      ) : null}
 
       {queueOpen ? (
         <GlassSheet
@@ -854,46 +905,6 @@ function ActiveSessionScreen({
             }}
           />
         </GlassSheet>
-      ) : null}
-
-      {effortOpen ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={chat?.config?.reasoning}
-          onChange={level => {
-            if (runtime === null || chat === undefined) return;
-            setChatConfig(runtime, chat.id, {
-              harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              modelOptions: chat.config?.modelOptions ?? {},
-              reasoning: level,
-              sandbox: chat.config?.sandbox,
-            });
-          }}
-          showFast={fastOption !== undefined}
-          fastEnabled={fastEnabled}
-          onToggleFast={on => {
-            if (
-              runtime === null ||
-              chat === undefined ||
-              fastOption === undefined
-            )
-              return;
-            setChatConfig(runtime, chat.id, {
-              harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              reasoning: chat.config?.reasoning,
-              sandbox: chat.config?.sandbox,
-              modelOptions: {
-                ...(chat.config?.modelOptions ?? {}),
-                [fastOption.id]: on
-                  ? fastOnChoice(fastOption)
-                  : fastOffChoice(fastOption),
-              },
-            });
-          }}
-          onDismiss={() => setEffortOpen(false)}
-        />
       ) : null}
 
       {prSheet !== null ? (
