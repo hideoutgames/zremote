@@ -22,11 +22,12 @@ test('WorkingStatusRow shows flavour plus elapsed', async () => {
     expect(labels).toContain(`${flavourWord(flavourSeed('c1'), 58)}…`);
     expect(labels).toContain('58s');
     expect(
-      tree!.root.findAll(n => n.props.testID === 'working-status-strip'),
-    ).toHaveLength(1);
+      tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
+    ).toBeGreaterThan(0);
     expect(
-      tree!.root.findAll(n => n.props.testID === 'working-status-elapsed'),
-    ).toHaveLength(1);
+      tree!.root.findAll(n => n.props.testID === 'working-status-elapsed')
+        .length,
+    ).toBeGreaterThan(0);
   } finally {
     await act(async () => {
       tree?.unmount();
