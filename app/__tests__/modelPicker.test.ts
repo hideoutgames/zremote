@@ -3,7 +3,23 @@ import {
   detentForValue,
   nearestDetent,
   revalidateSelection,
+  effortLevelsForModel,
+  modelRowKey,
 } from '../src/components/modelPicker';
+
+test('effortLevelsForModel prefers the model ladder', () => {
+  expect(
+    effortLevelsForModel({ reasoningLevels: ['low', 'high'] }, ['medium']),
+  ).toEqual(['low', 'high']);
+  expect(effortLevelsForModel({ reasoningLevels: [] }, ['low'])).toEqual([
+    'low',
+  ]);
+  expect(effortLevelsForModel({ reasoningLevels: [] }, undefined)).toEqual([]);
+});
+
+test('modelRowKey joins harness and model', () => {
+  expect(modelRowKey('claude-code', 'sonnet')).toBe('claude-code:sonnet');
+});
 
 test('effortDetents preserves the advertised order', () => {
   expect(effortDetents(['low', 'medium', 'high'])).toEqual([

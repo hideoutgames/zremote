@@ -3,6 +3,18 @@
 
 import type { ChatConfig, Model } from '../zeron/protocol/types';
 
+export const modelRowKey = (harness: string, modelId: string): string =>
+  `${harness}:${modelId}`;
+
+/** A model's own ladder when non-empty, else the harness's advertised list. */
+export const effortLevelsForModel = (
+  model: Pick<Model, 'reasoningLevels'>,
+  harnessLevels: readonly string[] | undefined,
+): string[] =>
+  model.reasoningLevels.length > 0
+    ? [...model.reasoningLevels]
+    : [...(harnessLevels ?? [])];
+
 /** Ordered detents = the harness's advertised reasoning levels, exactly as
  * the catalog returns them (capitalized for display only — the wire value is
  * the raw level). */

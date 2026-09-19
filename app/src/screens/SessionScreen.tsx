@@ -1,6 +1,6 @@
 // SessionScreen — the fork's ChatScreen shape driven by the synchronized
 // session store: KeyboardAwareLegendList transcript, glass composer, scroll
-// chevron, reasoning sheet, context-usage bar, failed-send banner.
+// chevron, reasoning sheet, failed-send banner.
 
 import React, {
   Suspense,
@@ -32,7 +32,6 @@ import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
 import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
 import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
 import {
-  autoApproveFor,
   rememberModelPick,
   setPlanMode,
   toggleChatPinned,
@@ -64,14 +63,18 @@ import { recentMenuModels } from '../zeron/state/recentModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
 import { fastOptionForModel, isFastEnabled } from '../components/fastMode';
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
-import { usePrBadge } from '../zeron/state/changeRequestStore';
+import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
-import type { MessageEntry } from '../zeron/protocol/types';
+import {
+  FULL_ACCESS_SANDBOX,
+  type MessageEntry,
+} from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
+import { composerPrBadge } from '../components/threadPrs';
 import {
   SessionTranscriptList,
   type SessionTranscriptListHandle,
@@ -102,7 +105,6 @@ import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
-import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -306,6 +308,16 @@ function ActiveSessionScreen({
 
   const entries = session.entries;
 
+  // Local send/steer ids play SlideInDown once. Historical rows (thread
+  // open, list recycle) must not — UserMessage entering is mount-time.
+  const enterIdsRef = useRef(new Set<string>());
+  for (const p of session.pendingSends) {
+    enterIdsRef.current.add(p.messageId);
+  }
+  const onUserMessageEntered = useCallback((id: string) => {
+    enterIdsRef.current.delete(id);
+  }, []);
+
   const openReasoning = useCallback((text: string) => setReasoning(text), []);
 
   const onFetchOutput = useCallback(
@@ -321,7 +333,12 @@ function ActiveSessionScreen({
   const renderEntry = useCallback(
     ({ item }: { item: MessageEntry }) =>
       item.role === 'user' ? (
-        <UserMessage entry={item} chatId={chatId} />
+        <UserMessage
+          entry={item}
+          chatId={chatId}
+          animateEnter={enterIdsRef.current.has(item.id)}
+          onEntered={onUserMessageEntered}
+        />
       ) : (
         <AssistantMessage
           entry={item}
@@ -333,7 +350,7 @@ function ActiveSessionScreen({
           onOpenFileDiff={file => setFileDiff(file)}
         />
       ),
-    [phase, openReasoning, onFetchOutput, chatId],
+    [phase, openReasoning, onFetchOutput, chatId, onUserMessageEntered],
   );
 
   const doSend = useCallback(
@@ -344,7 +361,6 @@ function ActiveSessionScreen({
         text,
         { config: chat?.config, cwd: chat?.cwd },
         {
-          autoApprove: autoApproveFor(chatId),
           ...(wt !== undefined ? { worktree: wt } : {}),
         },
       );
@@ -396,7 +412,6 @@ function ActiveSessionScreen({
         {
           worktree: draft.pendingWorktree,
           phase,
-          autoApprove: autoApproveFor(chatId),
         },
       );
     },
@@ -407,7 +422,6 @@ function ActiveSessionScreen({
       draft.attachments,
       draft.pendingWorktree,
       phase,
-      chatId,
     ],
   );
 
@@ -572,7 +586,15 @@ function ActiveSessionScreen({
     chat?.branch,
     chat?.checkoutId,
   );
-  const prBadge = usePrBadge(chatId);
+  const checkoutSummary = useStore(
+    changeRequestStore,
+    s => s.byChat[chatId]?.changeRequest ?? undefined,
+  );
+  const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
+  const prBadge = useMemo(
+    () => composerPrBadge(checkoutSummary, checkoutDiff),
+    [checkoutSummary, checkoutDiff],
+  );
   const keyboardOffset = { opened: 0 };
   const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
     .filter(Boolean)
@@ -771,8 +793,6 @@ function ActiveSessionScreen({
         />
       ) : null}
 
-      <ContextUsageBar usage={session.meta.contextUsage} />
-
       {session.failedSends.map(f => (
         <View
           key={f.messageId}
@@ -851,7 +871,7 @@ function ActiveSessionScreen({
                 model: m,
                 modelOptions: chat.config?.modelOptions ?? {},
                 reasoning: chat.config?.reasoning,
-                sandbox: chat.config?.sandbox,
+                sandbox: FULL_ACCESS_SANDBOX,
               });
               rememberModelPick({ harness: h, model: m });
             }}
@@ -894,7 +914,7 @@ function ActiveSessionScreen({
                 harness: chat.config?.harness ?? '',
                 model: chat.config?.model,
                 reasoning: chat.config?.reasoning,
-                sandbox: chat.config?.sandbox,
+                sandbox: FULL_ACCESS_SANDBOX,
                 modelOptions: {
                   ...(chat.config?.modelOptions ?? {}),
                   [fastOption.id]: choice,
@@ -928,7 +948,7 @@ function ActiveSessionScreen({
               model: chat.config?.model,
               modelOptions: chat.config?.modelOptions ?? {},
               reasoning: level,
-              sandbox: chat.config?.sandbox,
+              sandbox: FULL_ACCESS_SANDBOX,
             });
           }}
           onDismiss={() => {

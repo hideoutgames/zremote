@@ -18,6 +18,11 @@ import { ModelPickerSheet } from '../src/components/ModelPickerSheet';
 import { QueuePanel } from '../src/components/QueuePanel';
 import { resetDrafts, stageAttachment } from '../src/zeron/state/draftStore';
 import {
+  getSessionStore,
+  resetSessionStores,
+} from '../src/zeron/state/sessionStores';
+import type { PrBadgeModel } from '../src/components/prBadge';
+import {
   catalogStore,
   type DeviceCatalog,
 } from '../src/zeron/state/catalogStore';
@@ -77,6 +82,7 @@ afterEach(() => {
     tree?.unmount();
   });
   tree = undefined;
+  resetSessionStores();
 });
 
 test('composer: input labelled, send/stop/mic/model buttons have roles', async () => {
@@ -126,6 +132,9 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   expect(labels.some(l => l.label === 'High')).toBe(true);
   expect(labels.some(l => l.label === 'Fast mode')).toBe(false);
   expect(
+    mounted.root.findAll(n => n.props.testID === 'context-usage-chip'),
+  ).toHaveLength(0);
+  expect(
     mounted.root.findAll(
       n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
     ),
@@ -134,6 +143,60 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   expect(labels.some(l => l.label === 'Project')).toBe(false);
   expect(labels.some(l => l.label === 'Checkout')).toBe(false);
   expect(labels.some(l => l.label === 'Branch')).toBe(false);
+});
+
+const composerProps = {
+  chatId: 'c1',
+  phase: 'idle' as const,
+  roomState: 'connected' as const,
+  harness: undefined,
+  capabilities: new Set<string>(),
+  modelLabel: 'Default',
+  harnessId: 'claude-code',
+  recentItems: [{ harness: 'claude-code', model: 'sonnet', label: 'Sonnet' }],
+  onPickRecentModel: () => {},
+  onOpenMoreModels: () => {},
+  effortLabel: 'High',
+  effortSupported: true,
+  fastSupported: false,
+  fastEnabled: false,
+  onOpenEffort: () => {},
+  onSelectFast: () => {},
+  dictation: dictationUnavailable,
+  onSend: () => {},
+  onSteer: () => {},
+  onQueue: () => {},
+  onStop: () => {},
+  onCancel: () => {},
+  onSendAttachments: () => Promise.resolve('sent' as never),
+  onRespondInput: () => {},
+  onSendBlocked: () => {},
+};
+
+test('fast mode chip is labelled when the harness supports it', async () => {
+  const mounted = await render(
+    <Composer {...composerProps} fastSupported fastEnabled />,
+  );
+  const labels = labelled(mounted.root);
+  expect(labels.some(l => l.role === 'button' && l.label === 'Fast mode')).toBe(
+    true,
+  );
+});
+
+test('context usage chip appears when the session meta has tokens', async () => {
+  getSessionStore('c1').setState({
+    meta: { contextUsage: { tokens: 32_000, window: 200_000 } },
+  });
+  const mounted = await render(<Composer {...composerProps} />);
+  const chip = mounted.root.findByProps({ testID: 'context-usage-chip' });
+  expect(chip.props.accessibilityRole).toBe('button');
+  expect(chip.props.accessibilityLabel).toMatch(/Context usage/i);
+  await act(async () => {
+    chip.props.onPress();
+  });
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'TrueSheet').length,
+  ).toBeGreaterThan(0);
 });
 
 test('compose composer: desktop, project, checkout, and branch sit above the input', async () => {
@@ -308,10 +371,44 @@ test('question panel: options are labelled buttons', async () => {
   ).toBeGreaterThanOrEqual(3); // two options + submit
 });
 
-test('model picker: search, provider groups, and sandbox are labelled', async () => {
+test('model picker: search, provider groups, effort, and fast are labelled', async () => {
   const catalog: DeviceCatalog = {
-    harnesses: [{ id: 'claude', name: 'Claude', reasoningLevels: [] } as never],
-    modelsByHarness: { claude: [] },
+    harnesses: [
+      {
+        id: 'claude-code',
+        name: 'Claude',
+        reasoningLevels: ['low', 'high'],
+      } as never,
+      { id: 'codex', name: 'Codex', reasoningLevels: [] } as never,
+    ],
+    modelsByHarness: {
+      'claude-code': [
+        {
+          id: 'sonnet',
+          label: 'Sonnet',
+          reasoningLevels: ['low', 'high'],
+          options: [
+            {
+              id: 'fastMode',
+              label: 'Fast',
+              choices: [
+                { id: 'on', label: 'On' },
+                { id: 'off', label: 'Off' },
+              ],
+              defaultChoice: 'off',
+            },
+          ],
+        },
+      ],
+      codex: [
+        {
+          id: 'gpt',
+          label: 'GPT',
+          reasoningLevels: [],
+          options: [],
+        },
+      ],
+    },
     loading: false,
     loadedAt: Date.now(),
   };
@@ -324,27 +421,43 @@ test('model picker: search, provider groups, and sandbox are labelled', async ()
         deviceId: 'h1',
         archived: false,
         createdAt: 0,
-        config: { harness: 'claude', modelOptions: {} },
+        config: {
+          harness: 'claude-code',
+          model: 'sonnet',
+          reasoning: 'high',
+          modelOptions: {},
+        },
       }}
       phase="idle"
       onClose={() => {}}
+      lockHarness={false}
     />,
   );
   const labels = labelled(mounted.root);
-  // Every pressable row carries a role + label.
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
   expect(labels.some(l => l.label === 'Close')).toBe(true);
   expect(labels.some(l => l.label === 'Search')).toBe(true);
+  expect(labels.some(l => l.label === 'Sonnet')).toBe(true);
+  expect(labels.some(l => l.label === 'GPT')).toBe(true);
+  expect(labels.some(l => l.label === 'High')).toBe(true);
+  expect(labels.some(l => l.label === 'Fast mode')).toBe(true);
   expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
+  expect(labels.some(l => l.label.includes('Codex'))).toBe(true);
+  expect(mounted.root.findAll(n => n.props.children === 'Active')).toEqual([]);
+  expect(mounted.root.findAll(n => n.props.children === 'More')).toEqual([]);
+  expect(mounted.root.findAll(n => n.props.children === 'Sandbox')).toEqual([]);
   expect(
-    mounted.root.findAll(n => n.props.children === 'Active').length,
-  ).toBeGreaterThan(0);
-  expect(
-    mounted.root.findAll(n => n.props.children === 'More').length,
-  ).toBeGreaterThan(0);
+    mounted.root.findAll(n => n.props.children === 'Auto-approve'),
+  ).toEqual([]);
   expect(
     mounted.root.findAll(n => n.props.children === 'Model').length,
   ).toBeGreaterThan(0);
+  const selected = mounted.root.findAll(
+    n =>
+      n.props.accessibilityLabel === 'Sonnet' &&
+      n.props.accessibilityState?.selected === true,
+  );
+  expect(selected.length).toBeGreaterThan(0);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {
@@ -388,6 +501,56 @@ test('queued pill is a labelled button', async () => {
   expect(labels.some(l => l.role === 'button' && l.label === '2 Queued')).toBe(
     true,
   );
+  expect(mounted.root.findAll(n => n.props.testID === 'pr-pill')).toHaveLength(
+    0,
+  );
+});
+
+test('PR pill is labelled only when a thread PR is supplied', async () => {
+  const pr: PrBadgeModel = {
+    tone: 'open',
+    label: 'viewPr',
+    showCounts: false,
+    additions: 0,
+    deletions: 0,
+    fileCount: 0,
+    title: 'Composer chrome',
+    state: 'open',
+    url: 'https://github.com/acme/app/pull/7',
+    number: 7,
+    baseRef: 'main',
+    headRef: 'feat',
+  };
+  const hidden = await render(
+    <ComposerChromeRow
+      queueCount={0}
+      onOpenQueue={() => {}}
+      pr={undefined}
+      onOpenPr={() => {}}
+    />,
+  );
+  expect(hidden.root.findAll(n => n.props.testID === 'pr-pill')).toHaveLength(
+    0,
+  );
+
+  const shown = await render(
+    <ComposerChromeRow
+      queueCount={0}
+      onOpenQueue={() => {}}
+      pr={pr}
+      onOpenPr={() => {}}
+    />,
+  );
+  const labels = labelled(shown.root);
+  expect(
+    labels.some(l => l.role === 'button' && l.label === 'View pull request'),
+  ).toBe(true);
+  expect(
+    shown.root.findAll(
+      n =>
+        n.props.testID === 'pr-pill' && n.props.accessibilityRole === 'button',
+    ).length,
+  ).toBeGreaterThan(0);
 });
 
 test('queue rows have no fill or card chrome', async () => {

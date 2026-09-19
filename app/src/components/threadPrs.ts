@@ -41,3 +41,17 @@ export const collectThreadPrs = (
   if (checkout == null) return [];
   return [badgeFromSummary(checkout, diff)];
 };
+
+const hasPrIdentity = (badge: PrBadgeModel): boolean =>
+  badge.url !== '' || badge.number > 0;
+
+/** Composer chrome pill: a real, non-closed checkout CR (draft, open, or
+ * merged). Closed-only and placeholder summaries stay hidden. History still
+ * lists closed checkout CRs via `collectThreadPrs`. */
+export const composerPrBadge = (
+  checkout?: ChangeRequestSummary | null,
+  diff?: PrDiffCounts,
+): PrBadgeModel | undefined =>
+  collectThreadPrs(checkout, diff).find(
+    p => p.state !== 'closed' && hasPrIdentity(p),
+  );

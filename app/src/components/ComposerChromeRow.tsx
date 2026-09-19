@@ -59,6 +59,7 @@ export function ComposerChromeRow({
           accessibilityLabel={t(
             pr.label === 'viewPrDraft' ? 'pr.viewDraftA11y' : 'pr.viewA11y',
           )}
+          testID="pr-pill"
           style={styles.pill}
         >
           <View style={styles.pillHit}>

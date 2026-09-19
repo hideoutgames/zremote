@@ -1,5 +1,6 @@
 import {
   collectThreadPrs,
+  composerPrBadge,
   badgeFromSummary,
 } from '../src/components/threadPrs';
 import type { ChangeRequestSummary } from '../src/zeron/protocol/types';
@@ -34,4 +35,18 @@ test('closed checkout change requests still appear in history', () => {
 test('empty thread has no change requests', () => {
   expect(collectThreadPrs()).toEqual([]);
   expect(collectThreadPrs(null)).toEqual([]);
+});
+
+test('composerPrBadge hides closed-only and placeholder CRs', () => {
+  expect(composerPrBadge()).toBeUndefined();
+  expect(composerPrBadge(summary({ state: 'closed' }))).toBeUndefined();
+  expect(
+    composerPrBadge(summary({ number: 0, url: '', state: 'open' })),
+  ).toBeUndefined();
+});
+
+test('composerPrBadge shows draft, open, and merged checkout CRs', () => {
+  expect(composerPrBadge(summary({ draft: true }))?.tone).toBe('draft');
+  expect(composerPrBadge(summary({ state: 'open' }))?.number).toBe(7);
+  expect(composerPrBadge(summary({ state: 'merged' }))?.tone).toBe('merged');
 });

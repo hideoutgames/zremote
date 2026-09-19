@@ -18,7 +18,7 @@ logic:
   cancelOwnCommand; queue enqueue/send-now/steer-now/remove/move.
 - **Registry writes**: createSpace, deleteSpace, createChat, renameChat,
   archive/unarchive, markSeen, deleteChat, setChatConfig.
-- **Composer logic**: send routing, `autoApprove=false` default, sandbox,
+- **Composer logic**: send routing, full-access sandbox + autoApprove,
   picker logic incl. provider-bound sessions, drafts, checkout rules +
   version gate.
 - **Transcript projection**, message context menu, a11y labels/roles.
@@ -49,7 +49,7 @@ Needs a Mac build, a device, or a host in the right state:
 - Composer/attachment UI surfaces, Border Beam, effort-slider haptics,
   shimmer — device rendering.
 - Transcript rendering, theme, reduced-motion/transparency runtime,
-  ContextUsageBar — device rendering.
+  Context usage chip — device rendering.
 - Terminal on-device rendering/input (font metrics are measured constants).
 - Checkout selector UI + `SwitchRef`/`CreateWorktree` round-trip.
 - Files/Changes/History RPC round-trips on a live checkout.
@@ -108,8 +108,8 @@ set superseded by room sync.
 
 - TrueSheet cannot anchor iPad popovers — `Modal formSheet` fallback used.
 - `loro-crdt` npm replaced by a Nitro module over loro-swift 1.13.3.
-- `autoApprove` is a `RunRequest` field (not `ChatConfig`) — per-chat
-  `uiPrefs`, confirm-gated, off by default.
+- Runs always send `sandbox: danger-full-access` and `autoApprove: true`;
+  there is no sandbox/auto-approve picker.
 - Terminal: bespoke ANSI model; LegendList over scrollback+grid.
 - `zeron-split-view` not in package.json deps on purpose.
 - No device screenshots/recordings — no iOS build was possible on this
