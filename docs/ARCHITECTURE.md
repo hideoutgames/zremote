@@ -142,11 +142,16 @@ the thread Details sheet.
 `ZeronApp` waits for `AuthSession.restore()` (SecureStore) before showing
 `SignInScreen`, so a returning user never flashes signed-out. Sign-in uses
 PKCE (`PKCE_ENABLED`) and the HTTPS callback `https://{edge}/auth/cli/callback`
-(AASA + `associatedDomains`). `zeron://` Linking remains a second return
-path. There is no paste-code fallback; cancel/error shows the generic
-message and the user taps Sign in again. Expo Go cannot receive universal
-links — production sign-in is the HTTPS session on a dev/production build
-(demo stays under Advanced).
+(AASA + `associatedDomains`). `openAuthSession` sets `preferUniversalLinks`
+so iOS 17.4+ uses `ASWebAuthenticationSession`'s HTTPS callback API; the
+legacy `callbackURLScheme: "https"` path fails to start and shows the
+generic error immediately. PKCE SHA-256 is `expo-crypto`, injected at
+`beginSignIn`. `zeron://` Linking remains a second return path. There is
+no paste-code fallback; cancel/error shows the generic message and the
+user taps Sign in again. Expo Go cannot receive universal links —
+production sign-in is the HTTPS session on a dev/production build (demo
+stays under Advanced). Edge must serve AASA (`IOS_APP_IDS`) or the sheet
+opens and never returns — that is not the instant-on-tap failure.
 
 ## Workspace tools (Files / Terminal / History)
 

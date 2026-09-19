@@ -13,8 +13,13 @@ export const openAuthSession = async (
   url: string,
   redirectUrl: string,
 ): Promise<AuthBrowserResult> => {
+  // HTTPS callbacks must use the iOS 17.4+ `.https(host:path:)` API.
+  // The default (`preferUniversalLinks: false`) passes scheme "https" into
+  // the legacy callbackURLScheme initializer, which fails to start and
+  // surfaces as an instant Sign-in error with no browser.
   const result = await WebBrowser.openAuthSessionAsync(url, redirectUrl, {
     preferEphemeralSession: false,
+    preferUniversalLinks: true,
   });
   if (result.type === 'success') return { type: 'success', url: result.url };
   return { type: result.type === 'cancel' ? 'cancel' : 'dismiss' };
