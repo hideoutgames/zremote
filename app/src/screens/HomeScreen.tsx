@@ -51,8 +51,7 @@ import {
 } from '../zeron/runtime/workspaceActions';
 import { useRuntime } from '../app/runtimeContext';
 import type { Chat } from '../zeron/protocol/types';
-import { BrandMark } from '../components/BrandMark';
-import { svgForHarness } from '../components/harnessBrand';
+import { HarnessMark } from '../components/HarnessMark';
 import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { ComposeComposer } from '../components/ComposeComposer';
@@ -176,7 +175,6 @@ const ChatRow = React.memo(function ({
     undefined,
   );
   const at = chat.lastMessageAt ?? chat.createdAt;
-  const mark = svgForHarness(chat.config?.harness);
   const line = threadStatusLine(
     indicator,
     prTone === null
@@ -274,7 +272,11 @@ const ChatRow = React.memo(function ({
         >
           <View style={styles.rowText} testID={`thread-body-${chat.id}`}>
             <View style={styles.titleRow}>
-              {mark !== undefined ? <BrandMark svg={mark} size={16} /> : null}
+              <HarnessMark
+                harnessId={chat.config?.harness}
+                size={16}
+                color={theme.text}
+              />
               <Text
                 style={[
                   styles.title,

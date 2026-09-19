@@ -5,6 +5,8 @@ import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
+import { BrandMark } from '../src/components/BrandMark';
+import * as Theme from '../src/theme';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import {
   changeRequestStore,
@@ -422,4 +424,41 @@ test('sidebar New thread hides while search is focused', async () => {
   expect(
     mounted.root.findAll(n => n.props.testID === 'home-new-thread'),
   ).toHaveLength(0);
+});
+
+test('thread harness marks tint with theme text so they stay visible in dark mode', async () => {
+  const themeSpy = jest
+    .spyOn(Theme, 'useTheme')
+    .mockReturnValue(Theme.darkTheme);
+  workspaceStore.setState({
+    chats: [
+      chat({
+        id: 'with-mark',
+        title: 'Codex thread',
+        config: { harness: 'codex', modelOptions: {} },
+      }),
+      chat({ id: 'no-mark', title: 'Bare thread' }),
+    ],
+  });
+  try {
+    const mounted = await render(
+      <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+    );
+    const body = mounted.root.findAll(
+      n =>
+        n.props.testID === 'thread-body-with-mark' &&
+        typeof n.type === 'string',
+    )[0];
+    const marks = body.findAllByType(BrandMark);
+    expect(marks).toHaveLength(1);
+    expect(marks[0].props.svg).toContain(Theme.darkTheme.text);
+    expect(marks[0].props.svg).not.toContain('currentColor');
+    const bare = mounted.root.findAll(
+      n =>
+        n.props.testID === 'thread-body-no-mark' && typeof n.type === 'string',
+    )[0];
+    expect(bare.findAllByType(BrandMark)).toHaveLength(0);
+  } finally {
+    themeSpy.mockRestore();
+  }
 });
