@@ -55,7 +55,6 @@ import {
 } from '../zeron/native/dictation';
 import type { DictationModelState } from '../../modules/zeron-dictation/src/Dictation.nitro';
 import { AppearanceBackground } from '../components/settings/AppearanceBackground';
-import { TopChromeFade } from '../components/TopChromeFade';
 
 const log = createLog();
 
@@ -593,7 +592,6 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
             </>
           )}
         </ScrollView>
-        <TopChromeFade inset={0} />
       </View>
     </View>
   );

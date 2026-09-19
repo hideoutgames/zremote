@@ -141,7 +141,7 @@ test('appearance group offers choose image and hides effects until set', async (
   ).toBe(0);
   expect(
     mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBeGreaterThan(0);
+  ).toBe(0);
 });
 
 test('installed background shows replace/remove and effect chips', async () => {
