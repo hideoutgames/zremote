@@ -98,7 +98,7 @@ Needs a Mac build, a device, or a host in the right state:
 ## Not started (`not-started`)
 
 Queue edit leases · setChatActivity/setChatHost · review comments ·
-change-request badge · session sounds · appearance/theme
+session sounds · appearance/theme
 library · in-app browser pane · widgets/composer/files settings pages ·
 transcript attachment thumbnails · workspace
 `zeron-file:` links · new-thread background effects · Watch\*/queue-admin RPC

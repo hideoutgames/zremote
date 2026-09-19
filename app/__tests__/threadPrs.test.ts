@@ -52,7 +52,9 @@ test('collectThreadPrs prefers the checkout CR then unique transcript URLs', () 
   );
   expect(prs.map(p => p.number)).toEqual([7, 3]);
   expect(prs[0].title).toBe('Composer chrome');
+  expect(prs[0].fileCount).toBe(0);
   expect(prs[1].title).toBe('acme/app#3');
+  expect(prs[1].fileCount).toBe(0);
 });
 
 test('closed checkout PRs still appear in history', () => {

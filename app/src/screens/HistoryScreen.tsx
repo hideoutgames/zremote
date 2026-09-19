@@ -8,16 +8,14 @@ import { useStore } from 'zustand';
 import { useSessionState } from '../zeron/state/sessionStores';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { collectThreadPrs } from '../components/threadPrs';
-import type { PrBadgeModel } from '../components/prBadge';
+import {
+  hasPrStats,
+  prStateLabelKey,
+  type PrBadgeModel,
+} from '../components/prBadge';
+import { prToneColor, prToneFill } from '../components/prChrome';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-
-const stateLabel = (badge: PrBadgeModel): string => {
-  if (badge.state === 'closed') return t('pr.closed');
-  if (badge.tone === 'merged') return t('pr.merged');
-  if (badge.tone === 'draft') return t('pr.draft');
-  return t('pr.open');
-};
 
 export function HistoryScreen({
   chatId,
@@ -50,6 +48,7 @@ export function HistoryScreen({
             const label = t('history.prRow')
               .replace('{number}', String(badge.number))
               .replace('{title}', badge.title);
+            const toneColor = prToneColor(theme, badge);
             return (
               <Pressable
                 key={badge.url !== '' ? badge.url : String(badge.number)}
@@ -59,18 +58,40 @@ export function HistoryScreen({
                 style={[styles.row, { borderBottomColor: theme.border }]}
               >
                 <View style={styles.body}>
+                  <View style={styles.metaRow}>
+                    <View
+                      style={[
+                        styles.pill,
+                        { backgroundColor: prToneFill(theme, badge) },
+                      ]}
+                    >
+                      <Text style={[styles.pillText, { color: toneColor }]}>
+                        {t(prStateLabelKey(badge))}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[styles.number, { color: theme.textSecondary }]}
+                    >
+                      {`#${badge.number}`}
+                    </Text>
+                    {hasPrStats(badge) ? (
+                      <Text style={styles.counts}>
+                        <Text style={{ color: theme.diffAddText }}>
+                          {`+${badge.additions}`}
+                        </Text>
+                        {` `}
+                        <Text style={{ color: theme.diffDelText }}>
+                          {`-${badge.deletions}`}
+                        </Text>
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text
                     style={[styles.title, { color: theme.text }]}
                     numberOfLines={2}
                     maxFontSizeMultiplier={1.6}
                   >
                     {badge.title}
-                  </Text>
-                  <Text
-                    style={[styles.meta, { color: theme.textSecondary }]}
-                    numberOfLines={1}
-                  >
-                    {`${stateLabel(badge)} · #${badge.number}`}
                   </Text>
                 </View>
               </Pressable>
@@ -92,7 +113,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
   },
-  body: { gap: 4 },
+  body: { gap: 6 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  pill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pillText: { fontSize: 12, fontWeight: '600' },
+  number: { fontSize: 13 },
+  counts: { fontSize: 13, fontWeight: '600' },
   title: { fontSize: 16, fontWeight: '600' },
-  meta: { fontSize: 13 },
 });

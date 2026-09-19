@@ -4,16 +4,20 @@
 
 import type {
   ChangeRequestSummary,
-  CheckoutDiff,
   MessageEntry,
 } from '../zeron/protocol/types';
-import { prBadgeModel, type PrBadgeModel } from './prBadge';
+import {
+  fileCountOf,
+  prBadgeModel,
+  type PrBadgeModel,
+  type PrDiffCounts,
+} from './prBadge';
 
 const PR_URL = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/gi;
 
 export const badgeFromSummary = (
   summary: ChangeRequestSummary,
-  diff?: Pick<CheckoutDiff, 'additions' | 'deletions'>,
+  diff?: PrDiffCounts,
 ): PrBadgeModel => {
   const fromPill = prBadgeModel(summary, diff);
   if (fromPill !== undefined) return fromPill;
@@ -24,6 +28,7 @@ export const badgeFromSummary = (
     showCounts: false,
     additions: diff?.additions ?? 0,
     deletions: diff?.deletions ?? 0,
+    fileCount: fileCountOf(diff),
     title: summary.title.replace(/[\r\n]+/g, ' '),
     state: summary.state,
     url: summary.url,
@@ -49,6 +54,7 @@ export const extractPrsFromText = (text: string): PrBadgeModel[] => {
       showCounts: false,
       additions: 0,
       deletions: 0,
+      fileCount: 0,
       title: `${owner}/${repo}#${number}`,
       state: 'open',
       url,
@@ -71,7 +77,7 @@ const textOf = (entry: MessageEntry): string =>
 export const collectThreadPrs = (
   entries: MessageEntry[],
   checkout?: ChangeRequestSummary | null,
-  diff?: Pick<CheckoutDiff, 'additions' | 'deletions'>,
+  diff?: PrDiffCounts,
 ): PrBadgeModel[] => {
   const out: PrBadgeModel[] = [];
   const seen = new Set<string>();
