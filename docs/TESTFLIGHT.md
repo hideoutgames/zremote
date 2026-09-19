@@ -25,9 +25,8 @@ Two workflows under `.github/workflows/`:
   of this workflow, including failures). `extra.gitSha` is baked in at
   prebuild so Settings can show `0.1.0 (N) · abc1234`.
 
-  Stacked Cursor PRs that merge into another feature branch **do not**
-  land on TestFlight. Retarget those PRs at `main` (or merge the stack
-  into `main`) before expecting the IPA to include them.
+  PRs that merge into another feature branch never reach TestFlight —
+  retarget them at `main` (AGENTS.md).
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
