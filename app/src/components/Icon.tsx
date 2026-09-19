@@ -1,5 +1,11 @@
 import React, { type ComponentProps } from 'react';
-import { type ColorValue, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  type ColorValue,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SymbolView } from 'react-native-nitro-symbols';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
 import type { SFSymbol } from 'sf-symbols-typescript';
@@ -102,18 +108,27 @@ export function Icon({
 }: IconProps) {
   const mdiName = (SF_TO_MDI[name] ?? 'help-circle-outline') as MdiName;
   return (
-    <SymbolView
-      symbolName={name}
-      tintColor={color}
-      pointSize={size}
-      style={[{ width: size, height: size }, style]}
-      fallback={
-        <MaterialDesignIcons
-          name={mdiName}
-          size={size}
-          color={color as string}
-        />
-      }
-    />
+    <View
+      collapsable={false}
+      style={[styles.clip, { width: size, height: size }, style]}
+    >
+      <SymbolView
+        symbolName={name}
+        tintColor={color}
+        pointSize={size}
+        style={{ width: size, height: size }}
+        fallback={
+          <MaterialDesignIcons
+            name={mdiName}
+            size={size}
+            color={color as string}
+          />
+        }
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  clip: { overflow: 'hidden' },
+});
