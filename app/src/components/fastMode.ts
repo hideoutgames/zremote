@@ -5,10 +5,11 @@ import type { Model, ModelOption } from '../zeron/protocol/types';
 
 export const FAST_OPTION_IDS = ['fast', 'fastMode', 'fast-mode'] as const;
 
-const isOn = (choice: string | undefined): boolean => {
-  if (choice === undefined) return false;
-  const v = choice.toLowerCase();
-  return v === 'on' || v === 'true' || v === '1' || v === 'yes';
+const OFF_CHOICES = new Set(['off', 'false', '0', 'no']);
+
+export const isFastOffChoice = (choice: string | undefined): boolean => {
+  if (choice === undefined) return true;
+  return OFF_CHOICES.has(choice.toLowerCase());
 };
 
 export const findFastOption = (
@@ -27,15 +28,15 @@ export const isFastEnabled = (
   if (option === undefined) return false;
   const raw = modelOptions?.[option.id];
   const choice = typeof raw === 'string' ? raw : option.defaultChoice;
-  return isOn(choice);
+  return !isFastOffChoice(choice);
 };
 
 export const fastOnChoice = (option: ModelOption): string => {
-  const on = option.choices.find(c => isOn(c.id));
+  const on = option.choices.find(c => !isFastOffChoice(c.id));
   return on?.id ?? option.choices[0]?.id ?? 'on';
 };
 
 export const fastOffChoice = (option: ModelOption): string => {
-  const off = option.choices.find(c => !isOn(c.id));
+  const off = option.choices.find(c => isFastOffChoice(c.id));
   return off?.id ?? option.defaultChoice;
 };

@@ -3,7 +3,7 @@
 // Message-row shape follows Agents Kit beui/message + prompt-kit/message
 // (both MIT) — a plain bubble; no avatar chrome on this client.
 
-import React, { useState } from 'react';
+import React, { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ContextMenu from '../menus/context-menu';
 import Animated, {
@@ -30,14 +30,31 @@ const textOf = (entry: MessageEntry): string =>
     .map(p => p.text)
     .join('\n');
 
-export const UserMessage = React.memo(function ({
+function EnteringStack({ children }: { children: ReactNode }) {
+  'use no memo';
+  const reduceMotion = useReducedMotion();
+  return (
+    <Animated.View
+      style={styles.stack}
+      entering={
+        reduceMotion
+          ? undefined
+          : SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
+      }
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+export const UserMessage = React.memo(function UserMessageInner({
   entry,
 }: {
   entry: MessageEntry;
   chatId?: string;
 }) {
+  'use no memo';
   const theme = useTheme();
-  const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
   const { plan, text: visible } = stripPlanPrefix(text);
@@ -50,14 +67,7 @@ export const UserMessage = React.memo(function ({
     <View style={styles.row}>
       <ContextMenu.Root>
         <ContextMenu.Trigger>
-          <Animated.View
-            style={styles.stack}
-            entering={
-              reduceMotion
-                ? undefined
-                : SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
-            }
-          >
+          <EnteringStack>
             {images.length > 0 ? (
               <View style={styles.attachmentRow}>
                 {images.map(p =>
@@ -123,7 +133,7 @@ export const UserMessage = React.memo(function ({
                 ) : null}
               </View>
             ) : null}
-          </Animated.View>
+          </EnteringStack>
         </ContextMenu.Trigger>
         {messageCopyContent(visible)}
       </ContextMenu.Root>

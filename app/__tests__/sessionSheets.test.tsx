@@ -21,6 +21,9 @@ import {
 } from '../src/zeron/state/changeRequestStore';
 import type { Chat, DeviceRow } from '../src/zeron/protocol/types';
 import type { PrBadgeModel } from '../src/components/prBadge';
+import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
+import { entryFrom } from '../src/zeron/doc/sessionDoc';
+import { CHAT_WORKING, demoTranscripts } from '../src/demo/fixtures';
 
 const services: AppServices = {
   auth: null as never,
@@ -173,6 +176,58 @@ test('session overflow has History/Files/Terminal and not Changes/Previews', asy
   expect(labels).not.toContain('Changes');
   expect(labels).not.toContain('Previews');
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);
+});
+
+test('populated demo transcript does not abort into the error boundary', async () => {
+  const raw = demoTranscripts(1_800_000_000_000)[CHAT_WORKING] ?? [];
+  const entries = raw
+    .map(entryFrom)
+    .filter((e): e is NonNullable<typeof e> => e !== undefined);
+  act(() => {
+    workspaceStore.setState(s => ({
+      ...s,
+      chats: [{ ...chat, id: CHAT_WORKING, title: 'Ship demo mode' }],
+    }));
+    getSessionStore(CHAT_WORKING).setState({
+      entries,
+      commands: [],
+      queue: [],
+      meta: {},
+      pendingSends: [],
+      failedSends: [],
+      unsyncedCommandIds: [],
+      room: 'caughtUp',
+      queueActionsPending: new Set(),
+    });
+    // Demo checkouts stream a draft PR. usePrBadge must not rebuild a new
+    // snapshot object each render (that loops and trips the error boundary).
+    setChangeRequestForChat(CHAT_WORKING, {
+      checkoutId: 'demo-checkout',
+      deviceId: 'h1',
+      cwd: '/repo',
+      branch: 'main',
+      changeRequest: {
+        provider: 'github',
+        number: 42,
+        title: 'Composer chrome overhaul',
+        url: 'https://github.com/example/zremote/pull/42',
+        state: 'open',
+        draft: true,
+        baseRef: 'main',
+        headRef: 'feature/composer',
+      },
+      updatedAt: '2026-09-19T10:00:00Z',
+    });
+  });
+  const tree = await render(
+    <AppErrorBoundary resetKey={CHAT_WORKING}>
+      <SessionScreen chatId={CHAT_WORKING} onBack={() => {}} />
+    </AppErrorBoundary>,
+  );
+  expect(
+    tree.root.findAll(n => n.props.testID === 'app-error-fallback'),
+  ).toHaveLength(0);
+  expect(texts(tree.root).join(' ')).toContain('demo mode');
 });
 
 test('history empty copy is short', async () => {

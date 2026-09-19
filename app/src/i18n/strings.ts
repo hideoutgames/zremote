@@ -372,6 +372,7 @@ const en = {
   'pr.emptyCommits': 'No commits on this checkout yet.',
 
   'common.cancel': 'Cancel',
+  'common.close': 'Close',
   'common.enable': 'Enable',
   'common.done': 'Done',
   'common.on': 'On',

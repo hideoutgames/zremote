@@ -40,7 +40,7 @@ test('effort dest rect centers on the window, or on an iPad composer anchor', ()
   const windowed = effortDestRect(1024, 768);
   expect(windowed.x + windowed.width / 2).toBe(512);
   expect(windowed.y + windowed.height / 2).toBe(384);
-  expect(windowed.height).toBe(effortSliderTrackHeight + 16);
+  expect(windowed.height).toBe(effortSliderTrackHeight);
 
   const anchored = effortDestRect(1024, 768, {
     x: 340,

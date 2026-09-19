@@ -1,6 +1,6 @@
-// Centered effort overlay: short edge-to-edge fade + Liquid Glass pill.
-// Mounted in a transparent Modal (not KeyboardStickyView). Opens by
-// morphing a glass pill from the composer chip's window rect to the
+// Centered effort overlay: pane-scoped fade behind the level label +
+// Liquid Glass pill. Mounted in a transparent Modal (not KeyboardStickyView).
+// Opens by morphing a glass pill from the composer chip's window rect to the
 // composer (or window) center via RN Animated (no Reanimated worklets).
 // Fast mode lives on the composer chip, not here.
 
@@ -34,7 +34,7 @@ export interface EffortOrigin {
 const MORPH_MS = 280;
 const PILL_MAX_WIDTH = 360;
 const PILL_H_INSET = 28;
-const BAND_HEIGHT = 160;
+const LABEL_OFFSET = 36;
 
 export const effortDestRect = (
   windowWidth: number,
@@ -51,7 +51,7 @@ export const effortDestRect = (
     PILL_MAX_WIDTH,
     Math.max(bounds.width - PILL_H_INSET * 2, 0),
   );
-  const height = effortSliderTrackHeight + 16;
+  const height = effortSliderTrackHeight;
   return {
     x: bounds.x + (bounds.width - width) / 2,
     y: bounds.y + (bounds.height - height) / 2,
@@ -247,14 +247,15 @@ export function EffortOverlay({
             {
               left: dest.x,
               width: dest.width,
-              top: dest.y + dest.height / 2 - BAND_HEIGHT / 2,
+              top: dest.y - LABEL_OFFSET - 24,
+              height: dest.height + LABEL_OFFSET + 48,
               opacity: washOpacity,
             },
           ]}
         >
           <FadeBlur
             fade="vertical"
-            intensity={28}
+            intensity={40}
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
@@ -262,11 +263,14 @@ export function EffortOverlay({
           pointerEvents="none"
           style={[
             styles.label,
+            theme.scheme === 'dark'
+              ? styles.labelShadowDark
+              : styles.labelShadowLight,
             {
               color: theme.text,
               left: dest.x,
               width: dest.width,
-              top: dest.y - 36,
+              top: dest.y - LABEL_OFFSET,
               opacity: contentOpacity,
             },
           ]}
@@ -306,7 +310,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   band: {
     position: 'absolute',
-    height: BAND_HEIGHT,
   },
   label: {
     position: 'absolute',
@@ -314,15 +317,26 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
   },
+  labelShadowDark: {
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  labelShadowLight: {
+    textShadowColor: 'rgba(255,255,255,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
   pillWrap: {
     position: 'absolute',
   },
   pill: {
     flex: 1,
-    borderRadius: 32,
+    borderRadius: effortSliderTrackHeight / 2,
     paddingHorizontal: 10,
+    justifyContent: 'center',
     overflow: 'hidden',
   },
-  sliderFade: { flex: 1 },
+  sliderFade: { justifyContent: 'center' },
   unsupported: { padding: 20, fontSize: 13, textAlign: 'center' },
 });

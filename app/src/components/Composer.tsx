@@ -24,7 +24,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia';
+import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { KeyboardController } from 'react-native-keyboard-controller';
@@ -74,7 +75,7 @@ import {
   useComposerExtraHeight,
   setComposerExtraHeight,
 } from '../zeron/state/uiPrefs';
-import type { HarnessDescriptor } from '../zeron/protocol/types';
+import type { HarnessDescriptor, ModelOption } from '../zeron/protocol/types';
 import { composerAction, harnessSteers, liveAction } from './composerAction';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
@@ -92,28 +93,27 @@ const THUMBS_ANIM_MS = 220;
 const CHIP_FADE = 28;
 const SEND_TARGET = 44;
 const TRAILING_GAP = 4;
-const TRAILING_RESERVE =
-  VOICE_PILL_SIZE + TRAILING_GAP + SEND_TARGET + CHIP_FADE;
+const TRAILING_CLUSTER = VOICE_PILL_SIZE + TRAILING_GAP + SEND_TARGET;
 
-function ChipFade({
-  width,
-  height,
-  color,
-}: {
-  width: number;
-  height: number;
-  color: string;
-}) {
+function ChipRowMask({ children }: { children: React.ReactNode }) {
   return (
-    <Canvas style={{ width, height }} pointerEvents="none">
-      <Rect x={0} y={0} width={width} height={height}>
-        <LinearGradient
-          start={vec(0, 0)}
-          end={vec(width, 0)}
-          colors={['transparent', color]}
-        />
-      </Rect>
-    </Canvas>
+    <MaskedView
+      style={styles.actionChipsScroll}
+      maskElement={
+        <View style={styles.chipMask}>
+          <View style={styles.chipMaskOpaque} />
+          <LinearGradient
+            colors={['black', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.chipMaskFade}
+          />
+          <View style={styles.chipMaskClear} />
+        </View>
+      }
+    >
+      {children}
+    </MaskedView>
   );
 }
 
@@ -137,9 +137,11 @@ export interface ComposerProps {
   effortSupported: boolean;
   fastSupported: boolean;
   fastEnabled: boolean;
+  fastOption?: ModelOption;
+  fastChoice?: string;
   effortOpen?: boolean;
   onOpenEffort: (origin?: EffortOrigin) => void;
-  onToggleFast: (on: boolean) => void;
+  onSelectFast: (choiceId: string) => void;
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
   dictation: DictationPort;
@@ -179,9 +181,11 @@ export const Composer = React.memo(function ({
   effortSupported,
   fastSupported,
   fastEnabled,
+  fastOption,
+  fastChoice,
   effortOpen = false,
   onOpenEffort,
-  onToggleFast,
+  onSelectFast,
   onFocusChange,
   checkout,
   dictation,
@@ -196,6 +200,7 @@ export const Composer = React.memo(function ({
   composerRef,
   onLayout,
 }: ComposerProps) {
+  'use no memo';
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -591,62 +596,53 @@ export const Composer = React.memo(function ({
               ) : null}
 
               <View style={styles.chipsWrap}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={[
-                    styles.actionChips,
-                    { paddingRight: TRAILING_RESERVE },
-                  ]}
-                  style={styles.actionChipsScroll}
-                >
-                  {planMode ? (
-                    <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
-                  ) : null}
-                  <ModelMenuButton
-                    harnessId={harnessId}
-                    modelLabel={modelLabel}
-                    items={recentItems}
-                    onPick={onPickRecentModel}
-                    onMore={onOpenMoreModels}
-                  />
-                  {effortSupported ? (
-                    <Pressable
-                      ref={effortChipRef}
-                      style={effortOpen ? styles.effortChipHidden : undefined}
-                      onPress={openEffort}
-                      hitSlop={4}
-                      accessibilityRole="button"
-                      accessibilityLabel={effortLabel}
-                    >
-                      <ComposerMenuChip
-                        label={effortLabel}
-                        color={theme.text}
-                        chevronColor={theme.textSecondary}
-                      />
-                    </Pressable>
-                  ) : null}
-                  {fastSupported ? (
-                    <FastMenuButton
-                      enabled={fastEnabled}
-                      onToggle={onToggleFast}
+                <ChipRowMask>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={[
+                      styles.actionChips,
+                      { paddingRight: TRAILING_CLUSTER },
+                    ]}
+                    style={styles.actionChipsScroll}
+                  >
+                    {planMode ? (
+                      <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
+                    ) : null}
+                    <ModelMenuButton
+                      harnessId={harnessId}
+                      modelLabel={modelLabel}
+                      items={recentItems}
+                      onPick={onPickRecentModel}
+                      onMore={onOpenMoreModels}
                     />
-                  ) : null}
-                </ScrollView>
+                    {effortSupported ? (
+                      <Pressable
+                        ref={effortChipRef}
+                        style={effortOpen ? styles.effortChipHidden : undefined}
+                        onPress={openEffort}
+                        hitSlop={4}
+                        accessibilityRole="button"
+                        accessibilityLabel={effortLabel}
+                      >
+                        <ComposerMenuChip
+                          label={effortLabel}
+                          color={theme.text}
+                          chevronColor={theme.textSecondary}
+                        />
+                      </Pressable>
+                    ) : null}
+                    {fastSupported ? (
+                      <FastMenuButton
+                        enabled={fastEnabled}
+                        option={fastOption}
+                        value={fastChoice}
+                        onSelect={onSelectFast}
+                      />
+                    ) : null}
+                  </ScrollView>
+                </ChipRowMask>
                 <View style={styles.trailingOverlay} pointerEvents="box-none">
-                  <ChipFade
-                    width={CHIP_FADE}
-                    height={44}
-                    color={
-                      theme.scheme === 'dark'
-                        ? regular
-                          ? 'rgba(28,28,30,0.2)'
-                          : 'rgba(28,28,30,0.88)'
-                        : regular
-                        ? 'rgba(255,255,255,0.2)'
-                        : 'rgba(255,255,255,0.88)'
-                    }
-                  />
                   <View style={styles.trailingCluster}>
                     <VoicePill
                       active={dictating}
@@ -867,6 +863,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     justifyContent: 'center',
   },
+  chipMask: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  chipMaskOpaque: { flex: 1, backgroundColor: 'black' },
+  chipMaskFade: { width: CHIP_FADE, height: '100%' },
+  chipMaskClear: { width: TRAILING_CLUSTER },
   trailingOverlay: {
     position: 'absolute',
     right: 0,
