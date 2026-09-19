@@ -4,6 +4,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { openAuthSession } from '../zeron/native/authBrowser';
@@ -26,6 +27,7 @@ const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 export function SignInScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const auth = useAuthSession();
   const edgeUrl = appConfig().edgeUrl;
   const [busy, setBusy] = useState(false);
@@ -73,7 +75,15 @@ export function SignInScreen() {
   }, [auth, edgeUrl]);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: theme.background,
+          paddingTop: insets.top + 24,
+        },
+      ]}
+    >
       <Text style={[styles.title, { color: theme.text }]}>
         {t('signIn.title')}
       </Text>

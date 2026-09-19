@@ -1,5 +1,5 @@
 // AdaptiveShell in-flow sidebar: the uiPrefs toggle flips the persisted
-// pref and the glass panel's accessibilityState.expanded (regular width).
+// pref and the column's accessibilityState.expanded (regular width).
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';

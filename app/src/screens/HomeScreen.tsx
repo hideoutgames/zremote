@@ -12,15 +12,12 @@ import React, {
 } from 'react';
 import {
   Alert,
-  LayoutAnimation,
   Pressable,
   RefreshControl,
-  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
   View,
-  type ViewStyle,
 } from 'react-native';
 import {
   LegendList,
@@ -335,26 +332,13 @@ export function HomeScreen({
   onOpenSettings: () => void;
   /** iPad sidebar: enter compose in the detail column. */
   onCompose?: (opts?: { spaceId?: string }) => void;
-  /** 'sidebar' renders inside the glass panel — its own New/Settings
-   * controls switch from glass to subtle fills (no extra glass-on-glass). */
+  /** 'sidebar' keeps New thread in this column; compose lives in detail. */
   variant?: 'screen' | 'sidebar';
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  // Inside the glass sidebar the safe area is handled by the panel.
-  const barInset = variant === 'sidebar' ? 0 : undefined;
-  const control = (style: StyleProp<ViewStyle>, children: React.ReactNode) =>
-    variant === 'sidebar' ? (
-      <View style={[style, { backgroundColor: theme.inputBackground }]}>
-        {children}
-      </View>
-    ) : (
-      <Glass interactive style={style}>
-        {children}
-      </Glass>
-    );
   const [query, setQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<TextInput>(null);
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -364,20 +348,12 @@ export function HomeScreen({
   const [composerH, setComposerH] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
+  const searching = searchFocused || query.trim() !== '';
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    if (searchOpen) searchRef.current?.focus();
-  }, [searchOpen]);
-
-  const animateSearch = (open: boolean) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setSearchOpen(open);
-  };
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -517,20 +493,27 @@ export function HomeScreen({
   );
   const trailing = (
     <>
-      {control(styles.circle, folderMenu)}
-      {control(styles.circle, settingsBtn)}
+      <Glass interactive style={styles.circle}>
+        {folderMenu}
+      </Glass>
+      <Glass interactive style={styles.circle}>
+        {settingsBtn}
+      </Glass>
     </>
   );
 
+  const bottomPad = searching
+    ? insets.bottom + 12
+    : variant === 'sidebar'
+    ? bottomH !== 0
+      ? bottomH + 12
+      : insets.bottom + 76
+    : composerH !== 0
+    ? composerH + 12
+    : insets.bottom + 140;
+
   return (
-    <View
-      style={[
-        styles.container,
-        variant === 'sidebar'
-          ? undefined
-          : { backgroundColor: theme.background },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <LegendList
         data={rest}
         keyExtractor={item => item.id}
@@ -595,19 +578,12 @@ export function HomeScreen({
           styles.listContent,
           {
             paddingTop: headerH !== 0 ? headerH : insets.top + 64,
-            paddingBottom:
-              variant === 'sidebar'
-                ? bottomH !== 0
-                  ? bottomH + 12
-                  : insets.bottom + 76
-                : composerH !== 0
-                ? composerH + 12
-                : insets.bottom + 140,
+            paddingBottom: bottomPad,
           },
         ]}
         scrollIndicatorInsets={{
           top: headerH,
-          bottom: variant === 'sidebar' ? bottomH : composerH,
+          bottom: searching ? 0 : variant === 'sidebar' ? bottomH : composerH,
         }}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
@@ -615,7 +591,7 @@ export function HomeScreen({
       />
 
       <View
-        style={[styles.topBar, { paddingTop: (barInset ?? insets.top) + 8 }]}
+        style={[styles.topBar, { paddingTop: insets.top + 8 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
@@ -625,51 +601,31 @@ export function HomeScreen({
             variant === 'sidebar' ? styles.topRowSidebar : undefined,
           ]}
         >
-          {searchOpen || query !== ''
-            ? control(
-                styles.search,
-                <>
-                  <Icon
-                    name="magnifyingglass"
-                    size={18}
-                    color={theme.textSecondary}
-                  />
-                  <TextInput
-                    ref={searchRef}
-                    style={[styles.searchInput, { color: theme.text }]}
-                    placeholder={t('home.search')}
-                    placeholderTextColor={theme.textSecondary}
-                    value={query}
-                    onChangeText={setQuery}
-                    autoCapitalize="none"
-                    autoFocus
-                    testID="home-search-input"
-                    accessibilityLabel={t('home.search')}
-                    onBlur={() => {
-                      if (query.trim() === '') animateSearch(false);
-                    }}
-                  />
-                </>,
-              )
-            : control(
-                styles.circle,
-                <Pressable
-                  onPress={() => animateSearch(true)}
-                  style={styles.fill}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.search')}
-                  testID="home-search"
-                >
-                  <Icon name="magnifyingglass" size={18} color={theme.text} />
-                </Pressable>,
-              )}
-          {variant === 'sidebar' ? (
-            <View style={styles.trailingCluster}>{trailing}</View>
-          ) : (
-            <GlassContainer spacing={8} style={styles.trailingCluster}>
-              {trailing}
-            </GlassContainer>
-          )}
+          <Glass interactive style={styles.search}>
+            <Icon
+              name="magnifyingglass"
+              size={18}
+              color={theme.textSecondary}
+            />
+            <TextInput
+              ref={searchRef}
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder={t('home.search')}
+              placeholderTextColor={theme.textSecondary}
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              testID="home-search-input"
+              accessibilityLabel={t('home.search')}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
+          </Glass>
+          <GlassContainer spacing={8} style={styles.trailingCluster}>
+            {trailing}
+          </GlassContainer>
         </View>
 
         {connection !== 'connected' ? (
@@ -685,12 +641,9 @@ export function HomeScreen({
         ) : null}
       </View>
 
-      {variant === 'sidebar' ? (
+      {searching ? null : variant === 'sidebar' ? (
         <View
-          style={[
-            styles.bottomBar,
-            { paddingBottom: (barInset ?? insets.bottom) + 8 },
-          ]}
+          style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
           onLayout={e => setBottomH(e.nativeEvent.layout.height)}
           pointerEvents="box-none"
         >
@@ -702,15 +655,12 @@ export function HomeScreen({
             accessibilityRole="button"
             accessibilityLabel={t('home.newThread')}
           >
-            {control(
-              styles.newChat,
-              <>
-                <Icon name="plus" size={16} color={theme.text} />
-                <Text style={[styles.newChatText, { color: theme.text }]}>
-                  {t('home.newThread')}
-                </Text>
-              </>,
-            )}
+            <Glass interactive style={styles.newChat}>
+              <Icon name="plus" size={16} color={theme.text} />
+              <Text style={[styles.newChatText, { color: theme.text }]}>
+                {t('home.newThread')}
+              </Text>
+            </Glass>
           </Pressable>
         </View>
       ) : (

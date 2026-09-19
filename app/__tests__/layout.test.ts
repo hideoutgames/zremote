@@ -2,6 +2,10 @@ import {
   layoutFor,
   REGULAR_MIN_WIDTH,
   INSPECTOR_AUTO_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  COMPOSER_MAX_WIDTH,
+  COMPOSER_H_GUTTER,
 } from '../src/navigation/layout';
 
 const prefs = { sidebarCollapsed: false, inspectorOpen: false };
@@ -18,8 +22,8 @@ test('regular width shows sidebar + detail, no inspector below 1100', () => {
   expect(l.mode).toBe('regular');
   expect(l.sidebarVisible).toBe(true);
   expect(l.inspectorVisible).toBe(false);
-  expect(l.sidebarWidth).toBeGreaterThanOrEqual(300);
-  expect(l.sidebarWidth).toBeLessThanOrEqual(360);
+  expect(l.sidebarWidth).toBeGreaterThanOrEqual(SIDEBAR_MIN_WIDTH);
+  expect(l.sidebarWidth).toBeLessThanOrEqual(SIDEBAR_MAX_WIDTH);
 });
 
 test('sidebar collapse persists through prefs', () => {
@@ -38,10 +42,21 @@ test('inspector column is never shown — tools launch from the overflow menu', 
   expect(l.inspectorWidth).toBeLessThanOrEqual(480);
 });
 
-test('measure cap is ~720; iPad composer caps at half the window', () => {
-  expect(layoutFor(REGULAR_MIN_WIDTH, prefs).measureCap).toBe(720);
-  expect(layoutFor(REGULAR_MIN_WIDTH, prefs).composerMaxWidth).toBe(
-    Math.round(REGULAR_MIN_WIDTH * 0.5),
+test('measure cap is ~720; iPad composer caps inside the detail column', () => {
+  const regular = layoutFor(REGULAR_MIN_WIDTH, prefs);
+  expect(regular.measureCap).toBe(720);
+  expect(regular.composerMaxWidth).toBe(
+    Math.min(
+      COMPOSER_MAX_WIDTH,
+      Math.max(
+        0,
+        REGULAR_MIN_WIDTH - regular.sidebarWidth - COMPOSER_H_GUTTER * 2,
+      ),
+    ),
+  );
+  const collapsed = layoutFor(820, { ...prefs, sidebarCollapsed: true });
+  expect(collapsed.composerMaxWidth).toBe(
+    Math.min(COMPOSER_MAX_WIDTH, 820 - COMPOSER_H_GUTTER * 2),
   );
   expect(layoutFor(390, prefs).composerMaxWidth).toBeUndefined();
 });
