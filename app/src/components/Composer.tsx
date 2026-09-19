@@ -27,7 +27,6 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useReducedMotion,
-  Easing,
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
@@ -368,15 +367,12 @@ export const Composer = React.memo(function ({
   const [stripContentHeight, setStripContentHeight] = useState(0);
   // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
   const reduceMotion = useReducedMotion();
+  const stripH = hasAttachments ? stripContentHeight : 0;
+  const stripO = hasAttachments ? 1 : 0;
+  const stripDur = reduceMotion ? 0 : THUMBS_ANIM_MS;
   const stripStyle = useAnimatedStyle(() => ({
-    height: withTiming(hasAttachments ? stripContentHeight : 0, {
-      duration: reduceMotion ? 0 : THUMBS_ANIM_MS,
-      easing: Easing.inOut(Easing.ease),
-    }),
-    opacity: withTiming(hasAttachments ? 1 : 0, {
-      duration: reduceMotion ? 0 : THUMBS_ANIM_MS,
-      easing: Easing.inOut(Easing.ease),
-    }),
+    height: withTiming(stripH, { duration: stripDur }),
+    opacity: withTiming(stripO, { duration: stripDur }),
   }));
 
   const right = action.right;

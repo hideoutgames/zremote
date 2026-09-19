@@ -23,7 +23,6 @@ import {
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withTiming,
@@ -93,16 +92,11 @@ export function AdaptiveShell({
         });
   }, [layout.sidebarVisible, reduceMotion, collapse]);
 
+  const sidebarWidth = layout.sidebarWidth;
   const sidebarAnim = useAnimatedStyle(() => ({
-    transform: [{ translateX: collapse.value * -(layout.sidebarWidth + 12) }],
+    transform: [{ translateX: collapse.value * -(sidebarWidth + 12) }],
     opacity: 1 - collapse.value,
   }));
-
-  /** Detail leading inset: header/composer pad out from under the floating
-   * sidebar; the transcript itself stays edge-to-edge underneath it. */
-  const leadingInset = useDerivedValue(
-    () => (1 - collapse.value) * (layout.sidebarWidth + 24),
-  );
 
   if (layout.mode === 'compact') {
     return (
@@ -124,7 +118,6 @@ export function AdaptiveShell({
             onBack={toggleSidebar}
             leadingIcon="sidebar.left"
             contentMaxWidth={layout.measureCap}
-            leadingInsetSV={leadingInset}
           />
         ) : (
           <View style={styles.emptyDetail}>
