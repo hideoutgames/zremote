@@ -6,11 +6,11 @@ Two workflows under `.github/workflows/`:
   `main` touching `app/**` or the iOS workflows. Unsigned Release build
   (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
   `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
-- **`ios-testflight.yml` — iOS TestFlight.** Runs on **push to `main`**
-  when `app/**`, this workflow, or `patches/zeron-edge/**` change, and on
-  manual `workflow_dispatch` (optional `notes`). Signed archive + upload to
-  App Store Connect via the App Store Connect API key and the team's **one
-  cloud-managed Apple Distribution certificate**. Expo prebuild's
+- **`ios-testflight.yml` — iOS TestFlight.** Manual `workflow_dispatch`
+  only (optional `notes`). Merges to `main` do **not** start it. Signed
+  archive + upload to App Store Connect via the App Store Connect API key
+  and the team's **one cloud-managed Apple Distribution certificate**.
+  Expo prebuild's
   Automatic / Apple Development identity is **stripped** on the app and
   widget targets (and the project-level `iPhone Developer` setting) so
   Xcode 26 Automatic cloud signing can pick Distribution for a generic
@@ -19,14 +19,13 @@ Two workflows under `.github/workflows/`:
   style needs a local cert the runner does not have. No certificates,
   profiles, or key material are committed.
 
-  The archive is always the **checked-out git SHA** of the triggering
-  event (`github.sha` on push, the branch selected in the Actions UI on
-  dispatch). `CFBundleVersion` is `github.run_number` (counts every run
-  of this workflow, including failures). `extra.gitSha` is baked in at
-  prebuild so Settings can show `0.1.0 (N) · abc1234`.
-
-  PRs that merge into another feature branch never reach TestFlight —
-  retarget them at `main` (AGENTS.md).
+  The archive is always the **checked-out git SHA** of the branch
+  selected in the Actions UI (`github.sha`). `CFBundleVersion` is
+  `github.run_number` (counts every run of this workflow, including
+  failures). `extra.gitSha` is baked in at prebuild so Settings can show
+  `0.1.0 (N) · abc1234`. Dispatch `main` after the work has merged
+  (AGENTS.md) — stacked PRs that land on another feature branch never
+  ship.
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
@@ -114,8 +113,7 @@ gated. The job's first step fails with a clear list of missing secret
 ## 4. Run
 
 - Actions → **iOS TestFlight** → Run workflow (picks a branch; default
-  `main`).
-- Or merge to `main` — a push that touches `app/**` starts the job.
+  `main`). Merges to `main` do not start an archive.
 
 `IOS_BUILD_NUMBER` is the workflow run number; `GITHUB_SHA` is written
 into `expo.extra.gitSha` at prebuild. `aps-environment` stays
