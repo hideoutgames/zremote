@@ -248,6 +248,15 @@ test('unseen chat renders medium weight (higher than regular titles)', async () 
   ).toBe(false);
 });
 
+const statusNode = (
+  root: TestRenderer.ReactTestInstance,
+  id: string,
+): TestRenderer.ReactTestInstance =>
+  root.findAll(n => n.props.testID === `thread-status-${id}`)[0];
+
+const prMarksOf = (root: TestRenderer.ReactTestInstance, id: string) =>
+  statusNode(root, id).findAllByType(BrandMark);
+
 test('PR status follows checkout change-request state', async () => {
   workspaceStore.setState({
     chats: [
@@ -299,8 +308,17 @@ test('PR status follows checkout change-request state', async () => {
   );
   expect(statusOf(mounted.root, 'open')).toBe('Open');
   expect(statusOf(mounted.root, 'draft')).toBe('Draft');
-  expect(statusOf(mounted.root, 'merged')).toBe('Merged · +12 \u22123');
+  expect(statusOf(mounted.root, 'merged')).toBe('Merged · +12 -3');
   expect(statusOf(mounted.root, 'none')).toBe('1m');
+  expect(prMarksOf(mounted.root, 'open')).toHaveLength(1);
+  expect(prMarksOf(mounted.root, 'draft')).toHaveLength(1);
+  expect(prMarksOf(mounted.root, 'merged')).toHaveLength(1);
+  expect(prMarksOf(mounted.root, 'none')).toHaveLength(0);
+  const mergedSvg = prMarksOf(mounted.root, 'merged')[0].props.svg as string;
+  expect(
+    mergedSvg.includes(Theme.darkTheme.prMerged) ||
+      mergedSvg.includes(Theme.lightTheme.prMerged),
+  ).toBe(true);
 });
 
 test('working threads show Working; idle threads stay full color', async () => {
@@ -323,10 +341,27 @@ test('working threads show Working; idle threads stay full color', async () => {
       },
     },
   });
+  setChangeRequestForChat('live', {
+    checkoutId: 'live',
+    deviceId: 'host1',
+    cwd: '/repo',
+    branch: 'main',
+    changeRequest: {
+      provider: 'github',
+      number: 9,
+      title: 'Live PR',
+      url: 'https://example.com/9',
+      state: 'open',
+      baseRef: 'main',
+      headRef: 'feat',
+    },
+    updatedAt: 'now',
+  });
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   expect(statusOf(mounted.root, 'live')).toBe('Working');
+  expect(prMarksOf(mounted.root, 'live')).toHaveLength(0);
   expect(
     mounted.root.findAll(n => n.props.testID === 'thread-elapsed-live')[0]
       ?.props.children,
