@@ -89,7 +89,9 @@ export const SessionTranscriptList = forwardRef<
     scrolledForKeyRef.current = openKey;
     hasOverflowedRef.current = true;
     setFollowing(true);
-    void scrollMessageToEnd({ animated: false, closeKeyboard: false });
+    scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
+      () => {},
+    );
   }, [openKey, entries.length, scrollMessageToEnd]);
 
   const onComposerLayout = useCallback(
