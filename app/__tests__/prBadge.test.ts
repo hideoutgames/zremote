@@ -1,4 +1,4 @@
-import { prBadgeModel } from '../src/components/prBadge';
+import { prBadgeModel, threadPrDot } from '../src/components/prBadge';
 import type { ChangeRequestSummary } from '../src/zeron/protocol/types';
 
 const summary = (
@@ -40,4 +40,14 @@ test('draft shows working-tree counts', () => {
   expect(draft?.showCounts).toBe(true);
   expect(draft?.additions).toBe(135);
   expect(draft?.deletions).toBe(56);
+});
+
+test('threadPrDot maps checkout CR to list dots', () => {
+  expect(threadPrDot(undefined)).toBeNull();
+  expect(threadPrDot(null)).toBeNull();
+  expect(threadPrDot(summary({ state: 'closed' }))).toBeNull();
+  expect(threadPrDot(summary({ state: 'open' }))).toBe('open');
+  expect(threadPrDot(summary({ state: 'open', draft: true }))).toBe('draft');
+  expect(threadPrDot(summary({ state: 'merged' }))).toBe('merged');
+  expect(threadPrDot(summary({ state: 'merged', draft: true }))).toBe('merged');
 });

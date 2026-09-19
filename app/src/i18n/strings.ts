@@ -28,7 +28,7 @@ const en = {
   // Home
   'home.search': 'Search sessions',
   'home.allSpaces': 'All spaces',
-  'home.sessions': 'Sessions',
+  'home.sessions': 'Threads',
   'home.archived': 'Archived',
   'home.showMore': 'Show more',
   'home.newSession': 'New session',
