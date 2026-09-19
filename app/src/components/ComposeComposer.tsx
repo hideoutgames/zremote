@@ -25,12 +25,7 @@ import { Composer } from './Composer';
 import { DEFAULT_COMPOSE_BRANCH } from './CheckoutSelector';
 import { EffortOverlay, type EffortOrigin } from './EffortOverlay';
 import { ModelPickerSheet } from './ModelPickerSheet';
-import {
-  fastOffChoice,
-  fastOnChoice,
-  fastOptionForModel,
-  isFastEnabled,
-} from './fastMode';
+import { fastOptionForModel, isFastEnabled } from './fastMode';
 import { capitalizeLevel } from './effortSliderMath';
 import { useRuntime } from '../app/runtimeContext';
 import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
@@ -450,20 +445,26 @@ export function ComposeComposer({
         effortLabel={effortLabel}
         effortSupported={effortLevels.length > 0}
         fastSupported={fastOption !== undefined}
+        fastOption={fastOption}
         fastEnabled={fastEnabled}
+        fastChoice={
+          fastOption === undefined
+            ? undefined
+            : typeof modelOptions[fastOption.id] === 'string'
+            ? (modelOptions[fastOption.id] as string)
+            : fastOption.defaultChoice
+        }
         effortOpen={effortOpen}
         onOpenEffort={origin => {
           Keyboard.dismiss();
           setEffortOrigin(origin);
           setEffortOpen(true);
         }}
-        onToggleFast={on => {
+        onSelectFast={choice => {
           if (fastOption === undefined) return;
           setModelOptions({
             ...modelOptions,
-            [fastOption.id]: on
-              ? fastOnChoice(fastOption)
-              : fastOffChoice(fastOption),
+            [fastOption.id]: choice,
           });
         }}
         checkout={checkout}

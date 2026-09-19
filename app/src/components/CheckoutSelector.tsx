@@ -3,17 +3,23 @@
 // this row; host, cwd, and branch live on the thread Details sheet.
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import * as DropdownMenu from './menus/dropdown-menu';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
 import type { Chat, DeviceRow, RepoRef, Space } from '../zeron/protocol/types';
 import { listRefs } from '../zeron/runtime/catalog';
 import { checkoutChangeAllowed } from './checkoutRules';
+import { ComposerMenuChip } from './ComposerMenuChip';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import { Icon } from './Icon';
 
 export const DEFAULT_COMPOSE_BRANCH = 'main';
+export const CHECKOUT_CHIP_MAX_CHARS = 16;
+
+export const displayCheckoutLabel = (label: string): string =>
+  label.length > CHECKOUT_CHIP_MAX_CHARS
+    ? `${label.slice(0, CHECKOUT_CHIP_MAX_CHARS)}…`
+    : label;
 
 export interface CheckoutChipsProps {
   runtime: AppRuntime;
@@ -45,15 +51,17 @@ const ChipTrigger = ({
   const theme = useTheme();
   return (
     <View
-      style={[styles.chip, { backgroundColor: theme.inputBackground }]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={label}
       collapsable={false}
     >
-      <Text style={[styles.chipText, { color: theme.text }]} numberOfLines={1}>
-        {label}
-      </Text>
-      <Icon name="chevron.down" size={10} color={theme.textSecondary} />
+      <ComposerMenuChip
+        label={displayCheckoutLabel(label)}
+        color={theme.text}
+        chevronColor={theme.textSecondary}
+        limitWidth={false}
+      />
     </View>
   );
 };
@@ -120,155 +128,149 @@ export function CheckoutChips({
   );
 
   return (
-    <View style={styles.bar} testID="compose-checkout">
-      <View style={styles.slot}>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <ChipTrigger
-              label={machineLabel}
-              accessibilityLabel={t('checkout.desktop')}
-            />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            {(hosts ?? []).map(d => (
-              <DropdownMenu.Item key={d.id} onSelect={() => onSelectHost?.(d)}>
-                <DropdownMenu.ItemTitle>{d.name}</DropdownMenu.ItemTitle>
-                {d.id === host?.id ? (
-                  <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
-                ) : null}
-              </DropdownMenu.Item>
-            ))}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      </View>
-
-      <View style={styles.slot}>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <ChipTrigger
-              label={projectLabel}
-              accessibilityLabel={t('checkout.project')}
-            />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item
-              key="no-project"
-              onSelect={() => onSelectSpace?.(undefined)}
-            >
-              <DropdownMenu.ItemTitle>
-                {t('newSession.noProject')}
-              </DropdownMenu.ItemTitle>
-              {chat.spaceId === undefined ? (
+    <ScrollView
+      horizontal
+      testID="compose-checkout"
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.bar}
+    >
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <ChipTrigger
+            label={machineLabel}
+            accessibilityLabel={t('checkout.desktop')}
+          />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          {(hosts ?? []).map(d => (
+            <DropdownMenu.Item key={d.id} onSelect={() => onSelectHost?.(d)}>
+              <DropdownMenu.ItemTitle>{d.name}</DropdownMenu.ItemTitle>
+              {d.id === host?.id ? (
                 <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
               ) : null}
             </DropdownMenu.Item>
-            {hostSpaces.map(s => (
-              <DropdownMenu.Item key={s.id} onSelect={() => onSelectSpace?.(s)}>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <ChipTrigger
+            label={projectLabel}
+            accessibilityLabel={t('checkout.project')}
+          />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          <DropdownMenu.Item
+            key="no-project"
+            onSelect={() => onSelectSpace?.(undefined)}
+          >
+            <DropdownMenu.ItemTitle>
+              {t('newSession.noProject')}
+            </DropdownMenu.ItemTitle>
+            {chat.spaceId === undefined ? (
+              <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+            ) : null}
+          </DropdownMenu.Item>
+          {hostSpaces.map(s => (
+            <DropdownMenu.Item key={s.id} onSelect={() => onSelectSpace?.(s)}>
+              <DropdownMenu.ItemTitle>
+                {s.name !== undefined && s.name !== '' ? s.name : s.path}
+              </DropdownMenu.ItemTitle>
+              {s.id === chat.spaceId ? (
+                <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+              ) : null}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <ChipTrigger
+            label={checkoutModeLabel}
+            accessibilityLabel={t('checkout.label')}
+          />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          {hasProject ? (
+            <>
+              <DropdownMenu.Item
+                key="current"
+                onSelect={() => onSelectCurrentCheckout?.()}
+              >
                 <DropdownMenu.ItemTitle>
-                  {s.name !== undefined && s.name !== '' ? s.name : s.path}
+                  {t('newSession.checkout.current')}
                 </DropdownMenu.ItemTitle>
-                {s.id === chat.spaceId ? (
+                {!newWorktree ? (
                   <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
                 ) : null}
               </DropdownMenu.Item>
-            ))}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      </View>
-
-      <View style={styles.slot}>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <ChipTrigger
-              label={checkoutModeLabel}
-              accessibilityLabel={t('checkout.label')}
-            />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            {hasProject ? (
-              <>
-                <DropdownMenu.Item
-                  key="current"
-                  onSelect={() => onSelectCurrentCheckout?.()}
-                >
-                  <DropdownMenu.ItemTitle>
-                    {t('newSession.checkout.current')}
-                  </DropdownMenu.ItemTitle>
-                  {!newWorktree ? (
-                    <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
-                  ) : null}
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  key="new-wt"
-                  onSelect={() => {
-                    if (!wtVerdict.allowed) return;
-                    onSelectNewWorktree?.(branchLabel);
-                  }}
-                >
-                  <DropdownMenu.ItemTitle>
-                    {wtVerdict.allowed
-                      ? t('newSession.checkout.newWorktree')
-                      : t('checkout.worktreeUnsupported').replace(
-                          '{host}',
-                          host?.name ?? t('newSession.host'),
-                        )}
-                  </DropdownMenu.ItemTitle>
-                  {newWorktree ? (
-                    <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
-                  ) : null}
-                </DropdownMenu.Item>
-              </>
-            ) : (
-              <DropdownMenu.Item key="need-project" onSelect={() => {}}>
+              <DropdownMenu.Item
+                key="new-wt"
+                onSelect={() => {
+                  if (!wtVerdict.allowed) return;
+                  onSelectNewWorktree?.(branchLabel);
+                }}
+              >
                 <DropdownMenu.ItemTitle>
-                  {t('checkout.pickProject')}
+                  {wtVerdict.allowed
+                    ? t('newSession.checkout.newWorktree')
+                    : t('checkout.worktreeUnsupported').replace(
+                        '{host}',
+                        host?.name ?? t('newSession.host'),
+                      )}
                 </DropdownMenu.ItemTitle>
+                {newWorktree ? (
+                  <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+                ) : null}
               </DropdownMenu.Item>
-            )}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      </View>
+            </>
+          ) : (
+            <DropdownMenu.Item key="need-project" onSelect={() => {}}>
+              <DropdownMenu.ItemTitle>
+                {t('checkout.pickProject')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
 
-      <View style={styles.slot}>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <ChipTrigger
-              label={branchLabel}
-              accessibilityLabel={t('checkout.branch')}
-            />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            {hasProject && (refs ?? []).length > 0 ? (
-              (refs ?? []).map(r => (
-                <DropdownMenu.Item
-                  key={r.name}
-                  onSelect={() => onSelectRef?.(r)}
-                >
-                  <DropdownMenu.ItemTitle>
-                    {r.current
-                      ? t('checkout.current').replace('{branch}', r.name)
-                      : r.worktreePath !== undefined
-                      ? `${r.name} (${t('checkout.worktree')})`
-                      : r.name}
-                  </DropdownMenu.ItemTitle>
-                  {r.name === branchLabel ? (
-                    <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
-                  ) : null}
-                </DropdownMenu.Item>
-              ))
-            ) : (
-              <DropdownMenu.Item key="need-branch" onSelect={() => {}}>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <ChipTrigger
+            label={branchLabel}
+            accessibilityLabel={t('checkout.branch')}
+          />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          {hasProject && (refs ?? []).length > 0 ? (
+            (refs ?? []).map(r => (
+              <DropdownMenu.Item key={r.name} onSelect={() => onSelectRef?.(r)}>
                 <DropdownMenu.ItemTitle>
-                  {hasProject
-                    ? DEFAULT_COMPOSE_BRANCH
-                    : t('checkout.pickProject')}
+                  {r.current
+                    ? t('checkout.current').replace('{branch}', r.name)
+                    : r.worktreePath !== undefined
+                    ? `${r.name} (${t('checkout.worktree')})`
+                    : r.name}
                 </DropdownMenu.ItemTitle>
+                {r.name === branchLabel ? (
+                  <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+                ) : null}
               </DropdownMenu.Item>
-            )}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      </View>
-    </View>
+            ))
+          ) : (
+            <DropdownMenu.Item key="need-branch" onSelect={() => {}}>
+              <DropdownMenu.ItemTitle>
+                {hasProject
+                  ? DEFAULT_COMPOSE_BRANCH
+                  : t('checkout.pickProject')}
+              </DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </ScrollView>
   );
 }
 
@@ -281,17 +283,4 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
   },
-  slot: { flex: 1, minWidth: 0 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 32,
-    maxWidth: '100%',
-    minWidth: 0,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    width: '100%',
-  },
-  chipText: { fontSize: 13, flexShrink: 1, fontWeight: '500' },
 });

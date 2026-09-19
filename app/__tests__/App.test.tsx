@@ -48,6 +48,26 @@ test('renders SignInScreen when signed out', async () => {
   });
 });
 
+test('Sign in shows paste-code fallback after the browser session', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<App />);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  });
+  pressByText(tree!.root, 'Sign in');
+  await act(async () => {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  });
+  const texts = allText(tree!.root);
+  expect(texts).toContain('Paste the sign-in code');
+  expect(
+    tree!.root.findAll(n => typeof n.props.onChangeText === 'function').length,
+  ).toBeGreaterThan(0);
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
 test('Advanced → Try demo mode lands on Home with fixture data', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -65,6 +85,33 @@ test('Advanced → Try demo mode lands on Home with fixture data', async () => {
   expect(texts).not.toContain('Demo');
   expect(texts).toContain('Ship demo mode');
   expect(texts).toContain('Refactor relay reconnect');
+  await act(async () => {
+    exitDemo();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('demo: opening a working thread does not show the error fallback', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<App />);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  });
+  pressByText(tree!.root, 'Advanced');
+  pressByText(tree!.root, 'Try demo mode');
+  await act(async () => {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  });
+  pressByText(tree!.root, 'Ship demo mode');
+  await act(async () => {
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'app-error-fallback'),
+  ).toHaveLength(0);
   await act(async () => {
     exitDemo();
     for (let i = 0; i < 5; i++) await Promise.resolve();

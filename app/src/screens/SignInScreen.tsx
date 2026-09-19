@@ -1,9 +1,10 @@
 // Sign-in: ASWebAuthenticationSession / HTTPS callback with PKCE. Demo
 // remains under Advanced. Expo Go cannot receive universal links — production
-// sign-in is the HTTPS session on a dev/production build.
+// sign-in is the HTTPS session on a dev/production build; paste-code is the
+// completable path when the browser cannot return here.
 
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { openAuthSession } from '../zeron/native/authBrowser';
@@ -11,7 +12,7 @@ import { appConfig } from '../zeron/native/appConfig';
 import { parseCallbackUrl } from '../zeron/auth/authKit';
 import { randomBytes, sha256 } from '../zeron/native/expoCrypto';
 import { useAuthSession } from '../app/runtimeContext';
-import { Glass } from '../components/Glass';
+import { GlassControl } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { enterDemo } from '../demo/demoMode';
@@ -31,6 +32,8 @@ export function SignInScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
+  const [showPaste, setShowPaste] = useState(false);
+  const [paste, setPaste] = useState('');
 
   const signIn = useCallback(async () => {
     setBusy(true);
@@ -43,10 +46,10 @@ export function SignInScreen() {
         sha256,
       });
       if (isExpoGo) {
-        // Universal links can't land back in Expo Go. The zeron:// listener
-        // in ZeronApp remains a second return path; otherwise tap Sign in
-        // again from a development build.
+        // Universal links can't land back in Expo Go. Paste the code the
+        // callback page shows; the zeron:// listener remains a second path.
         await WebBrowser.openBrowserAsync(url).catch(() => {});
+        setShowPaste(true);
         return;
       }
       const result = await openAuthSession(url, `${edgeUrl}/auth/cli/callback`);
@@ -54,23 +57,43 @@ export function SignInScreen() {
         const link = parseCallbackUrl(result.url);
         if (link.error !== undefined || link.code === undefined) {
           setError(t('signIn.error.generic'));
+          setShowPaste(true);
           return;
         }
         await auth.completeSignIn({
           code: link.code,
           state: link.state ?? '',
         });
-      } else if (result.type !== 'cancel') {
+        return;
+      }
+      if (result.type !== 'cancel') {
         setError(t('signIn.error.generic'));
       }
+      setShowPaste(true);
     } catch (e) {
       const name = e instanceof Error ? e.name : 'Error';
       log.warn(`sign-in failed (${name})`);
       setError(t('signIn.error.generic'));
+      setShowPaste(true);
     } finally {
       setBusy(false);
     }
   }, [auth, edgeUrl]);
+
+  const completePaste = useCallback(async () => {
+    if (paste.trim() === '') return;
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.completePastedCode(paste);
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`paste sign-in failed (${name})`);
+      setError(t('signIn.error.generic'));
+    } finally {
+      setBusy(false);
+    }
+  }, [auth, paste]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
@@ -81,16 +104,62 @@ export function SignInScreen() {
         {t('signIn.subtitle')}
       </Text>
 
-      <Pressable onPress={signIn} disabled={busy} hitSlop={8}>
-        <Glass interactive style={styles.primary}>
-          <Text style={[styles.primaryText, { color: theme.sendActive }]}>
-            {t('signIn.button')}
-          </Text>
-        </Glass>
-      </Pressable>
+      <GlassControl
+        interactive
+        onPress={signIn}
+        disabled={busy}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('signIn.button')}
+        style={styles.primary}
+      >
+        <Text style={[styles.primaryText, { color: theme.sendActive }]}>
+          {t('signIn.button')}
+        </Text>
+      </GlassControl>
 
       {error !== null ? (
         <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
+      ) : null}
+
+      {showPaste ? (
+        <View style={styles.pasteBox}>
+          <Text style={[styles.pasteTitle, { color: theme.text }]}>
+            {t('signIn.pasteFallback.title')}
+          </Text>
+          <Text style={[styles.pasteBody, { color: theme.textSecondary }]}>
+            {isExpoGo
+              ? t('signIn.pasteFallback.expoGo')
+              : t('signIn.pasteFallback.body')}
+          </Text>
+          <TextInput
+            value={paste}
+            onChangeText={setPaste}
+            placeholder={t('signIn.pasteFallback.placeholder')}
+            placeholderTextColor={theme.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+            style={[
+              styles.pasteInput,
+              { color: theme.text, backgroundColor: theme.inputBackground },
+            ]}
+            accessibilityLabel={t('signIn.pasteFallback.placeholder')}
+          />
+          <GlassControl
+            interactive
+            onPress={completePaste}
+            disabled={busy || paste.trim() === ''}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('signIn.pasteFallback.continue')}
+            style={styles.demoButton}
+          >
+            <Text style={[styles.demoText, { color: theme.sendActive }]}>
+              {t('signIn.pasteFallback.continue')}
+            </Text>
+          </GlassControl>
+        </View>
       ) : null}
 
       <Pressable
@@ -108,13 +177,18 @@ export function SignInScreen() {
           <Text style={[styles.edge, { color: theme.textSecondary }]}>
             {`${t('signIn.edgeUrl')}: ${edgeUrl}`}
           </Text>
-          <Pressable onPress={enterDemo} hitSlop={8}>
-            <Glass interactive style={styles.demoButton}>
-              <Text style={[styles.demoText, { color: theme.sendActive }]}>
-                {t('signIn.demo.button')}
-              </Text>
-            </Glass>
-          </Pressable>
+          <GlassControl
+            interactive
+            onPress={enterDemo}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('signIn.demo.button')}
+            style={styles.demoButton}
+          >
+            <Text style={[styles.demoText, { color: theme.sendActive }]}>
+              {t('signIn.demo.button')}
+            </Text>
+          </GlassControl>
           <Text style={[styles.demoHint, { color: theme.textSecondary }]}>
             {t('signIn.demo.hint')}
           </Text>
@@ -138,11 +212,23 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingHorizontal: 28,
     paddingVertical: 12,
+    minHeight: 44,
     alignItems: 'center',
     overflow: 'hidden',
   },
   primaryText: { fontSize: 17, fontWeight: '600' },
   error: { fontSize: 13 },
+  pasteBox: { alignItems: 'center', gap: 8, width: '100%', maxWidth: 360 },
+  pasteTitle: { fontSize: 15, fontWeight: '600' },
+  pasteBody: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  pasteInput: {
+    alignSelf: 'stretch',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontFamily: 'Menlo',
+  },
   advancedToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -156,6 +242,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 8,
+    minHeight: 36,
     alignItems: 'center',
     overflow: 'hidden',
   },

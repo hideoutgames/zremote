@@ -251,6 +251,7 @@ jest.mock('expo-notifications', () => ({
 }));
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
+  openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
 }));
 jest.mock('expo-file-system', () => ({
   File: class {

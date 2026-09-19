@@ -62,12 +62,7 @@ import {
 import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
 import { recentMenuModels } from '../zeron/state/recentModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
-import {
-  fastOffChoice,
-  fastOnChoice,
-  fastOptionForModel,
-  isFastEnabled,
-} from '../components/fastMode';
+import { fastOptionForModel, isFastEnabled } from '../components/fastMode';
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
 import { usePrBadge } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
@@ -842,14 +837,23 @@ function ActiveSessionScreen({
             effortLabel={effortLabel}
             effortSupported={effortLevels.length > 0}
             fastSupported={fastOption !== undefined}
+            fastOption={fastOption}
             fastEnabled={fastEnabled}
+            fastChoice={
+              fastOption === undefined
+                ? undefined
+                : typeof chat?.config?.modelOptions?.[fastOption.id] ===
+                  'string'
+                ? (chat.config.modelOptions[fastOption.id] as string)
+                : fastOption.defaultChoice
+            }
             effortOpen={effortOpen}
             onOpenEffort={origin => {
               Keyboard.dismiss();
               setEffortOrigin(origin);
               setEffortOpen(true);
             }}
-            onToggleFast={on => {
+            onSelectFast={choice => {
               if (
                 runtime === null ||
                 chat === undefined ||
@@ -863,9 +867,7 @@ function ActiveSessionScreen({
                 sandbox: chat.config?.sandbox,
                 modelOptions: {
                   ...(chat.config?.modelOptions ?? {}),
-                  [fastOption.id]: on
-                    ? fastOnChoice(fastOption)
-                    : fastOffChoice(fastOption),
+                  [fastOption.id]: choice,
                 },
               });
             }}

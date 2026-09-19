@@ -34,14 +34,14 @@ export interface EffortOrigin {
 const MORPH_MS = 280;
 const PILL_MAX_WIDTH = 360;
 const PILL_H_INSET = 28;
-const BAND_HEIGHT = 160;
+const LABEL_OFFSET = 36;
 
 const destRect = (windowWidth: number, windowHeight: number): EffortOrigin => {
   const width = Math.min(
     PILL_MAX_WIDTH,
     Math.max(windowWidth - PILL_H_INSET * 2, 0),
   );
-  const height = effortSliderTrackHeight + 16;
+  const height = effortSliderTrackHeight;
   return {
     x: (windowWidth - width) / 2,
     y: (windowHeight - height) / 2,
@@ -215,14 +215,15 @@ export function EffortOverlay({
           style={[
             styles.band,
             {
-              top: dest.y + dest.height / 2 - BAND_HEIGHT / 2,
+              top: dest.y - LABEL_OFFSET - 24,
+              height: dest.height + LABEL_OFFSET + 48,
               opacity: washOpacity,
             },
           ]}
         >
           <FadeBlur
             fade="vertical"
-            intensity={28}
+            intensity={40}
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
@@ -232,8 +233,14 @@ export function EffortOverlay({
             styles.label,
             {
               color: theme.text,
-              top: dest.y - 36,
+              top: dest.y - LABEL_OFFSET,
               opacity: contentOpacity,
+              textShadowColor:
+                theme.scheme === 'dark'
+                  ? 'rgba(0,0,0,0.85)'
+                  : 'rgba(255,255,255,0.9)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 8,
             },
           ]}
         >
@@ -274,7 +281,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    height: BAND_HEIGHT,
   },
   label: {
     position: 'absolute',
@@ -289,10 +295,11 @@ const styles = StyleSheet.create({
   },
   pill: {
     flex: 1,
-    borderRadius: 32,
+    borderRadius: effortSliderTrackHeight / 2,
     paddingHorizontal: 10,
+    justifyContent: 'center',
     overflow: 'hidden',
   },
-  sliderFade: { flex: 1 },
+  sliderFade: { justifyContent: 'center' },
   unsupported: { padding: 20, fontSize: 13, textAlign: 'center' },
 });

@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useAuthSession } from '../app/runtimeContext';
-import { Glass } from '../components/Glass';
+import { GlassControl } from '../components/Glass';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
@@ -132,17 +132,19 @@ export function OrgGateScreen() {
               },
             ]}
           />
-          <Pressable
+          <GlassControl
+            interactive
             onPress={create}
             disabled={busy || name.trim().length === 0}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('orgGate.create')}
+            style={styles.primary}
           >
-            <Glass interactive style={styles.primary}>
-              <Text style={[styles.primaryText, { color: theme.sendActive }]}>
-                {t('orgGate.create')}
-              </Text>
-            </Glass>
-          </Pressable>
+            <Text style={[styles.primaryText, { color: theme.sendActive }]}>
+              {t('orgGate.create')}
+            </Text>
+          </GlassControl>
         </View>
       ) : null}
       {error !== null ? (
@@ -181,6 +183,7 @@ const styles = StyleSheet.create({
   primary: {
     borderRadius: 12,
     paddingVertical: 12,
+    minHeight: 44,
     alignItems: 'center',
     overflow: 'hidden',
   },

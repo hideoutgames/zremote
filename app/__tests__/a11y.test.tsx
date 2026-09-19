@@ -99,7 +99,7 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
       fastSupported={false}
       fastEnabled={false}
       onOpenEffort={() => {}}
-      onToggleFast={() => {}}
+      onSelectFast={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
       onSteer={() => {}}
@@ -157,7 +157,7 @@ test('compose composer: desktop, project, checkout, and branch sit above the inp
       fastSupported={false}
       fastEnabled={false}
       onOpenEffort={() => {}}
-      onToggleFast={() => {}}
+      onSelectFast={() => {}}
       checkout={{
         runtime: {} as never,
         chat: {
@@ -244,7 +244,7 @@ test('composer: Fast mode chip is a separate labelled button', async () => {
       fastSupported
       fastEnabled={false}
       onOpenEffort={() => {}}
-      onToggleFast={() => {}}
+      onSelectFast={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
       onSteer={() => {}}
@@ -333,7 +333,18 @@ test('model picker: search, provider groups, and sandbox are labelled', async ()
   const labels = labelled(mounted.root);
   // Every pressable row carries a role + label.
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
+  expect(labels.some(l => l.label === 'Close')).toBe(true);
+  expect(labels.some(l => l.label === 'Search')).toBe(true);
   expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Active').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'More').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Model').length,
+  ).toBeGreaterThan(0);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {
@@ -432,7 +443,7 @@ test('composer file tiles are square preview buttons', async () => {
       fastSupported={false}
       fastEnabled={false}
       onOpenEffort={() => {}}
-      onToggleFast={() => {}}
+      onSelectFast={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
       onSteer={() => {}}

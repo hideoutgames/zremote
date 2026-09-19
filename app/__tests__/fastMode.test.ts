@@ -31,6 +31,23 @@ test('isFastEnabled reads modelOptions and default', () => {
   expect(isFastEnabled(undefined, undefined)).toBe(false);
 });
 
+test('isFastEnabled treats any non-off choice as on', () => {
+  const opt: ModelOption = {
+    id: 'fast',
+    label: 'Fast mode',
+    choices: [
+      { id: 'off', label: 'Off' },
+      { id: 'standard', label: 'Standard' },
+      { id: 'extra', label: 'Extra' },
+    ],
+    defaultChoice: 'off',
+  };
+  expect(isFastEnabled({ fast: 'standard' }, opt)).toBe(true);
+  expect(isFastEnabled({ fast: 'extra' }, opt)).toBe(true);
+  expect(isFastEnabled({ fast: 'off' }, opt)).toBe(false);
+  expect(isFastEnabled({}, opt)).toBe(false);
+});
+
 test('on/off choices', () => {
   const opt = option('fast');
   expect(fastOnChoice(opt)).toBe('on');

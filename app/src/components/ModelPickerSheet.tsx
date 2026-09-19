@@ -1,5 +1,6 @@
-// More-models sheet: search + models for the session's provider. Effort /
-// Fast live on the composer overlay. Sandbox and auto-approve stay here.
+// More-models sheet: Cursor Mobile-style list (search, Active / More) with
+// sandbox and auto-approve kept as a quieter footer. Effort / Fast stay on
+// the composer.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -33,8 +34,9 @@ import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
-import { HarnessMark } from './HarnessMark';
 import { revalidateSelection } from './modelPicker';
+import * as DropdownMenu from './menus/dropdown-menu';
+import { MenuDismissShield } from './menus/MenuDismissShield';
 
 export interface ModelPickerSheetProps {
   runtime: AppRuntime;
@@ -53,6 +55,91 @@ const SANDBOX_LEVELS = [
   'workspace-write',
   'danger-full-access',
 ] as const;
+
+const CLOSE = 32;
+
+function ModelRow({
+  label,
+  selected,
+  unavailable,
+  description,
+  onSelect,
+  last,
+  borderColor,
+  textColor,
+  secondaryColor,
+  dangerColor,
+  accentColor,
+}: {
+  label: string;
+  selected: boolean;
+  unavailable?: boolean;
+  description?: string;
+  onSelect: () => void;
+  last: boolean;
+  borderColor: string;
+  textColor: string;
+  secondaryColor: string;
+  dangerColor: string;
+  accentColor: string;
+}) {
+  return (
+    <View
+      style={[
+        styles.row,
+        last
+          ? undefined
+          : {
+              borderBottomColor: borderColor,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+            },
+      ]}
+    >
+      <Pressable
+        style={styles.rowHit}
+        onPress={onSelect}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected }}
+      >
+        <Text style={[styles.rowText, { color: textColor }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </Pressable>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <Pressable
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} ${t('session.overflow')}`}
+            style={styles.ellipsisHit}
+          >
+            <Icon name="ellipsis" size={16} color={secondaryColor} />
+          </Pressable>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          {description !== undefined && description !== '' ? (
+            <DropdownMenu.Item key="about" onSelect={() => {}}>
+              <DropdownMenu.ItemTitle>{description}</DropdownMenu.ItemTitle>
+            </DropdownMenu.Item>
+          ) : null}
+          <DropdownMenu.Item key="select" onSelect={onSelect}>
+            <DropdownMenu.ItemTitle>{label}</DropdownMenu.ItemTitle>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      {unavailable ? (
+        <Text style={[styles.badge, { color: dangerColor }]}>
+          {t('picker.unavailable')}
+        </Text>
+      ) : selected ? (
+        <Icon name="checkmark" size={16} color={accentColor} />
+      ) : (
+        <View style={styles.checkSpacer} />
+      )}
+    </View>
+  );
+}
 
 export function ModelPickerSheet({
   runtime,
@@ -184,6 +271,34 @@ export function ModelPickerSheet({
     [apply],
   );
 
+  const activeLabel =
+    currentModels.find(m => m.id === config?.model)?.label ?? config?.model;
+  const moreGroups = grouped.map(g => ({
+    ...g,
+    models: g.models.filter(
+      m => !(m.id === config?.model && g.harness.id === harnessId),
+    ),
+  }));
+
+  const header = (
+    <View style={styles.header}>
+      <Pressable
+        onPress={onClose}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.close')}
+      >
+        <View style={styles.closeButton}>
+          <Icon name="xmark" size={15} color={theme.text} />
+        </View>
+      </Pressable>
+      <Text style={[styles.title, { color: theme.text }]}>
+        {t('picker.title')}
+      </Text>
+      <View style={styles.closeButton} />
+    </View>
+  );
+
   const content = (
     <ScrollView
       contentContainerStyle={[
@@ -192,97 +307,77 @@ export function ModelPickerSheet({
       ]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={[styles.title, { color: theme.text }]}>
-        {t('picker.title')}
-      </Text>
       {live ? (
         <Text style={[styles.note, { color: theme.textSecondary }]}>
           {t('picker.appliesNext')}
         </Text>
       ) : null}
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder={t('picker.search')}
-        placeholderTextColor={theme.textSecondary}
-        style={[
-          styles.search,
-          { color: theme.text, backgroundColor: theme.inputBackground },
-        ]}
-        accessibilityLabel={t('picker.search')}
-      />
+      <View
+        style={[styles.searchWrap, { backgroundColor: theme.inputBackground }]}
+      >
+        <Icon name="magnifyingglass" size={15} color={theme.textSecondary} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('picker.search')}
+          placeholderTextColor={theme.textSecondary}
+          style={[styles.search, { color: theme.text }]}
+          accessibilityLabel={t('picker.search')}
+        />
+      </View>
 
       <Text style={[styles.section, { color: theme.textSecondary }]}>
         {t('picker.active')}
       </Text>
-      {config?.model !== undefined ? (
-        <View
-          style={[
-            styles.row,
-            { borderColor: health.modelOk ? theme.accent : theme.danger },
-          ]}
-        >
-          <HarnessMark harnessId={harnessId} size={18} color={theme.text} />
-          <Text style={[styles.rowText, { color: theme.text }]}>
-            {currentModels.find(m => m.id === config.model)?.label ??
-              config.model}
-          </Text>
-          {health.modelOk ? (
-            <Icon name="checkmark" size={14} color={theme.accent} />
-          ) : (
-            <Text style={[styles.badge, { color: theme.danger }]}>
-              {t('picker.unavailable')}
-            </Text>
-          )}
-        </View>
+      {config?.model !== undefined && activeLabel !== undefined ? (
+        <ModelRow
+          label={activeLabel}
+          selected={health.modelOk}
+          unavailable={!health.modelOk}
+          description={
+            currentModels.find(m => m.id === config.model)?.description
+          }
+          onSelect={() => {
+            const model = currentModels.find(m => m.id === config.model);
+            if (model !== undefined && harnessId !== undefined)
+              pickModel(harnessId, model);
+          }}
+          last
+          borderColor={theme.border}
+          textColor={theme.text}
+          secondaryColor={theme.textSecondary}
+          dangerColor={theme.danger}
+          accentColor={theme.accent}
+        />
       ) : null}
 
-      {grouped.map(({ harness: h, models }) => (
-        <View key={h.id} style={styles.group}>
-          <View
-            style={styles.groupHead}
+      <Text style={[styles.section, { color: theme.textSecondary }]}>
+        {t('picker.more')}
+      </Text>
+      {moreGroups.map(({ harness: h, models }) => (
+        <View key={h.id}>
+          <Text
+            style={[styles.groupHead, { color: theme.textSecondary }]}
             accessibilityRole="header"
             accessibilityLabel={h.name}
           >
-            <HarnessMark harnessId={h.id} size={16} color={theme.text} />
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {h.name}
-            </Text>
-          </View>
-          {models.map(m => (
-            <Pressable
+            {h.name}
+          </Text>
+          {models.map((m, i) => (
+            <ModelRow
               key={m.id}
-              style={[
-                styles.row,
-                { borderColor: theme.border },
-                m.id === config?.model &&
-                  h.id === harnessId && { borderColor: theme.accent },
-              ]}
-              onPress={() => pickModel(h.id, m)}
-              accessibilityRole="button"
-              accessibilityLabel={m.label}
-              accessibilityState={{
-                selected: m.id === config?.model && h.id === harnessId,
-              }}
-            >
-              <View style={styles.rowBody}>
-                <Text style={[styles.rowText, { color: theme.text }]}>
-                  {m.label}
-                </Text>
-                {m.description !== undefined ? (
-                  <Text
-                    style={[styles.rowSub, { color: theme.textSecondary }]}
-                    numberOfLines={1}
-                  >
-                    {m.description}
-                  </Text>
-                ) : null}
-              </View>
-              {m.id === config?.model && h.id === harnessId ? (
-                <Icon name="checkmark" size={14} color={theme.accent} />
-              ) : null}
-            </Pressable>
+              label={m.label}
+              selected={m.id === config?.model && h.id === harnessId}
+              description={m.description}
+              onSelect={() => pickModel(h.id, m)}
+              last={i === models.length - 1}
+              borderColor={theme.border}
+              textColor={theme.text}
+              secondaryColor={theme.textSecondary}
+              dangerColor={theme.danger}
+              accentColor={theme.accent}
+            />
           ))}
         </View>
       ))}
@@ -290,74 +385,56 @@ export function ModelPickerSheet({
       <Text style={[styles.section, { color: theme.textSecondary }]}>
         {t('picker.sandbox')}
       </Text>
-      <View style={styles.segmented}>
+      <View style={[styles.footerBlock, { borderTopColor: theme.border }]}>
         {SANDBOX_LEVELS.map(l => {
           const selected = (config?.sandbox ?? 'workspace-write') === l;
           return (
             <Pressable
               key={l}
-              style={[
-                styles.segment,
-                {
-                  backgroundColor: selected
-                    ? theme.accent
-                    : theme.cardBackground,
-                },
-              ]}
+              style={[styles.plainRow, { borderBottomColor: theme.border }]}
               onPress={() => pickSandbox(l)}
               accessibilityRole="button"
               accessibilityLabel={t(`picker.sandbox.${l}`)}
               accessibilityState={{ selected }}
             >
-              <Text
-                style={[
-                  styles.segmentTextSmall,
-                  { color: selected ? theme.sendActive : theme.text },
-                ]}
-              >
+              <Text style={[styles.rowText, { color: theme.text }]}>
                 {t(`picker.sandbox.${l}`)}
               </Text>
+              {selected ? (
+                <Icon name="checkmark" size={16} color={theme.accent} />
+              ) : null}
             </Pressable>
           );
         })}
-      </View>
-
-      <Pressable
-        style={[styles.row, { borderColor: theme.border }]}
-        onPress={toggleAutoApprove}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: autoApprove }}
-      >
-        <Text style={[styles.rowText, { color: theme.text }]}>
-          {t('picker.autoApprove')}
-        </Text>
-        <Text
-          style={[
-            styles.rowSub,
-            { color: autoApprove ? theme.danger : theme.textSecondary },
-          ]}
+        <Pressable
+          style={styles.plainRow}
+          onPress={toggleAutoApprove}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: autoApprove }}
+          accessibilityLabel={t('picker.autoApprove')}
         >
-          {autoApprove ? t('common.on') : t('common.off')}
-        </Text>
-      </Pressable>
-
-      <View style={styles.footer}>
-        <View
-          style={[styles.doneBtn, { backgroundColor: theme.cardBackground }]}
-        >
-          <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.done')}
+          <Text style={[styles.rowText, { color: theme.text }]}>
+            {t('picker.autoApprove')}
+          </Text>
+          <Text
+            style={[
+              styles.rowSub,
+              { color: autoApprove ? theme.danger : theme.textSecondary },
+            ]}
           >
-            <Text style={[styles.doneText, { color: theme.accent }]}>
-              {t('common.done')}
-            </Text>
-          </Pressable>
-        </View>
+            {autoApprove ? t('common.on') : t('common.off')}
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
+  );
+
+  const body = (
+    <View style={[styles.sheetBody, { backgroundColor: theme.background }]}>
+      {header}
+      {content}
+      <MenuDismissShield />
+    </View>
   );
 
   if (formSheet === true) {
@@ -369,7 +446,7 @@ export function ModelPickerSheet({
         onRequestClose={onClose}
       >
         <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
-          {content}
+          {body}
         </View>
       </Modal>
     );
@@ -382,50 +459,89 @@ export function ModelPickerSheet({
       grabber
       backgroundColor={theme.background}
     >
-      {content}
+      {body}
     </TrueSheet>
   );
 }
 
 const styles = StyleSheet.create({
   modalFill: { flex: 1 },
-  content: { padding: 20, gap: 10 },
-  title: { fontSize: 20, fontWeight: '700' },
-  section: { fontSize: 12, fontWeight: '600', marginTop: 10 },
-  note: { fontSize: 12 },
-  search: {
+  sheetBody: { flexGrow: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  closeButton: {
+    width: CLOSE,
+    height: CLOSE,
+    borderRadius: CLOSE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontSize: 17, fontWeight: '600' },
+  content: { paddingHorizontal: 8, paddingBottom: 24, gap: 4 },
+  section: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+  },
+  note: { fontSize: 12, paddingHorizontal: 12, marginBottom: 4 },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    marginTop: 4,
     borderRadius: 12,
     paddingHorizontal: 12,
+    gap: 8,
+  },
+  search: {
+    flex: 1,
     paddingVertical: 10,
     fontSize: 16,
   },
-  group: { gap: 8 },
-  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  groupHead: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 2,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 12,
+    minHeight: 48,
+    paddingHorizontal: 12,
     gap: 8,
   },
-  rowBody: { flex: 1, gap: 2 },
-  rowText: { fontSize: 15, flex: 1 },
-  rowSub: { fontSize: 12 },
+  rowHit: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  ellipsisHit: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: { fontSize: 17, flexShrink: 1 },
+  rowSub: { fontSize: 13 },
   badge: { fontSize: 11, fontWeight: '600' },
-  segmented: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  segment: {
-    borderRadius: 10,
+  checkSpacer: { width: 16 },
+  footerBlock: {
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  plainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
   },
-  segmentTextSmall: { fontSize: 12 },
-  footer: { marginTop: 16, alignItems: 'center' },
-  doneBtn: {
-    borderRadius: 22,
-    paddingHorizontal: 28,
-    paddingVertical: 10,
-    overflow: 'hidden',
-  },
-  doneText: { fontSize: 15, fontWeight: '600' },
 });
