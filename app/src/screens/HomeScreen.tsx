@@ -31,14 +31,13 @@ import {
   useHostForChat,
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
-import {
-  isAgentRunning,
-  sortOverviewThreads,
-} from '../zeron/protocol/entities';
+import { sortOverviewThreads } from '../zeron/protocol/entities';
 import {
   sessionTitle,
   hostLabel,
   checkoutLabel,
+  threadStatusLine,
+  type ThreadStatusLine,
 } from '../zeron/state/sessionTruth';
 import {
   markChatSeen,
@@ -54,26 +53,19 @@ import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
-import { useThreadPrDot } from '../zeron/state/changeRequestStore';
-import { setComposeDefaults } from '../zeron/state/uiPrefs';
+import { usePrBadge } from '../zeron/state/changeRequestStore';
+import {
+  setComposeDefaults,
+  toggleChatPinned,
+  useChatPinned,
+  usePinnedChatIds,
+} from '../zeron/state/uiPrefs';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 
-const INACTIVE_OPACITY = 0.55;
-
-const prDotColor = (
-  theme: Theme,
-  tone: 'draft' | 'open' | 'merged',
-): string => {
-  switch (tone) {
-    case 'draft':
-      return theme.prDraft;
-    case 'open':
-      return theme.prOpen;
-    case 'merged':
-      return theme.prMerged;
-  }
-};
+type HomeListItem =
+  | { type: 'section'; id: string; title: string }
+  | { type: 'chat'; chat: Chat };
 
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
@@ -85,6 +77,65 @@ export const relativeTime = (at: number, now: number): string => {
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d`;
   return new Date(at).toLocaleDateString();
+};
+
+const statusCopy = (line: ThreadStatusLine): string => {
+  switch (line.kind) {
+    case 'working':
+      return t('session.working');
+    case 'awaitingInput':
+      return t('session.awaitingInput');
+    case 'errored':
+      return t('session.errored');
+    case 'time':
+      return line.label;
+    case 'pr':
+      return line.tone === 'merged'
+        ? t('pr.merged')
+        : line.tone === 'draft'
+        ? t('pr.draft')
+        : t('pr.open');
+  }
+};
+
+const ThreadStatus = ({
+  line,
+  theme,
+  chatId,
+}: {
+  line: ThreadStatusLine;
+  theme: Theme;
+  chatId: string;
+}) => {
+  const label = statusCopy(line);
+  const showCounts =
+    line.kind === 'pr' && (line.additions > 0 || line.deletions > 0);
+  return (
+    <Text
+      style={[styles.subtitle, { color: theme.textSecondary }]}
+      numberOfLines={1}
+      maxFontSizeMultiplier={1.6}
+      testID={`thread-status-${chatId}`}
+    >
+      {label}
+      {showCounts && line.kind === 'pr' ? (
+        <>
+          {' · '}
+          {line.additions > 0 ? (
+            <Text
+              style={{ color: theme.diffAddText }}
+            >{`+${line.additions}`}</Text>
+          ) : null}
+          {line.additions > 0 && line.deletions > 0 ? ' ' : null}
+          {line.deletions > 0 ? (
+            <Text
+              style={{ color: theme.diffDelText }}
+            >{`\u2212${line.deletions}`}</Text>
+          ) : null}
+        </>
+      ) : null}
+    </Text>
+  );
 };
 
 const ChatRow = React.memo(function ({
@@ -99,11 +150,22 @@ const ChatRow = React.memo(function ({
   const indicator = useIndicator(chat.id);
   const host = useHostForChat(chat.id);
   const unseen = chatUnseen(chat);
-  const prTone = useThreadPrDot(chat.id);
-  const live = isAgentRunning(indicator);
+  const pr = usePrBadge(chat.id);
+  const pinned = useChatPinned(chat.id);
   const [hovered, setHovered] = useState(false);
   const at = chat.lastMessageAt ?? chat.createdAt;
   const mark = svgForHarness(chat.config?.harness);
+  const line = threadStatusLine(
+    indicator,
+    pr === undefined
+      ? undefined
+      : {
+          tone: pr.tone,
+          additions: pr.additions,
+          deletions: pr.deletions,
+        },
+    relativeTime(at, Date.now()),
+  );
 
   const onRename = useCallback(() => {
     Alert.prompt(
@@ -121,6 +183,8 @@ const ChatRow = React.memo(function ({
   const onToggleArchive = useCallback(() => {
     if (runtime !== null) setChatArchived(runtime, chat.id, !chat.archived);
   }, [runtime, chat.id, chat.archived]);
+
+  const onPin = useCallback(() => toggleChatPinned(chat.id), [chat.id]);
 
   const onDelete = useCallback(() => {
     Alert.alert(t('home.row.delete'), t('home.row.deleteConfirm'), [
@@ -142,7 +206,11 @@ const ChatRow = React.memo(function ({
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <Pressable
-          style={[styles.row, hovered ? styles.rowHover : undefined]}
+          style={[
+            styles.row,
+            { borderBottomColor: theme.border },
+            hovered ? styles.rowHover : undefined,
+          ]}
           onPress={() => {
             if (runtime !== null) markChatSeen(runtime, chat.id);
             onOpen(chat.id);
@@ -154,27 +222,7 @@ const ChatRow = React.memo(function ({
             .filter(Boolean)
             .join(', ')}
         >
-          {prTone !== null ? (
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: prDotColor(theme, prTone) },
-              ]}
-              testID={`pr-dot-${chat.id}-${prTone}`}
-            />
-          ) : (
-            <View
-              style={styles.dotPlaceholder}
-              testID={`pr-dot-${chat.id}-none`}
-            />
-          )}
-          <View
-            style={[
-              styles.rowText,
-              live ? undefined : { opacity: INACTIVE_OPACITY },
-            ]}
-            testID={`thread-body-${chat.id}`}
-          >
+          <View style={styles.rowText} testID={`thread-body-${chat.id}`}>
             <View style={styles.titleRow}>
               {mark !== undefined ? <BrandMark svg={mark} size={16} /> : null}
               <Text
@@ -188,30 +236,18 @@ const ChatRow = React.memo(function ({
                 {sessionTitle(chat)}
               </Text>
             </View>
-            <Text
-              style={[styles.subtitle, { color: theme.textSecondary }]}
-              numberOfLines={1}
-            >
-              {[project, hostName, relativeTime(at, Date.now())]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-            {chat.lastMessagePreview !== undefined &&
-            chat.lastMessagePreview !== '' ? (
-              <Text
-                style={[styles.preview, { color: theme.textSecondary }]}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.6}
-              >
-                {chat.lastMessagePreview}
-              </Text>
-            ) : null}
+            <ThreadStatus line={line} theme={theme} chatId={chat.id} />
           </View>
         </Pressable>
       </ContextMenu.Trigger>
       <ContextMenu.Content>
         <ContextMenu.Item key="rename" onSelect={onRename}>
           <ContextMenu.ItemTitle>{t('home.row.rename')}</ContextMenu.ItemTitle>
+        </ContextMenu.Item>
+        <ContextMenu.Item key="pin" onSelect={onPin}>
+          <ContextMenu.ItemTitle>
+            {pinned ? t('session.unpin') : t('session.pin')}
+          </ContextMenu.ItemTitle>
         </ContextMenu.Item>
         <ContextMenu.Item key="archive" onSelect={onToggleArchive}>
           <ContextMenu.ItemTitle>
@@ -255,6 +291,7 @@ export function HomeScreen({
       </Glass>
     );
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -263,6 +300,7 @@ export function HomeScreen({
   const [composerH, setComposerH] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
+  const searchExpanded = searchOpen || query.trim() !== '';
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -281,6 +319,7 @@ export function HomeScreen({
   const devices = useStore(workspaceStore, s => s.devices);
   const connection = useStore(workspaceStore, s => s.connection);
   const sessions = useStore(workspaceStore, s => s.sessions);
+  const pinnedChatIds = usePinnedChatIds();
 
   const chats = useMemo(() => {
     const scoped =
@@ -299,18 +338,49 @@ export function HomeScreen({
     return sortOverviewThreads(filtered, sessions, now);
   }, [overview, spaceFilter, query, sessions, now]);
 
+  const rows = useMemo(() => {
+    const pinnedSet = new Set(pinnedChatIds);
+    const pinned = pinnedChatIds
+      .map(id => chats.find(c => c.id === id))
+      .filter((c): c is Chat => c !== undefined);
+    const rest = chats.filter(c => !pinnedSet.has(c.id));
+    const items: HomeListItem[] = [];
+    if (pinned.length > 0) {
+      items.push({
+        type: 'section',
+        id: 'pinned',
+        title: t('home.pinned'),
+      });
+      for (const c of pinned) items.push({ type: 'chat', chat: c });
+    }
+    for (const c of rest) items.push({ type: 'chat', chat: c });
+    return items;
+  }, [chats, pinnedChatIds]);
+
   useOverviewChangeRequestWatches(runtime, chats);
 
   const spaceName = useCallback(
-    (id: string) => spaces.find(s => s.id === id)?.name ?? id,
+    (id: string) => {
+      const space = spaces.find(s => s.id === id);
+      if (space === undefined) return id;
+      if (space.name !== undefined && space.name !== '') return space.name;
+      return space.path.split(/[\\/]/).filter(Boolean).pop() ?? id;
+    },
     [spaces],
   );
 
   const renderRow = useCallback(
-    ({ item }: LegendListRenderItemProps<Chat>) => (
-      <ChatRow chat={item} onOpen={onOpenSession} />
-    ),
-    [onOpenSession],
+    ({ item }: LegendListRenderItemProps<HomeListItem>) => {
+      if (item.type === 'section') {
+        return (
+          <Text style={[styles.section, { color: theme.textSecondary }]}>
+            {item.title}
+          </Text>
+        );
+      }
+      return <ChatRow chat={item.chat} onOpen={onOpenSession} />;
+    },
+    [onOpenSession, theme.textSecondary],
   );
 
   const folderLabel =
@@ -341,16 +411,20 @@ export function HomeScreen({
       ]}
     >
       <LegendList
-        data={chats}
-        keyExtractor={item => item.id}
-        estimatedItemSize={66}
+        data={rows}
+        keyExtractor={item =>
+          item.type === 'section' ? `section:${item.id}` : item.chat.id
+        }
+        estimatedItemSize={78}
         recycleItems
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListHeaderComponent={
-          <Text style={[styles.section, { color: theme.textSecondary }]}>
-            {t('home.sessions')}
+          <Text style={[styles.largeTitle, { color: theme.text }]}>
+            {spaceFilter === undefined
+              ? t('home.sessions')
+              : spaceName(spaceFilter)}
           </Text>
         }
         ListEmptyComponent={
@@ -412,21 +486,40 @@ export function HomeScreen({
         pointerEvents="box-none"
       >
         <GlassContainer spacing={8} style={styles.topRow}>
-          <Glass interactive style={styles.search}>
-            <Icon
-              name="magnifyingglass"
-              size={18}
-              color={theme.textSecondary}
-            />
-            <TextInput
-              style={[styles.searchInput, { color: theme.text }]}
-              placeholder={t('home.search')}
-              placeholderTextColor={theme.textSecondary}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-            />
-          </Glass>
+          {searchExpanded ? (
+            <Glass interactive style={styles.search}>
+              <Icon
+                name="magnifyingglass"
+                size={18}
+                color={theme.textSecondary}
+              />
+              <TextInput
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder={t('home.search')}
+                placeholderTextColor={theme.textSecondary}
+                value={query}
+                onChangeText={setQuery}
+                onBlur={() => {
+                  if (query.trim() === '') setSearchOpen(false);
+                }}
+                autoFocus
+                autoCapitalize="none"
+                accessibilityLabel={t('home.search')}
+              />
+            </Glass>
+          ) : (
+            <Pressable
+              onPress={() => setSearchOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('home.search')}
+              testID="home-search"
+            >
+              <Glass interactive style={styles.circle}>
+                <Icon name="magnifyingglass" size={18} color={theme.text} />
+              </Glass>
+            </Pressable>
+          )}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
               <Glass
@@ -560,6 +653,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 10,
     paddingHorizontal: 16,
     paddingBottom: 12,
@@ -583,36 +677,40 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   pillText: { fontSize: 12, fontWeight: '500' },
+  largeTitle: {
+    fontSize: 34,
+    fontWeight: '700',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
   section: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
     paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   empty: { fontSize: 15, padding: 20, textAlign: 'center' },
   listContent: { paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowHover: { opacity: 0.72 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotPlaceholder: { width: 8, height: 8 },
-  rowText: { flex: 1, gap: 3 },
+  rowText: { flex: 1, gap: 4 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  title: { flex: 1, fontSize: 18, fontWeight: '500' },
+  title: { flex: 1, fontSize: 17, fontWeight: '600' },
   unseen: { fontWeight: '700' },
-  subtitle: { fontSize: 14 },
-  preview: { fontSize: 13 },
+  subtitle: { fontSize: 15 },
   archivedHeader: {
     flexDirection: 'row',
     alignItems: 'center',

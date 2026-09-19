@@ -29,6 +29,7 @@ const en = {
   'home.search': 'Search sessions',
   'home.allSpaces': 'All spaces',
   'home.sessions': 'Threads',
+  'home.pinned': 'Pinned',
   'home.archived': 'Archived',
   'home.showMore': 'Show more',
   'home.newSession': 'New session',
