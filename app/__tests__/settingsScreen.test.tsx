@@ -123,9 +123,9 @@ test('appearance group offers choose image and hides effects until set', async (
   const mounted = await render(<SettingsScreen onClose={() => {}} />);
   const text = allText(mounted.root);
   expect(text).toContain('Appearance');
-  expect(text).toContain('New thread composer background');
+  expect(text).toContain('Background image');
   expect(text).toContain(
-    'Add an image behind the composer on empty new threads.',
+    'Add an image behind threads, chats, and new threads.',
   );
   expect(text).toContain('Choose image');
   expect(

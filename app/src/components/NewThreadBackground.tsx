@@ -1,13 +1,13 @@
-// Empty new-thread hero: cover-fit artwork with a full-height bottom
-// dissolve. Treatments (dither / ASCII / halftone / scanlines) use a static
-// Skia RuntimeEffect — no Reanimated worklets. Falls back to the untreated
-// image when the shader or decode fails (Jest, Expo Go, compile errors).
+// Window-sized session wallpaper: cover-fit artwork behind Home, existing
+// chats, and new-thread compose. Treatments (dither / ASCII / halftone /
+// scanlines) use a static Skia RuntimeEffect — no Reanimated worklets.
+// Falls back to the untreated image when the shader or decode fails
+// (Jest, Expo Go, compile errors). Mount once at AdaptiveShell / RootPager
+// so every surface shares the same crop.
 
-import React, { useMemo, useState } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
 import {
   Canvas,
   Fill,
@@ -23,7 +23,6 @@ import {
 } from '../zeron/state/uiPrefs';
 import {
   NEW_THREAD_BACKGROUND_FROSTED_OPACITY,
-  newThreadBackgroundHeight,
   type NewThreadBackgroundEffect,
 } from '../zeron/state/newThreadBackground';
 
@@ -199,52 +198,34 @@ function Artwork({
 
 export function NewThreadBackground() {
   const theme = useTheme();
-  const { height: viewportHeight } = useWindowDimensions();
   const background = useNewThreadComposerBackground();
   const effect = useNewThreadBackgroundEffect();
-  const heroHeight = useMemo(
-    () => newThreadBackgroundHeight(viewportHeight),
-    [viewportHeight],
-  );
   if (background === undefined) return null;
   return (
     <View
       pointerEvents="none"
       testID="new-thread-background"
-      style={[styles.hero, { height: heroHeight }]}
+      style={styles.fill}
     >
-      <MaskedView
-        style={StyleSheet.absoluteFill}
-        maskElement={
-          <LinearGradient
-            colors={['black', 'transparent']}
-            style={StyleSheet.absoluteFill}
-          />
-        }
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          { opacity: NEW_THREAD_BACKGROUND_FROSTED_OPACITY },
+        ]}
       >
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { opacity: NEW_THREAD_BACKGROUND_FROSTED_OPACITY },
-          ]}
-        >
-          <Artwork
-            uri={background.uri}
-            effect={effect}
-            light={theme.scheme === 'light'}
-          />
-        </View>
-      </MaskedView>
+        <Artwork
+          uri={background.uri}
+          effect={effect}
+          light={theme.scheme === 'light'}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+  fill: {
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
     zIndex: 0,
   },

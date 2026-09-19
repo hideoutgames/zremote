@@ -68,12 +68,15 @@ import {
   setComposeDefaults,
   toggleChatPinned,
   useChatPinned,
+  useNewThreadComposerBackground,
   usePinnedChatIds,
 } from '../zeron/state/uiPrefs';
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 import { TopChromeFade } from '../components/TopChromeFade';
+import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
+import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
 /** Extra list padding so the Threads title sits below the chrome fade. */
 const LIST_GAP_BELOW_CHROME = 20;
@@ -422,6 +425,7 @@ export function HomeScreen({
   const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
   const searching = searchFocused || query.trim() !== '';
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -583,7 +587,13 @@ export function HomeScreen({
   const chromeH = headerH !== 0 ? headerH : insets.top + 64;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+      ]}
+    >
+      <ThreadsBackgroundBlur />
       <LegendList
         data={rest}
         keyExtractor={item => item.id}

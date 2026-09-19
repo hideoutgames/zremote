@@ -37,6 +37,7 @@ import { SessionScreen } from '../screens/SessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { AppErrorBoundary } from '../app/AppErrorBoundary';
 import { useTheme } from '../theme';
+import { NewThreadBackground } from '../components/NewThreadBackground';
 import { Icon } from '../components/Icon';
 import { layoutFor, type LayoutPrefs } from './layout';
 import { t } from '../i18n/strings';
@@ -146,6 +147,7 @@ export function AdaptiveShell({
 
   return (
     <View style={[styles.row, { backgroundColor: theme.background }]}>
+      <NewThreadBackground />
       <InFlowSidebar
         visible={layout.sidebarVisible}
         width={layout.sidebarWidth}

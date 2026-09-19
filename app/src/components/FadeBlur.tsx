@@ -1,7 +1,8 @@
 // Masked BlurView that fades to transparency. Used behind the composer
-// (fade up) and the centered effort slider (soft rectangle with faded
-// edges on all sides). Skia is intentionally avoided here (Release
-// worklet crashes).
+// (fade up), the centered effort slider (soft rectangle with faded
+// edges on all sides), and the session wallpaper (horizontal fade into
+// sharp gutters). Skia is intentionally avoided here (Release worklet
+// crashes).
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -45,8 +46,9 @@ export function FadeBlur({
 }: {
   intensity: number;
   style?: StyleProp<ViewStyle>;
-  fade?: 'up' | 'down' | 'vertical' | 'radial';
-  /** For `down`, the 0–1 location where the opaque plateau ends. */
+  fade?: 'up' | 'down' | 'vertical' | 'radial' | 'horizontal';
+  /** For `down`, the 0–1 location where the opaque plateau ends.
+   *  For `horizontal`, the 0–1 edge inset of the fade on each side. */
   fadeHold?: number;
 }) {
   const theme = useTheme();
@@ -73,6 +75,26 @@ export function FadeBlur({
       style={StyleSheet.absoluteFill}
     />
   );
+  if (fade === 'horizontal') {
+    const edge = Math.min(0.4, Math.max(0.04, fadeHold ?? 0.12));
+    return (
+      <MaskedView
+        pointerEvents="none"
+        style={style}
+        maskElement={
+          <LinearGradient
+            colors={EDGE_COLORS}
+            locations={[0, edge, 1 - edge, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={StyleSheet.absoluteFill}
+          />
+        }
+      >
+        {blur}
+      </MaskedView>
+    );
+  }
   if (fade === 'radial') {
     return (
       <MaskedView

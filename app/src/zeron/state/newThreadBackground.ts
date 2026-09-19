@@ -43,8 +43,6 @@ export interface BackgroundFs {
 
 export const NEW_THREAD_BACKGROUND_DIR = 'new-thread-backgrounds';
 export const NEW_THREAD_BACKGROUND_FROSTED_OPACITY = 0.84;
-export const NEW_THREAD_BACKGROUND_VIEWPORT_RATIO = 0.72;
-export const NEW_THREAD_BACKGROUND_MAX_HEIGHT = 760;
 
 const RASTER_EXT = new Set([
   'png',
@@ -72,11 +70,10 @@ export const unbindBackgroundFs = (): void => {
 
 export const getBackgroundFs = (): BackgroundFs | undefined => boundFs;
 
-export const newThreadBackgroundHeight = (viewportHeight: number): number =>
-  Math.min(
-    Math.max(viewportHeight, 0) * NEW_THREAD_BACKGROUND_VIEWPORT_RATIO,
-    NEW_THREAD_BACKGROUND_MAX_HEIGHT,
-  );
+export const wallpaperScreenFill = (
+  fallback: string,
+  hasWallpaper: boolean,
+): string => (hasWallpaper ? 'transparent' : fallback);
 
 const extFromName = (name: string): string | undefined => {
   const i = name.lastIndexOf('.');

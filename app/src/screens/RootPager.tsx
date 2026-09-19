@@ -15,6 +15,7 @@ import { SessionScreen } from './SessionScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { AppErrorBoundary } from '../app/AppErrorBoundary';
 import { useTheme } from '../theme';
+import { NewThreadBackground } from '../components/NewThreadBackground';
 import {
   EDGE_BACK_WIDTH,
   isHorizontalEdgeMove,
@@ -99,6 +100,7 @@ export function RootPager({
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
+      <NewThreadBackground />
       <PagerView
         ref={pagerRef}
         style={styles.pager}
