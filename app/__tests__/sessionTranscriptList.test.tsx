@@ -18,9 +18,11 @@ import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 const keyboardMock = jest.requireMock('@legendapp/list/keyboard') as {
   __scrollMessageToEnd: jest.Mock;
   __onComposerLayout: jest.Mock;
+  __scrollToIndex: jest.Mock;
 };
 const scrollMessageToEnd = keyboardMock.__scrollMessageToEnd;
 const reportComposerInset = keyboardMock.__onComposerLayout;
+const scrollToIndex = keyboardMock.__scrollToIndex;
 
 const FOLLOW = { on: { dataChange: true, itemLayout: true } };
 
@@ -80,9 +82,17 @@ function Harness({
   );
 }
 
+function overflowList(tree: TestRenderer.ReactTestRenderer) {
+  tree.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+    nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 844 } },
+  });
+  listProps(tree).onContentSizeChange(390, 2000);
+}
+
 beforeEach(() => {
   scrollMessageToEnd.mockClear();
   reportComposerInset.mockClear();
+  scrollToIndex.mockClear();
   uiPrefsStore.setState({ composerExtraHeight: 0 });
 });
 
@@ -356,6 +366,184 @@ test('live extra height adds 1:1 to the transcript inset', async () => {
   });
   expect(heights.at(-1)).toBe(292);
   expect(lastReportedHeight()).toBe(292);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('hides the message rail when there is only one entry', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'preview-rail'),
+  ).toHaveLength(0);
+  expect(listProps(tree!).showsVerticalScrollIndicator).toBe(true);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('hides the message rail when content does not overflow', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 844 } },
+    });
+    listProps(tree!).onContentSizeChange(390, 200);
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'preview-rail'),
+  ).toHaveLength(0);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('shows the message rail once content overflows two or more entries', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'preview-rail').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree!.root.findAll(
+      n =>
+        n.props.testID === 'preview-rail-item-m1' &&
+        typeof n.props.onPress === 'function',
+    ),
+  ).toHaveLength(1);
+  expect(
+    tree!.root.findAll(
+      n =>
+        n.props.testID === 'preview-rail-item-m2' &&
+        typeof n.props.onPress === 'function',
+    ),
+  ).toHaveLength(1);
+  expect(listProps(tree!).showsVerticalScrollIndicator).toBe(false);
+  expect(listProps(tree!).contentContainerStyle).toEqual(
+    expect.arrayContaining([expect.objectContaining({ paddingRight: 40 })]),
+  );
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('working status is not a rail tick', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), entry('m2')]}
+        openKey="c1:1"
+        working
+        startedAt={1}
+      />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+  });
+  expect(
+    tree!.root.findAll(
+      n =>
+        String(n.props.testID ?? '').startsWith('preview-rail-item-') &&
+        typeof n.props.onPress === 'function',
+    ),
+  ).toHaveLength(2);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
+  ).toBeGreaterThan(0);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('last rail tick follows the live edge', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+    listProps(tree!).onScrollBeginDrag();
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
+  scrollMessageToEnd.mockClear();
+
+  await act(async () => {
+    tree!.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-m2' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
+  });
+  expect(scrollMessageToEnd).toHaveBeenCalledWith({
+    animated: true,
+    closeKeyboard: false,
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(scrollToIndex).not.toHaveBeenCalled();
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('a non-last rail tick jumps to that message and clears follow', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+
+  await act(async () => {
+    tree!.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-m1' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
+  });
+  expect(scrollToIndex).toHaveBeenCalledWith({
+    index: 0,
+    animated: true,
+    viewPosition: 0.5,
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
 
   await act(async () => {
     tree!.unmount();

@@ -18,6 +18,8 @@ import {
   Text,
   View,
   type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { type LegendListRef } from '@legendapp/list/react-native';
 import {
@@ -25,6 +27,7 @@ import {
   useKeyboardChatComposerInset,
   useKeyboardScrollToEnd,
 } from '@legendapp/list/keyboard';
+import { useReducedMotion } from 'react-native-reanimated';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
@@ -35,8 +38,16 @@ import {
   composerListInset,
 } from './composerExtraHeight';
 import { WorkingStatusRow } from './WorkingStatus';
+import { PreviewRail } from './agentsKit/PreviewRail';
+import {
+  buildRailItems,
+  pickActiveRailId,
+  type RailItem,
+} from './agentsKit/messagePreview';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
+const RAIL_PADDING_RIGHT = 40;
+const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
 
 export const WORKING_STATUS_ID = '__working-status__';
 
@@ -97,14 +108,26 @@ export const SessionTranscriptList = forwardRef<
 ) {
   'use no memo';
   const theme = useTheme();
+  const reduceMotion = useReducedMotion();
   const listRef = useRef<LegendListRef>(null);
   const [following, setFollowing] = useState(false);
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [listHeight, setListHeight] = useState(0);
+  const [composerInset, setComposerInset] = useState(0);
+  const [viewableIds, setViewableIds] = useState<string[]>([]);
+  const [scrollMetrics, setScrollMetrics] = useState({
+    offset: 0,
+    viewportHeight: 0,
+    contentHeight: 0,
+  });
+  const [dismissKey, setDismissKey] = useState(0);
   const hasOverflowedRef = useRef(false);
   const scrolledForKeyRef = useRef<string | null>(null);
   const wasWorkingRef = useRef(working);
   const followingRef = useRef(following);
   followingRef.current = following;
+  const viewableIdsRef = useRef<string[]>([]);
 
   const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
     useKeyboardChatComposerInset(listRef, composerRef);
@@ -133,6 +156,38 @@ export const SessionTranscriptList = forwardRef<
     return rows;
   }, [entries, working]);
 
+  const railItems = useMemo(
+    () =>
+      buildRailItems(entries, {
+        emptyLabel: t('session.message'),
+        goToLabel: (role, n, total) =>
+          t('session.goToMessage')
+            .replace('{role}', role)
+            .replace('{n}', String(n))
+            .replace('{total}', String(total)),
+      }),
+    [entries],
+  );
+  const itemIds = useMemo(() => railItems.map(item => item.id), [railItems]);
+
+  const overflowing = contentHeight > listHeight + 1 && entries.length > 1;
+  const railTop = insetsTop + 96;
+  const railHeight = Math.max(0, listHeight - railTop - composerInset);
+  const columnWidth =
+    contentMaxWidth !== undefined
+      ? Math.min(contentMaxWidth, windowWidth)
+      : windowWidth;
+  const railRight = (windowWidth - columnWidth) / 2 + 4;
+  const activeRailId = following
+    ? itemIds[itemIds.length - 1] ?? ''
+    : pickActiveRailId({
+        itemIds,
+        offset: scrollMetrics.offset,
+        viewportHeight: scrollMetrics.viewportHeight || listHeight,
+        contentHeight: scrollMetrics.contentHeight || contentHeight,
+        viewableIds,
+      });
+
   const publishInset = useCallback((extraHeight: number) => {
     const base = baseHeightRef.current;
     if (base === null) return;
@@ -141,6 +196,7 @@ export const SessionTranscriptList = forwardRef<
       composerExtraMax(windowHeightRef.current),
     );
     const inset = composerListInset(base, extra);
+    setComposerInset(inset);
     onComposerHeightRef.current(inset);
     reportComposerInsetRef.current({
       nativeEvent: { layout: { x: 0, y: 0, width: 0, height: inset } },
@@ -247,68 +303,152 @@ export const SessionTranscriptList = forwardRef<
     [chatId, startedAt, renderEntry],
   );
 
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ item: TranscriptRow }> }) => {
+      const ids = viewableItems.flatMap(v =>
+        v.item.kind === 'entry' ? [v.item.entry.id] : [],
+      );
+      const prev = viewableIdsRef.current;
+      const same =
+        ids.length === prev.length && ids.every((id, i) => id === prev[i]);
+      if (same) return;
+      viewableIdsRef.current = ids;
+      setViewableIds(ids);
+    },
+  ).current;
+
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
+      setScrollMetrics({
+        offset: contentOffset.y,
+        viewportHeight: layoutMeasurement.height,
+        contentHeight: contentSize.height,
+      });
+    },
+    [],
+  );
+
+  const scrollToRailItem = useCallback(
+    (item: RailItem) => {
+      const last = railItems[railItems.length - 1]?.id === item.id;
+      if (last) {
+        followEnd({
+          animated: reduceMotion !== true,
+          closeKeyboard: false,
+        }).catch(() => {});
+        return;
+      }
+      const index = entries.findIndex(entry => entry.id === item.id);
+      if (index < 0) return;
+      hasOverflowedRef.current = true;
+      setFollowing(false);
+      const jump = listRef.current?.scrollToIndex({
+        index,
+        animated: reduceMotion !== true,
+        viewPosition: 0.5,
+      });
+      jump?.catch(() => {
+        // LegendList rejects if the row has not been measured yet.
+      });
+    },
+    [entries, followEnd, railItems, reduceMotion],
+  );
+
   return (
-    <KeyboardAwareLegendList
-      ref={listRef}
+    <View
+      testID="session-transcript"
       style={styles.fill}
-      data={data}
-      keyExtractor={(item: TranscriptRow) =>
-        item.kind === 'working' ? WORKING_STATUS_ID : item.entry.id
-      }
-      renderItem={renderItem}
-      applyWorkaroundForContentInsetHitTestBug
-      maintainVisibleContentPosition={
-        Platform.OS !== 'android'
-          ? undefined
-          : anchorIndex != null && !following
-      }
-      keyboardLiftBehavior="whenAtEnd"
-      keyboardOffset={insetsBottom}
-      contentInsetEndAdjustment={contentInsetEndAdjustment}
-      freeze={freeze}
-      anchoredEndSpace={
-        anchorIndex != null
-          ? {
-              anchorIndex,
-              anchorMaxSize: ANCHOR_MAX_SIZE,
-              anchorOffset: insetsTop + 56,
-              onSizeChanged: (size: number) => {
-                if (size <= 0 && !hasOverflowedRef.current) {
-                  hasOverflowedRef.current = true;
-                  setFollowing(true);
-                }
-              },
-            }
-          : undefined
-      }
-      maintainScrollAtEnd={
-        following ? { on: { dataChange: true, itemLayout: true } } : undefined
-      }
-      maintainScrollAtEndThreshold={1}
-      estimatedItemSize={64}
-      estimatedListSize={{ width: windowWidth, height: windowHeight }}
-      onEndVisible={(v: boolean) => {
-        onShowScrollDown(!v);
-        if (v && hasOverflowedRef.current) setFollowing(true);
+      onLayout={event => {
+        const height = event.nativeEvent.layout.height;
+        setListHeight(prev => (prev === height ? prev : height));
       }}
-      onScrollBeginDrag={() => {
-        if (hasOverflowedRef.current) setFollowing(false);
-      }}
-      contentContainerStyle={[
-        styles.listContent,
-        { paddingTop: insetsTop + 96 },
-        contentMaxWidth !== undefined
-          ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-          : undefined,
-      ]}
-      scrollIndicatorInsets={{ top: insetsTop + 96 }}
-      keyboardDismissMode="interactive"
-      ListEmptyComponent={
-        <Text style={[styles.empty, { color: theme.textSecondary }]}>
-          {t('session.empty')}
-        </Text>
-      }
-    />
+    >
+      <KeyboardAwareLegendList
+        ref={listRef}
+        style={styles.fill}
+        data={data}
+        keyExtractor={(item: TranscriptRow) =>
+          item.kind === 'working' ? WORKING_STATUS_ID : item.entry.id
+        }
+        renderItem={renderItem}
+        applyWorkaroundForContentInsetHitTestBug
+        maintainVisibleContentPosition={
+          Platform.OS !== 'android'
+            ? undefined
+            : anchorIndex != null && !following
+        }
+        keyboardLiftBehavior="whenAtEnd"
+        keyboardOffset={insetsBottom}
+        contentInsetEndAdjustment={contentInsetEndAdjustment}
+        freeze={freeze}
+        anchoredEndSpace={
+          anchorIndex != null
+            ? {
+                anchorIndex,
+                anchorMaxSize: ANCHOR_MAX_SIZE,
+                anchorOffset: insetsTop + 56,
+                onSizeChanged: (size: number) => {
+                  if (size <= 0 && !hasOverflowedRef.current) {
+                    hasOverflowedRef.current = true;
+                    setFollowing(true);
+                  }
+                },
+              }
+            : undefined
+        }
+        maintainScrollAtEnd={
+          following ? { on: { dataChange: true, itemLayout: true } } : undefined
+        }
+        maintainScrollAtEndThreshold={1}
+        estimatedItemSize={64}
+        estimatedListSize={{ width: windowWidth, height: windowHeight }}
+        onEndVisible={(v: boolean) => {
+          onShowScrollDown(!v);
+          if (v && hasOverflowedRef.current) setFollowing(true);
+        }}
+        onScrollBeginDrag={() => {
+          if (hasOverflowedRef.current) setFollowing(false);
+          setDismissKey(key => key + 1);
+        }}
+        onScroll={onScroll}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={VIEWABILITY}
+        onContentSizeChange={(_w: number, height: number) => {
+          setContentHeight(prev => (prev === height ? prev : height));
+        }}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingTop: insetsTop + 96 },
+          overflowing ? { paddingRight: RAIL_PADDING_RIGHT } : undefined,
+          contentMaxWidth !== undefined
+            ? [styles.measureCap, { maxWidth: contentMaxWidth }]
+            : undefined,
+        ]}
+        scrollIndicatorInsets={{ top: insetsTop + 96 }}
+        showsVerticalScrollIndicator={!overflowing}
+        keyboardDismissMode="interactive"
+        ListEmptyComponent={
+          <Text style={[styles.empty, { color: theme.textSecondary }]}>
+            {t('session.empty')}
+          </Text>
+        }
+      />
+      {overflowing && railItems.length > 1 && railHeight > 0 ? (
+        <PreviewRail
+          items={railItems}
+          label={t('session.messageNavigation')}
+          activeId={activeRailId}
+          onItemSelect={scrollToRailItem}
+          top={railTop}
+          bottom={composerInset}
+          right={railRight}
+          railHeight={railHeight}
+          dismissKey={dismissKey}
+        />
+      ) : null}
+    </View>
   );
 });
 
