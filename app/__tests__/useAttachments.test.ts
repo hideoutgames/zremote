@@ -27,6 +27,11 @@ beforeEach(() => {
   getDocumentAsync.mockReset();
 });
 
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
 test('stageDocumentPickerResult stages every returned asset', () => {
   const result = stageDocumentPickerResult('c1', {
     canceled: false,

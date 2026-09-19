@@ -41,6 +41,7 @@ test('effort overlay is a centered Modal with a slider and no Fast switch', asyn
 });
 
 test('tapping the effort overlay backdrop dismisses it', async () => {
+  jest.useFakeTimers();
   const onDismiss = jest.fn();
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -60,11 +61,13 @@ test('tapping the effort overlay backdrop dismisses it', async () => {
   )[0];
   await act(async () => {
     done.props.onPress();
+    jest.advanceTimersByTime(300);
   });
   expect(onDismiss).toHaveBeenCalledTimes(1);
-  act(() => {
+  await act(async () => {
     tree?.unmount();
   });
+  jest.useRealTimers();
 });
 
 test('effort dest rect stays at mid-screen height and centers on an iPad composer column', () => {
