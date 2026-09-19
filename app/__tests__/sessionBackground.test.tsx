@@ -74,12 +74,24 @@ test('home list mounts the threads blur when artwork is set', async () => {
   expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
 });
 
+const zIndexOf = (node: TestRenderer.ReactTestInstance): number => {
+  const style = Array.isArray(node.props.style)
+    ? node.props.style.flat()
+    : [node.props.style];
+  const z = style.find(s => s != null && typeof s.zIndex === 'number')?.zIndex;
+  return typeof z === 'number' ? z : 0;
+};
+
 test('compose session stays sharp: chrome fade, no list or chat blur', async () => {
   const mounted = await render(<SessionScreen onBack={() => {}} />);
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'chat-background-blur')).toBe(0);
   expect(count(mounted.root, 'session-background-blur')).toBe(0);
   expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+  const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
+  const center = mounted.root.findByProps({ testID: 'compose-center' });
+  expect(fade.props.pointerEvents).toBe('none');
+  expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(fade));
 });
 
 test('active session keeps the chrome fade and adds a column blur', async () => {

@@ -223,12 +223,24 @@ function ComposeSessionScreen({
         { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
       ]}
     >
+      <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
+      <View
+        testID="compose-center"
+        style={[styles.composeCenter, { transform: [{ translateY: shift }] }]}
+        {...dismissPan.panHandlers}
+      >
+        <ComposeComposer
+          autoFocus
+          composerMaxWidth={composerMaxWidth}
+          onCreated={id => onCreated?.(id)}
+          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
+        />
+      </View>
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
-        <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
         <View style={styles.headerRow} pointerEvents="box-none">
           <GlassControl
             interactive
@@ -248,17 +260,6 @@ function ComposeSessionScreen({
             />
           </GlassControl>
         </View>
-      </View>
-      <View
-        style={[styles.composeCenter, { transform: [{ translateY: shift }] }]}
-        {...dismissPan.panHandlers}
-      >
-        <ComposeComposer
-          autoFocus
-          composerMaxWidth={composerMaxWidth}
-          onCreated={id => onCreated?.(id)}
-          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
-        />
       </View>
     </View>
   );
@@ -1195,7 +1196,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
-  composeCenter: { flex: 1, justifyContent: 'center' },
+  composeCenter: { flex: 1, justifyContent: 'center', zIndex: 2 },
   header: {
     position: 'absolute',
     top: 0,
