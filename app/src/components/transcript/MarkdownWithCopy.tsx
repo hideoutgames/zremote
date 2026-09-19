@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
@@ -14,8 +14,12 @@ export function CodeFenceBlock({ lang, text }: { lang: string; text: string }) {
   const onCopy = useCallback(() => {
     Clipboard.setStringAsync(text).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
   }, [text]);
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(id);
+  }, [copied]);
   return (
     <View
       testID="code-fence"

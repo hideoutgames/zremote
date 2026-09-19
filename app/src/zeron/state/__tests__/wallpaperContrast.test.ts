@@ -2,7 +2,7 @@ import {
   averageLuminanceFromRgba,
   contrastSchemeFromLuminance,
   luminanceOfRgb,
-} from '../src/zeron/state/wallpaperContrast';
+} from '../wallpaperContrast';
 
 test('luminanceOfRgb weights green most', () => {
   expect(luminanceOfRgb(255, 255, 255)).toBeCloseTo(1);
