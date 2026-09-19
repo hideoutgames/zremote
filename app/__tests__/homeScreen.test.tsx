@@ -77,6 +77,15 @@ const statusOf = (root: TestRenderer.ReactTestInstance, id: string): string => {
   return flattenText(node?.props.children);
 };
 
+const searchInput = (
+  root: TestRenderer.ReactTestInstance,
+): TestRenderer.ReactTestInstance =>
+  root.findAll(
+    n =>
+      n.props.testID === 'home-search-input' &&
+      typeof n.props.onChangeText === 'function',
+  )[0];
+
 const bodyText = (root: TestRenderer.ReactTestInstance, id: string): string => {
   const body = root.findAll(
     n => n.props.testID === `thread-body-${id}` && typeof n.type === 'string',
@@ -152,9 +161,7 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   )[0];
   expect(trigger).toBeDefined();
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
-  const search = mounted.root.findAll(
-    n => n.props.testID === 'home-search-input',
-  )[0];
+  const search = searchInput(mounted.root);
   expect(search).toBeDefined();
   expect(search.props.accessibilityLabel).toBe('Search sessions');
 });
@@ -377,21 +384,19 @@ test('search is an always-visible field and hides the composer while focused', a
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
-  const search = mounted.root.findAll(
-    n => n.props.testID === 'home-search-input',
-  );
-  expect(search).toHaveLength(1);
+  const search = searchInput(mounted.root);
+  expect(search).toBeDefined();
   expect(
     mounted.root.findAll(n => n.props.testID === 'compose-composer').length,
   ).toBeGreaterThan(0);
   await act(async () => {
-    search[0].props.onFocus();
+    search.props.onFocus();
   });
   expect(
     mounted.root.findAll(n => n.props.testID === 'compose-composer'),
   ).toHaveLength(0);
   await act(async () => {
-    search[0].props.onBlur();
+    search.props.onBlur();
   });
   expect(
     mounted.root.findAll(n => n.props.testID === 'compose-composer').length,
@@ -410,9 +415,7 @@ test('sidebar New thread hides while search is focused', async () => {
   expect(
     mounted.root.findAll(n => n.props.testID === 'home-new-thread').length,
   ).toBeGreaterThan(0);
-  const search = mounted.root.findAll(
-    n => n.props.testID === 'home-search-input',
-  )[0];
+  const search = searchInput(mounted.root);
   await act(async () => {
     search.props.onFocus();
   });
