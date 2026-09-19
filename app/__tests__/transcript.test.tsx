@@ -7,6 +7,8 @@ import { Text } from 'react-native';
 import { UserMessage } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
 import { InputCard } from '../src/components/transcript/InputCard';
+import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
+import * as ContextMenu from 'zeego/context-menu';
 import type { MessageEntry, MessagePart } from '../src/zeron/protocol/types';
 
 const userEntry: MessageEntry = {
@@ -181,4 +183,9 @@ test('InputCard shows Answered once resolved', async () => {
     );
   });
   expect(textOf(tree!.root)).toContain('Answered');
+});
+
+test('messageCopyContent is a zeego Content element', () => {
+  const el = messageCopyContent('hello from the phone');
+  expect(el.type).toBe(ContextMenu.Content);
 });
