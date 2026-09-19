@@ -26,6 +26,7 @@ import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
 import { messageCopyContent } from './MessageCopyMenu';
 import { mendMarkdown } from './mendMarkdown';
+import { FrostedBubble } from './FrostedBubble';
 import { MarkdownWithCopy } from './MarkdownWithCopy';
 import { WorkingStatusRow } from '../WorkingStatus';
 import { inputAnswers } from './inputAnswers';
@@ -207,12 +208,11 @@ export const AssistantMessage = React.memo(function ({
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <View style={styles.row}>
-          <View
+          <FrostedBubble
             testID="assistant-bubble"
-            style={[
-              styles.bubble,
-              { backgroundColor: theme.assistantBubbleBackground },
-            ]}
+            style={styles.bubble}
+            contentStyle={styles.bubblePad}
+            tintColor={theme.assistantBubbleBackground}
           >
             {items.map((item, i) =>
               item.kind === 'tools' ? (
@@ -264,7 +264,7 @@ export const AssistantMessage = React.memo(function ({
                 startedAt={workingStartedAt}
               />
             ) : null}
-          </View>
+          </FrostedBubble>
         </View>
       </ContextMenu.Trigger>
       {messageCopyContent(fullText)}
@@ -283,6 +283,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     maxWidth: '88%',
     borderRadius: 20,
+  },
+  bubblePad: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,

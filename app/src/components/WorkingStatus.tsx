@@ -8,6 +8,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { flavourSeed, flavourWord } from './workingMotion';
 import { formatWorkingElapsed } from '../zeron/state/workingElapsed';
+import { FrostedBubble } from './transcript/FrostedBubble';
 
 const ROW_TINTS = ['#B6D3EF', '#EDB185', '#F888A0'] as const;
 const DIM = 0.1;
@@ -123,15 +124,14 @@ export function WorkingStatusBubble({
   const theme = useTheme();
   return (
     <View style={styles.bubbleRow}>
-      <View
+      <FrostedBubble
         testID="assistant-bubble"
-        style={[
-          styles.bubble,
-          { backgroundColor: theme.assistantBubbleBackground },
-        ]}
+        style={styles.bubble}
+        contentStyle={styles.bubblePad}
+        tintColor={theme.assistantBubbleBackground}
       >
         <WorkingStatusRow compact chatId={chatId} startedAt={startedAt} />
-      </View>
+      </FrostedBubble>
     </View>
   );
 }
@@ -162,6 +162,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     maxWidth: '88%',
     borderRadius: 20,
+  },
+  bubblePad: {
     paddingHorizontal: 14,
     paddingVertical: 10,
   },

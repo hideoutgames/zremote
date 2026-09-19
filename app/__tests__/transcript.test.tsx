@@ -6,6 +6,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
 import { UserMessage } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
+import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
 import * as ContextMenu from 'zeego/context-menu';
@@ -306,6 +307,9 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
     : [bubble.props.style];
   expect(style.some(s => s?.maxWidth === '82%')).toBe(true);
   expect(style.some(s => s?.width === '100%')).toBe(false);
+  expect(bubble.findAll(n => n.props.intensity != null)[0].props.intensity).toBe(
+    BUBBLE_BLUR_INTENSITY,
+  );
 });
 
 test('AssistantMessage wraps text in a chat bubble', async () => {
@@ -315,9 +319,10 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
       <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
     );
   });
-  expect(
-    tree!.root.findAll(n => n.props.testID === 'assistant-bubble').length,
-  ).toBeGreaterThan(0);
+  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
+  expect(bubble.findAll(n => n.props.intensity != null)[0].props.intensity).toBe(
+    BUBBLE_BLUR_INTENSITY,
+  );
 });
 
 test('UserMessage never ellipsizes a short prompt', async () => {

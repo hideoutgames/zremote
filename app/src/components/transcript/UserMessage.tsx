@@ -17,6 +17,7 @@ import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import { stripPlanPrefix } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
+import { FrostedBubble } from './FrostedBubble';
 import { messageCopyContent } from './MessageCopyMenu';
 
 export const FOLD_CHARS = 1000;
@@ -113,12 +114,11 @@ export const UserMessage = React.memo(function UserMessageInner({
               </View>
             ) : null}
             {showBubble ? (
-              <View
+              <FrostedBubble
                 testID="user-bubble"
-                style={[
-                  styles.bubble,
-                  { backgroundColor: theme.userBubbleBackground },
-                ]}
+                style={styles.bubble}
+                contentStyle={styles.bubblePad}
+                tintColor={theme.userBubbleBackground}
               >
                 {kind !== null ? <PlanBadge kind={kind} /> : null}
                 {shown !== '' ? (
@@ -142,7 +142,7 @@ export const UserMessage = React.memo(function UserMessageInner({
                     </Text>
                   </Pressable>
                 ) : null}
-              </View>
+              </FrostedBubble>
             ) : null}
           </EnteringStack>
         </ContextMenu.Trigger>
@@ -184,6 +184,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     maxWidth: '82%',
     borderRadius: 20,
+  },
+  bubblePad: {
     paddingHorizontal: 14,
     paddingVertical: 9,
     gap: 6,
