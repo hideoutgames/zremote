@@ -159,19 +159,22 @@ the thread Details sheet.
 `ZeronApp` waits for `AuthSession.restore()` (SecureStore) before showing
 `SignInScreen`, so a returning user never flashes signed-out. Sign-in uses
 PKCE (`PKCE_ENABLED`). WorkOS still redirects to the registered HTTPS URI
-`https://{edge}/auth/cli/callback`. On iOS 17.4+ the app starts
-`ASWebAuthenticationSession` with that same HTTPS callback
-(`preferUniversalLinks: true`) so the session completes when WorkOS lands
-there — the paste-code HTML never shows. If HTTPS AuthSession fails to start
-(iOS 17.0–17.3), it retries with `zeron://auth/callback`; the edge 302-hops
+`https://{edge}/auth/cli/callback`. The app starts
+`ASWebAuthenticationSession` on `zeron://auth/callback` (custom scheme,
+`preferUniversalLinks: false`) so the WorkOS sheet actually presents —
+HTTPS AuthSession with universal links silently cancels without verified
+AASA/`webcredentials` and never opens `api.workos.com`. The edge 302-hops
 iPhone/iPad user-agents and `zr1.`-prefixed pending states to that scheme
-(`patches/zeron-edge/0004` + `0005`). PKCE SHA-256 is `expo-crypto`, injected
-at `beginSignIn`. `zeron://` Linking remains a last-resort return path
-(Safari fallback). There is no paste-code UI; cancel shows the generic
-message and the user taps Sign in again. Desktop CLI `zeron login` still
-sees the paste-code page. Expo Go uses the same HTTPS-first AuthSession.
-AASA (`IOS_APP_IDS`) remains useful for HTTPS universal links but is not
-required for the 17.4+ in-session intercept.
+(`patches/zeron-edge/0004` + `0005`), so the paste-code HTML never shows.
+PKCE SHA-256 is `expo-crypto`, injected at `beginSignIn`. Pending PKCE
+state is persisted in Keychain (15-minute TTL) so a Safari hop or process
+death can still `completeSignIn`. Tokens are stored under a sanitized
+SecureStore key (URL `:`/`/` are illegal in Keychain keys). `zeron://`
+Linking is the Safari-fallback return path if AuthSession fails to start.
+There is no paste-code UI; cancel shows the generic message and the user
+taps Sign in again. Desktop CLI `zeron login` still sees the paste-code
+page. AASA (`IOS_APP_IDS`) remains useful for HTTPS universal links into
+the app but is not required for the custom-scheme AuthSession.
 
 ## Workspace tools (Files / Terminal / History)
 

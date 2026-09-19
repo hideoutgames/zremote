@@ -6,9 +6,11 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import App from '../App';
 import { authStore } from '../src/zeron/state/authStore';
 import { exitDemo } from '../src/demo/demoMode';
+import { AUTH_CALLBACK_URL } from '../src/zeron/native/authBrowser';
 
 const pressByText = async (
   root: TestRenderer.ReactTestInstance,
@@ -52,7 +54,8 @@ test('renders SignInScreen when signed out', async () => {
   });
 });
 
-test('Sign in opens an auth session instead of a paste-code form', async () => {
+test('Sign in opens WorkOS via a zeron:// auth session, not a paste-code form', async () => {
+  (WebBrowser.openAuthSessionAsync as jest.Mock).mockClear();
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(<App />);
@@ -64,6 +67,17 @@ test('Sign in opens an auth session instead of a paste-code form', async () => {
   expect(
     tree!.root.findAll(n => typeof n.props.onChangeText === 'function').length,
   ).toBe(0);
+  expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalled();
+  const [url, redirect, opts] = (WebBrowser.openAuthSessionAsync as jest.Mock)
+    .mock.calls[0];
+  expect(url).toContain(
+    'https://api.workos.com/user_management/authorize?response_type=code',
+  );
+  expect(redirect).toBe(AUTH_CALLBACK_URL);
+  expect(opts).toEqual({
+    preferEphemeralSession: false,
+    preferUniversalLinks: false,
+  });
   await act(async () => {
     tree!.unmount();
   });

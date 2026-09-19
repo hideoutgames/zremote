@@ -1,6 +1,6 @@
-// Sign-in: ASWebAuthenticationSession intercepts the WorkOS HTTPS callback
-// (iOS 17.4+); zeron:// is the start-failure fallback. PKCE throughout.
-// Demo remains under Advanced.
+// Sign-in: WorkOS redirect stays the registered HTTPS URI; AuthSession
+// listens on zeron:// so the sheet actually presents. The edge 302-hops
+// to that scheme. PKCE throughout. Demo remains under Advanced.
 
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -44,7 +44,7 @@ export function SignInScreen() {
         random: randomBytes,
         sha256,
       });
-      const result = await openAuthSessionOrBrowser(url, httpsCallback);
+      const result = await openAuthSessionOrBrowser(url);
       if (result.type === 'success') {
         const link = parseCallbackUrl(result.url);
         if (link.error !== undefined || link.code === undefined) {

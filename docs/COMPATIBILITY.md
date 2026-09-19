@@ -117,28 +117,30 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
 `http://127.0.0.1:{port}/callback` and the hosted paste-code page
 `{edge}/auth/cli/callback`. The mobile flow:
 
-1. **Primary**: `ASWebAuthenticationSession` with the WorkOS HTTPS
-   redirect `{edge}/auth/cli/callback` plus PKCE. On iOS 17.4+
-   `openAuthSessionAsync` uses `preferUniversalLinks: true` so Apple's
-   `.https(host:path:)` API intercepts that landing URL and the paste-code
-   page never shows. If HTTPS AuthSession fails to start (iOS 17.0–17.3,
-   where scheme `"https"` cannot start), the app retries with
-   `zeron://auth/callback`. The edge 302-hops iPhone/iPad user-agents and
-   `zr1.`-prefixed pending states to that scheme (`patches/zeron-edge/0004`
-   + `0005`). `zeron://` Linking is a last-resort return path (Safari
-   fallback). There is no in-app paste-code UI; cancel/error shows a
-   generic message and the user taps Sign in again. Desktop CLI
-   `zeron login` still sees the paste-code page.
+1. **Primary**: `ASWebAuthenticationSession` on `zeron://auth/callback`
+   (custom scheme, `preferUniversalLinks: false`) so the WorkOS sheet
+   actually presents. WorkOS still uses the registered HTTPS redirect
+   `{edge}/auth/cli/callback` plus PKCE. The edge 302-hops iPhone/iPad
+   user-agents and `zr1.`-prefixed pending states to that scheme
+   (`patches/zeron-edge/0004` + `0005`), so the paste-code page never
+   shows. HTTPS AuthSession with `preferUniversalLinks: true` is not used:
+   without verified AASA/`webcredentials` it silently returns `cancel` and
+   never opens `api.workos.com`. `zeron://` Linking is the Safari-fallback
+   return path if AuthSession fails to start. There is no in-app paste-code
+   UI; cancel/error shows a generic message and the user taps Sign in
+   again. Desktop CLI `zeron login` still sees the paste-code page.
 2. `state` is minted per attempt with a `zr1.` prefix (so the edge can hop
-   without UA sniffing), stored until consumed, and bound to the
-   intercepted code (same CSRF discipline as the engine).
+   without UA sniffing), stored in memory and Keychain until consumed
+   (15-minute TTL), and bound to the intercepted code (same CSRF discipline
+   as the engine).
 3. **PKCE**: `PKCE_ENABLED` is on. `SignInScreen` injects `expo-crypto`
    `randomBytes` / `sha256` into `beginSignIn` (Hermes Web Crypto is not
    the production path). The edge exchange route must forward
    `code_verifier` (`0001`); without that patch HTTPS-callback sign-in fails
    PKCE validation. See `docs/HOST_EDGE_CHANGES.md`.
 
-Tokens (access + refresh) live in Keychain-backed storage (`expo-secure-store`).
+Tokens (access + refresh) live in Keychain-backed storage (`expo-secure-store`),
+namespaced by a sanitized edge URL (SecureStore keys cannot contain `:` or `/`).
 WebSocket connections send the bearer as an `Authorization` header
 (NitroWebSocket supports headers) instead of `?token=`, so credentials never
 appear in URLs or logs.
