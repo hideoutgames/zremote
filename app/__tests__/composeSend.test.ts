@@ -33,11 +33,20 @@ beforeEach(() => {
 });
 
 test('createThreadFromCompose writes the chat, moves the draft, and sendRun', async () => {
-  const writes: { kind: string; id: string }[] = [];
+  const writes: {
+    kind: string;
+    id: string;
+    set?: Record<string, unknown>;
+  }[] = [];
   const sendRun = jest.fn();
   const runtime = {
     registryDoc: {
-      write: (kind: string, id: string) => writes.push({ kind, id }),
+      write: (
+        kind: string,
+        id: string,
+        _op?: string,
+        set?: Record<string, unknown>,
+      ) => writes.push({ kind, id, set }),
     },
     registry: { flushPending: () => {} },
     openSession: () => ({
@@ -64,10 +73,16 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
       model: 'sonnet',
       reasoning: 'high',
     },
+    branch: 'main',
   });
 
   expect(chatId).toBeTruthy();
   expect(writes.some(w => w.kind === 'chats' && w.id === chatId)).toBe(true);
+  expect(
+    writes.some(
+      w => w.kind === 'chats' && w.id === chatId && w.set?.branch === 'main',
+    ),
+  ).toBe(true);
   expect(draftStore.getState().byChat[COMPOSE_DRAFT_ID]).toBeUndefined();
   expect(sendRun).toHaveBeenCalledWith(
     'hello from compose',

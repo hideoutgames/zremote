@@ -195,7 +195,7 @@ These are thin screens over host-relayed RPCs — nothing runs on the phone.
   other CSI/OSC/DCS. Rows render as monospace Text runs with a cursor block.
   Input is a hidden TextInput plus a key bar (Esc, Ctrl, arrows, Tab, Ctrl-C)
   mapping to byte sequences. Tabs allow multiple shells per session; exited
-  shells show "exited (code)" with the TTL note.
+  shells stay listed (dimmed, with `[exit N]`) until the host TTL expires.
 - **History** (`screens/HistoryScreen.tsx`, `components/threadPrs.ts`):
   pull requests in this thread. The checkout's current change request
   (`WatchCheckoutChangeRequest`) plus `github.com/.../pull/N` URLs in

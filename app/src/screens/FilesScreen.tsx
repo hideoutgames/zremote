@@ -4,8 +4,8 @@
 // (WorkspaceTarget {chatId}). Errors surface verbatim — path-jail
 // rejections included. `.git` is never listed by the host and is also
 // filtered client-side in filesPaneReducer. Ignored files are opt-in
-// (`includeIgnored`); while enabled a one-line trust-boundary hint shows
-// (ARCHITECTURE.md: ignored content never leaves the host).
+// (`includeIgnored`); ignored rows render dimmed (ARCHITECTURE.md:
+// ignored content never leaves the host).
 
 import React, {
   useCallback,
@@ -41,6 +41,9 @@ import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|heic|avif)$/i;
+
+const leaf = (path: string): string =>
+  path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 export function FilesScreen({
   chatId,
@@ -173,9 +176,11 @@ export function FilesScreen({
   }
 
   const rows = matches ?? state.entries;
+  const folderTitle =
+    dir !== '' ? leaf(dir) : chat?.cwd !== undefined ? leaf(chat.cwd) : '';
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
-      <View style={[styles.bar, { borderBottomColor: theme.border }]}>
+      <View style={styles.nav}>
         {dir !== '' ? (
           <Pressable
             onPress={() => setDir(dir.split('/').slice(0, -1).join('/'))}
@@ -186,20 +191,20 @@ export function FilesScreen({
           >
             <Icon name="chevron.left" size={16} color={theme.text} />
           </Pressable>
-        ) : null}
-        <TextInput
-          value={search}
-          onChangeText={onSearch}
-          placeholder={t('files.search')}
-          placeholderTextColor={theme.textSecondary}
-          style={[
-            styles.search,
-            { color: theme.text, backgroundColor: theme.inputBackground },
-          ]}
-          accessibilityLabel={t('files.search')}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        ) : (
+          <View style={styles.barBtn} />
+        )}
+        {folderTitle !== '' ? (
+          <Text
+            style={[styles.folderTitle, { color: theme.text }]}
+            numberOfLines={1}
+            accessibilityRole="header"
+          >
+            {folderTitle}
+          </Text>
+        ) : (
+          <View style={styles.folderTitle} />
+        )}
         <Pressable
           onPress={() => dispatch({ type: 'toggleIgnored' })}
           hitSlop={8}
@@ -213,20 +218,27 @@ export function FilesScreen({
           style={styles.barBtn}
         >
           <Icon
-            name="eye"
+            name={state.includeIgnored ? 'eye.slash' : 'eye'}
             size={16}
             color={state.includeIgnored ? theme.accent : theme.textSecondary}
           />
         </Pressable>
       </View>
-      {state.includeIgnored ? (
-        <Text
-          style={[styles.hint, { color: theme.textSecondary }]}
-          maxFontSizeMultiplier={1.6}
-        >
-          {t('files.trustBoundary')}
-        </Text>
-      ) : null}
+      <View
+        style={[styles.searchWrap, { backgroundColor: theme.inputBackground }]}
+      >
+        <Icon name="magnifyingglass" size={14} color={theme.textSecondary} />
+        <TextInput
+          value={search}
+          onChangeText={onSearch}
+          placeholder={t('files.search')}
+          placeholderTextColor={theme.textSecondary}
+          style={[styles.search, { color: theme.text }]}
+          accessibilityLabel={t('files.search')}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
       {state.error !== undefined ? (
         <Text style={[styles.hint, { color: theme.danger }]}>
           {state.error}
@@ -262,6 +274,13 @@ export function FilesScreen({
             >
               {e.name}
             </Text>
+            {e.kind === 'directory' ? (
+              <Icon
+                name="chevron.right"
+                size={14}
+                color={theme.textSecondary}
+              />
+            ) : null}
           </Pressable>
         ))}
       </ScrollView>
@@ -271,13 +290,10 @@ export function FilesScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  bar: {
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 4,
   },
   barBtn: {
     minWidth: 44,
@@ -285,12 +301,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  folderTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    minHeight: 36,
+  },
   search: {
     flex: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
     paddingVertical: 6,
-    fontSize: 14,
+    fontSize: 16,
   },
   hint: { fontSize: 11, paddingHorizontal: 12, paddingVertical: 4 },
   empty: { padding: 24, textAlign: 'center' },
@@ -302,6 +332,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  name: { flex: 1, fontSize: 14 },
+  name: { flex: 1, fontSize: 17 },
   ignored: { opacity: 0.5 },
 });

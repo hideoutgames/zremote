@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
+  Pressable,
   StyleSheet,
   View,
   type ColorValue,
+  type PressableProps,
   type ViewProps,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -128,9 +130,72 @@ export function GlassContainer({
   );
 }
 
+type GlassControlProps = ViewProps &
+  Pick<
+    PressableProps,
+    | 'onPress'
+    | 'disabled'
+    | 'hitSlop'
+    | 'testID'
+    | 'accessibilityRole'
+    | 'accessibilityLabel'
+    | 'accessibilityState'
+    | 'accessibilityHint'
+  > & {
+    interactive?: boolean;
+    tintColor?: ColorValue;
+  };
+
+// Interactive glass as the outer surface; the Pressable lives *inside* so
+// iOS 26 does not wrap a second glass UIButton around the chip.
+export function GlassControl({
+  interactive = true,
+  tintColor,
+  style,
+  children,
+  onPress,
+  disabled,
+  hitSlop,
+  testID,
+  accessibilityRole = 'button',
+  accessibilityLabel,
+  accessibilityState,
+  accessibilityHint,
+  ...rest
+}: GlassControlProps) {
+  return (
+    <Glass
+      interactive={interactive}
+      tintColor={tintColor}
+      style={style}
+      {...rest}
+    >
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        hitSlop={hitSlop}
+        testID={testID}
+        accessibilityRole={accessibilityRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={accessibilityState}
+        accessibilityHint={accessibilityHint}
+        style={styles.controlHit}
+      >
+        {children}
+      </Pressable>
+    </Glass>
+  );
+}
+
 const styles = StyleSheet.create({
   clip: {
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  controlHit: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

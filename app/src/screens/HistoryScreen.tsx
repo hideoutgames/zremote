@@ -8,12 +8,9 @@ import { useStore } from 'zustand';
 import { useSessionState } from '../zeron/state/sessionStores';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { collectThreadPrs } from '../components/threadPrs';
-import {
-  hasPrStats,
-  prStateLabelKey,
-  type PrBadgeModel,
-} from '../components/prBadge';
-import { prToneColor, prToneFill } from '../components/prChrome';
+import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
+import { prToneColor } from '../components/prChrome';
+import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 
@@ -48,52 +45,38 @@ export function HistoryScreen({
             const label = t('history.prRow')
               .replace('{number}', String(badge.number))
               .replace('{title}', badge.title);
-            const toneColor = prToneColor(theme, badge);
             return (
               <Pressable
                 key={badge.url !== '' ? badge.url : String(badge.number)}
                 onPress={() => onOpenPr?.(badge)}
                 accessibilityRole="button"
-                accessibilityLabel={label}
+                accessibilityLabel={`${label}, ${t(prStateLabelKey(badge))}`}
                 style={[styles.row, { borderBottomColor: theme.border }]}
               >
-                <View style={styles.body}>
-                  <View style={styles.metaRow}>
-                    <View
-                      style={[
-                        styles.pill,
-                        { backgroundColor: prToneFill(theme, badge) },
-                      ]}
-                    >
-                      <Text style={[styles.pillText, { color: toneColor }]}>
-                        {t(prStateLabelKey(badge))}
-                      </Text>
-                    </View>
-                    <Text
-                      style={[styles.number, { color: theme.textSecondary }]}
-                    >
-                      {`#${badge.number}`}
-                    </Text>
-                    {hasPrStats(badge) ? (
-                      <Text style={styles.counts}>
-                        <Text style={{ color: theme.diffAddText }}>
-                          {`+${badge.additions}`}
-                        </Text>
-                        {` `}
-                        <Text style={{ color: theme.diffDelText }}>
-                          {`-${badge.deletions}`}
-                        </Text>
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text
-                    style={[styles.title, { color: theme.text }]}
-                    numberOfLines={2}
-                    maxFontSizeMultiplier={1.6}
-                  >
-                    {badge.title}
-                  </Text>
-                </View>
+                <View
+                  style={[
+                    styles.dot,
+                    { backgroundColor: prToneColor(theme, badge) },
+                  ]}
+                />
+                <Text
+                  style={[styles.title, { color: theme.text }]}
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={1.6}
+                >
+                  {badge.title}
+                </Text>
+                <Text
+                  style={[styles.number, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {`#${badge.number}`}
+                </Text>
+                <Icon
+                  name="chevron.right"
+                  size={14}
+                  color={theme.textSecondary}
+                />
               </Pressable>
             );
           })}
@@ -111,22 +94,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'center',
-  },
-  body: { gap: 6 },
-  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+    gap: 10,
   },
-  pill: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  pillText: { fontSize: 12, fontWeight: '600' },
-  number: { fontSize: 13 },
-  counts: { fontSize: 13, fontWeight: '600' },
-  title: { fontSize: 16, fontWeight: '600' },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  title: { flex: 1, fontSize: 16, fontWeight: '600' },
+  number: { fontSize: 13, fontVariant: ['tabular-nums'] },
 });

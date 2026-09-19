@@ -6,6 +6,7 @@ import React, { type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useTheme } from '../theme';
+import { MenuDismissShield } from './menus/MenuDismissShield';
 
 export const SESSION_SHEET_DETENTS: (number | 'auto')[] = [0.75, 1];
 
@@ -14,19 +15,22 @@ export function SessionSheet({
   onDismiss,
   children,
   fill = false,
+  initialDetentIndex = 0,
 }: {
   title?: string;
   onDismiss: () => void;
   children: ReactNode;
   /** Fill the detent so Files / Terminal can layout a flex body. */
   fill?: boolean;
+  /** 0 = 75% (lists); 1 = full (Terminal). */
+  initialDetentIndex?: number;
 }) {
   const theme = useTheme();
 
   return (
     <TrueSheet
       detents={SESSION_SHEET_DETENTS}
-      initialDetentIndex={0}
+      initialDetentIndex={initialDetentIndex}
       onDidDismiss={onDismiss}
       grabber
       backgroundColor={theme.background}
@@ -41,6 +45,7 @@ export function SessionSheet({
           </Text>
         ) : null}
         {fill ? <View style={styles.fill}>{children}</View> : children}
+        <MenuDismissShield />
       </View>
     </TrueSheet>
   );
@@ -49,11 +54,11 @@ export function SessionSheet({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     textAlign: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
 });

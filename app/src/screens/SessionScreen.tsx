@@ -25,7 +25,7 @@ import {
   KeyboardController,
   KeyboardStickyView,
 } from 'react-native-keyboard-controller';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
@@ -73,7 +73,7 @@ import { usePrBadge } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
-import { Glass } from '../components/Glass';
+import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
@@ -186,25 +186,23 @@ function ComposeSessionScreen({
         style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
       >
-        <Pressable
+        <GlassControl
+          interactive
           onPress={onBack}
-          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={
             leadingIcon !== undefined ? t('sidebar.toggle') : t('session.back')
           }
-          style={styles.headerBtn}
+          style={styles.circle}
         >
-          <Glass interactive style={styles.circle}>
-            <Icon
-              name={(leadingIcon ?? 'chevron.left') as never}
-              size={18}
-              color={theme.text}
-            />
-          </Glass>
-        </Pressable>
+          <Icon
+            name={(leadingIcon ?? 'chevron.left') as never}
+            size={18}
+            color={theme.text}
+          />
+        </GlassControl>
         <View style={styles.headerText}>
-          <Glass style={styles.titlePill}>
+          <Glass interactive style={styles.titlePill}>
             <Text
               style={[styles.title, { color: theme.text }]}
               numberOfLines={1}
@@ -594,129 +592,144 @@ function ActiveSessionScreen({
         style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
       >
-        <Pressable
+        <GlassControl
+          interactive
           onPress={onBack}
-          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={
             leadingIcon !== undefined ? t('sidebar.toggle') : t('session.back')
           }
-          style={styles.headerBtn}
+          style={styles.circle}
         >
-          <Glass interactive style={styles.circle}>
-            <Icon
-              name={(leadingIcon ?? 'chevron.left') as never}
-              size={18}
-              color={theme.text}
-            />
-          </Glass>
-        </Pressable>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <Pressable
-              style={styles.headerText}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={t('session.titleMenu')}
-            >
-              <Glass style={styles.titlePill}>
-                <Text
-                  style={[styles.title, { color: theme.text }]}
-                  numberOfLines={1}
+          <Icon
+            name={(leadingIcon ?? 'chevron.left') as never}
+            size={18}
+            color={theme.text}
+          />
+        </GlassControl>
+        <View style={styles.headerText} pointerEvents="box-none">
+          <Glass interactive style={styles.titlePill}>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <Pressable
+                  style={styles.titleHit}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.titleMenu')}
                 >
-                  {sessionTitle(chat)}
-                </Text>
-                {subtitle !== '' ? (
                   <Text
-                    style={[styles.subtitle, { color: theme.textSecondary }]}
+                    style={[styles.title, { color: theme.text }]}
                     numberOfLines={1}
                   >
-                    {subtitle}
+                    {sessionTitle(chat)}
                   </Text>
-                ) : null}
-              </Glass>
-            </Pressable>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item key="rename" onSelect={onRename}>
-              <DropdownMenu.ItemTitle>
-                {t('session.rename')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="pin" onSelect={onPin}>
-              <DropdownMenu.ItemTitle>
-                {pinned ? t('session.unpin') : t('session.pin')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="archive" onSelect={onArchive}>
-              <DropdownMenu.ItemTitle>
-                {chat?.archived
-                  ? t('home.row.unarchive')
-                  : t('session.archive')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+                  {subtitle !== '' ? (
+                    <Text
+                      style={[styles.subtitle, { color: theme.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      {subtitle}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                <DropdownMenu.Item key="rename" onSelect={onRename}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.rename')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+                <DropdownMenu.Group>
+                  <DropdownMenu.Item key="pin" onSelect={onPin}>
+                    <DropdownMenu.ItemTitle>
+                      {pinned ? t('session.unpin') : t('session.pin')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon
+                      ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+                    />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Group>
+                <DropdownMenu.Item key="archive" onSelect={onArchive}>
+                  <DropdownMenu.ItemTitle>
+                    {chat?.archived
+                      ? t('home.row.unarchive')
+                      : t('session.archive')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </Glass>
+        </View>
         <View style={styles.headerRight}>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <Glass
-                interactive
-                style={styles.circle}
-                accessibilityRole="button"
-                accessibilityLabel={t('session.overflow')}
-              >
-                <Icon name="ellipsis.circle" size={18} color={theme.text} />
-              </Glass>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-              <DropdownMenu.Item
-                key="details"
-                onSelect={() => setDetailsOpen(true)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.details')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="subagents"
-                onSelect={() => setSubagentsOpen(true)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.subagents')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="history"
-                onSelect={() => setToolSheet('history')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.history')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="files"
-                onSelect={() => setToolSheet('files')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.files')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="terminal"
-                onSelect={() => setToolSheet('terminal')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.terminal')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item key="copy" onSelect={onCopyId}>
-                <DropdownMenu.ItemTitle>
-                  {t('session.copyId')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
+          <Glass interactive style={styles.circle}>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <Pressable
+                  style={styles.controlFill}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.overflow')}
+                >
+                  <Icon name="ellipsis" size={18} color={theme.text} />
+                </Pressable>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                <DropdownMenu.Item
+                  key="details"
+                  onSelect={() => setDetailsOpen(true)}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {t('session.details')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'info.circle' }} />
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  key="subagents"
+                  onSelect={() => setSubagentsOpen(true)}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {t('session.subagents')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'person.2' }} />
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item
+                  key="history"
+                  onSelect={() => setToolSheet('history')}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {t('session.history')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon
+                    ios={{ name: 'arrow.triangle.branch' }}
+                  />
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  key="files"
+                  onSelect={() => setToolSheet('files')}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {t('session.files')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'folder' }} />
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  key="terminal"
+                  onSelect={() => setToolSheet('terminal')}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {t('session.terminal')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'terminal' }} />
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item key="copy" onSelect={onCopyId}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.copyId')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </Glass>
         </View>
       </View>
 
@@ -995,18 +1008,14 @@ function ActiveSessionScreen({
         </SessionSheet>
       ) : null}
       {toolSheet === 'files' ? (
-        <SessionSheet
-          title={t('session.files')}
-          fill
-          onDismiss={() => setToolSheet(null)}
-        >
+        <SessionSheet fill onDismiss={() => setToolSheet(null)}>
           <FilesScreen chatId={chatId} />
         </SessionSheet>
       ) : null}
       {toolSheet === 'terminal' ? (
         <SessionSheet
-          title={t('session.terminal')}
           fill
+          initialDetentIndex={1}
           onDismiss={() => setToolSheet(null)}
         >
           <TerminalScreen chatId={chatId} />
@@ -1040,7 +1049,6 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   measureCap: { width: '100%', alignSelf: 'center' },
-  headerBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   titlePill: {
     alignItems: 'center',
@@ -1048,15 +1056,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     maxWidth: '100%',
-    overflow: 'hidden',
+  },
+  titleHit: {
+    alignItems: 'center',
+    maxWidth: '100%',
   },
   circle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+  },
+  controlFill: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerText: { flex: 1, alignItems: 'center' },
   title: { fontSize: 17, fontWeight: '600' },

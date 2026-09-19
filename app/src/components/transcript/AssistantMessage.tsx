@@ -7,7 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as ContextMenu from 'zeego/context-menu';
+import * as ContextMenu from '../menus/context-menu';
 import type { MessageEntry, MessagePart } from '../../zeron/protocol/types';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import { markdownStyleFor } from '../../markdownStyle';
@@ -26,7 +26,7 @@ import type { TurnChange } from './turnChanges';
 import { PlanCard } from './PlanCard';
 import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
-import { MessageCopyMenu } from './MessageCopyMenu';
+import { messageCopyContent } from './MessageCopyMenu';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
@@ -273,7 +273,7 @@ export const AssistantMessage = React.memo(function ({
           ) : null}
         </View>
       </ContextMenu.Trigger>
-      <MessageCopyMenu text={fullText} />
+      {messageCopyContent(fullText)}
     </ContextMenu.Root>
   );
 });
