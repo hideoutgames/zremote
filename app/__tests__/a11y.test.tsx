@@ -423,8 +423,10 @@ test('composer file tiles are square preview buttons', async () => {
       onOpenMoreModels={() => {}}
       effortLabel="High"
       effortSupported
+      fastSupported={false}
       fastEnabled={false}
       onOpenEffort={() => {}}
+      onToggleFast={() => {}}
       dictation={dictationUnavailable}
       onSend={() => {}}
       onSteer={() => {}}
