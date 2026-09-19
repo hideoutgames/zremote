@@ -307,9 +307,9 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
     : [bubble.props.style];
   expect(style.some(s => s?.maxWidth === '82%')).toBe(true);
   expect(style.some(s => s?.width === '100%')).toBe(false);
-  expect(bubble.findAll(n => n.props.intensity != null)[0].props.intensity).toBe(
-    BUBBLE_BLUR_INTENSITY,
-  );
+  expect(
+    bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
+  ).toBe(BUBBLE_BLUR_INTENSITY);
 });
 
 test('AssistantMessage wraps text in a chat bubble', async () => {
@@ -320,9 +320,9 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
     );
   });
   const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
-  expect(bubble.findAll(n => n.props.intensity != null)[0].props.intensity).toBe(
-    BUBBLE_BLUR_INTENSITY,
-  );
+  expect(
+    bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
+  ).toBe(BUBBLE_BLUR_INTENSITY);
 });
 
 test('UserMessage never ellipsizes a short prompt', async () => {
