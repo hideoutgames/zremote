@@ -22,9 +22,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  KeyboardAvoidingView,
   KeyboardController,
   KeyboardStickyView,
+  useKeyboardState,
 } from 'react-native-keyboard-controller';
 import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
@@ -47,6 +47,7 @@ import {
   setPlanMode,
   toggleChatPinned,
   useChatPinned,
+  useNewThreadComposerBackground,
   useRecentModels,
 } from '../zeron/state/uiPrefs';
 import {
@@ -129,8 +130,10 @@ import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { createLog } from '../zeron/log';
-import { NewThreadBackground } from '../components/NewThreadBackground';
+import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 import { TopChromeFade } from '../components/TopChromeFade';
+import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
+import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
 const log = createLog();
 
@@ -202,11 +205,24 @@ function ComposeSessionScreen({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState(s => s.height);
   const [headerH, setHeaderH] = useState(0);
+  const [composerH, setComposerH] = useState(0);
   const dismissPan = useKeyboardDismissPan();
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
+  const shift = composeKeyboardShift({
+    windowHeight,
+    composerHeight: composerH,
+    keyboardHeight,
+  });
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <NewThreadBackground />
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+      ]}
+    >
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
@@ -233,17 +249,17 @@ function ComposeSessionScreen({
           </GlassControl>
         </View>
       </View>
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={styles.composeCenter}
+      <View
+        style={[styles.composeCenter, { transform: [{ translateY: shift }] }]}
         {...dismissPan.panHandlers}
       >
         <ComposeComposer
           autoFocus
           composerMaxWidth={composerMaxWidth}
           onCreated={id => onCreated?.(id)}
+          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
         />
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -621,8 +637,16 @@ function ActiveSessionScreen({
     .filter(Boolean)
     .join(' · ');
 
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+      ]}
+    >
+      <ChatBackgroundBlur contentMaxWidth={contentMaxWidth} />
       <SessionTranscriptList
         key={openKey}
         ref={transcriptRef}

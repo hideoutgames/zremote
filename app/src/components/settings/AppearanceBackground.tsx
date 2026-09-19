@@ -1,5 +1,6 @@
-// Settings → Appearance: new-thread composer background picker + effect
-// chips. Copy matches desktop Settings → Appearance.
+// Settings → Appearance: session wallpaper picker + effect chips. Copy
+// tracks desktop Settings → Appearance for the picker/effects; the image
+// now fills the window behind Home, chats, and compose.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';

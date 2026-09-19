@@ -24,6 +24,19 @@ test('TopChromeFade is non-interactive and sized to inset plus band', async () =
   });
 });
 
+test('FadeBlur horizontal mode still mounts a mask', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <FadeBlur fade="horizontal" fadeHold={0.14} intensity={36} />,
+    );
+  });
+  expect(tree!.root).toBeTruthy();
+  act(() => {
+    tree?.unmount();
+  });
+});
+
 test('FadeBlur down mode still mounts a mask', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {

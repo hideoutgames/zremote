@@ -255,9 +255,9 @@ const en = {
   'settings.titleModel': 'Model',
   'settings.agentAccounts': 'Agent Accounts',
   'settings.appearance': 'Appearance',
-  'settings.background': 'New thread composer background',
+  'settings.background': 'Background image',
   'settings.backgroundEmpty':
-    'Add an image behind the composer on empty new threads.',
+    'Add an image behind threads, chats, and new threads.',
   'settings.backgroundFrostHint': 'Softened automatically on frosted themes.',
   'settings.backgroundUnavailable': 'Image unavailable',
   'settings.backgroundUnavailableHint': 'Choose a replacement or remove it.',

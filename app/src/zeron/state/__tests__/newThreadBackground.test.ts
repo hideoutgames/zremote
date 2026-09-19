@@ -1,10 +1,10 @@
 import {
   bindBackgroundFs,
   copyBackgroundFile,
-  newThreadBackgroundHeight,
   retireManagedBackground,
   unbindBackgroundFs,
   validateBackgroundSource,
+  wallpaperScreenFill,
   type BackgroundFs,
 } from '../newThreadBackground';
 import { MAX_ATTACHMENT_BYTES } from '../../attachments/validate';
@@ -98,8 +98,7 @@ test('copyBackgroundFile writes a managed unique file then retires the previous'
   expect(fs.files.get(second.background.uri)).toBe('file:///tmp/b.jpg');
 });
 
-test('newThreadBackgroundHeight matches desktop 0.72 cap at 760', () => {
-  expect(newThreadBackgroundHeight(400)).toBe(288);
-  expect(newThreadBackgroundHeight(1000)).toBe(720);
-  expect(newThreadBackgroundHeight(1200)).toBe(760);
+test('wallpaperScreenFill is transparent only when artwork is set', () => {
+  expect(wallpaperScreenFill('#000000', false)).toBe('#000000');
+  expect(wallpaperScreenFill('#FFFFFF', true)).toBe('transparent');
 });

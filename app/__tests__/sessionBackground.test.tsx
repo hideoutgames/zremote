@@ -1,6 +1,8 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { SessionScreen } from '../src/screens/SessionScreen';
+import { HomeScreen } from '../src/screens/HomeScreen';
+import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import {
   AppServicesContext,
   type AppServices,
@@ -28,6 +30,9 @@ const render = async (element: React.ReactElement) => {
   return tree!;
 };
 
+const count = (root: TestRenderer.ReactTestInstance, testID: string): number =>
+  root.findAll(n => n.props.testID === testID).length;
+
 beforeEach(() => {
   uiPrefsStore.setState({
     newThreadComposerBackground: {
@@ -54,18 +59,30 @@ afterEach(() => {
   tree = undefined;
 });
 
-test('compose session shows the new-thread hero and chrome fade', async () => {
-  const mounted = await render(<SessionScreen onBack={() => {}} />);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'new-thread-background')
-      .length,
-  ).toBeGreaterThan(0);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBeGreaterThan(0);
+test('shell wallpaper sits behind home and the detail column', async () => {
+  const mounted = await render(<AdaptiveShell requestedChat={null} />);
+  expect(count(mounted.root, 'new-thread-background')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'session-background-blur')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'chat-background-blur')).toBe(0);
 });
 
-test('active session keeps the chrome fade and hides the hero', async () => {
+test('home list mounts the threads blur when artwork is set', async () => {
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(count(mounted.root, 'session-background-blur')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+});
+
+test('compose session stays sharp: chrome fade, no list or chat blur', async () => {
+  const mounted = await render(<SessionScreen onBack={() => {}} />);
+  expect(count(mounted.root, 'new-thread-background')).toBe(0);
+  expect(count(mounted.root, 'chat-background-blur')).toBe(0);
+  expect(count(mounted.root, 'session-background-blur')).toBe(0);
+  expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+});
+
+test('active session keeps the chrome fade and adds a column blur', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -78,11 +95,17 @@ test('active session keeps the chrome fade and hides the hero', async () => {
     ],
   });
   const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'new-thread-background')
-      .length,
-  ).toBe(0);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBeGreaterThan(0);
+  expect(count(mounted.root, 'new-thread-background')).toBe(0);
+  expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+});
+
+test('no artwork means no wallpaper or blur layers', async () => {
+  uiPrefsStore.setState({
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'none',
+  });
+  const mounted = await render(<AdaptiveShell requestedChat={null} />);
+  expect(count(mounted.root, 'new-thread-background')).toBe(0);
+  expect(count(mounted.root, 'session-background-blur')).toBe(0);
 });

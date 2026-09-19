@@ -68,12 +68,15 @@ import {
   setComposeDefaults,
   toggleChatPinned,
   useChatPinned,
+  useNewThreadComposerBackground,
   usePinnedChatIds,
 } from '../zeron/state/uiPrefs';
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 import { TopChromeFade } from '../components/TopChromeFade';
+import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
+import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
@@ -419,6 +422,7 @@ export function HomeScreen({
   const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
   const searching = searchFocused || query.trim() !== '';
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -579,7 +583,13 @@ export function HomeScreen({
     : insets.bottom + 76;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+      ]}
+    >
+      <ThreadsBackgroundBlur />
       <LegendList
         data={rest}
         keyExtractor={item => item.id}

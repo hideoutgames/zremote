@@ -46,7 +46,7 @@ export interface UiPrefs {
   composeDefaults?: ComposeDefaults;
   /** Last-used effort / Fast per catalog model (`harness:modelId`). */
   modelSettingsByKey: Record<string, ModelSettings>;
-  /** Device-local artwork behind the empty new-thread composer. */
+  /** Device-local artwork behind Home, chats, and new-thread compose. */
   newThreadComposerBackground?: NewThreadComposerBackground;
   /** Non-destructive treatment composited over the artwork. */
   newThreadBackgroundEffect: NewThreadBackgroundEffect;
