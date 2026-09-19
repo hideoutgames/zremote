@@ -83,6 +83,9 @@ const THUMBS_ANIM_MS = 220;
 
 export interface ComposerProps {
   chatId: string;
+  /** Session is today's bound-thread composer; compose creates a thread on send. */
+  mode?: 'session' | 'compose';
+  autoFocus?: boolean;
   phase: RunPhase;
   roomState: RoomState;
   harness?: HarnessDescriptor;
@@ -122,6 +125,8 @@ export interface ComposerProps {
 
 export const Composer = React.memo(function ({
   chatId,
+  mode = 'session',
+  autoFocus = false,
   phase,
   roomState,
   harness,
@@ -188,6 +193,10 @@ export const Composer = React.memo(function ({
   const inputMaxHeight =
     (windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT) +
     extraHeight;
+  const inputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus, mode]);
   const planMode = usePlanMode(chatId);
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
@@ -523,7 +532,9 @@ export const Composer = React.memo(function ({
           ) : null}
 
           <TextInput
+            ref={inputRef}
             value={draft.text}
+            autoFocus={autoFocus}
             onChangeText={text => setDraftText(chatId, text)}
             onSelectionChange={e =>
               (selRef.current = e.nativeEvent.selection.start)

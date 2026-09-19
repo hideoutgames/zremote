@@ -27,18 +27,21 @@ export const rememberRecentModel = (
 
 /** Up to `limit` models for the composer's Liquid Glass menu. Recents that
  * still exist in the catalog come first; empty recents still fill from the
- * **same harness** as `current` (a started session is provider-bound). */
+ * **same harness** as `current` when `lockHarness` (a started session is
+ * provider-bound). Compose mode passes `lockHarness: false` so every
+ * provider/model in the catalog can appear. */
 export const recentMenuModels = (
   recents: readonly RecentModel[],
   catalog: readonly CatalogModelRef[],
   current: RecentModel | undefined,
   limit = 3,
+  lockHarness = true,
 ): CatalogModelRef[] => {
   if (limit <= 0 || catalog.length === 0) return [];
   const byKey = new Map(catalog.map(m => [keyOf(m), m]));
   const out: CatalogModelRef[] = [];
   const seen = new Set<string>();
-  const currentHarness = current?.harness;
+  const currentHarness = lockHarness ? current?.harness : undefined;
   const add = (ref: RecentModel | undefined): void => {
     if (ref === undefined || out.length >= limit) return;
     if (currentHarness !== undefined && ref.harness !== currentHarness) return;

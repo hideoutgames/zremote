@@ -118,22 +118,18 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
 `{edge}/auth/cli/callback`. The mobile flow:
 
 1. **Primary**: `ASWebAuthenticationSession` with an _https_ callback
-   (`{edge}/auth/cli/callback`, iOS 17.4+). This reuses the already-registered
-   redirect URI; iOS intercepts the redirect before the paste page renders and
-   hands `code`+`state` to the app. Requirement: the app declares
+   (`{edge}/auth/cli/callback`, iOS 17.4+) plus PKCE. This reuses the
+   already-registered redirect URI; iOS intercepts the redirect and hands
+   `code`+`state` to the app. Requirement: the app declares
    `applinks:<edge host>` in Associated Domains and the edge serves
-   `/.well-known/apple-app-site-association` — a small, additive edge change
-   shipped as a separate patch (`patches/zeron-edge/`). Not deployed yet.
-2. **Fallback (works against the production edge today)**: open the same
-   authorize URL, let the hosted page show the `state.code` string, and paste
-   it into the app — exactly the flow Zeron's SwiftUI client and `zeron login`
-   use.
-3. `state` is minted per attempt, stored until consumed, and bound to the
-   pasted/intercepted code (same CSRF discipline as the engine).
-4. **PKCE**: the edge exchange route does not currently forward a
-   `code_verifier`; we send `code_challenge` only when the edge advertises
-   support. The additive `codeVerifier` passthrough is part of the same edge
-   patch and is separately identified in `docs/HOST_EDGE_CHANGES.md`.
+   `/.well-known/apple-app-site-association` (`patches/zeron-edge/0001`).
+   `zeron://` Linking is a second return path. There is no in-app paste-code
+   UI; cancel/error shows a generic message and the user taps Sign in again.
+2. `state` is minted per attempt, stored until consumed, and bound to the
+   intercepted code (same CSRF discipline as the engine).
+3. **PKCE**: `PKCE_ENABLED` is on. The edge exchange route must forward
+   `code_verifier` (`0001`); without that patch HTTPS-callback sign-in fails
+   PKCE validation. See `docs/HOST_EDGE_CHANGES.md`.
 
 Tokens (access + refresh) live in Keychain-backed storage (`expo-secure-store`).
 WebSocket connections send the bearer as an `Authorization` header
@@ -158,7 +154,7 @@ a silent fallback into a less-safe behavior.
 
 | Capability                                                                                                       | Minimum host version                      | Evidence                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — new-session "New worktree" checkout) | **0.2.62**                                | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `NewSessionSheet` + `CheckoutSelector` (blocked, "update Zeron on \<host\>"). |
+| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — compose "New worktree" checkout) | **0.2.62**                                | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `CheckoutSelector` (blocked, "update Zeron on \<host\>"). |
 | Shared queue send (`queue` doc rows, composer "Queue" pill)                                                      | capability `message-queue-v1`             | `crates/rpc/src/lib.rs` `QUEUE_MESSAGE`; ComposerView.swift queue-first flow. Without it the live pill degrades to Steer-or-hidden.                                                                                                                                                                                                                                                 |
 | Queued attachments (`pending://` refs + escort uploads)                                                          | capability `message-queue-attachments-v1` | `attachments.rs`/`UploadStash.swift`; `sendPlan()` in `app/src/zeron/attachments/sendPlan.ts` falls back to legacy upload-first.                                                                                                                                                                                                                                                    |
 | Queue row actions (Send now / Steer now / Remove)                                                                | capability `message-queue-actions-v1`     | `crates/rpc/src/lib.rs` `SEND_QUEUED_MESSAGE_NOW` etc.; `QueuePanel` hides actions without it.                                                                                                                                                                                                                                                                                      |

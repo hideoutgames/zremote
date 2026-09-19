@@ -28,6 +28,13 @@ export interface CheckoutChipsProps {
   spaces: readonly Space[];
   projectLabel: string;
   worktreeLabel: string;
+  /** Compose: the machine row lists every host and is switchable. */
+  hostSwitchable?: boolean;
+  hosts?: readonly DeviceRow[];
+  onSelectHost?: (device: DeviceRow) => void;
+  onSelectSpace?: (space: Space | undefined) => void;
+  onSelectRef?: (ref: RepoRef) => void;
+  onSelectNewWorktree?: (base: string) => void;
 }
 
 const ChipTrigger = ({
@@ -76,6 +83,12 @@ export function CheckoutChips({
   spaces,
   projectLabel,
   worktreeLabel,
+  hostSwitchable = false,
+  hosts,
+  onSelectHost,
+  onSelectSpace,
+  onSelectRef,
+  onSelectNewWorktree,
 }: CheckoutChipsProps) {
   const [refs, setRefs] = useState<RepoRef[] | undefined>(undefined);
   const [wtOpen, setWtOpen] = useState(false);
@@ -94,6 +107,18 @@ export function CheckoutChips({
   const applyWorktree = useCallback(
     async (choice: CheckoutChoice) => {
       if (host === undefined) return;
+      if (hostSwitchable) {
+        if (choice.kind === 'ref') {
+          onSelectRef?.({
+            name: choice.ref,
+            current: false,
+            worktreePath: choice.worktreePath,
+          });
+          return;
+        }
+        onSelectNewWorktree?.(choice.base);
+        return;
+      }
       const verdict = checkoutChangeAllowed(phase, choice, host);
       if (!verdict.allowed) {
         Alert.alert(
@@ -130,7 +155,16 @@ export function CheckoutChips({
       }
       setChatCheckout(runtime, chat.id, path, choice.base);
     },
-    [runtime, chat.id, host, phase, repoPath],
+    [
+      runtime,
+      chat.id,
+      host,
+      phase,
+      repoPath,
+      hostSwitchable,
+      onSelectRef,
+      onSelectNewWorktree,
+    ],
   );
 
   const enabled =
@@ -150,10 +184,32 @@ export function CheckoutChips({
           />
         </DropdownMenu.Trigger>
         <DropdownMenu.Content>
-          {host !== undefined ? (
+          {hostSwitchable ? (
+            (hosts ?? []).map(d => (
+              <DropdownMenu.Item key={d.id} onSelect={() => onSelectHost?.(d)}>
+                <DropdownMenu.ItemTitle>{d.name}</DropdownMenu.ItemTitle>
+                {d.id === host?.id ? (
+                  <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+                ) : null}
+              </DropdownMenu.Item>
+            ))
+          ) : host !== undefined ? (
             <DropdownMenu.Item key="machine" disabled>
               <DropdownMenu.ItemTitle>{host.name}</DropdownMenu.ItemTitle>
               <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+            </DropdownMenu.Item>
+          ) : null}
+          {hostSwitchable ? (
+            <DropdownMenu.Item
+              key="no-project"
+              onSelect={() => onSelectSpace?.(undefined)}
+            >
+              <DropdownMenu.ItemTitle>
+                {t('newSession.noProject')}
+              </DropdownMenu.ItemTitle>
+              {chat.spaceId === undefined ? (
+                <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+              ) : null}
             </DropdownMenu.Item>
           ) : null}
           {hostSpaces.map(s => (
@@ -161,6 +217,10 @@ export function CheckoutChips({
               key={s.id}
               onSelect={() => {
                 if (!enabled) return;
+                if (hostSwitchable) {
+                  onSelectSpace?.(s);
+                  return;
+                }
                 setChatSpace(runtime, chat.id, s.id, s.path);
               }}
             >

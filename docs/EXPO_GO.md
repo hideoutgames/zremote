@@ -34,9 +34,9 @@ Windows).
 
 ## What works
 
-- Sign-in via **paste code** — universal links can't return into Expo Go,
-  so the AuthKit URL opens in `openBrowserAsync` and the code is pasted
-  back (SignInScreen detects `storeClient` automatically).
+- Sign-in via **HTTPS callback** on a development/production build (PKCE +
+  AASA). Expo Go cannot receive universal links, so production sign-in is
+  not available there — use **Advanced → Try demo mode** to explore the UI.
 - Spaces, sessions, device list — registry layers are unchanged (they never
   needed Loro).
 - Live transcript via **relay mode**, send/steer/stop/questions, queue view
@@ -89,9 +89,8 @@ What it simulates:
   realistic multi-part reply, `steer`, `interrupt`, `respondInput`), the
   message queue, attachments, workspace files, checkout diffs, git history,
   echo terminals, agent accounts, previews, and update status.
-- A "Demo" pill is pinned top-right on every screen; Settings shows
-  "Demo account" / "Exit demo". Demo mode is not persisted — a reload
-  returns to sign-in.
+- Settings shows "Demo account" / "Exit demo". Demo mode is not persisted
+  — a reload returns to sign-in.
 
 **Nothing leaves the device.** `demoEdge.fetchImpl` answers the same
 endpoint shapes the runtime calls; there is no network dial, no auth

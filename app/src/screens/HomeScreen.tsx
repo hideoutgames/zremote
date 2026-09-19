@@ -1,5 +1,7 @@
 // Home (left pager page): search, spaces filter, the threads list driven by
-// workspaceStore, archived shelf, connection pill, New session + Settings.
+// workspaceStore, archived shelf, connection pill. Settings sits next to
+// the folder control; iPhone mounts the compose Composer here, iPad keeps
+// a New thread button that enters detail compose.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -50,9 +52,10 @@ import { BrandMark } from '../components/BrandMark';
 import { svgForHarness } from '../components/harnessBrand';
 import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
-import { NewSessionSheet } from './NewSessionSheet';
+import { ComposeComposer } from '../components/ComposeComposer';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
 import { useThreadPrDot } from '../zeron/state/changeRequestStore';
+import { setComposeDefaults } from '../zeron/state/uiPrefs';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 
@@ -226,10 +229,13 @@ const ChatRow = React.memo(function ({
 export function HomeScreen({
   onOpenSession,
   onOpenSettings,
+  onCompose,
   variant = 'screen',
 }: {
   onOpenSession: (chatId: string) => void;
   onOpenSettings: () => void;
+  /** iPad sidebar: enter compose in the detail column. */
+  onCompose?: (opts?: { spaceId?: string }) => void;
   /** 'sidebar' renders inside the glass panel — its own New/Settings
    * controls switch from glass to subtle fills (no extra glass-on-glass). */
   variant?: 'screen' | 'sidebar';
@@ -251,10 +257,10 @@ export function HomeScreen({
   const [query, setQuery] = useState('');
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const [bottomH, setBottomH] = useState(0);
+  const [composerH, setComposerH] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
 
@@ -309,6 +315,21 @@ export function HomeScreen({
 
   const folderLabel =
     spaceFilter === undefined ? t('home.allSpaces') : spaceName(spaceFilter);
+
+  const enterCompose = useCallback(
+    (spaceId?: string) => {
+      if (spaceId !== undefined) {
+        const space = spaces.find(s => s.id === spaceId);
+        if (space !== undefined)
+          setComposeDefaults({
+            deviceId: space.deviceId,
+            spaceId: space.id,
+          });
+      }
+      onCompose?.({ spaceId });
+    },
+    [spaces, onCompose],
+  );
 
   return (
     <View
@@ -367,12 +388,19 @@ export function HomeScreen({
           styles.listContent,
           {
             paddingTop: headerH !== 0 ? headerH : insets.top + 64,
-            paddingBottom: bottomH !== 0 ? bottomH + 12 : insets.bottom + 76,
+            paddingBottom:
+              variant === 'sidebar'
+                ? bottomH !== 0
+                  ? bottomH + 12
+                  : insets.bottom + 76
+                : composerH !== 0
+                ? composerH + 12
+                : insets.bottom + 140,
           },
         ]}
         scrollIndicatorInsets={{
           top: headerH,
-          bottom: bottomH,
+          bottom: variant === 'sidebar' ? bottomH : composerH,
         }}
         showsVerticalScrollIndicator={false}
         renderItem={renderRow}
@@ -427,7 +455,7 @@ export function HomeScreen({
               {spaceFilter !== undefined ? (
                 <DropdownMenu.Item
                   key="newHere"
-                  onSelect={() => setSheetOpen(true)}
+                  onSelect={() => enterCompose(spaceFilter)}
                 >
                   <DropdownMenu.ItemTitle>
                     {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
@@ -457,6 +485,17 @@ export function HomeScreen({
               })}
             </DropdownMenu.Content>
           </DropdownMenu.Root>
+          <Pressable
+            onPress={onOpenSettings}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.title')}
+            testID="home-settings"
+          >
+            <Glass interactive style={styles.circle}>
+              <Icon name="gearshape" size={20} color={theme.text} />
+            </Glass>
+          </Pressable>
         </GlassContainer>
 
         {connection !== 'connected' ? (
@@ -472,47 +511,43 @@ export function HomeScreen({
         ) : null}
       </View>
 
-      <View
-        style={[
-          styles.bottomBar,
-          { paddingBottom: (barInset ?? insets.bottom) + 8 },
-        ]}
-        onLayout={e => setBottomH(e.nativeEvent.layout.height)}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          style={styles.newChatWrap}
-          onPress={() => setSheetOpen(true)}
-          hitSlop={8}
+      {variant === 'sidebar' ? (
+        <View
+          style={[
+            styles.bottomBar,
+            { paddingBottom: (barInset ?? insets.bottom) + 8 },
+          ]}
+          onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+          pointerEvents="box-none"
         >
-          {control(
-            styles.newChat,
-            <>
-              <Icon name="plus" size={16} color={theme.text} />
-              <Text style={[styles.newChatText, { color: theme.text }]}>
-                {t('home.newSession')}
-              </Text>
-            </>,
-          )}
-        </Pressable>
-        <Pressable onPress={onOpenSettings} hitSlop={8}>
-          {control(
-            styles.circle,
-            <Icon name="gearshape" size={20} color={theme.text} />,
-          )}
-        </Pressable>
-      </View>
-
-      {sheetOpen ? (
-        <NewSessionSheet
-          initialSpaceId={spaceFilter}
-          onClose={() => setSheetOpen(false)}
-          onCreated={id => {
-            setSheetOpen(false);
-            onOpenSession(id);
-          }}
-        />
-      ) : null}
+          <Pressable
+            style={styles.newChatWrap}
+            onPress={() => enterCompose()}
+            hitSlop={8}
+            testID="home-new-thread"
+            accessibilityRole="button"
+            accessibilityLabel={t('home.newThread')}
+          >
+            {control(
+              styles.newChat,
+              <>
+                <Icon name="plus" size={16} color={theme.text} />
+                <Text style={[styles.newChatText, { color: theme.text }]}>
+                  {t('home.newThread')}
+                </Text>
+              </>,
+            )}
+          </Pressable>
+        </View>
+      ) : (
+        <View
+          style={styles.homeComposer}
+          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
+          pointerEvents="box-none"
+        >
+          <ComposeComposer sticky onCreated={onOpenSession} />
+        </View>
+      )}
     </View>
   );
 }
@@ -615,5 +650,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  homeComposer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
 });

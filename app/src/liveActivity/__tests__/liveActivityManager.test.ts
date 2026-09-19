@@ -23,11 +23,12 @@ const props = (
 
 const T0 = 1_000_000;
 
-test('planActivity: starts on working/awaitingInput only', () => {
+test('planActivity: starts on working/awaitingInput/planReady only', () => {
   expect(planActivity(undefined, props('working'), T0).kind).toBe('start');
   expect(planActivity(undefined, props('awaitingInput'), T0).kind).toBe(
     'start',
   );
+  expect(planActivity(undefined, props('planReady'), T0).kind).toBe('start');
   expect(planActivity(undefined, props('stale'), T0).kind).toBe('none');
   expect(planActivity(undefined, props('completed'), T0).kind).toBe('none');
 });
@@ -69,11 +70,14 @@ class FakeHandle implements LiveActivityHandle {
 }
 
 class FakeDriver implements LiveActivityDriver {
-  failStarts = false;
+  failIndividuals = false;
   started: FakeHandle[] = [];
+  startedProps: SessionActivityProps[] = [];
   instances: FakeHandle[] = [];
-  start(_p: SessionActivityProps): LiveActivityHandle {
-    if (this.failStarts) throw new Error('activity limit');
+  start(p: SessionActivityProps): LiveActivityHandle {
+    if (this.failIndividuals && p.overflowTitles === undefined)
+      throw new Error('activity limit');
+    this.startedProps.push(p);
     const h = new FakeHandle();
     this.started.push(h);
     this.instances.push(h);
@@ -115,13 +119,15 @@ test('start dedupes, token listener registers, end unregisters', () => {
   expect(unreg).toEqual(['c1']);
 });
 
-test('OS refusal falls back to aggregate for the selected session', () => {
+test('OS refusal packs leftovers into one overflow list', () => {
   const driver = new FakeDriver();
-  driver.failStarts = true;
+  driver.failIndividuals = true;
   const { mgr } = make(driver);
-  mgr.apply('c1', props('working'));
-  driver.failStarts = false;
-  // aggregate created lazily on first failure for the selected session
-  mgr.apply('c2', props('working'));
-  expect(driver.started.length).toBeLessThanOrEqual(1);
+  mgr.apply('c1', props('working', 'c1'));
+  mgr.apply('c2', props('working', 'c2'));
+  expect(mgr.overflowChatIds().sort()).toEqual(['c1', 'c2']);
+  expect(driver.started).toHaveLength(1);
+  expect(driver.startedProps[0].overflowTitles).toEqual(['Session', 'Session']);
+  mgr.apply('c1', props('completed', 'c1'));
+  expect(mgr.overflowChatIds()).toEqual(['c2']);
 });
