@@ -575,13 +575,16 @@ export function HomeScreen({
         }
         ListHeaderComponent={
           <>
-            <Text style={[styles.largeTitle, { color: theme.text }]}>
+            <Text
+              style={[styles.largeTitle, { color: theme.text }]}
+              testID="home-title"
+            >
               {spaceFilter === undefined
                 ? t('home.sessions')
                 : spaceName(spaceFilter)}
             </Text>
             {pinned.length > 0 ? (
-              <>
+              <View style={styles.pinnedSection} testID="home-pinned-section">
                 <Text style={[styles.section, { color: theme.textSecondary }]}>
                   {t('home.pinned')}
                 </Text>
@@ -593,7 +596,7 @@ export function HomeScreen({
                     now={now}
                   />
                 ))}
-              </>
+              </View>
             ) : null}
           </>
         }
@@ -611,16 +614,27 @@ export function HomeScreen({
                 style={styles.archivedHeader}
                 onPress={() => setArchivedOpen(o => !o)}
                 hitSlop={6}
+                testID="home-archived-header"
               >
-                <Icon name="archivebox" size={14} color={theme.textSecondary} />
-                <Text style={[styles.section, { color: theme.textSecondary }]}>
+                <View style={styles.archivedIcon}>
+                  <Icon
+                    name="archivebox"
+                    size={14}
+                    color={theme.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[styles.archivedLabel, { color: theme.textSecondary }]}
+                >
                   {`${t('home.archived')} (${archived.length})`}
                 </Text>
-                <Icon
-                  name={archivedOpen ? 'chevron.up' : 'chevron.down'}
-                  size={12}
-                  color={theme.textSecondary}
-                />
+                <View style={styles.archivedIcon}>
+                  <Icon
+                    name={archivedOpen ? 'chevron.up' : 'chevron.down'}
+                    size={14}
+                    color={theme.textSecondary}
+                  />
+                </View>
               </Pressable>
               {archivedOpen
                 ? archived.map(c => (
@@ -758,8 +772,8 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: 12, fontWeight: '500' },
   largeTitle: {
-    fontSize: 34,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '500',
     paddingHorizontal: 20,
     paddingTop: 4,
     paddingBottom: 12,
@@ -796,8 +810,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  title: { flex: 1, fontSize: 17, fontWeight: '600' },
-  unseen: { fontWeight: '700' },
+  title: { flex: 1, fontSize: 17, fontWeight: '400' },
+  unseen: { fontWeight: '500' },
   subtitle: { fontSize: 15 },
   elapsed: {
     fontSize: 13,
@@ -806,12 +820,24 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     textAlign: 'right',
   },
+  pinnedSection: { paddingBottom: 12 },
   archivedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 20,
     paddingVertical: 10,
+  },
+  archivedIcon: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  archivedLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 20,
   },
   bottomBar: {
     position: 'absolute',
