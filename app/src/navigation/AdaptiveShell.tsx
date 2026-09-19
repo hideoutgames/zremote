@@ -191,6 +191,7 @@ export function AdaptiveShell({
         visible={settingsOpen}
         animationType="slide"
         presentationStyle="formSheet"
+        allowSwipeDismissal
         onRequestClose={() => setSettingsOpen(false)}
       >
         <SettingsScreen onClose={() => setSettingsOpen(false)} />

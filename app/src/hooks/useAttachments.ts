@@ -4,11 +4,13 @@
 // silently dropped.
 
 import { useCallback } from 'react';
+import { InteractionManager } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import {
-  stageAttachment,
+  stageAttachments,
   removeAttachment,
+  type StageAttachmentInput,
   type StagedAttachment,
 } from '../zeron/state/draftStore';
 import {
@@ -21,17 +23,76 @@ export interface StageResult {
   rejected: { name: string; reason: string }[];
 }
 
-const stageOne = (
+/** Wait for the Zeego attach menu to finish dismissing before presenting
+ * another UIKit controller (UIDocumentPicker / PHPicker). */
+export const PICKER_MENU_DELAY_MS = 100;
+
+export const afterAttachMenuDismissed = <T>(
+  run: () => Promise<T>,
+): Promise<T> =>
+  new Promise((resolve, reject) => {
+    InteractionManager.runAfterInteractions(() => {
+      setTimeout(() => {
+        run().then(resolve, reject);
+      }, PICKER_MENU_DELAY_MS);
+    });
+  });
+
+const collectAndStage = (
   chatId: string,
-  a: Omit<StagedAttachment, 'id' | 'uploadState'>,
-  out: StageResult,
-): void => {
-  const v = validateStagedAttachment(a);
-  if (v.ok === false) {
-    out.rejected.push({ name: a.name, reason: v.reason });
-    return;
+  items: StageAttachmentInput[],
+): StageResult => {
+  const out: StageResult = { staged: [], rejected: [] };
+  const accepted: StageAttachmentInput[] = [];
+  for (const a of items) {
+    const v = validateStagedAttachment(a);
+    if (v.ok === false) {
+      out.rejected.push({ name: a.name, reason: v.reason });
+      continue;
+    }
+    accepted.push(a);
   }
-  out.staged.push(stageAttachment(chatId, a));
+  if (accepted.length > 0) {
+    out.staged.push(...stageAttachments(chatId, accepted));
+  }
+  return out;
+};
+
+export type DocumentPickerAssetLike = {
+  name: string;
+  uri: string;
+  mimeType?: string | null;
+  size?: number | null;
+};
+
+export const stageDocumentPickerResult = (
+  chatId: string,
+  result: { canceled: boolean; assets?: DocumentPickerAssetLike[] | null },
+): StageResult => {
+  if (result.canceled === true || result.assets == null) {
+    return { staged: [], rejected: [] };
+  }
+  return collectAndStage(
+    chatId,
+    result.assets.map(file => ({
+      kind: 'file' as const,
+      name: file.name,
+      mimeType: file.mimeType ?? 'image/jpeg',
+      size: file.size ?? 0,
+      localUri: file.uri,
+    })),
+  );
+};
+
+export const pickFilesForChat = async (
+  chatId: string,
+): Promise<StageResult> => {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: [FILE_PICKER_MIME],
+    multiple: true,
+    copyToCacheDirectory: true,
+  });
+  return stageDocumentPickerResult(chatId, result);
 };
 
 export function useAttachments(chatId: string): {
@@ -40,86 +101,71 @@ export function useAttachments(chatId: string): {
   pickFiles: () => Promise<StageResult>;
   remove: (id: string) => void;
 } {
-  const pickImages = useCallback(async () => {
-    const out: StageResult = { staged: [], rejected: [] };
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      includeBase64: false,
-      maxWidth: 2048,
-      maxHeight: 2048,
-      quality: 0.9,
-      selectionLimit: 4,
-    });
-    if (result.didCancel || !result.assets) return out;
-    for (const asset of result.assets) {
-      if (asset.uri === undefined) continue;
-      stageOne(
-        chatId,
-        {
-          kind: 'image',
-          name: asset.fileName ?? 'photo',
-          mimeType: asset.type ?? 'image/jpeg',
-          size: asset.fileSize ?? 0,
-          localUri: asset.uri,
-        },
-        out,
-      );
-    }
-    return out;
-  }, [chatId]);
+  const pickImages = useCallback(
+    () =>
+      afterAttachMenuDismissed(async () => {
+        const result = await launchImageLibrary({
+          mediaType: 'photo',
+          includeBase64: false,
+          maxWidth: 2048,
+          maxHeight: 2048,
+          quality: 0.9,
+          selectionLimit: 4,
+        });
+        if (result.didCancel || !result.assets) {
+          return { staged: [], rejected: [] };
+        }
+        const items: StageAttachmentInput[] = [];
+        for (const asset of result.assets) {
+          if (asset.uri === undefined) continue;
+          items.push({
+            kind: 'image',
+            name: asset.fileName ?? 'photo',
+            mimeType: asset.type ?? 'image/jpeg',
+            size: asset.fileSize ?? 0,
+            localUri: asset.uri,
+          });
+        }
+        return collectAndStage(chatId, items);
+      }),
+    [chatId],
+  );
 
-  const pickCamera = useCallback(async () => {
-    const out: StageResult = { staged: [], rejected: [] };
-    const result = await launchCamera({
-      mediaType: 'photo',
-      includeBase64: false,
-      maxWidth: 2048,
-      maxHeight: 2048,
-      quality: 0.9,
-    });
-    if (result.didCancel || !result.assets) return out;
-    for (const asset of result.assets) {
-      if (asset.uri === undefined) continue;
-      stageOne(
-        chatId,
-        {
-          kind: 'image',
-          name: asset.fileName ?? 'photo',
-          mimeType: asset.type ?? 'image/jpeg',
-          size: asset.fileSize ?? 0,
-          localUri: asset.uri,
-        },
-        out,
-      );
-    }
-    return out;
-  }, [chatId]);
+  const pickCamera = useCallback(
+    () =>
+      afterAttachMenuDismissed(async () => {
+        const result = await launchCamera({
+          mediaType: 'photo',
+          includeBase64: false,
+          maxWidth: 2048,
+          maxHeight: 2048,
+          quality: 0.9,
+        });
+        if (result.didCancel || !result.assets) {
+          return { staged: [], rejected: [] };
+        }
+        const items: StageAttachmentInput[] = [];
+        for (const asset of result.assets) {
+          if (asset.uri === undefined) continue;
+          items.push({
+            kind: 'image',
+            name: asset.fileName ?? 'photo',
+            mimeType: asset.type ?? 'image/jpeg',
+            size: asset.fileSize ?? 0,
+            localUri: asset.uri,
+          });
+        }
+        return collectAndStage(chatId, items);
+      }),
+    [chatId],
+  );
 
   // Files picker is unfiltered (`*/*`); shared validation only enforces
   // the 24MB cap. Photos/camera stay on the image pickers.
-  const pickFiles = useCallback(async () => {
-    const out: StageResult = { staged: [], rejected: [] };
-    const result = await DocumentPicker.getDocumentAsync({
-      type: FILE_PICKER_MIME,
-      multiple: true,
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled) return out;
-    for (const file of result.assets) {
-      stageOne(
-        chatId,
-        {
-          kind: 'file',
-          name: file.name,
-          mimeType: file.mimeType ?? 'image/jpeg',
-          size: file.size ?? 0,
-          localUri: file.uri,
-        },
-        out,
-      );
-    }
-    return out;
-  }, [chatId]);
+  const pickFiles = useCallback(
+    () => afterAttachMenuDismissed(() => pickFilesForChat(chatId)),
+    [chatId],
+  );
 
   const remove = useCallback(
     (id: string) => removeAttachment(chatId, id),

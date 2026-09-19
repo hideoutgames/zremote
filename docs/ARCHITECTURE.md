@@ -63,7 +63,12 @@ over the relay (`UploadChunk` → `UploadCommit` → durable path) or, on hosts 
 advertise `message-queue-attachments-v1`, referenced as `pending://{uploadId}/{name}`
 while the bytes chase the command. The run request carries both the
 `attachments` paths and the `Attached files (local files …)` prompt trailer,
-matching desktop. Device-local URIs are never sent to a host.
+matching desktop. Device-local URIs are never sent to a host. Composer Attach
+→ Files presents the system document picker with `multiple: true` after the
+menu has dismissed; every returned asset is batch-staged into the draft
+(24MB cap per file, oversized siblings rejected without dropping the rest).
+iOS `expo-document-picker` is patched so multi-select copies each
+security-scoped URL (`asCopy: false` when `multiple`).
 
 ## Background continuity
 
@@ -117,7 +122,12 @@ width has no pager (sidebar + detail).
 but exposes no modifier flags on iOS, so Cmd+Enter cannot be distinguished
 from Enter in JS — documented gap; Escape-to-dismiss sheets is likewise not
 reachable from JS and is deferred to the native split-view stage. Sheet
-dismissal relies on TrueSheet's grabber / `Modal`'s own iPad Esc handling.
+dismissal: TrueSheet `dismissible` (default true) closes on grabber swipe or
+a tap on the dimmed area; RN `pageSheet`/`formSheet` Modals set
+`allowSwipeDismissal` plus `onRequestClose` so iPad dim-tap and swipe-down
+update `visible`. Overlay popups (`EffortOverlay`, `ImagePreviewModal`) use
+a full-screen Pressable backdrop. The Expo Go TrueSheet shim honors
+`dismissible` the same way.
 
 **Popover anchoring:** `@lodev09/react-native-true-sheet` has no iPad popover
 anchoring — its `anchor`/`anchorOffset` props only center/align the sheet on

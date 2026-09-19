@@ -89,6 +89,7 @@ export function PrSheet({
       visible
       animationType="slide"
       presentationStyle="pageSheet"
+      allowSwipeDismissal
       onRequestClose={onDismiss}
     >
       <View

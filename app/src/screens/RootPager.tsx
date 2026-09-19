@@ -121,6 +121,7 @@ export function RootPager({
         visible={settingsOpen}
         animationType="slide"
         presentationStyle="pageSheet"
+        allowSwipeDismissal
         onRequestClose={() => setSettingsOpen(false)}
       >
         <SettingsScreen onClose={() => setSettingsOpen(false)} />
