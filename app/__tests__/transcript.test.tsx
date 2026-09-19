@@ -189,3 +189,26 @@ test('messageCopyContent is a zeego Content element', () => {
   const el = messageCopyContent('hello from the phone');
   expect(el.type).toBe(ContextMenu.Content);
 });
+
+const enteringViews = (root: TestRenderer.ReactTestInstance) =>
+  root.findAll(n => n.props.entering != null);
+
+test('UserMessage skips the send entering animation by default', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={userEntry} />);
+  });
+  expect(enteringViews(tree!.root)).toHaveLength(0);
+});
+
+test('UserMessage plays send entering when animateEnter is set', async () => {
+  const onEntered = jest.fn();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <UserMessage entry={userEntry} animateEnter onEntered={onEntered} />,
+    );
+  });
+  expect(enteringViews(tree!.root).length).toBeGreaterThan(0);
+  expect(onEntered).toHaveBeenCalledWith(userEntry.id);
+});

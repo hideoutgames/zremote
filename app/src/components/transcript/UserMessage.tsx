@@ -3,7 +3,7 @@
 // Message-row shape follows Agents Kit beui/message + prompt-kit/message
 // (both MIT) — a plain bubble; no avatar chrome on this client.
 
-import React, { useState, type ReactNode } from 'react';
+import React, { useLayoutEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ContextMenu from '../menus/context-menu';
 import Animated, {
@@ -30,16 +30,22 @@ const textOf = (entry: MessageEntry): string =>
     .map(p => p.text)
     .join('\n');
 
-function EnteringStack({ children }: { children: ReactNode }) {
+function EnteringStack({
+  animate,
+  children,
+}: {
+  animate: boolean;
+  children: ReactNode;
+}) {
   'use no memo';
   const reduceMotion = useReducedMotion();
   return (
     <Animated.View
       style={styles.stack}
       entering={
-        reduceMotion
-          ? undefined
-          : SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
+        animate && !reduceMotion
+          ? SlideInDown.easing(Easing.out(Easing.exp)).duration(700)
+          : undefined
       }
     >
       {children}
@@ -49,9 +55,13 @@ function EnteringStack({ children }: { children: ReactNode }) {
 
 export const UserMessage = React.memo(function UserMessageInner({
   entry,
+  animateEnter = false,
+  onEntered,
 }: {
   entry: MessageEntry;
   chatId?: string;
+  animateEnter?: boolean;
+  onEntered?: (id: string) => void;
 }) {
   'use no memo';
   const theme = useTheme();
@@ -63,11 +73,15 @@ export const UserMessage = React.memo(function UserMessageInner({
   const shown =
     expanded || !foldable ? visible : `${visible.slice(0, FOLD_CHARS)}…`;
 
+  useLayoutEffect(() => {
+    if (animateEnter) onEntered?.(entry.id);
+  }, [animateEnter, entry.id, onEntered]);
+
   return (
     <View style={styles.row}>
       <ContextMenu.Root>
         <ContextMenu.Trigger>
-          <EnteringStack>
+          <EnteringStack animate={animateEnter}>
             {images.length > 0 ? (
               <View style={styles.attachmentRow}>
                 {images.map(p =>
