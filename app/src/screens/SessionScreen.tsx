@@ -23,11 +23,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  type SharedValue,
-} from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { type LegendListRef } from '@legendapp/list/react-native';
 import {
@@ -126,12 +121,16 @@ const ReasoningSheet = React.lazy(() =>
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 
+// Do not add Reanimated worklets in this screen. React Compiler + worklets
+// 0.10.x serializes a wide memo cache (props, runtime, Sets) and 0.10.1
+// throws, which RCTFatal aborts in Release/TestFlight. Extract a tiny child
+// if a worklet is required.
+
 export function SessionScreen({
   chatId,
   onBack,
   leadingIcon,
   contentMaxWidth,
-  leadingInsetSV,
 }: {
   chatId: string;
   onBack: () => void;
@@ -139,16 +138,9 @@ export function SessionScreen({
   leadingIcon?: string;
   /** iPad: cap the transcript/composer measure (~720pt), centered. */
   contentMaxWidth?: number;
-  /** iPad: animated leading inset under the floating sidebar — applied to
-   * the header and composer measure only; the transcript scrolls under. */
-  leadingInsetSV?: SharedValue<number>;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const fallbackInset = useSharedValue(0);
-  const leadingPad = useAnimatedStyle(() => ({
-    paddingLeft: (leadingInsetSV ?? fallbackInset).value,
-  }));
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const auth = useAuthSession();
@@ -555,8 +547,8 @@ export function SessionScreen({
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + 6 }, leadingPad]}
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
       >
         <Pressable
@@ -683,7 +675,7 @@ export function SessionScreen({
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </View>
-      </Animated.View>
+      </View>
 
       {composerFocused ? (
         <Pressable
@@ -737,13 +729,12 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        <Animated.View
-          style={[
+        <View
+          style={
             contentMaxWidth !== undefined
               ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-              : undefined,
-            leadingPad,
-          ]}
+              : undefined
+          }
         >
           <ComposerChromeRow
             queueCount={session.queue.length}
@@ -814,7 +805,7 @@ export function SessionScreen({
             composerRef={composerRef}
             onLayout={onComposerLayout}
           />
-        </Animated.View>
+        </View>
       </KeyboardStickyView>
 
       {queueOpen ? (

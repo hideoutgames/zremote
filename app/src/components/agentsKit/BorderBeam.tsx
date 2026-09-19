@@ -63,6 +63,8 @@ export function BorderBeam({
     }
   };
   const color = colorFor(state.color);
+  const mode = state.mode;
+  const speed = state.speed;
 
   // Skia clock: ms since mount; the sweep angle derives from it so a paused
   // render simply freezes the beam (mode≠sweep ignores it anyway).
@@ -80,18 +82,18 @@ export function BorderBeam({
   }, [appActive]);
 
   const opacity = useDerivedValue(() => {
-    if (state.mode === 'off') return 0;
-    if (state.mode === 'fading') return 0.35;
+    if (mode === 'off') return 0;
+    if (mode === 'fading') return 0.35;
     return 1;
   });
 
   const transform = useDerivedValue(() => {
-    if (state.mode !== 'sweep' || appActive.value === 0) return [{ rotate: 0 }];
-    const turns = (clock.value / 1000) * state.speed;
+    if (mode !== 'sweep' || appActive.value === 0) return [{ rotate: 0 }];
+    const turns = (clock.value / 1000) * speed;
     return [{ rotate: (turns % 1) * Math.PI * 2 }];
   });
 
-  if (width <= 0 || height <= 0 || state.mode === 'off') return null;
+  if (width <= 0 || height <= 0 || mode === 'off') return null;
   const cx = width / 2;
   const cy = height / 2;
 
@@ -103,7 +105,7 @@ export function BorderBeam({
       <Canvas style={{ width, height }}>
         <Group opacity={opacity}>
           {/* Dim base ring for the dashed/stale look. */}
-          {state.mode === 'stale' ? (
+          {mode === 'stale' ? (
             <RoundedRect
               x={STROKE / 2}
               y={STROKE / 2}
