@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  KeyboardAvoidingView,
   KeyboardController,
   KeyboardStickyView,
 } from 'react-native-keyboard-controller';
@@ -202,7 +203,6 @@ function ComposeSessionScreen({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [headerH, setHeaderH] = useState(0);
-  const keyboardOffset = { opened: 0 };
   const dismissPan = useKeyboardDismissPan();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -214,23 +214,6 @@ function ComposeSessionScreen({
       >
         <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
         <View style={styles.headerRow} pointerEvents="box-none">
-          <View style={styles.headerCenter} pointerEvents="box-none">
-            <View style={styles.titlePillWrap} pointerEvents="box-none">
-              <Glass
-                interactive
-                style={styles.titlePill}
-                testID="session-title-pill"
-              >
-                <Text
-                  style={[styles.title, { color: theme.text }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {t('home.newThread')}
-                </Text>
-              </Glass>
-            </View>
-          </View>
           <GlassControl
             interactive
             onPress={onBack}
@@ -248,21 +231,19 @@ function ComposeSessionScreen({
               color={theme.text}
             />
           </GlassControl>
-          <View style={styles.headerRight} />
         </View>
       </View>
-      <View style={styles.composeEmpty} {...dismissPan.panHandlers}>
-        <Text style={[styles.empty, { color: theme.textSecondary }]}>
-          {t('session.empty')}
-        </Text>
-      </View>
-      <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={styles.composeCenter}
+        {...dismissPan.panHandlers}
+      >
         <ComposeComposer
           autoFocus
           composerMaxWidth={composerMaxWidth}
           onCreated={id => onCreated?.(id)}
         />
-      </KeyboardStickyView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -1190,8 +1171,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
-  empty: { fontSize: 15, textAlign: 'center', padding: 32 },
-  composeEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  composeCenter: { flex: 1, justifyContent: 'center' },
   header: {
     position: 'absolute',
     top: 0,

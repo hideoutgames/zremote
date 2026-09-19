@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Modal, Text } from 'react-native';
+import { Modal } from 'react-native';
 import { ImagePreviewModal } from '../src/components/ImagePreviewModal';
 import { TrueSheet } from '../src/expoGo/shims/trueSheet';
 import { ModelPickerSheet } from '../src/components/ModelPickerSheet';
@@ -169,9 +169,6 @@ test('compact New thread opens a blank compose session', async () => {
   expect(
     tree.root.findAll(n => n.props.testID === 'compose-composer').length,
   ).toBeGreaterThan(0);
-  expect(
-    tree.root.findAllByType(Text).some(n => n.props.children === 'New thread'),
-  ).toBe(true);
   await act(async () => {
     tree.unmount();
   });
