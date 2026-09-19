@@ -59,6 +59,11 @@ export const QuestionPanel = React.memo(function ({
   const complete = questions.every(
     q => labelsFor(q, answers[q.id], custom[q.id]).length > 0,
   );
+  const submitFg = complete
+    ? theme.scheme === 'dark'
+      ? '#000000'
+      : '#FFFFFF'
+    : '#FFFFFF';
 
   const submit = () => {
     if (!complete) return;
@@ -140,29 +145,8 @@ export const QuestionPanel = React.memo(function ({
           { backgroundColor: complete ? theme.sendActive : theme.border },
         ]}
       >
-        <Icon
-          name="arrow.up"
-          size={14}
-          color={
-            complete
-              ? theme.scheme === 'dark'
-                ? '#000000'
-                : '#FFFFFF'
-              : '#FFFFFF'
-          }
-        />
-        <Text
-          style={[
-            styles.submitText,
-            {
-              color: complete
-                ? theme.scheme === 'dark'
-                  ? '#000000'
-                  : '#FFFFFF'
-                : '#FFFFFF',
-            },
-          ]}
-        >
+        <Icon name="arrow.up" size={14} color={submitFg} />
+        <Text style={[styles.submitText, { color: submitFg }]}>
           {t('session.submit')}
         </Text>
       </Pressable>

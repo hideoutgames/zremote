@@ -814,10 +814,7 @@ function ActiveSessionScreen({
       {session.failedSends.length > 0 ? (
         <KeyboardStickyView
           offset={keyboardOffset}
-          style={[
-            styles.failedWrap,
-            { bottom: composerHeight + 10, zIndex: 4 },
-          ]}
+          style={[styles.failedWrap, { bottom: composerHeight + 10 }]}
           pointerEvents="box-none"
         >
           {session.failedSends.map(f => (
@@ -905,7 +902,7 @@ function ActiveSessionScreen({
               )
                 return;
               const catalogModel = modelsFor(chat.deviceId, h).find(
-                row => row.id === m,
+                catalogRow => catalogRow.id === m,
               );
               const levels = reasoningLevelsFor(chat.deviceId, h, m);
               const stored = modelSettingsFor(h, m);
@@ -1239,6 +1236,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     gap: 8,
+    zIndex: 4,
   },
   failedBanner: {
     borderRadius: 16,

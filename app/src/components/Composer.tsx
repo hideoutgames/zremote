@@ -432,10 +432,10 @@ export const Composer = React.memo(function ({
       result !== null &&
       typeof (result as Promise<boolean | void>).then === 'function'
     ) {
-      (result as Promise<boolean | void>).then(finish).catch(() => {});
+      (result as Promise<boolean | void>).then(finish, () => {});
       return;
     }
-    finish(result);
+    finish(result as boolean | void);
   }, [
     hasAttachments,
     draft.text,
@@ -462,6 +462,7 @@ export const Composer = React.memo(function ({
   const sendArmed =
     right === 'send' &&
     (action.primary === 'send' || live === 'queue' || live === 'steer');
+  const homeInset = (keyboardVisible ? 0 : insets.bottom) + 8;
 
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
@@ -762,7 +763,7 @@ export const Composer = React.memo(function ({
       ) : null}
 
       <View
-        style={{ height: keyboardVisible ? 8 : insets.bottom + 8 }}
+        style={[styles.homePad, { height: homeInset }]}
         pointerEvents="none"
       />
 
@@ -896,4 +897,5 @@ const styles = StyleSheet.create({
   chipSpacer: { flexGrow: 1, minWidth: 0 },
   effortChipHidden: { opacity: 0 },
   hint: { fontSize: 12, textAlign: 'center' },
+  homePad: {},
 });

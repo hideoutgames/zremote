@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { Icon } from './Icon';
 import { useTheme } from '../theme';

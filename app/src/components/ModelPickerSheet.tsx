@@ -320,7 +320,7 @@ export function ModelPickerSheet({
         harnesses.find(h => h.id === harness)?.reasoningLevels,
       );
       const stored = modelSettings[modelRowKey(harness, model.id)];
-      const live =
+      const selectedLive =
         harness === harnessId && config?.model === model.id
           ? {
               reasoning: config?.reasoning,
@@ -330,10 +330,10 @@ export function ModelPickerSheet({
       const fastOption = fastOptionForModel(model);
       const reasoning =
         extra?.reasoning ??
-        rememberedReasoning(stored, levels, live?.reasoning);
+        rememberedReasoning(stored, levels, selectedLive?.reasoning);
       const modelOptions =
         extra?.modelOptions ??
-        rememberedModelOptions(stored, fastOption, live?.modelOptions);
+        rememberedModelOptions(stored, fastOption, selectedLive?.modelOptions);
       apply({
         harness,
         model: model.id,
