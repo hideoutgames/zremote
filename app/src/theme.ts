@@ -30,7 +30,7 @@ export interface Theme {
   planBadge: string;
   planBadgeFill: string;
   planButton: string;
-  /** Composer effort chip when Fast mode is on. */
+  /** Composer Fast chip when Fast mode is on. */
   fastAccent: string;
   prOpen: string;
   prMerged: string;

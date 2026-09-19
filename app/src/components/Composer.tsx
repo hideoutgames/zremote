@@ -3,7 +3,7 @@
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
-//   action row: [+] · live Queue/Steer · Plan · model · effort · voice · send.
+//   action row: [+] · live Queue/Steer · Plan · model · effort · fast · voice · send.
 // Host / repo / origin live on the thread Details sheet for existing sessions.
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
@@ -11,7 +11,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AccessibilityInfo,
   ActivityIndicator,
   AppState,
   type LayoutChangeEvent,
@@ -24,7 +23,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { NitroImage } from 'react-native-nitro-image';
@@ -32,6 +30,7 @@ import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { CheckoutChips, type CheckoutChipsProps } from './CheckoutSelector';
 import { Glass } from './Glass';
+import { FadeBlur } from './FadeBlur';
 import { Icon } from './Icon';
 import { ModelMenuButton } from './ModelMenuButton';
 import { PlanBadge } from './PlanBadge';
@@ -96,8 +95,10 @@ export interface ComposerProps {
   onOpenMoreModels: () => void;
   effortLabel: string;
   effortSupported: boolean;
+  fastSupported: boolean;
   fastEnabled: boolean;
   onOpenEffort: () => void;
+  onToggleFast: (on: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
   dictation: DictationPort;
@@ -135,8 +136,10 @@ export const Composer = React.memo(function ({
   onOpenMoreModels,
   effortLabel,
   effortSupported,
+  fastSupported,
   fastEnabled,
   onOpenEffort,
+  onToggleFast,
   onFocusChange,
   checkout,
   dictation,
@@ -215,7 +218,6 @@ export const Composer = React.memo(function ({
   const [dictationSupported, setDictationSupported] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
-  const [reduceTransparency, setReduceTransparency] = useState(false);
   const baseRef = useRef('');
   const selRef = useRef(0);
   // Partials/finals splice into the draft at the caret position captured
@@ -279,17 +281,6 @@ export const Composer = React.memo(function ({
       mounted = false;
     };
   }, [dictation]);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceTransparencyEnabled()
-      .then(setReduceTransparency)
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      setReduceTransparency,
-    );
-    return () => sub.remove();
-  }, []);
 
   // Stop dictation on background / unmount (never leak the mic).
   useEffect(() => {
@@ -405,19 +396,7 @@ export const Composer = React.memo(function ({
           })
         }
       >
-        {reduceTransparency ? null : (
-          <View style={styles.surroundBlur} pointerEvents="none">
-            <BlurView
-              tint={
-                theme.scheme === 'dark'
-                  ? 'systemThinMaterialDark'
-                  : 'systemThinMaterialLight'
-              }
-              intensity={22}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
-        )}
+        <FadeBlur intensity={22} style={styles.surroundBlur} />
         <Glass style={styles.glass}>
           <View
             style={styles.grabberHit}
@@ -626,17 +605,53 @@ export const Composer = React.memo(function ({
                   <Pressable
                     style={[
                       styles.effortChip,
-                      {
-                        backgroundColor: fastEnabled
-                          ? theme.fastAccent
-                          : theme.inputBackground,
-                      },
+                      { backgroundColor: theme.inputBackground },
                     ]}
                     onPress={onOpenEffort}
                     hitSlop={4}
                     accessibilityRole="button"
                     accessibilityLabel={effortLabel}
                   >
+                    <Icon
+                      name="slider.horizontal.3"
+                      size={14}
+                      color={theme.text}
+                    />
+                    <Text
+                      style={[styles.effortText, { color: theme.text }]}
+                      numberOfLines={1}
+                    >
+                      {effortLabel}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {fastSupported ? (
+                  <Pressable
+                    style={[
+                      styles.effortChip,
+                      {
+                        backgroundColor: fastEnabled
+                          ? theme.fastAccent
+                          : theme.inputBackground,
+                      },
+                    ]}
+                    onPress={() => onToggleFast(!fastEnabled)}
+                    hitSlop={4}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('picker.fastMode')}
+                    accessibilityState={{ selected: fastEnabled }}
+                  >
+                    <Icon
+                      name="bolt.fill"
+                      size={14}
+                      color={
+                        fastEnabled
+                          ? theme.scheme === 'dark'
+                            ? '#000000'
+                            : '#FFFFFF'
+                          : theme.text
+                      }
+                    />
                     <Text
                       style={[
                         styles.effortText,
@@ -650,7 +665,7 @@ export const Composer = React.memo(function ({
                       ]}
                       numberOfLines={1}
                     >
-                      {effortLabel}
+                      {t('picker.fastMode')}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -779,11 +794,10 @@ const styles = StyleSheet.create({
   glassWrap: { position: 'relative' },
   surroundBlur: {
     position: 'absolute',
-    top: -8,
+    top: -64,
     left: -8,
     right: -8,
     bottom: -8,
-    borderRadius: 32,
     overflow: 'hidden',
   },
   glassHaloDark: {
@@ -913,11 +927,12 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   effortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     height: 32,
     borderRadius: 16,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 10,
+    gap: 6,
   },
   effortText: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 12, textAlign: 'center' },

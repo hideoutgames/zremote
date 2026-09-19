@@ -45,6 +45,20 @@ jest.mock('@callstack/liquid-glass', () => ({
 jest.mock('expo-blur', () => ({
   BlurView: require('react-native').View,
 }));
+jest.mock('expo-linear-gradient', () => ({
+  LinearGradient: require('react-native').View,
+}));
+jest.mock('@react-native-masked-view/masked-view', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const MaskedView = ({ children }) =>
+    React.createElement(View, null, children);
+  MaskedView.default = MaskedView;
+  return {
+    __esModule: true,
+    default: MaskedView,
+  };
+});
 
 jest.mock('expo-glass-effect', () => ({
   GlassView: require('react-native').View,

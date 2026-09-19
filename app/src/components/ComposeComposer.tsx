@@ -12,6 +12,7 @@ import React, {
 import {
   Alert,
   type LayoutChangeEvent,
+  Pressable,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -80,7 +81,7 @@ export function ComposeComposer({
   onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const devices = useStore(workspaceStore, s => s.devices);
   const spaces = useStore(workspaceStore, s => s.spaces);
@@ -396,7 +397,7 @@ export function ComposeComposer({
         }
       : undefined;
 
-  const inner = (
+  const composer = (
     <View
       style={
         composerMaxWidth !== undefined
@@ -424,8 +425,18 @@ export function ComposeComposer({
         onOpenMoreModels={() => setPickerOpen(true)}
         effortLabel={effortLabel}
         effortSupported={effortLevels.length > 0}
+        fastSupported={fastOption !== undefined}
         fastEnabled={fastEnabled}
         onOpenEffort={() => setEffortOpen(true)}
+        onToggleFast={on => {
+          if (fastOption === undefined) return;
+          setModelOptions({
+            ...modelOptions,
+            [fastOption.id]: on
+              ? fastOnChoice(fastOption)
+              : fastOffChoice(fastOption),
+          });
+        }}
         checkout={checkout}
         dictation={dictation}
         onSend={onSend}
@@ -439,28 +450,6 @@ export function ComposeComposer({
         composerRef={composerRef}
         onLayout={onLayout ?? (() => {})}
       />
-      {effortOpen ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={reasoning}
-          onChange={level => {
-            setReasoning(level);
-            persist({ reasoning: level });
-          }}
-          showFast={fastOption !== undefined}
-          fastEnabled={fastEnabled}
-          onToggleFast={on => {
-            if (fastOption === undefined) return;
-            setModelOptions({
-              ...modelOptions,
-              [fastOption.id]: on
-                ? fastOnChoice(fastOption)
-                : fastOffChoice(fastOption),
-            });
-          }}
-          onDismiss={() => setEffortOpen(false)}
-        />
-      ) : null}
       {pickerOpen && runtime !== null ? (
         <ModelPickerSheet
           runtime={runtime}
@@ -475,18 +464,54 @@ export function ComposeComposer({
     </View>
   );
 
-  if (!sticky) return inner;
+  const stack = (
+    <View style={styles.stack} pointerEvents="box-none">
+      {effortOpen ? (
+        <Pressable
+          style={[styles.effortDismiss, { height: windowHeight }]}
+          onPress={() => setEffortOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.done')}
+        />
+      ) : null}
+      {effortOpen ? (
+        <View style={styles.effortLayer}>
+          <EffortOverlay
+            levels={effortLevels}
+            value={reasoning}
+            onChange={level => {
+              setReasoning(level);
+              persist({ reasoning: level });
+            }}
+          />
+        </View>
+      ) : null}
+      <View style={styles.composerLayer}>{composer}</View>
+    </View>
+  );
+
+  if (!sticky) return stack;
   return (
     <KeyboardStickyView
       offset={{ opened: insets.bottom }}
       style={styles.sticky}
     >
-      {inner}
+      {stack}
     </KeyboardStickyView>
   );
 }
 
 const styles = StyleSheet.create({
   sticky: { width: '100%' },
+  stack: { width: '100%' },
   measureCap: { width: '100%', alignSelf: 'center' },
+  effortDismiss: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+  effortLayer: { zIndex: 2, width: '100%' },
+  composerLayer: { zIndex: 2, width: '100%' },
 });
