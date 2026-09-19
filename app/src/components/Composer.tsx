@@ -149,7 +149,7 @@ export interface ComposerProps {
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
   dictation: DictationPort;
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean | void | Promise<boolean | void>;
   onSteer: (text: string) => void;
   onQueue: (text: string) => void;
   onStop: () => void;
@@ -417,10 +417,25 @@ export const Composer = React.memo(function ({
       setDraftText(chatId, '');
       return;
     }
-    if (action.primary === 'steer') onSteer(text);
-    else if (action.primary === 'send') onSend(text);
-    else return;
-    setDraftText(chatId, '');
+    if (action.primary === 'steer') {
+      onSteer(text);
+      setDraftText(chatId, '');
+      return;
+    }
+    if (action.primary !== 'send') return;
+    const result = onSend(text);
+    const finish = (ok: boolean | void) => {
+      if (ok !== false) setDraftText(chatId, '');
+    };
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      typeof (result as Promise<boolean | void>).then === 'function'
+    ) {
+      (result as Promise<boolean | void>).then(finish).catch(() => {});
+      return;
+    }
+    finish(result);
   }, [
     hasAttachments,
     draft.text,
@@ -453,14 +468,7 @@ export const Composer = React.memo(function ({
   const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
 
   return (
-    <View
-      ref={composerRef}
-      onLayout={onLayout}
-      style={[
-        styles.container,
-        { paddingBottom: (keyboardVisible ? 0 : insets.bottom) + 8 },
-      ]}
-    >
+    <View ref={composerRef} onLayout={onLayout} style={styles.container}>
       <View
         style={styles.glassWrap}
         onLayout={e =>
@@ -643,6 +651,7 @@ export const Composer = React.memo(function ({
                         onSelect={onSelectFast}
                       />
                     ) : null}
+                    <View style={styles.chipSpacer} />
                     <ContextUsageChip usage={session.meta.contextUsage} />
                   </ScrollView>
                 </ChipRowMask>
@@ -751,6 +760,11 @@ export const Composer = React.memo(function ({
           {t('session.workingHint')}
         </Text>
       ) : null}
+
+      <View
+        style={{ height: keyboardVisible ? 8 : insets.bottom + 8 }}
+        pointerEvents="none"
+      />
 
       {preview !== null && isImageMime(preview.mimeType) ? (
         <ImagePreviewModal
@@ -877,7 +891,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexGrow: 1,
   },
+  chipSpacer: { flexGrow: 1, minWidth: 0 },
   effortChipHidden: { opacity: 0 },
   hint: { fontSize: 12, textAlign: 'center' },
 });

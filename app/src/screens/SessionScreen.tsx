@@ -28,11 +28,21 @@ import {
 import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
-import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
-import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
-import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
 import {
+  useSessionState,
+  useRunPhase,
+  dismissFailedSend,
+} from '../zeron/state/sessionStores';
+import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
+import {
+  useDraft,
+  setDraftPendingWorktree,
+  restoreFailedSend,
+} from '../zeron/state/draftStore';
+import {
+  modelSettingsFor,
   rememberModelPick,
+  rememberModelSettings,
   setPlanMode,
   toggleChatPinned,
   useChatPinned,
@@ -49,7 +59,6 @@ import {
   renameChat,
 } from '../zeron/runtime/workspaceActions';
 import type { SessionController } from '../zeron/runtime/sessionController';
-import { restoreFailedSend } from '../zeron/state/draftStore';
 import { edgeFetchBytes } from '../zeron/transport/edgeHttp';
 import { blobUrl } from '../zeron/transport/edge';
 import {
@@ -62,6 +71,10 @@ import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
 import { recentMenuModels } from '../zeron/state/recentModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
 import { fastOptionForModel, isFastEnabled } from '../components/fastMode';
+import {
+  rememberedModelOptions,
+  rememberedReasoning,
+} from '../components/modelPicker';
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
@@ -354,22 +367,27 @@ function ActiveSessionScreen({
   );
 
   const doSend = useCallback(
-    (text: string) => {
-      if (controller === undefined) return;
+    (text: string): boolean => {
+      if (controller === undefined) return false;
       const wt = draft.pendingWorktree;
-      controller.sendRun(
-        text,
-        { config: chat?.config, cwd: chat?.cwd },
-        {
-          ...(wt !== undefined ? { worktree: wt } : {}),
-        },
-      );
+      try {
+        controller.sendRun(
+          text,
+          { config: chat?.config, cwd: chat?.cwd },
+          {
+            ...(wt !== undefined ? { worktree: wt } : {}),
+          },
+        );
+      } catch {
+        return false;
+      }
       if (wt !== undefined) setDraftPendingWorktree(chatId, undefined);
       transcriptRef.current?.noteSent(entries.length);
       transcriptRef.current?.scrollMessageToEnd({
         animated: entries.length > 0,
         closeKeyboard: true,
       });
+      return true;
     },
     [controller, draft.pendingWorktree, chat, chatId, entries.length],
   );
@@ -793,26 +811,46 @@ function ActiveSessionScreen({
         />
       ) : null}
 
-      {session.failedSends.map(f => (
-        <View
-          key={f.messageId}
-          style={[styles.failedBanner, { borderColor: theme.danger }]}
+      {session.failedSends.length > 0 ? (
+        <KeyboardStickyView
+          offset={keyboardOffset}
+          style={[
+            styles.failedWrap,
+            { bottom: composerHeight + 10, zIndex: 4 },
+          ]}
+          pointerEvents="box-none"
         >
-          <Text style={[styles.failedText, { color: theme.danger }]}>
-            {`${t('session.failedSend')} (${t(
-              `session.failedSend.${f.status}`,
-            )})`}
-          </Text>
-          <Pressable
-            onPress={() => restoreFailedSend(chatId, f.text)}
-            hitSlop={6}
-          >
-            <Text style={[styles.failedAction, { color: theme.accent }]}>
-              {t('session.restoreDraft')}
-            </Text>
-          </Pressable>
-        </View>
-      ))}
+          {session.failedSends.map(f => (
+            <Glass
+              key={f.messageId}
+              style={[
+                styles.failedBanner,
+                { backgroundColor: theme.glassFallbackBackground },
+              ]}
+            >
+              <View
+                style={[styles.failedDot, { backgroundColor: theme.danger }]}
+              />
+              <Text style={[styles.failedText, { color: theme.text }]}>
+                {t('session.failedSend')}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  restoreFailedSend(chatId, f.text);
+                  dismissFailedSend(chatId, f.messageId);
+                }}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={t('session.restoreDraft')}
+              >
+                <Text style={[styles.failedAction, { color: theme.text }]}>
+                  {t('session.restoreDraft')}
+                </Text>
+              </Pressable>
+            </Glass>
+          ))}
+        </KeyboardStickyView>
+      ) : null}
 
       <KeyboardStickyView
         offset={keyboardOffset}
@@ -866,11 +904,26 @@ function ActiveSessionScreen({
                 h !== chat.config.harness
               )
                 return;
+              const catalogModel = modelsFor(chat.deviceId, h).find(
+                row => row.id === m,
+              );
+              const levels = reasoningLevelsFor(chat.deviceId, h, m);
+              const stored = modelSettingsFor(h, m);
+              const same =
+                h === chat.config?.harness && m === chat.config?.model;
               setChatConfig(runtime, chat.id, {
                 harness: h,
                 model: m,
-                modelOptions: chat.config?.modelOptions ?? {},
-                reasoning: chat.config?.reasoning,
+                modelOptions: rememberedModelOptions(
+                  stored,
+                  fastOptionForModel(catalogModel),
+                  same ? chat.config?.modelOptions : undefined,
+                ),
+                reasoning: rememberedReasoning(
+                  stored,
+                  levels,
+                  same ? chat.config?.reasoning : undefined,
+                ),
                 sandbox: FULL_ACCESS_SANDBOX,
               });
               rememberModelPick({ harness: h, model: m });
@@ -920,6 +973,13 @@ function ActiveSessionScreen({
                   [fastOption.id]: choice,
                 },
               });
+              if (
+                chat.config?.harness !== undefined &&
+                chat.config.model !== undefined
+              )
+                rememberModelSettings(chat.config.harness, chat.config.model, {
+                  modelOptions: { [fastOption.id]: choice },
+                });
             }}
             onFocusChange={setComposerFocused}
             dictation={dictation}
@@ -950,6 +1010,13 @@ function ActiveSessionScreen({
               reasoning: level,
               sandbox: FULL_ACCESS_SANDBOX,
             });
+            if (
+              chat.config?.harness !== undefined &&
+              chat.config.model !== undefined
+            )
+              rememberModelSettings(chat.config.harness, chat.config.model, {
+                reasoning: level,
+              });
           }}
           onDismiss={() => {
             setEffortOpen(false);
@@ -1167,21 +1234,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-  failedBanner: {
+  failedWrap: {
     position: 'absolute',
-    bottom: 120,
     left: 16,
     right: 16,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
+    gap: 8,
+  },
+  failedBanner: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 10,
+    overflow: 'hidden',
   },
-  failedText: { fontSize: 13, flex: 1 },
-  failedAction: { fontSize: 13, fontWeight: '600' },
+  failedDot: { width: 8, height: 8, borderRadius: 4 },
+  failedText: { fontSize: 14, flex: 1 },
+  failedAction: { fontSize: 14, fontWeight: '600' },
   queueSheet: { padding: 20 },
   focusDim: {
     ...StyleSheet.absoluteFill,

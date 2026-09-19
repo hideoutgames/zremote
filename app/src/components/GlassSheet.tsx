@@ -1,7 +1,8 @@
 // Shared Liquid Glass sheet chrome used by Thought process and the queue
-// panel. TrueSheet hosts the sheet; Glass frosts the body.
+// panel. TrueSheet hosts the sheet; Glass frosts the body. Default detent
+// is half the screen; swipe up for full.
 
-import React, { useRef, useState, type ReactNode } from 'react';
+import React, { useRef, type ReactNode } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -16,6 +17,8 @@ import { Glass } from './Glass';
 import { MenuDismissShield } from './menus/MenuDismissShield';
 import { Icon } from './Icon';
 import { useTheme } from '../theme';
+
+export const GLASS_SHEET_DETENTS: (number | 'auto')[] = [0.5, 1];
 
 export function GlassSheet({
   title,
@@ -33,7 +36,6 @@ export function GlassSheet({
   const { height: windowHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardState(s => s.height);
   const sheet = useRef<TrueSheet>(null);
-  const [expanded, setExpanded] = useState(false);
 
   const cap = Math.max(
     240,
@@ -45,10 +47,9 @@ export function GlassSheet({
   return (
     <TrueSheet
       ref={sheet}
-      detents={['auto', 1]}
+      detents={GLASS_SHEET_DETENTS}
       initialDetentIndex={0}
       onDidDismiss={onDismiss}
-      onDetentChange={event => setExpanded(event.nativeEvent.index >= 1)}
       maxContentHeight={cap}
       backgroundColor="transparent"
       grabber
@@ -56,7 +57,7 @@ export function GlassSheet({
       <Glass
         style={[
           styles.body,
-          expanded ? styles.bodyExpanded : undefined,
+          styles.bodyFill,
           { paddingBottom: insets.bottom + 16 },
         ]}
       >
@@ -78,7 +79,7 @@ export function GlassSheet({
           )}
           <View style={styles.closeButton} />
         </View>
-        <View style={expanded ? styles.bodyFill : undefined}>{children}</View>
+        <View style={styles.bodyFill}>{children}</View>
         <MenuDismissShield />
       </Glass>
     </TrueSheet>
@@ -89,7 +90,6 @@ const CLOSE = 32;
 
 const styles = StyleSheet.create({
   body: { borderRadius: 20, overflow: 'hidden' },
-  bodyExpanded: { flex: 1, minHeight: '100%' },
   bodyFill: { flex: 1, minHeight: 0 },
   header: {
     flexDirection: 'row',

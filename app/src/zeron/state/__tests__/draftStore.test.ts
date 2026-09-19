@@ -66,6 +66,11 @@ describe('draftStore', () => {
     expect(draftStore.getState().byChat.c1.text).toBe(
       'typed since\n\nsecond failure',
     );
+
+    restoreFailedSend('c1', 'typed since\n\nsecond failure');
+    expect(draftStore.getState().byChat.c1.text).toBe(
+      'typed since\n\nsecond failure',
+    );
   });
 
   it('isolates drafts per account (separate files)', async () => {

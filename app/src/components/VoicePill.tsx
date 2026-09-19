@@ -231,5 +231,6 @@ const styles = StyleSheet.create({
     height: VOICE_PILL_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
 });

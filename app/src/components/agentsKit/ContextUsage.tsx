@@ -53,10 +53,12 @@ function ContextUsageRing({
   size,
   ratio,
   color,
+  trackColor,
 }: {
   size: number;
   ratio: number;
   color: string;
+  trackColor: string;
 }) {
   const stroke = Math.max(2, (size * 2) / 24);
   const inset = stroke / 2;
@@ -76,7 +78,7 @@ function ContextUsageRing({
             height: size,
             borderRadius: size / 2,
             borderWidth: stroke,
-            borderColor: color,
+            borderColor: trackColor,
           },
         ]}
       />
@@ -87,10 +89,9 @@ function ContextUsageRing({
     <Canvas style={{ width: size, height: size }} pointerEvents="none">
       <Path
         path={paths.track}
-        color={color}
+        color={trackColor}
         style="stroke"
         strokeWidth={stroke}
-        opacity={0.2}
       />
       {paths.sweep !== null ? (
         <Path
@@ -110,12 +111,14 @@ function ContextUsageSheet({
   maxTokens,
   ratio,
   color,
+  trackColor,
   onDismiss,
 }: {
   tokens: number;
   maxTokens: number;
   ratio: number;
   color: string;
+  trackColor: string;
   onDismiss: () => void;
 }) {
   const theme = useTheme();
@@ -127,7 +130,12 @@ function ContextUsageSheet({
     <GlassSheet title={t('composer.context')} onDismiss={onDismiss}>
       <View style={styles.sheetBody}>
         <View style={styles.hero}>
-          <ContextUsageRing size={SHEET_RING} ratio={ratio} color={color} />
+          <ContextUsageRing
+            size={SHEET_RING}
+            ratio={ratio}
+            color={color}
+            trackColor={trackColor}
+          />
           <Text
             style={[styles.heroPct, { color: theme.text }]}
             accessibilityElementsHidden
@@ -158,8 +166,8 @@ export const ContextUsageChip = React.memo(function ({
   const resolved = resolveContextUsage(usage);
   if (resolved === undefined) return null;
   const ratio = contextUsageRatio(resolved.tokens, resolved.window);
-  const color =
-    ratio > CONTEXT_DANGER_RATIO ? theme.danger : theme.indicatorWorking;
+  const trackColor = theme.sendInactive;
+  const color = ratio > CONTEXT_DANGER_RATIO ? theme.danger : theme.text;
   const percent = formatContextPercent(ratio);
   return (
     <>
@@ -174,8 +182,12 @@ export const ContextUsageChip = React.memo(function ({
         onPress={() => setOpen(true)}
         style={styles.chipHit}
       >
-        <ContextUsageRing size={CHIP_RING} ratio={ratio} color={color} />
-        <Text style={[styles.chipPct, { color: theme.text }]}>{percent}</Text>
+        <ContextUsageRing
+          size={CHIP_RING}
+          ratio={ratio}
+          color={color}
+          trackColor={trackColor}
+        />
       </Pressable>
       {open ? (
         <ContextUsageSheet
@@ -183,6 +195,7 @@ export const ContextUsageChip = React.memo(function ({
           maxTokens={resolved.window}
           ratio={ratio}
           color={color}
+          trackColor={trackColor}
           onDismiss={() => setOpen(false)}
         />
       ) : null}
@@ -193,13 +206,11 @@ export const ContextUsageChip = React.memo(function ({
 const styles = StyleSheet.create({
   fallbackRing: { opacity: 0.35 },
   chipHit: {
-    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     height: 32,
-    paddingHorizontal: 4,
-    gap: 4,
+    width: 32,
   },
-  chipPct: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   sheetBody: {
     alignItems: 'center',
     paddingHorizontal: 24,

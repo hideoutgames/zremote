@@ -8,6 +8,7 @@ import {
 } from '../zeron/protocol/registryCore';
 import type {
   AgentAccountsSnapshot,
+  ChangeRequestSummary,
   CheckoutDiff,
   GitHistoryCommit,
   HarnessDescriptor,
@@ -750,28 +751,34 @@ export const demoWorkspaceListing = (directory: string): WorkspaceEntry[] => {
     name: string,
     kind: WorkspaceEntry['kind'],
     size?: number,
+    ignored = false,
   ): WorkspaceEntry => ({
     path,
     name,
     kind,
     ...(size !== undefined ? { size } : {}),
     modifiedAt: '2026-09-01T10:00:00Z',
-    ignored: false,
+    ignored,
     readOnly: false,
   });
   if (directory === '' || directory === '.' || directory === '/') {
     return [
       mk('src', 'src', 'directory'),
       mk('docs', 'docs', 'directory'),
+      mk('scripts', 'scripts', 'directory'),
       mk('README.md', 'README.md', 'file', 1200),
       mk('package.json', 'package.json', 'file', 900),
+      mk('.env', '.env', 'file', 80, true),
+      mk('node_modules', 'node_modules', 'directory', undefined, true),
     ];
   }
   if (directory === 'src') {
     return [
       mk('src/demo', 'demo', 'directory'),
+      mk('src/ui', 'ui', 'directory'),
       mk('src/main.ts', 'main.ts', 'file', 400),
       mk('src/util.ts', 'util.ts', 'file', 800),
+      mk('src/generated.d.ts', 'generated.d.ts', 'file', 220, true),
     ];
   }
   if (directory === 'src/demo') {
@@ -780,8 +787,14 @@ export const demoWorkspaceListing = (directory: string): WorkspaceEntry[] => {
       mk('src/demo/fixtures.ts', 'fixtures.ts', 'file', 1800),
     ];
   }
+  if (directory === 'src/ui') {
+    return [mk('src/ui/composer.ts', 'composer.ts', 'file', 1100)];
+  }
   if (directory === 'docs') {
     return [mk('docs/DEMO.md', 'DEMO.md', 'file', 600)];
+  }
+  if (directory === 'scripts') {
+    return [mk('scripts/seed.sh', 'seed.sh', 'file', 140)];
   }
   return [];
 };
@@ -794,6 +807,8 @@ export const demoFiles: Record<string, string> = {
   'src/util.ts': 'export const noop = () => {};\n',
   'src/demo/demoEdge.ts': '// simulated edge — see demo mode docs\n',
   'src/demo/fixtures.ts': '// fictional fixture data\n',
+  'src/ui/composer.ts': 'export const composer = () => null;\n',
+  'scripts/seed.sh': '#!/bin/sh\necho demo\n',
   'docs/DEMO.md': '# Demo\n\nNothing here leaves the device.\n',
 };
 
@@ -864,6 +879,65 @@ export const demoCommits = (): GitHistoryCommit[] => {
     ]),
     mk('aaa006', 'Initial demo scaffolding', '2026-09-16T12:00:00Z'),
   ];
+};
+
+const mkPr = (
+  number: number,
+  title: string,
+  state: ChangeRequestSummary['state'],
+  headRef: string,
+  extra: Partial<ChangeRequestSummary> = {},
+): ChangeRequestSummary => ({
+  provider: 'github',
+  number,
+  title,
+  url: `https://github.com/example/zremote/pull/${number}`,
+  state,
+  baseRef: 'main',
+  headRef,
+  ...extra,
+});
+
+export const demoChangeRequestFor = (
+  branch: string,
+  cwd: string,
+): ChangeRequestSummary | null => {
+  if (branch === 'demo/replay')
+    return mkPr(42, 'Composer chrome overhaul', 'open', 'feature/composer', {
+      draft: true,
+      body: '## Summary\n\nDemo pull request for the composer chrome.',
+    });
+  if (cwd === demoPaths.zeron && branch === 'main')
+    return mkPr(18, 'Relay reconnect backoff', 'open', 'main');
+  if (cwd === demoPaths.zeron && branch.startsWith('fix/'))
+    return mkPr(7, 'Investigate sync gap', 'closed', branch);
+  if (cwd === demoPaths.zremote && branch === 'main')
+    return mkPr(12, 'Cache strategy notes', 'merged', 'main');
+  return null;
+};
+
+export const demoHistoryPrs = (chatId: string): ChangeRequestSummary[] => {
+  switch (chatId) {
+    case CHAT_WORKING:
+      return [
+        mkPr(42, 'Composer chrome overhaul', 'open', 'feature/composer', {
+          draft: true,
+        }),
+        mkPr(41, 'Queue panel swipe', 'open', 'feature/queue'),
+        mkPr(39, 'Glass sheet detents', 'merged', 'feature/glass'),
+      ];
+    case CHAT_LONG:
+    case CHAT_TOOLS:
+      return [mkPr(18, 'Relay reconnect backoff', 'open', 'main')];
+    case CHAT_ERRORED:
+      return [
+        mkPr(7, 'Investigate sync gap', 'closed', 'fix/reconnect-backoff'),
+      ];
+    case CHAT_INPUT:
+      return [mkPr(12, 'Cache strategy notes', 'merged', 'main')];
+    default:
+      return [];
+  }
 };
 
 export const demoAccounts = (): AgentAccountsSnapshot => ({

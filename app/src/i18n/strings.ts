@@ -95,6 +95,7 @@ const en = {
   'session.answered': 'Answered',
   'session.interrupted': 'Interrupted',
   'session.submit': 'Submit',
+  'session.question.custom': 'Your answer',
   'session.working': 'Working',
   'session.queuedLocally': 'Queued',
   'session.changes': 'Changes',
@@ -148,6 +149,7 @@ const en = {
   'terminal.exit': '[exit {code}]',
   'terminal.exitedNote':
     'Exited shells stay listed for 30 minutes on the host.',
+  'terminal.unavailable': 'Terminal needs a connected desktop.',
 
   // History
   'history.title': 'History',

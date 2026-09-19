@@ -38,6 +38,7 @@ import {
   demoRegistryRows,
   demoTranscripts,
   demoWorkspaceListing,
+  demoChangeRequestFor,
   HOST_LIVE,
 } from './fixtures';
 import { bytesToBase64, base64ToBytes } from '../zeron/util/base64';
@@ -537,14 +538,18 @@ export class DemoEdge {
         return this.replyErr(socket, id, 'demo: no tool blobs');
 
       // ── Workspace files ──
-      case METHODS.LIST_WORKSPACE_DIRECTORY:
+      case METHODS.LIST_WORKSPACE_DIRECTORY: {
+        const directory = typeof p.directory === 'string' ? p.directory : '';
+        const includeIgnored = p.includeIgnored === true;
+        const entries = demoWorkspaceListing(directory).filter(
+          e => includeIgnored || e.ignored !== true,
+        );
         return this.reply(socket, id, {
-          directory: typeof p.directory === 'string' ? p.directory : '',
-          entries: demoWorkspaceListing(
-            typeof p.directory === 'string' ? p.directory : '',
-          ),
+          directory,
+          entries,
           truncated: false,
         });
+      }
       case METHODS.SEARCH_WORKSPACE_FILES: {
         const q = typeof p.query === 'string' ? p.query.toLowerCase() : '';
         const matches = Object.keys(demoFiles)
@@ -625,26 +630,12 @@ export class DemoEdge {
         });
       case METHODS.WATCH_CHECKOUT_CHANGE_REQUEST: {
         const branch = typeof p.branch === 'string' ? p.branch : 'main';
-        // Only the working demo thread (branch demo/replay) has a PR; other
-        // chats that share a cwd must not inherit a phantom change request.
-        const changeRequest =
-          branch === 'demo/replay'
-            ? {
-                provider: 'github',
-                number: 42,
-                title: 'Composer chrome overhaul',
-                url: 'https://github.com/example/zremote/pull/42',
-                state: 'open' as const,
-                draft: true,
-                baseRef: 'main',
-                headRef: 'feature/composer',
-                body: '## Summary\n\nDemo pull request for the composer chrome.',
-              }
-            : null;
+        const cwd = typeof p.cwd === 'string' ? p.cwd : demoPaths.zremote;
+        const changeRequest = demoChangeRequestFor(branch, cwd);
         streamItem(end, {
           checkoutId: 'demo-checkout',
           deviceId: HOST_LIVE,
-          cwd: demoPaths.zremote,
+          cwd,
           branch,
           changeRequest,
           updatedAt: '2026-09-19T10:00:00Z',
@@ -1434,7 +1425,14 @@ export class DemoEdge {
     }
     term.watchers.add(end);
     streams.set(end.id, () => term.watchers.delete(end));
-    this.termData(term, 'demo$ ');
+    this.termData(
+      term,
+      'Last login: Sat Sep 19 09:00:00 on ttys001\r\n' +
+        'demo$ pwd\r\n/demo/code/zremote\r\n' +
+        'demo$ ls\r\nREADME.md  docs  package.json  src\r\n' +
+        '# Demo shell — try ls, or type any command.\r\n' +
+        'demo$ ',
+    );
   }
 
   private termData(term: Terminal, text: string): void {
