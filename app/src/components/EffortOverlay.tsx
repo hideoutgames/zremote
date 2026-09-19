@@ -4,7 +4,7 @@
 // to mid-screen height, centered on the composer column on iPad (window
 // center on iPhone) via RN Animated (no Reanimated worklets). The model
 // picker hosts it `embedded` inside the already-presented sheet so it is
-// not stacked behind the formSheet / TrueSheet. Fast mode lives on the
+// not stacked behind the pageSheet / formSheet. Fast mode lives on the
 // composer chip, not here.
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
