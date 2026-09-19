@@ -129,3 +129,35 @@ test('effort overlay accepts a composer anchor without crashing', async () => {
     tree?.unmount();
   });
 });
+
+test('embedded effort overlay has no Modal and backdrop still dismisses', async () => {
+  jest.useFakeTimers();
+  const onDismiss = jest.fn();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <EffortOverlay
+        embedded
+        levels={['low', 'medium', 'high']}
+        value="medium"
+        onChange={() => {}}
+        onDismiss={onDismiss}
+      />,
+    );
+  });
+  expect(tree!.root.findAllByType(Modal)).toHaveLength(0);
+  const done = tree!.root.findAll(
+    n =>
+      n.props.accessibilityRole === 'button' &&
+      n.props.accessibilityLabel === 'Done',
+  )[0];
+  await act(async () => {
+    done.props.onPress();
+    jest.advanceTimersByTime(300);
+  });
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    tree?.unmount();
+  });
+  jest.useRealTimers();
+});

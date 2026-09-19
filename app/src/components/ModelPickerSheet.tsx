@@ -9,7 +9,6 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import type { EffortOrigin } from './EffortOverlay';
 import {
   Modal,
   Pressable,
@@ -59,6 +58,7 @@ import { capitalizeLevel } from './effortSliderMath';
 import { fastOptionForModel, isFastEnabled } from './fastMode';
 import { MenuDismissShield } from './menus/MenuDismissShield';
 import { useDismissibleNativeModal } from '../hooks/useDismissibleNativeModal';
+import { GlassControl } from './Glass';
 
 export interface ModelPickerSheetProps {
   runtime: AppRuntime;
@@ -73,6 +73,8 @@ export interface ModelPickerSheetProps {
 }
 
 const CLOSE = 32;
+/** Dark check on the orange Done glass (matches PlanSheet CTA label). */
+const DONE_CHECK = '#1C1204';
 
 function ModelRow({
   label,
@@ -101,7 +103,7 @@ function ModelRow({
   effortLabel?: string;
   effortSupported: boolean;
   onSelect: () => void;
-  onOpenEffort: (origin?: EffortOrigin) => void;
+  onOpenEffort: () => void;
   fastSupported: boolean;
   fastEnabled: boolean;
   fastOption?: Parameters<typeof FastMenuButton>[0]['option'];
@@ -115,17 +117,6 @@ function ModelRow({
   accentColor: string;
   onLayout?: (y: number) => void;
 }) {
-  const effortRef = useRef<View>(null);
-  const openEffort = () => {
-    const node = effortRef.current;
-    if (node !== null && typeof node.measureInWindow === 'function') {
-      node.measureInWindow((x, y, width, height) => {
-        onOpenEffort({ x, y, width, height });
-      });
-      return;
-    }
-    onOpenEffort();
-  };
   return (
     <View
       onLayout={e => onLayout?.(e.nativeEvent.layout.y)}
@@ -139,25 +130,21 @@ function ModelRow({
             },
       ]}
     >
-      <View style={styles.rowMain}>
-        <Pressable
-          style={styles.rowHit}
-          onPress={onSelect}
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          accessibilityState={{ selected }}
-        >
-          <Text
-            style={[styles.rowText, { color: textColor }]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
-        </Pressable>
+      <Pressable
+        style={styles.rowHit}
+        onPress={onSelect}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected }}
+      >
+        <Text style={[styles.rowText, { color: textColor }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </Pressable>
+      <View style={styles.rowTrail}>
         {effortSupported && effortLabel !== undefined ? (
           <Pressable
-            ref={effortRef}
-            onPress={openEffort}
+            onPress={onOpenEffort}
             hitSlop={4}
             accessibilityRole="button"
             accessibilityLabel={effortLabel}
@@ -170,8 +157,6 @@ function ModelRow({
             />
           </Pressable>
         ) : null}
-      </View>
-      <View style={styles.rowTrail}>
         {fastSupported ? (
           <FastMenuButton
             enabled={fastEnabled}
@@ -220,7 +205,6 @@ export function ModelPickerSheet({
     harness: string;
     model: string;
     levels: string[];
-    origin?: EffortOrigin;
   }>();
   const scrollRef = useRef<ScrollView>(null);
   const rowY = useRef<Record<string, number>>({});
@@ -352,10 +336,12 @@ export function ModelPickerSheet({
     [apply, locked, harnessId, harnesses, config, modelSettings],
   );
 
+  const dismiss = formSheet === true ? hide : onClose;
+
   const header = (
     <View style={styles.header}>
       <Pressable
-        onPress={formSheet === true ? hide : onClose}
+        onPress={dismiss}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={t('common.close')}
@@ -367,7 +353,17 @@ export function ModelPickerSheet({
       <Text style={[styles.title, { color: theme.text }]}>
         {t('picker.title')}
       </Text>
-      <View style={styles.closeButton} />
+      <GlassControl
+        interactive
+        tintColor={theme.planButton}
+        onPress={dismiss}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.done')}
+        style={styles.closeButton}
+      >
+        <Icon name="checkmark" size={16} color={DONE_CHECK} />
+      </GlassControl>
     </View>
   );
 
@@ -447,13 +443,12 @@ export function ModelPickerSheet({
                     : undefined
                 }
                 onSelect={() => pickModel(h.id, m)}
-                onOpenEffort={origin => {
+                onOpenEffort={() => {
                   pickModel(h.id, m);
                   setEffort({
                     harness: h.id,
                     model: m.id,
                     levels,
-                    origin,
                   });
                 }}
                 fastSupported={fastOption !== undefined}
@@ -493,40 +488,6 @@ export function ModelPickerSheet({
     </ScrollView>
   );
 
-  const body = (
-    <View style={[styles.sheetBody, { backgroundColor: theme.background }]}>
-      {header}
-      {content}
-      <MenuDismissShield />
-    </View>
-  );
-
-  const sheet =
-    formSheet === true ? (
-      <Modal
-        visible={visible}
-        presentationStyle="formSheet"
-        animationType="fade"
-        allowSwipeDismissal
-        onRequestClose={onRequestClose}
-        onDismiss={onModalDismiss}
-      >
-        <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
-          {body}
-        </View>
-      </Modal>
-    ) : (
-      <TrueSheet
-        detents={['auto', 1]}
-        initialDetentIndex={1}
-        onDidDismiss={onClose}
-        grabber
-        backgroundColor={theme.background}
-      >
-        {body}
-      </TrueSheet>
-    );
-
   const effortLevels = effort?.levels ?? [];
   const effortValue =
     effort === undefined
@@ -539,25 +500,59 @@ export function ModelPickerSheet({
             : undefined,
         );
 
+  const overlay =
+    effort !== undefined ? (
+      <EffortOverlay
+        embedded
+        levels={effortLevels}
+        value={effortValue}
+        onChange={level =>
+          apply({
+            harness: effort.harness,
+            model: effort.model,
+            reasoning: level,
+          })
+        }
+        onDismiss={() => setEffort(undefined)}
+      />
+    ) : null;
+
+  const body = (
+    <View style={[styles.sheetBody, { backgroundColor: theme.background }]}>
+      {header}
+      {content}
+      <MenuDismissShield />
+      {overlay}
+    </View>
+  );
+
+  if (formSheet === true) {
+    return (
+      <Modal
+        visible={visible}
+        presentationStyle="formSheet"
+        animationType="fade"
+        allowSwipeDismissal
+        onRequestClose={onRequestClose}
+        onDismiss={onModalDismiss}
+      >
+        <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
+          {body}
+        </View>
+      </Modal>
+    );
+  }
+
   return (
-    <>
-      {sheet}
-      {effort !== undefined ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={effortValue}
-          origin={effort.origin}
-          onChange={level =>
-            apply({
-              harness: effort.harness,
-              model: effort.model,
-              reasoning: level,
-            })
-          }
-          onDismiss={() => setEffort(undefined)}
-        />
-      ) : null}
-    </>
+    <TrueSheet
+      detents={['auto', 1]}
+      initialDetentIndex={1}
+      onDidDismiss={onClose}
+      grabber
+      backgroundColor={theme.background}
+    >
+      {body}
+    </TrueSheet>
   );
 }
 
@@ -579,6 +574,7 @@ const styles = StyleSheet.create({
     borderRadius: CLOSE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   title: { fontSize: 17, fontWeight: '600' },
   content: { paddingHorizontal: 8, paddingBottom: 24, gap: 4 },
@@ -611,20 +607,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
   },
-  rowMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  rowHit: { flexShrink: 1, minWidth: 0, justifyContent: 'center' },
+  rowHit: { flex: 1, minWidth: 0, justifyContent: 'center' },
   rowText: { fontSize: 17, flexShrink: 1 },
   rowTrail: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 0,
-    gap: 4,
+    gap: 20,
     marginLeft: 'auto',
   },
   badge: { fontSize: 11, fontWeight: '600' },

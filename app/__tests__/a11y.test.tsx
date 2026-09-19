@@ -436,6 +436,8 @@ test('model picker: search, provider groups, effort, and fast are labelled', asy
   const labels = labelled(mounted.root);
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
   expect(labels.some(l => l.label === 'Close')).toBe(true);
+  expect(labels.some(l => l.label === 'Done')).toBe(true);
+  expect(mounted.root.findAll(n => n.props.children === 'Done')).toEqual([]);
   expect(labels.some(l => l.label === 'Search')).toBe(true);
   expect(labels.some(l => l.label === 'Sonnet')).toBe(true);
   expect(labels.some(l => l.label === 'GPT')).toBe(true);
@@ -458,6 +460,13 @@ test('model picker: search, provider groups, effort, and fast are labelled', asy
       n.props.accessibilityState?.selected === true,
   );
   expect(selected.length).toBeGreaterThan(0);
+  expect(StyleSheet.flatten(selected[0].props.style).flex).toBe(1);
+  const effortChip = mounted.root.findAll(
+    n =>
+      n.props.accessibilityLabel === 'High' &&
+      n.props.accessibilityRole === 'button',
+  )[0];
+  expect(StyleSheet.flatten(effortChip.parent?.props.style).gap).toBe(20);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {

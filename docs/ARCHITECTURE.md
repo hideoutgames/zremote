@@ -125,9 +125,11 @@ reachable from JS and is deferred to the native split-view stage. Sheet
 dismissal: TrueSheet `dismissible` (default true) closes on grabber swipe or
 a tap on the dimmed area; RN `pageSheet`/`formSheet` Modals set
 `allowSwipeDismissal` plus `onRequestClose` so iPad dim-tap and swipe-down
-update `visible`. Overlay popups (`EffortOverlay`, `ImagePreviewModal`) use
-a full-screen Pressable backdrop. The Expo Go TrueSheet shim honors
-`dismissible` the same way.
+update `visible`. Overlay popups (`EffortOverlay` on the composer,
+`ImagePreviewModal`) use a full-screen Pressable backdrop. Inside
+`ModelPickerSheet` the effort overlay is `embedded` (absolute fill, no
+second Modal) so it is not stacked behind the formSheet / TrueSheet. The
+Expo Go TrueSheet shim honors `dismissible` the same way.
 
 **Popover anchoring:** `@lodev09/react-native-true-sheet` has no iPad popover
 anchoring — its `anchor`/`anchorOffset` props only center/align the sheet on
