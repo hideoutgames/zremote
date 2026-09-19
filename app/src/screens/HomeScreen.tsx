@@ -38,14 +38,13 @@ import {
   useHostForChat,
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
-import {
-  isAgentRunning,
-  sortOverviewThreads,
-} from '../zeron/protocol/entities';
+import { sortOverviewThreads } from '../zeron/protocol/entities';
 import {
   sessionTitle,
   hostLabel,
   checkoutLabel,
+  threadStatusLine,
+  type ThreadStatusLine,
 } from '../zeron/state/sessionTruth';
 import {
   markChatSeen,
@@ -61,7 +60,10 @@ import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
-import { useThreadPrDot } from '../zeron/state/changeRequestStore';
+import {
+  changeRequestStore,
+  useThreadPrDot,
+} from '../zeron/state/changeRequestStore';
 import {
   setComposeDefaults,
   toggleChatPinned,
@@ -71,22 +73,6 @@ import {
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
-
-const INACTIVE_OPACITY = 0.55;
-
-const prDotColor = (
-  theme: Theme,
-  tone: 'draft' | 'open' | 'merged',
-): string => {
-  switch (tone) {
-    case 'draft':
-      return theme.prDraft;
-    case 'open':
-      return theme.prOpen;
-    case 'merged':
-      return theme.prMerged;
-  }
-};
 
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
@@ -98,6 +84,71 @@ export const relativeTime = (at: number, now: number): string => {
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d`;
   return new Date(at).toLocaleDateString();
+};
+
+const statusCopy = (line: ThreadStatusLine): string => {
+  switch (line.kind) {
+    case 'working':
+      return t('session.working');
+    case 'awaitingInput':
+      return t('session.awaitingInput');
+    case 'errored':
+      return t('session.errored');
+    case 'time':
+      return line.label;
+    case 'pr':
+      return line.tone === 'merged'
+        ? t('pr.merged')
+        : line.tone === 'draft'
+        ? t('pr.draft')
+        : t('pr.open');
+  }
+};
+
+const ThreadStatus = ({
+  line,
+  theme,
+  chatId,
+}: {
+  line: ThreadStatusLine;
+  theme: Theme;
+  chatId: string;
+}) => {
+  const label = statusCopy(line);
+  const showCounts =
+    line.kind === 'pr' && (line.additions > 0 || line.deletions > 0);
+  if (!showCounts || line.kind !== 'pr') {
+    return (
+      <Text
+        style={[styles.subtitle, { color: theme.textSecondary }]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.6}
+        testID={`thread-status-${chatId}`}
+      >
+        {label}
+      </Text>
+    );
+  }
+  return (
+    <Text
+      style={[styles.subtitle, { color: theme.textSecondary }]}
+      numberOfLines={1}
+      maxFontSizeMultiplier={1.6}
+      testID={`thread-status-${chatId}`}
+    >
+      {label}
+      {' · '}
+      {line.additions > 0 ? (
+        <Text style={{ color: theme.diffAddText }}>{`+${line.additions}`}</Text>
+      ) : null}
+      {line.additions > 0 && line.deletions > 0 ? ' ' : null}
+      {line.deletions > 0 ? (
+        <Text
+          style={{ color: theme.diffDelText }}
+        >{`\u2212${line.deletions}`}</Text>
+      ) : null}
+    </Text>
+  );
 };
 
 const ChatRow = React.memo(function ({
@@ -113,15 +164,29 @@ const ChatRow = React.memo(function ({
   const host = useHostForChat(chat.id);
   const unseen = chatUnseen(chat);
   const prTone = useThreadPrDot(chat.id);
-  const live = isAgentRunning(indicator);
-  const [hovered, setHovered] = useState(false);
+  const prAdds = useStore(
+    changeRequestStore,
+    s => s.diffByChat[chat.id]?.additions ?? 0,
+  );
+  const prDels = useStore(
+    changeRequestStore,
+    s => s.diffByChat[chat.id]?.deletions ?? 0,
+  );
   const pinned = useChatPinned(chat.id);
+  const [hovered, setHovered] = useState(false);
   const suppressOpen = useRef(false);
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const at = chat.lastMessageAt ?? chat.createdAt;
   const mark = svgForHarness(chat.config?.harness);
+  const line = threadStatusLine(
+    indicator,
+    prTone === null
+      ? undefined
+      : { tone: prTone, additions: prAdds, deletions: prDels },
+    relativeTime(at, Date.now()),
+  );
 
   const armSuppress = useCallback(() => {
     suppressOpen.current = true;
@@ -192,7 +257,11 @@ const ChatRow = React.memo(function ({
     <ContextMenu.Root onOpenChange={onMenuOpenChange}>
       <ContextMenu.Trigger>
         <Pressable
-          style={[styles.row, hovered ? styles.rowHover : undefined]}
+          style={[
+            styles.row,
+            { borderBottomColor: theme.border },
+            hovered ? styles.rowHover : undefined,
+          ]}
           onPress={() => {
             if (suppressOpen.current) return;
             if (runtime !== null) markChatSeen(runtime, chat.id);
@@ -206,27 +275,7 @@ const ChatRow = React.memo(function ({
             .filter(Boolean)
             .join(', ')}
         >
-          {prTone !== null ? (
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: prDotColor(theme, prTone) },
-              ]}
-              testID={`pr-dot-${chat.id}-${prTone}`}
-            />
-          ) : (
-            <View
-              style={styles.dotPlaceholder}
-              testID={`pr-dot-${chat.id}-none`}
-            />
-          )}
-          <View
-            style={[
-              styles.rowText,
-              live ? undefined : { opacity: INACTIVE_OPACITY },
-            ]}
-            testID={`thread-body-${chat.id}`}
-          >
+          <View style={styles.rowText} testID={`thread-body-${chat.id}`}>
             <View style={styles.titleRow}>
               {mark !== undefined ? <BrandMark svg={mark} size={16} /> : null}
               <Text
@@ -245,24 +294,7 @@ const ChatRow = React.memo(function ({
                 </View>
               ) : null}
             </View>
-            <Text
-              style={[styles.subtitle, { color: theme.textSecondary }]}
-              numberOfLines={1}
-            >
-              {[project, hostName, relativeTime(at, Date.now())]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-            {chat.lastMessagePreview !== undefined &&
-            chat.lastMessagePreview !== '' ? (
-              <Text
-                style={[styles.preview, { color: theme.textSecondary }]}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.6}
-              >
-                {chat.lastMessagePreview}
-              </Text>
-            ) : null}
+            <ThreadStatus line={line} theme={theme} chatId={chat.id} />
           </View>
         </Pressable>
       </ContextMenu.Trigger>
@@ -359,8 +391,8 @@ export function HomeScreen({
   const devices = useStore(workspaceStore, s => s.devices);
   const connection = useStore(workspaceStore, s => s.connection);
   const sessions = useStore(workspaceStore, s => s.sessions);
-
   const pinnedIds = usePinnedChatIds();
+
   const chats = useMemo(() => {
     const scoped =
       spaceFilter === undefined
@@ -385,7 +417,12 @@ export function HomeScreen({
   useOverviewChangeRequestWatches(runtime, chats);
 
   const spaceName = useCallback(
-    (id: string) => spaces.find(s => s.id === id)?.name ?? id,
+    (id: string) => {
+      const space = spaces.find(s => s.id === id);
+      if (space === undefined) return id;
+      if (space.name !== undefined && space.name !== '') return space.name;
+      return space.path.split(/[\\/]/).filter(Boolean).pop() ?? id;
+    },
     [spaces],
   );
 
@@ -497,13 +534,18 @@ export function HomeScreen({
       <LegendList
         data={rest}
         keyExtractor={item => item.id}
-        estimatedItemSize={66}
+        estimatedItemSize={78}
         recycleItems
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListHeaderComponent={
           <>
+            <Text style={[styles.largeTitle, { color: theme.text }]}>
+              {spaceFilter === undefined
+                ? t('home.sessions')
+                : spaceName(spaceFilter)}
+            </Text>
             {pinned.length > 0 ? (
               <>
                 <Text style={[styles.section, { color: theme.textSecondary }]}>
@@ -514,9 +556,6 @@ export function HomeScreen({
                 ))}
               </>
             ) : null}
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('home.sessions')}
-            </Text>
           </>
         }
         ListEmptyComponent={
@@ -605,6 +644,7 @@ export function HomeScreen({
                     autoCapitalize="none"
                     autoFocus
                     testID="home-search-input"
+                    accessibilityLabel={t('home.search')}
                     onBlur={() => {
                       if (query.trim() === '') animateSearch(false);
                     }}
@@ -718,36 +758,40 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   pillText: { fontSize: 12, fontWeight: '500' },
+  largeTitle: {
+    fontSize: 34,
+    fontWeight: '700',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
   section: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
     paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   empty: { fontSize: 15, padding: 20, textAlign: 'center' },
   listContent: { paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowHover: { opacity: 0.72 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotPlaceholder: { width: 8, height: 8 },
-  rowText: { flex: 1, gap: 3 },
+  rowText: { flex: 1, gap: 4 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  title: { flex: 1, fontSize: 18, fontWeight: '500' },
+  title: { flex: 1, fontSize: 17, fontWeight: '600' },
   unseen: { fontWeight: '700' },
-  subtitle: { fontSize: 14 },
-  preview: { fontSize: 13 },
+  subtitle: { fontSize: 15 },
   archivedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
