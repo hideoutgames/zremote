@@ -954,6 +954,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexGrow: 1,
+    paddingRight: CHIP_FADE,
   },
   chipSpacer: { flexGrow: 1, minWidth: 0 },
   effortChipHidden: { opacity: 0 },
