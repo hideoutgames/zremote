@@ -225,7 +225,7 @@ export function NewThreadBackground() {
 
 const styles = StyleSheet.create({
   fill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
     zIndex: 0,
   },

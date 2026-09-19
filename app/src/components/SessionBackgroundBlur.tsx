@@ -66,7 +66,7 @@ export function ChatBackgroundBlur({
 
 const styles = StyleSheet.create({
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 0,
   },
   column: {

@@ -20,5 +20,6 @@ export const composeKeyboardShift = ({
   }
   const composerBottom = (windowHeight + composerHeight) / 2;
   const keyboardTop = windowHeight - keyboardHeight;
-  return -Math.max(0, composerBottom + gap - keyboardTop);
+  const overlap = Math.max(0, composerBottom + gap - keyboardTop);
+  return overlap === 0 ? 0 : -overlap;
 };
