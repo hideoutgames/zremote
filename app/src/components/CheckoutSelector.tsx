@@ -132,6 +132,9 @@ export function CheckoutChips({
       horizontal
       testID="compose-checkout"
       showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+      style={styles.scroll}
       contentContainerStyle={styles.bar}
     >
       <DropdownMenu.Root>
@@ -275,6 +278,10 @@ export function CheckoutChips({
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    alignSelf: 'stretch',
+    minWidth: 0,
+  },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
