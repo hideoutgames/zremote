@@ -8,6 +8,7 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -33,11 +34,22 @@ import {
   composerExtraMax,
   composerListInset,
 } from './composerExtraHeight';
+import { WorkingStatusRow } from './WorkingStatus';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 
+export const WORKING_STATUS_ID = '__working-status__';
+
+type TranscriptRow =
+  | { kind: 'entry'; entry: MessageEntry }
+  | { kind: 'working' };
+
 export type SessionTranscriptListHandle = {
   scrollMessageToEnd: (opts: {
+    animated: boolean;
+    closeKeyboard: boolean;
+  }) => Promise<void>;
+  followEnd: (opts: {
     animated: boolean;
     closeKeyboard: boolean;
   }) => Promise<void>;
@@ -60,6 +72,9 @@ export const SessionTranscriptList = forwardRef<
     onShowScrollDown: (show: boolean) => void;
     /** `${chatId}:${openGeneration}` — changes on every thread open. */
     openKey: string;
+    working?: boolean;
+    chatId?: string;
+    startedAt?: number;
   }
 >(function SessionTranscriptListInner(
   {
@@ -74,6 +89,9 @@ export const SessionTranscriptList = forwardRef<
     onComposerHeight,
     onShowScrollDown,
     openKey,
+    working = false,
+    chatId = '',
+    startedAt = 0,
   },
   ref,
 ) {
@@ -84,6 +102,9 @@ export const SessionTranscriptList = forwardRef<
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
   const hasOverflowedRef = useRef(false);
   const scrolledForKeyRef = useRef<string | null>(null);
+  const wasWorkingRef = useRef(working);
+  const followingRef = useRef(following);
+  followingRef.current = following;
 
   const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
     useKeyboardChatComposerInset(listRef, composerRef);
@@ -102,6 +123,15 @@ export const SessionTranscriptList = forwardRef<
   onComposerHeightRef.current = onComposerHeight;
   const reportComposerInsetRef = useRef(reportComposerInset);
   reportComposerInsetRef.current = reportComposerInset;
+
+  const data = useMemo((): TranscriptRow[] => {
+    const rows: TranscriptRow[] = entries.map(entry => ({
+      kind: 'entry',
+      entry,
+    }));
+    if (working) rows.push({ kind: 'working' });
+    return rows;
+  }, [entries, working]);
 
   const publishInset = useCallback((extraHeight: number) => {
     const base = baseHeightRef.current;
@@ -131,7 +161,7 @@ export const SessionTranscriptList = forwardRef<
   );
 
   useEffect(() => {
-    if (entries.length === 0) return;
+    if (entries.length === 0 && !working) return;
     if (scrolledForKeyRef.current === openKey) return;
     scrolledForKeyRef.current = openKey;
     hasOverflowedRef.current = true;
@@ -139,7 +169,16 @@ export const SessionTranscriptList = forwardRef<
     scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
       () => {},
     );
-  }, [openKey, entries.length, scrollMessageToEnd]);
+  }, [openKey, entries.length, working, scrollMessageToEnd]);
+
+  useEffect(() => {
+    const appeared = working && !wasWorkingRef.current;
+    wasWorkingRef.current = working;
+    if (!appeared || !followingRef.current) return;
+    scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
+      () => {},
+    );
+  }, [working, scrollMessageToEnd]);
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -171,27 +210,52 @@ export const SessionTranscriptList = forwardRef<
     [publishInset],
   );
 
+  const followEnd = useCallback(
+    (opts: { animated: boolean; closeKeyboard: boolean }) => {
+      hasOverflowedRef.current = true;
+      setFollowing(true);
+      return scrollMessageToEnd(opts);
+    },
+    [scrollMessageToEnd],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       scrollMessageToEnd,
+      followEnd,
       noteSent: (entryCount: number) => {
         setAnchorIndex(entryCount);
-        hasOverflowedRef.current = false;
-        setFollowing(false);
+        if (hasOverflowedRef.current) {
+          setFollowing(true);
+        } else {
+          setFollowing(false);
+        }
       },
       onComposerLayout,
     }),
-    [scrollMessageToEnd, onComposerLayout],
+    [scrollMessageToEnd, followEnd, onComposerLayout],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: TranscriptRow }) =>
+      item.kind === 'working' ? (
+        <WorkingStatusRow chatId={chatId} startedAt={startedAt} />
+      ) : (
+        renderEntry({ item: item.entry })
+      ),
+    [chatId, startedAt, renderEntry],
   );
 
   return (
     <KeyboardAwareLegendList
       ref={listRef}
       style={styles.fill}
-      data={entries}
-      keyExtractor={(item: MessageEntry) => item.id}
-      renderItem={renderEntry}
+      data={data}
+      keyExtractor={(item: TranscriptRow) =>
+        item.kind === 'working' ? WORKING_STATUS_ID : item.entry.id
+      }
+      renderItem={renderItem}
       applyWorkaroundForContentInsetHitTestBug
       maintainVisibleContentPosition={
         Platform.OS !== 'android'

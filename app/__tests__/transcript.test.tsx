@@ -159,7 +159,6 @@ test('AssistantMessage shows a plan card and turn changes', async () => {
     tree = TestRenderer.create(
       <AssistantMessage
         entry={entry}
-        phase="idle"
         onOpenReasoning={() => {}}
         onOpenPlan={() => {}}
         onOpenFileDiff={() => {}}
@@ -176,11 +175,7 @@ test('AssistantMessage groups the tool parts into one rail', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <AssistantMessage
-        entry={assistantEntry}
-        phase="idle"
-        onOpenReasoning={() => {}}
-      />,
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
     );
   });
   const texts = textOf(tree!.root);
@@ -201,11 +196,7 @@ test('streaming trailing tool group auto-opens', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <AssistantMessage
-        entry={entry}
-        phase="working"
-        onOpenReasoning={() => {}}
-      />,
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
     );
   });
   expect(
@@ -215,7 +206,7 @@ test('streaming trailing tool group auto-opens', async () => {
   expect(textOf(tree!.root)).toContain('cargo test --workspace');
 });
 
-test('waiting assistant shows the working spinner instead of shimmer copy', async () => {
+test('waiting assistant does not render an in-bubble working spinner', async () => {
   const entry: MessageEntry = {
     ...assistantEntry,
     status: 'streaming',
@@ -224,20 +215,18 @@ test('waiting assistant shows the working spinner instead of shimmer copy', asyn
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <AssistantMessage
-        entry={entry}
-        phase="working"
-        chatId="c1"
-        onOpenReasoning={() => {}}
-      />,
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
     );
   });
   expect(
     tree!.root.findAll(n => n.props.testID === 'working-spinner').length,
-  ).toBeGreaterThan(0);
+  ).toBe(0);
   expect(
     tree!.root.findAll(n => n.props.testID === 'working-wait').length,
-  ).toBeGreaterThan(0);
+  ).toBe(0);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
+  ).toBe(0);
 });
 
 test('InputCard summarizes an open question', async () => {
