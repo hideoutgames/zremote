@@ -120,6 +120,28 @@ export function railItemSize(
   return railHeight / count;
 }
 
+export type RailStackLayout = {
+  itemSize: number;
+  stackHeight: number;
+  /** Top offset inside the available band. Centered when short; 0 when long. */
+  offset: number;
+};
+
+/** Size the tick stack: center it in the band until it would overflow,
+ *  then fill the band (bottom pinned to the composer edge). */
+export function railStackLayout(
+  count: number,
+  availableHeight: number,
+): RailStackLayout {
+  const itemSize = railItemSize(count, availableHeight);
+  const stackHeight = count <= 0 ? 0 : itemSize * count;
+  const offset =
+    stackHeight > 0 && stackHeight < availableHeight
+      ? (availableHeight - stackHeight) / 2
+      : 0;
+  return { itemSize, stackHeight, offset };
+}
+
 export function pickActiveRailId(opts: {
   itemIds: string[];
   offset: number;

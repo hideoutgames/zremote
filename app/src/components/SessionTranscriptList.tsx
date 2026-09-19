@@ -42,12 +42,15 @@ import { PreviewRail } from './agentsKit/PreviewRail';
 import {
   buildRailItems,
   pickActiveRailId,
+  railStackLayout,
   type RailItem,
 } from './agentsKit/messagePreview';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 const RAIL_PADDING_RIGHT = 40;
 export const RAIL_RIGHT = 4;
+/** Gap so the last tick sits just above the composer, not flush with it. */
+export const RAIL_COMPOSER_GAP = 10;
 /** Remount LegendList after a sidebar-sized width jump so hit testing
  *  picks up the new column. Smaller layout ticks only re-anchor. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
@@ -179,8 +182,11 @@ export const SessionTranscriptList = forwardRef<
   const itemIds = useMemo(() => railItems.map(item => item.id), [railItems]);
 
   const overflowing = contentHeight > listHeight + 1 && entries.length > 1;
-  const railTop = insetsTop + 96;
-  const railHeight = Math.max(0, listHeight - railTop - composerInset);
+  const railBandTop = insetsTop + 96;
+  const railBandBottom = composerInset + RAIL_COMPOSER_GAP;
+  const railAvailable = Math.max(0, listHeight - railBandTop - railBandBottom);
+  const railLayout = railStackLayout(railItems.length, railAvailable);
+  const railTop = railBandTop + railLayout.offset;
   const railRight = RAIL_RIGHT;
   const activeRailId = following
     ? itemIds[itemIds.length - 1] ?? ''
@@ -466,16 +472,15 @@ export const SessionTranscriptList = forwardRef<
           </Text>
         }
       />
-      {overflowing && railItems.length > 1 && railHeight > 0 ? (
+      {overflowing && railItems.length > 1 && railLayout.stackHeight > 0 ? (
         <PreviewRail
           items={railItems}
           label={t('session.messageNavigation')}
           activeId={activeRailId}
           onItemSelect={scrollToRailItem}
           top={railTop}
-          bottom={composerInset}
+          height={railLayout.stackHeight}
           right={railRight}
-          railHeight={railHeight}
           dismissKey={dismissKey}
         />
       ) : null}

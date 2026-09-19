@@ -9,6 +9,7 @@ import {
   getMessagePreview,
   pickActiveRailId,
   railItemSize,
+  railStackLayout,
   tickScale,
   truncateMessageText,
 } from '../src/components/agentsKit/messagePreview';
@@ -131,6 +132,20 @@ test('pickActiveRailId pins first/last near the edges', () => {
 test('railItemSize compresses only when ticks would overflow', () => {
   expect(railItemSize(4, 200)).toBe(14);
   expect(railItemSize(20, 140)).toBe(7);
+});
+
+test('railStackLayout centers a short stack in the band', () => {
+  const layout = railStackLayout(4, 200);
+  expect(layout.itemSize).toBe(14);
+  expect(layout.stackHeight).toBe(56);
+  expect(layout.offset).toBe((200 - 56) / 2);
+});
+
+test('railStackLayout pins a long stack to the band height', () => {
+  const layout = railStackLayout(20, 140);
+  expect(layout.itemSize).toBe(7);
+  expect(layout.stackHeight).toBe(140);
+  expect(layout.offset).toBe(0);
 });
 
 test('tickScale is a four-step pyramid', () => {

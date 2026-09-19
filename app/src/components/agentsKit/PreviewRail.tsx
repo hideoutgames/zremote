@@ -12,12 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme';
 import { Glass } from '../Glass';
-import {
-  RAIL_ITEM_SIZE,
-  railItemSize,
-  tickScale,
-  type RailItem,
-} from './messagePreview';
+import { railItemSize, tickScale, type RailItem } from './messagePreview';
 
 export type { RailItem as PreviewRailItem };
 
@@ -65,9 +60,8 @@ export function PreviewRail({
   activeId,
   onItemSelect,
   top,
-  bottom,
+  height,
   right,
-  railHeight,
   dismissKey = 0,
 }: {
   items: RailItem[];
@@ -75,9 +69,8 @@ export function PreviewRail({
   activeId: string;
   onItemSelect: (item: RailItem) => void;
   top: number;
-  bottom: number;
+  height: number;
   right: number;
-  railHeight: number;
   dismissKey?: number;
 }) {
   'use no memo';
@@ -94,12 +87,7 @@ export function PreviewRail({
     : items[0]?.id ?? '';
   const highlightedId = pinnedId ?? selectedId;
   const highlightedIndex = items.findIndex(item => item.id === highlightedId);
-  const itemSize = railItemSize(items.length, railHeight);
-  const stackHeight = itemSize * items.length;
-  const stackTop =
-    items.length * RAIL_ITEM_SIZE <= railHeight
-      ? Math.max(0, (railHeight - stackHeight) / 2)
-      : 0;
+  const itemSize = railItemSize(items.length, height);
   const previewItem = items.find(item => item.id === pinnedId);
 
   return (
@@ -120,14 +108,11 @@ export function PreviewRail({
       ) : null}
       <View
         pointerEvents="box-none"
-        style={[styles.rail, { top, bottom, right, width: RAIL_WIDTH }]}
+        style={[styles.rail, { top, right, width: RAIL_WIDTH, height }]}
         accessibilityRole="adjustable"
         accessibilityLabel={label}
       >
-        <View
-          pointerEvents="box-none"
-          style={[styles.stack, { marginTop: stackTop }]}
-        >
+        <View pointerEvents="box-none" style={styles.stack}>
           {items.map((item, index) => {
             const distance =
               highlightedIndex < 0
@@ -170,11 +155,10 @@ export function PreviewRail({
                 top,
                 Math.min(
                   top +
-                    stackTop +
                     highlightedIndex * itemSize +
                     itemSize / 2 -
                     PREVIEW_HEIGHT / 2,
-                  top + railHeight - PREVIEW_HEIGHT,
+                  top + height - PREVIEW_HEIGHT,
                 ),
               ),
             },
@@ -214,6 +198,7 @@ const styles = StyleSheet.create({
   rail: {
     position: 'absolute',
     zIndex: 3,
+    overflow: 'hidden',
   },
   stack: {
     width: RAIL_WIDTH,

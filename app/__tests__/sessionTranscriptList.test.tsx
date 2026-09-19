@@ -6,10 +6,12 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text, View, type LayoutChangeEvent } from 'react-native';
 import {
   SessionTranscriptList,
+  RAIL_COMPOSER_GAP,
   RAIL_RIGHT,
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
 import type { MessageEntry } from '../src/zeron/protocol/types';
+import { railStackLayout } from '../src/components/agentsKit/messagePreview';
 import {
   setComposerExtraHeightLive,
   uiPrefsStore,
@@ -94,6 +96,26 @@ function overflowList(tree: TestRenderer.ReactTestRenderer) {
   });
   listProps(tree).onContentSizeChange(390, 2000);
 }
+
+const flattenStyle = (style: unknown): Array<Record<string, unknown>> => {
+  if (style == null) return [];
+  if (Array.isArray(style)) return style.flatMap(flattenStyle);
+  if (typeof style === 'object') return [style as Record<string, unknown>];
+  return [];
+};
+
+const railColumnStyle = (
+  tree: TestRenderer.ReactTestRenderer,
+): Record<string, unknown> | undefined => {
+  const node = tree.root.findAll(n =>
+    flattenStyle(n.props.style).some(
+      s => s.right === RAIL_RIGHT && typeof s.height === 'number',
+    ),
+  )[0];
+  return flattenStyle(node?.props.style).find(
+    s => s.right === RAIL_RIGHT && typeof s.height === 'number',
+  );
+};
 
 beforeEach(() => {
   scrollMessageToEnd.mockClear();
@@ -609,6 +631,62 @@ test('message rail stays right-aligned on a wide iPad column', async () => {
     );
   });
   expect(positioned.length).toBeGreaterThan(0);
+  const box = railColumnStyle(tree!);
+  expect(box?.right).toBe(RAIL_RIGHT);
+  expect(typeof box?.height).toBe('number');
+  expect(box?.bottom).toBeUndefined();
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('message rail is vertically centered while the stack is short', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+  });
+  const available = 844 - (47 + 96) - RAIL_COMPOSER_GAP;
+  const layout = railStackLayout(2, available);
+  expect(layout.offset).toBeGreaterThan(0);
+  const box = railColumnStyle(tree!);
+  expect(box).toEqual(
+    expect.objectContaining({
+      right: RAIL_RIGHT,
+      height: layout.stackHeight,
+      top: 47 + 96 + layout.offset,
+    }),
+  );
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('a long message rail stays inside the band just above the composer', async () => {
+  const entries = Array.from({ length: 60 }, (_, i) => entry(`m${i}`));
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<Harness entries={entries} openKey="c1:1" />);
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 400 } },
+    });
+    listProps(tree!).onContentSizeChange(390, 8000);
+  });
+  const available = 400 - (47 + 96) - RAIL_COMPOSER_GAP;
+  const layout = railStackLayout(60, available);
+  expect(layout.offset).toBe(0);
+  expect(layout.stackHeight).toBe(available);
+  const box = railColumnStyle(tree!);
+  expect(box?.right).toBe(RAIL_RIGHT);
+  expect(box?.height).toBe(layout.stackHeight);
+  expect(box?.height).toBeLessThanOrEqual(available);
+  expect(box?.top).toBe(47 + 96);
   await act(async () => {
     tree!.unmount();
   });

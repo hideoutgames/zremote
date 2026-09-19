@@ -31,9 +31,8 @@ const renderRail = async (
         activeId="u1"
         onItemSelect={onItemSelect}
         top={40}
-        bottom={80}
+        height={400}
         right={4}
-        railHeight={400}
         dismissKey={extra.dismissKey}
       />,
     );
@@ -120,6 +119,23 @@ test('pressing outside clears the pinned preview', async () => {
     tree.root.findAll(n => n.props.testID === 'preview-rail-preview'),
   ).toHaveLength(0);
 
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('rail column is a sized right-aligned box', async () => {
+  const tree = await renderRail();
+  const boxed = tree.root.findAll(n => {
+    const style = Array.isArray(n.props.style)
+      ? n.props.style.flat()
+      : [n.props.style];
+    return style.some(
+      (s: { right?: number; height?: number } | undefined) =>
+        s?.right === 4 && s?.height === 400,
+    );
+  });
+  expect(boxed.length).toBeGreaterThan(0);
   await act(async () => {
     tree.unmount();
   });
