@@ -1,6 +1,10 @@
 import {
+  applyBuildPrefix,
   applyPlanPrefix,
+  BUILD_PREFIX,
+  IMPLEMENT_PLAN_TEXT,
   stripPlanPrefix,
+  withBuildPrefixIf,
   withPlanPrefixIf,
 } from '../src/components/planMode';
 import {
@@ -27,9 +31,30 @@ test('applyPlanPrefix is idempotent and skips empty', () => {
 });
 
 test('stripPlanPrefix recovers the user text', () => {
-  expect(stripPlanPrefix('hello')).toEqual({ plan: false, text: 'hello' });
+  expect(stripPlanPrefix('hello')).toEqual({ kind: null, text: 'hello' });
   const sent = applyPlanPrefix('fix the cert');
-  expect(stripPlanPrefix(sent)).toEqual({ plan: true, text: 'fix the cert' });
+  expect(stripPlanPrefix(sent)).toEqual({
+    kind: 'plan',
+    text: 'fix the cert',
+  });
+});
+
+test('applyBuildPrefix is idempotent and skips empty', () => {
+  expect(applyBuildPrefix('')).toBe('');
+  expect(applyBuildPrefix('  ')).toBe('');
+  const once = applyBuildPrefix(IMPLEMENT_PLAN_TEXT);
+  expect(once.startsWith(BUILD_PREFIX)).toBe(true);
+  expect(applyBuildPrefix(once)).toBe(once);
+  expect(withBuildPrefixIf(false, 'x')).toBe('x');
+  expect(withBuildPrefixIf(true, 'x')).toBe(applyBuildPrefix('x'));
+});
+
+test('stripPlanPrefix recovers a build implement message', () => {
+  const sent = applyBuildPrefix(IMPLEMENT_PLAN_TEXT);
+  expect(stripPlanPrefix(sent)).toEqual({
+    kind: 'build',
+    text: IMPLEMENT_PLAN_TEXT,
+  });
 });
 
 const assistant = (

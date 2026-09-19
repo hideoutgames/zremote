@@ -6,19 +6,25 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from './Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import type { PromptBadgeKind } from './planMode';
 
-export function PlanBadge({ onDismiss }: { onDismiss?: () => void }) {
+export function PlanBadge({
+  onDismiss,
+  kind = 'plan',
+}: {
+  onDismiss?: () => void;
+  kind?: PromptBadgeKind;
+}) {
   const theme = useTheme();
+  const label = kind === 'build' ? t('composer.build') : t('composer.plan');
   return (
     <View
       style={[styles.badge, { backgroundColor: theme.planBadgeFill }]}
       accessibilityRole="text"
-      accessibilityLabel={t('composer.plan')}
+      accessibilityLabel={label}
     >
       <Icon name="list.bullet.indent" size={13} color={theme.planBadge} />
-      <Text style={[styles.label, { color: theme.planBadge }]}>
-        {t('composer.plan')}
-      </Text>
+      <Text style={[styles.label, { color: theme.planBadge }]}>{label}</Text>
       {onDismiss !== undefined ? (
         <Pressable
           onPress={onDismiss}
@@ -37,6 +43,7 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: 5,
     borderRadius: 16,
     paddingLeft: 10,
