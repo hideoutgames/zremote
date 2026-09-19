@@ -320,6 +320,13 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
     );
   });
   const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
+  const style = Array.isArray(bubble.props.style)
+    ? bubble.props.style.flat()
+    : [bubble.props.style];
+  expect(style.some(s => s?.maxWidth === '100%')).toBe(true);
+  expect(style.some(s => s?.maxWidth === '82%' || s?.maxWidth === '88%')).toBe(
+    false,
+  );
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
