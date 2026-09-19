@@ -45,6 +45,9 @@ jest.mock('@callstack/liquid-glass', () => ({
 jest.mock('expo-blur', () => ({
   BlurView: require('react-native').View,
 }));
+jest.mock('expo-linear-gradient', () => ({
+  LinearGradient: require('react-native').View,
+}));
 jest.mock('expo-image', () => ({
   Image: require('react-native').Image,
 }));

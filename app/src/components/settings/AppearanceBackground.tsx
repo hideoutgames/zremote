@@ -98,7 +98,11 @@ function EffectChip({
       ]}
     >
       <Text
-        style={[styles.chipLabel, { color: selected ? '#FFFFFF' : theme.text }]}
+        style={[
+          styles.chipLabel,
+          { color: theme.text },
+          selected ? styles.chipLabelOn : null,
+        ]}
       >
         {t(EFFECT_LABEL[effect])}
       </Text>
@@ -270,4 +274,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipLabel: { fontSize: 13, fontWeight: '600' },
+  chipLabelOn: { color: '#FFFFFF' },
 });

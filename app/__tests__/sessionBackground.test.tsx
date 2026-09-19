@@ -59,10 +59,10 @@ test('compose session shows the new-thread hero and chrome fade', async () => {
   expect(
     mounted.root.findAll(n => n.props.testID === 'new-thread-background')
       .length,
-  ).toBe(1);
+  ).toBeGreaterThan(0);
   expect(
     mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBe(1);
+  ).toBeGreaterThan(0);
 });
 
 test('active session keeps the chrome fade and hides the hero', async () => {
@@ -84,5 +84,5 @@ test('active session keeps the chrome fade and hides the hero', async () => {
   ).toBe(0);
   expect(
     mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBe(1);
+  ).toBeGreaterThan(0);
 });

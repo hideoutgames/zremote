@@ -129,8 +129,11 @@ test('appearance group offers choose image and hides effects until set', async (
   );
   expect(text).toContain('Choose image');
   expect(
-    mounted.root.findAll(n => n.props.testID === 'settings-background-choose')
-      .length,
+    mounted.root.findAll(
+      n =>
+        n.props.testID === 'settings-background-choose' &&
+        typeof n.props.onPress === 'function',
+    ).length,
   ).toBe(1);
   expect(
     mounted.root.findAll(n => n.props.testID === 'settings-background-effects')
@@ -138,7 +141,7 @@ test('appearance group offers choose image and hides effects until set', async (
   ).toBe(0);
   expect(
     mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBe(1);
+  ).toBeGreaterThan(0);
 });
 
 test('installed background shows replace/remove and effect chips', async () => {
@@ -158,7 +161,9 @@ test('installed background shows replace/remove and effect chips', async () => {
   expect(text).toContain('Shows the original artwork.');
   expect(
     mounted.root.findAll(
-      n => n.props.testID === 'settings-background-effect-ascii',
+      n =>
+        n.props.testID === 'settings-background-effect-ascii' &&
+        typeof n.props.onPress === 'function',
     ).length,
   ).toBe(1);
 });

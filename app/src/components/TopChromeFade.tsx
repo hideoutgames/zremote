@@ -20,9 +20,13 @@ export const hexToRgba = (hex: string, alpha: number): string => {
           .map(c => c + c)
           .join('')
       : raw;
-  const n = parseInt(full, 16);
-  if (Number.isNaN(n)) return `rgba(0,0,0,${alpha})`;
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return `rgba(0,0,0,${alpha})`;
+  }
+  return `rgba(${r},${g},${b},${alpha})`;
 };
 
 export function TopChromeFade({
