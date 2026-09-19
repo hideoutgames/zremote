@@ -99,6 +99,7 @@ export function AdaptiveShell({
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const [chatId, setChatId] = useState<string | null>(null);
+  const [openGeneration, setOpenGeneration] = useState(0);
   const [composing, setComposing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebarCollapsed = useSidebarCollapsed();
@@ -107,6 +108,7 @@ export function AdaptiveShell({
     if (requestedChat !== null) {
       setComposing(false);
       setChatId(requestedChat);
+      setOpenGeneration(n => n + 1);
     }
   }, [requestedChat]);
 
@@ -126,6 +128,7 @@ export function AdaptiveShell({
   const openSession = useCallback((id: string) => {
     setComposing(false);
     setChatId(id);
+    setOpenGeneration(n => n + 1);
   }, []);
   const enterCompose = useCallback(() => {
     setChatId(null);
@@ -171,6 +174,7 @@ export function AdaptiveShell({
           <AppErrorBoundary resetKey={chatId}>
             <SessionScreen
               chatId={chatId}
+              openGeneration={openGeneration}
               onBack={toggleSidebar}
               leadingIcon="sidebar.left"
               contentMaxWidth={layout.measureCap}

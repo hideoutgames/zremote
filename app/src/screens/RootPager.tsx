@@ -35,12 +35,14 @@ export function RootPager({
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<PagerView>(null);
   const [chatId, setChatId] = useState<string | null>(null);
+  const [openGeneration, setOpenGeneration] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePage, setActivePage] = useState(HOME_PAGE);
   const [isIdle, setIsIdle] = useState(true);
 
   const goToSession = useCallback((id: string) => {
     setChatId(id);
+    setOpenGeneration(n => n + 1);
     pagerRef.current?.setPage(SESSION_PAGE);
   }, []);
   const goHome = useCallback(() => pagerRef.current?.setPage(HOME_PAGE), []);
@@ -99,7 +101,11 @@ export function RootPager({
           <Freeze freeze={isIdle && activePage !== SESSION_PAGE}>
             {chatId !== null ? (
               <AppErrorBoundary resetKey={chatId}>
-                <SessionScreen chatId={chatId} onBack={goHome} />
+                <SessionScreen
+                  chatId={chatId}
+                  openGeneration={openGeneration}
+                  onBack={goHome}
+                />
               </AppErrorBoundary>
             ) : (
               <View style={styles.page} />

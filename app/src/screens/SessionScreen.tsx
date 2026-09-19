@@ -149,6 +149,7 @@ export function SessionScreen({
   leadingIcon,
   contentMaxWidth,
   composerMaxWidth,
+  openGeneration = 0,
 }: {
   chatId?: string;
   onBack: () => void;
@@ -159,6 +160,8 @@ export function SessionScreen({
   contentMaxWidth?: number;
   /** iPad: cap the composer stack inside the detail column. */
   composerMaxWidth?: number;
+  /** Bumps on every Home/deep-link open so reopen also lands at the tail. */
+  openGeneration?: number;
 }) {
   if (chatId === undefined) {
     return (
@@ -177,6 +180,7 @@ export function SessionScreen({
       leadingIcon={leadingIcon}
       contentMaxWidth={contentMaxWidth}
       composerMaxWidth={composerMaxWidth}
+      openGeneration={openGeneration}
     />
   );
 }
@@ -256,12 +260,14 @@ function ActiveSessionScreen({
   leadingIcon,
   contentMaxWidth,
   composerMaxWidth,
+  openGeneration,
 }: {
   chatId: string;
   onBack: () => void;
   leadingIcon?: string;
   contentMaxWidth?: number;
   composerMaxWidth?: number;
+  openGeneration: number;
 }) {
   'use no memo';
   const theme = useTheme();
@@ -321,6 +327,7 @@ function ActiveSessionScreen({
   const transcriptRef = useRef<SessionTranscriptListHandle>(null);
 
   const entries = session.entries;
+  const openKey = `${chatId}:${openGeneration}`;
 
   // Local send/steer ids play SlideInDown once. Historical rows (thread
   // open, list recycle) must not — UserMessage entering is mount-time.
@@ -622,7 +629,9 @@ function ActiveSessionScreen({
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <SessionTranscriptList
+        key={openKey}
         ref={transcriptRef}
+        openKey={openKey}
         entries={entries}
         renderEntry={renderEntry}
         composerRef={composerRef}
