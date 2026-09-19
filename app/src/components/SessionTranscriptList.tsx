@@ -6,6 +6,7 @@
 import React, {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -51,6 +52,8 @@ export const SessionTranscriptList = forwardRef<
     insetsBottom: number;
     onComposerHeight: (height: number) => void;
     onShowScrollDown: (show: boolean) => void;
+    /** `${chatId}:${openGeneration}` — changes on every thread open. */
+    openKey: string;
   }
 >(function SessionTranscriptListInner(
   {
@@ -64,6 +67,7 @@ export const SessionTranscriptList = forwardRef<
     insetsBottom,
     onComposerHeight,
     onShowScrollDown,
+    openKey,
   },
   ref,
 ) {
@@ -73,10 +77,20 @@ export const SessionTranscriptList = forwardRef<
   const [following, setFollowing] = useState(false);
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
   const hasOverflowedRef = useRef(false);
+  const scrolledForKeyRef = useRef<string | null>(null);
 
   const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
     useKeyboardChatComposerInset(listRef, composerRef);
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
+
+  useEffect(() => {
+    if (entries.length === 0) return;
+    if (scrolledForKeyRef.current === openKey) return;
+    scrolledForKeyRef.current = openKey;
+    hasOverflowedRef.current = true;
+    setFollowing(true);
+    void scrollMessageToEnd({ animated: false, closeKeyboard: false });
+  }, [openKey, entries.length, scrollMessageToEnd]);
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
