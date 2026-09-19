@@ -1,6 +1,7 @@
 // Masked BlurView that fades to transparency. Used behind the composer
-// (fade up) and the centered effort slider (fade both edges). Skia is
-// intentionally avoided here (Release worklet crashes).
+// (fade up) and the centered effort slider (soft rectangle with faded
+// edges on all sides). Skia is intentionally avoided here (Release
+// worklet crashes).
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -14,6 +15,28 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useTheme } from '../theme';
 
+const EDGE_COLORS = ['transparent', 'black', 'black', 'transparent'] as const;
+/** Inner plateau is the effort cluster; fade lives in the wash padding. */
+const EDGE_LOCATIONS = [0, 0.25, 0.75, 1] as const;
+
+function GradientMask({
+  start,
+  end,
+}: {
+  start?: { x: number; y: number };
+  end?: { x: number; y: number };
+}) {
+  return (
+    <LinearGradient
+      colors={EDGE_COLORS}
+      locations={EDGE_LOCATIONS}
+      start={start}
+      end={end}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
 export function FadeBlur({
   intensity,
   style,
@@ -21,7 +44,7 @@ export function FadeBlur({
 }: {
   intensity: number;
   style?: StyleProp<ViewStyle>;
-  fade?: 'up' | 'vertical';
+  fade?: 'up' | 'vertical' | 'radial';
 }) {
   const theme = useTheme();
   const [reduceTransparency, setReduceTransparency] = useState(false);
@@ -40,6 +63,32 @@ export function FadeBlur({
     theme.scheme === 'dark'
       ? 'systemThinMaterialDark'
       : 'systemThinMaterialLight';
+  const blur = (
+    <BlurView
+      tint={tint}
+      intensity={intensity}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+  if (fade === 'radial') {
+    return (
+      <MaskedView
+        pointerEvents="none"
+        style={style}
+        maskElement={
+          <GradientMask start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} />
+        }
+      >
+        <MaskedView
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+          maskElement={<GradientMask />}
+        >
+          {blur}
+        </MaskedView>
+      </MaskedView>
+    );
+  }
   const colors =
     fade === 'vertical'
       ? (['transparent', 'black', 'transparent'] as const)
@@ -58,11 +107,7 @@ export function FadeBlur({
         />
       }
     >
-      <BlurView
-        tint={tint}
-        intensity={intensity}
-        style={StyleSheet.absoluteFill}
-      />
+      {blur}
     </MaskedView>
   );
 }
