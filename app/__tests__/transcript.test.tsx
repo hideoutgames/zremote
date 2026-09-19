@@ -235,3 +235,53 @@ test('UserMessage plays send entering when animateEnter is set', async () => {
   expect(enteringViews(tree!.root).length).toBeGreaterThan(0);
   expect(onEntered).toHaveBeenCalledWith(userEntry.id);
 });
+
+const pressLabel = async (
+  root: TestRenderer.ReactTestInstance,
+  label: string,
+) => {
+  const target = root
+    .findAll(n => typeof n.props.onPress === 'function')
+    .find(p => p.findAllByType(Text).some(t => t.props.children === label));
+  expect(target).toBeDefined();
+  await act(async () => target!.props.onPress());
+};
+
+test('UserMessage shows the full text when at the 1000-character fold', async () => {
+  const body = 'a'.repeat(1000);
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [{ kind: 'text', id: 't0', text: body }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain(body);
+  expect(texts).not.toContain('Show full message…');
+  expect(texts).not.toContain('Collapse message…');
+});
+
+test('UserMessage folds above 1000 characters and expands from the bubble', async () => {
+  const body = `${'a'.repeat(1000)}Z`;
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [{ kind: 'text', id: 't0', text: body }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  let texts = textOf(tree!.root);
+  expect(texts).toContain('a'.repeat(1000));
+  expect(texts).not.toContain(body);
+  expect(texts).toContain('Show full message…');
+  expect(texts).not.toContain('Collapse message…');
+
+  await pressLabel(tree!.root, 'Show full message…');
+  texts = textOf(tree!.root);
+  expect(texts).toContain(body);
+  expect(texts).toContain('Collapse message…');
+  expect(texts).not.toContain('Show full message…');
+});

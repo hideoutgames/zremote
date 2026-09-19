@@ -1,7 +1,8 @@
 // User transcript row (message bubble): text bubble, attachment chips, and
-// the "Show more" fold at ~400 chars / 5 lines like desktop.
-// Message-row shape follows Agents Kit beui/message + prompt-kit/message
-// (both MIT) — a plain bubble; no avatar chrome on this client.
+// a 1000-character fold with Show full / Collapse at the bottom of the
+// bubble. Message-row shape follows Agents Kit beui/message +
+// prompt-kit/message (both MIT) — a plain bubble; no avatar chrome on this
+// client.
 
 import React, { useLayoutEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,8 +20,7 @@ import { stripPlanPrefix } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
 import { messageCopyContent } from './MessageCopyMenu';
 
-const FOLD_CHARS = 400;
-const FOLD_LINES = 5;
+const FOLD_CHARS = 1000;
 
 const textOf = (entry: MessageEntry): string =>
   entry.parts
@@ -70,8 +70,7 @@ export const UserMessage = React.memo(function UserMessageInner({
   const { kind, text: visible } = stripPlanPrefix(text);
   const images = entry.parts.filter(p => p.kind === 'image');
   const foldable = visible.length > FOLD_CHARS;
-  const shown =
-    expanded || !foldable ? visible : `${visible.slice(0, FOLD_CHARS)}…`;
+  const shown = expanded || !foldable ? visible : visible.slice(0, FOLD_CHARS);
   const showBubble = visible !== '' || kind !== null;
 
   useLayoutEffect(() => {
@@ -129,7 +128,6 @@ export const UserMessage = React.memo(function UserMessageInner({
                         styles.bubbleText,
                         { color: theme.userBubbleText },
                       ]}
-                      numberOfLines={expanded ? undefined : FOLD_LINES}
                     >
                       {shown}
                     </Text>
