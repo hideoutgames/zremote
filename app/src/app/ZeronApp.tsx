@@ -44,6 +44,7 @@ import { AppErrorBoundary } from './AppErrorBoundary';
 import { MenuDismissShield } from '../components/menus/MenuDismissShield';
 import { bindBackgroundFs } from '../zeron/state/newThreadBackground';
 import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
+import { bindRunFinishedHaptic } from '../notifications/runFinishedHaptic';
 
 const log = createLog();
 
@@ -184,6 +185,13 @@ export function ZeronApp() {
   const openSession = useCallback((chatId: string) => {
     setRequestedChat(chatId);
   }, []);
+
+  // One haptic when a run finishes while the app is open (any thread).
+  // Independent of APNs / Expo Go / demo — local CRDT status only.
+  useEffect(() => {
+    if (runtime === null) return;
+    return bindRunFinishedHaptic();
+  }, [runtime]);
 
   useEffect(() => {
     // Demo mode never registers push tokens — no real-edge traffic.
