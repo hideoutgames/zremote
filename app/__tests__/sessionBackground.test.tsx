@@ -1,4 +1,5 @@
 import React from 'react';
+import { TextInput } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { SessionScreen } from '../src/screens/SessionScreen';
 import { HomeScreen } from '../src/screens/HomeScreen';
@@ -110,6 +111,28 @@ test('active session keeps the chrome fade and adds a column blur', async () => 
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
   expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+});
+
+test('focused composer dim sits above the top chrome fade', async () => {
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
+  const input = mounted.root.findByType(TextInput);
+  await act(async () => {
+    input.props.onFocus();
+  });
+  const dim = mounted.root.findByProps({ testID: 'composer-focus-dim' });
+  const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
+  expect(zIndexOf(dim)).toBeGreaterThan(zIndexOf(fade));
 });
 
 test('no artwork means no wallpaper or blur layers', async () => {
