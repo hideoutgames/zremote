@@ -25,8 +25,14 @@ import {
   useKeyboardScrollToEnd,
 } from '@legendapp/list/keyboard';
 import type { MessageEntry } from '../zeron/protocol/types';
+import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
 import { useTheme } from '../theme';
+import {
+  clampComposerExtraHeight,
+  composerExtraMax,
+  composerListInset,
+} from './composerExtraHeight';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 
@@ -83,6 +89,47 @@ export const SessionTranscriptList = forwardRef<
     useKeyboardChatComposerInset(listRef, composerRef);
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
 
+  const windowHeightRef = useRef(windowHeight);
+  windowHeightRef.current = windowHeight;
+  const extraHeightRef = useRef(0);
+  extraHeightRef.current = clampComposerExtraHeight(
+    uiPrefsStore.getState().composerExtraHeight,
+    composerExtraMax(windowHeight),
+  );
+  const baseHeightRef = useRef<number | null>(null);
+  const lastMeasuredRef = useRef<number | null>(null);
+  const onComposerHeightRef = useRef(onComposerHeight);
+  onComposerHeightRef.current = onComposerHeight;
+  const reportComposerInsetRef = useRef(reportComposerInset);
+  reportComposerInsetRef.current = reportComposerInset;
+
+  const publishInset = useCallback((extraHeight: number) => {
+    const base = baseHeightRef.current;
+    if (base === null) return;
+    const extra = clampComposerExtraHeight(
+      extraHeight,
+      composerExtraMax(windowHeightRef.current),
+    );
+    const inset = composerListInset(base, extra);
+    onComposerHeightRef.current(inset);
+    reportComposerInsetRef.current({
+      nativeEvent: { layout: { x: 0, y: 0, width: 0, height: inset } },
+    } as LayoutChangeEvent);
+  }, []);
+
+  useEffect(
+    () =>
+      uiPrefsStore.subscribe((s, prev) => {
+        if (s.composerExtraHeight === prev.composerExtraHeight) return;
+        extraHeightRef.current = clampComposerExtraHeight(
+          s.composerExtraHeight,
+          composerExtraMax(windowHeightRef.current),
+        );
+        publishInset(s.composerExtraHeight);
+      }),
+    [publishInset],
+  );
+
   useEffect(() => {
     if (entries.length === 0) return;
     if (scrolledForKeyRef.current === openKey) return;
@@ -97,13 +144,31 @@ export const SessionTranscriptList = forwardRef<
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const height = event.nativeEvent.layout.height;
-      onComposerHeight(height);
-      // Full sticky stack (chrome + composer, including grabber extra
-      // height). Takes priority over overlaying a resized composer on the
-      // last messages. Home/threads composer layout is unchanged.
-      reportComposerInset(event);
+      const extra = extraHeightRef.current;
+      const base = baseHeightRef.current;
+      if (base !== null) {
+        const expected = composerListInset(base, extra);
+        if (height === expected) {
+          lastMeasuredRef.current = height;
+          publishInset(extra);
+          return;
+        }
+        // Ignore a stale layout from before the extra-height write.
+        if (
+          lastMeasuredRef.current !== null &&
+          height === lastMeasuredRef.current
+        ) {
+          return;
+        }
+      }
+      baseHeightRef.current = height - extra;
+      lastMeasuredRef.current = height;
+      // Full sticky stack (chrome + composer). Extra height is applied as
+      // base + extra so the transcript tracks the grabber 1:1 without
+      // waiting for TextInput minHeight layout. Home/threads unchanged.
+      publishInset(extra);
     },
-    [reportComposerInset, onComposerHeight],
+    [publishInset],
   );
 
   useImperativeHandle(
