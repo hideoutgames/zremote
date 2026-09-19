@@ -6,6 +6,7 @@ export const VOICE_PILL_OPEN_WIDTH = 148;
 export const VOICE_PILL_BAR_COUNT = 14;
 export const VOICE_PILL_CANCEL_DISTANCE = 64;
 export const VOICE_PILL_OPEN_MS = 200;
+export const VOICE_PILL_PROCESS_MS = 2000;
 
 export const formatVoiceElapsed = (ms: number): string => {
   const total = Math.max(0, Math.floor(ms / 1000));

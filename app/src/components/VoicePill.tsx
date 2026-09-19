@@ -3,7 +3,14 @@
 // DictationPort start/stop; slide-left cancels. No second mic path.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   Easing,
   useReducedMotion,
@@ -26,12 +33,14 @@ import {
 export function VoicePill({
   active,
   supported,
+  processing = false,
   levelTick = 0,
   onToggle,
   onCancel,
 }: {
   active: boolean;
   supported: boolean;
+  processing?: boolean;
   levelTick?: number;
   onToggle: () => void;
   onCancel: () => void;
@@ -130,13 +139,19 @@ export function VoicePill({
           cancelledRef.current = false;
           return;
         }
+        if (processing) return;
         if (supported) onToggle();
       }}
-      disabled={!supported}
+      disabled={!supported || processing}
       hitSlop={{ top: 6, bottom: 6, right: 6, left: 0 }}
       accessibilityRole="button"
-      accessibilityLabel={t('composer.dictate')}
-      accessibilityState={{ disabled: !supported, busy: active }}
+      accessibilityLabel={
+        processing ? t('composer.dictationProcessing') : t('composer.dictate')
+      }
+      accessibilityState={{
+        disabled: !supported || processing,
+        busy: active || processing,
+      }}
       accessibilityHint={
         supported ? undefined : t('composer.dictationUnavailable')
       }
@@ -177,11 +192,15 @@ export function VoicePill({
           </View>
         ) : null}
         <View style={styles.iconSlot}>
-          <Icon
-            name={active ? 'stop.fill' : 'mic'}
-            size={active ? 13 : 17}
-            color={iconColor}
-          />
+          {processing && !active ? (
+            <ActivityIndicator size="small" color={theme.textSecondary} />
+          ) : (
+            <Icon
+              name={active ? 'stop.fill' : 'mic'}
+              size={active ? 13 : 17}
+              color={iconColor}
+            />
+          )}
         </View>
       </VoicePillShell>
     </Pressable>
