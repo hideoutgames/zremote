@@ -301,7 +301,11 @@ test('compact session composer keeps the surround blur; compose never does', asy
   try {
     const session = await render(<Composer {...composerProps} />);
     expect(
-      session.root.findAll(n => n.props.testID === 'composer-surround-blur'),
+      session.root.findAll(
+        n =>
+          n.props.testID === 'composer-surround-blur' &&
+          typeof n.type === 'string',
+      ),
     ).toHaveLength(1);
     act(() => {
       session.unmount();
