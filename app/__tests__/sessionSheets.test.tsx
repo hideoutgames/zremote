@@ -199,6 +199,25 @@ test('populated demo transcript does not abort into the error boundary', async (
       room: 'caughtUp',
       queueActionsPending: new Set(),
     });
+    // Demo checkouts stream a draft PR. usePrBadge must not rebuild a new
+    // snapshot object each render (that loops and trips the error boundary).
+    setChangeRequestForChat(CHAT_WORKING, {
+      checkoutId: 'demo-checkout',
+      deviceId: 'h1',
+      cwd: '/repo',
+      branch: 'main',
+      changeRequest: {
+        provider: 'github',
+        number: 42,
+        title: 'Composer chrome overhaul',
+        url: 'https://github.com/example/zremote/pull/42',
+        state: 'open',
+        draft: true,
+        baseRef: 'main',
+        headRef: 'feature/composer',
+      },
+      updatedAt: '2026-09-19T10:00:00Z',
+    });
   });
   const tree = await render(
     <AppErrorBoundary resetKey={CHAT_WORKING}>

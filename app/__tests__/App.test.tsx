@@ -97,27 +97,28 @@ test('Advanced → Try demo mode lands on Home with fixture data', async () => {
 
 test('demo: opening a working thread does not show the error fallback', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
-  await act(async () => {
-    tree = TestRenderer.create(<App />);
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  });
-  await pressByText(tree!.root, 'Advanced');
-  await pressByText(tree!.root, 'Try demo mode');
-  await act(async () => {
-    for (let i = 0; i < 20; i++) await Promise.resolve();
-  });
-  await pressByText(tree!.root, 'Ship demo mode');
-  await act(async () => {
-    for (let i = 0; i < 30; i++) await Promise.resolve();
-  });
-  expect(
-    tree!.root.findAll(n => n.props.testID === 'app-error-fallback'),
-  ).toHaveLength(0);
-  await act(async () => {
-    exitDemo();
-    for (let i = 0; i < 5; i++) await Promise.resolve();
-  });
-  await act(async () => {
-    tree!.unmount();
-  });
+  try {
+    await act(async () => {
+      tree = TestRenderer.create(<App />);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    await pressByText(tree!.root, 'Advanced');
+    await pressByText(tree!.root, 'Try demo mode');
+    await act(async () => {
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    });
+    await pressByText(tree!.root, 'Ship demo mode');
+    await act(async () => {
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+    });
+    expect(
+      tree!.root.findAll(n => n.props.testID === 'app-error-fallback'),
+    ).toHaveLength(0);
+  } finally {
+    await act(async () => {
+      exitDemo();
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      tree?.unmount();
+    });
+  }
 });
