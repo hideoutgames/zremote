@@ -31,6 +31,7 @@ import {
 } from './prBadge';
 import { prToneColor, prToneFill } from './prChrome';
 import { openPrUrl, sharePrUrl } from './prUrl';
+import { useDismissibleNativeModal } from '../hooks/useDismissibleNativeModal';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 
@@ -47,6 +48,12 @@ export function PrSheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const {
+    visible,
+    hide,
+    onRequestClose,
+    onDismiss: onModalDismiss,
+  } = useDismissibleNativeModal(onDismiss);
   const [tab, setTab] = useState<PrTab>('overview');
   const liveSummary = useStore(
     changeRequestStore,
@@ -86,11 +93,12 @@ export function PrSheet({
 
   return (
     <Modal
-      visible
+      visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
       allowSwipeDismissal
-      onRequestClose={onDismiss}
+      onRequestClose={onRequestClose}
+      onDismiss={onModalDismiss}
     >
       <View
         style={[
@@ -100,7 +108,7 @@ export function PrSheet({
       >
         <View style={styles.header}>
           <GlassControl
-            onPress={onDismiss}
+            onPress={hide}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={t('session.back')}

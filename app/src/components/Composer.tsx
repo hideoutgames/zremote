@@ -89,6 +89,7 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { VoicePill } from './VoicePill';
+import { VOICE_PILL_PROCESS_MS } from './voicePillMath';
 import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
@@ -149,7 +150,7 @@ export interface ComposerProps {
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
   dictation: DictationPort;
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean | void | Promise<boolean | void>;
   onSteer: (text: string) => void;
   onQueue: (text: string) => void;
   onStop: () => void;
@@ -291,9 +292,37 @@ export const Composer = React.memo(function ({
   // ── Dictation ─────────────────────────────────────────────────────────
   const [dictationSupported, setDictationSupported] = useState(false);
   const [dictating, setDictating] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
   const baseRef = useRef('');
   const selRef = useRef(0);
+  const processingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearProcessingCooldown = useCallback(() => {
+    if (processingTimer.current !== null) {
+      clearTimeout(processingTimer.current);
+      processingTimer.current = null;
+    }
+    setProcessing(false);
+  }, []);
+  const beginProcessingCooldown = useCallback(() => {
+    if (processingTimer.current !== null) return;
+    setProcessing(true);
+    processingTimer.current = setTimeout(() => {
+      processingTimer.current = null;
+      setProcessing(false);
+    }, VOICE_PILL_PROCESS_MS);
+  }, []);
+  const beginProcessingCooldownRef = useRef(beginProcessingCooldown);
+  beginProcessingCooldownRef.current = beginProcessingCooldown;
+  useEffect(
+    () => () => {
+      if (processingTimer.current !== null) {
+        clearTimeout(processingTimer.current);
+        processingTimer.current = null;
+      }
+    },
+    [],
+  );
   // Partials/finals splice into the draft at the caret position captured
   // when dictation started (baseRef/selRef) — partials replace each other,
   // the final replaces the last partial.
@@ -317,8 +346,12 @@ export const Composer = React.memo(function ({
         )}${text}${baseRef.current.slice(selRef.current)}`,
       );
       setDictating(false);
+      beginProcessingCooldownRef.current();
     },
-    onError: () => setDictating(false),
+    onError: () => {
+      setDictating(false);
+      beginProcessingCooldownRef.current();
+    },
   });
   useEffect(() => {
     dictationCb.current.onPartial = text => {
@@ -340,6 +373,7 @@ export const Composer = React.memo(function ({
         )}${text}${baseRef.current.slice(selRef.current)}`,
       );
       setDictating(false);
+      beginProcessingCooldownRef.current();
     };
   }, [chatId]);
 
@@ -371,9 +405,11 @@ export const Composer = React.memo(function ({
   }, [dictation, dictating]);
 
   const toggleDictation = useCallback(() => {
+    if (processing) return;
     if (dictating) {
       dictation.stop().catch(() => {});
       setDictating(false);
+      beginProcessingCooldown();
       return;
     }
     baseRef.current = draft.text;
@@ -384,13 +420,14 @@ export const Composer = React.memo(function ({
       )
       .then(() => setDictating(true))
       .catch(() => setDictating(false));
-  }, [dictating, dictation, draft.text]);
+  }, [dictating, dictation, draft.text, processing, beginProcessingCooldown]);
 
   const cancelDictation = useCallback(() => {
     dictation.cancel().catch(() => {});
     setDraftText(chatId, baseRef.current);
     setDictating(false);
-  }, [dictation, chatId]);
+    clearProcessingCooldown();
+  }, [dictation, chatId, clearProcessingCooldown]);
 
   const submit = useCallback(() => {
     const text = withPlanPrefixIf(planMode, draft.text.trim());
@@ -417,10 +454,25 @@ export const Composer = React.memo(function ({
       setDraftText(chatId, '');
       return;
     }
-    if (action.primary === 'steer') onSteer(text);
-    else if (action.primary === 'send') onSend(text);
-    else return;
-    setDraftText(chatId, '');
+    if (action.primary === 'steer') {
+      onSteer(text);
+      setDraftText(chatId, '');
+      return;
+    }
+    if (action.primary !== 'send') return;
+    const result = onSend(text);
+    const finish = (ok: boolean | void) => {
+      if (ok !== false) setDraftText(chatId, '');
+    };
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      typeof (result as Promise<boolean | void>).then === 'function'
+    ) {
+      (result as Promise<boolean | void>).then(finish, () => {});
+      return;
+    }
+    finish(result as boolean | void);
   }, [
     hasAttachments,
     draft.text,
@@ -447,20 +499,14 @@ export const Composer = React.memo(function ({
   const sendArmed =
     right === 'send' &&
     (action.primary === 'send' || live === 'queue' || live === 'steer');
+  const homeInset = (keyboardVisible ? 0 : insets.bottom) + 8;
 
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
   const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
 
   return (
-    <View
-      ref={composerRef}
-      onLayout={onLayout}
-      style={[
-        styles.container,
-        { paddingBottom: (keyboardVisible ? 0 : insets.bottom) + 8 },
-      ]}
-    >
+    <View ref={composerRef} onLayout={onLayout} style={styles.container}>
       <View
         style={styles.glassWrap}
         onLayout={e =>
@@ -643,6 +689,7 @@ export const Composer = React.memo(function ({
                         onSelect={onSelectFast}
                       />
                     ) : null}
+                    <View style={styles.chipSpacer} />
                     <ContextUsageChip usage={session.meta.contextUsage} />
                   </ScrollView>
                 </ChipRowMask>
@@ -650,6 +697,7 @@ export const Composer = React.memo(function ({
                   <VoicePill
                     active={dictating}
                     supported={dictationSupported}
+                    processing={processing}
                     levelTick={voiceTick}
                     onToggle={toggleDictation}
                     onCancel={cancelDictation}
@@ -751,6 +799,11 @@ export const Composer = React.memo(function ({
           {t('session.workingHint')}
         </Text>
       ) : null}
+
+      <View
+        style={[styles.homePad, { height: homeInset }]}
+        pointerEvents="none"
+      />
 
       {preview !== null && isImageMime(preview.mimeType) ? (
         <ImagePreviewModal
@@ -877,7 +930,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexGrow: 1,
   },
+  chipSpacer: { flexGrow: 1, minWidth: 0 },
   effortChipHidden: { opacity: 0 },
   hint: { fontSize: 12, textAlign: 'center' },
+  homePad: {},
 });

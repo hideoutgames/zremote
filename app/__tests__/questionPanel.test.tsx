@@ -3,7 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { Text, TextInput } from 'react-native';
 import { QuestionPanel } from '../src/components/agentsKit/QuestionPanel';
 import type { UserInputQuestion } from '../src/zeron/protocol/types';
 
@@ -82,5 +82,29 @@ test('multiSelect toggles an option off', async () => {
   expect(onSubmit).toHaveBeenCalledWith('r1', [
     { questionId: 'q-sync', labels: ['Poll'] },
     { questionId: 'q-gates', labels: ['E2E'] },
+  ]);
+});
+
+test('custom text alone can submit and is appended to labels', async () => {
+  const onSubmit = jest.fn();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <QuestionPanel
+        requestId="r1"
+        questions={questions}
+        onSubmit={onSubmit}
+      />,
+    );
+  });
+  const root = tree!.root;
+  const inputs = root.findAllByType(TextInput);
+  expect(inputs).toHaveLength(2);
+  await act(async () => inputs[0].props.onChangeText('write my own'));
+  await act(async () => inputs[1].props.onChangeText('also this'));
+  await press(root, 'Submit');
+  expect(onSubmit).toHaveBeenCalledWith('r1', [
+    { questionId: 'q-sync', labels: ['write my own'] },
+    { questionId: 'q-gates', labels: ['also this'] },
   ]);
 });

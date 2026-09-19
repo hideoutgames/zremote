@@ -64,7 +64,6 @@ export const createThreadFromCompose = async (
           ...(opts.branch !== undefined ? { branch: opts.branch } : {}),
         })
       : createProjectlessChat(runtime, settings.deviceId, config);
-  moveDraft(COMPOSE_DRAFT_ID, chatId);
   rememberComposeDefaults(settings);
   if (settings.harness !== '' && settings.model !== '')
     rememberModelPick({ harness: settings.harness, model: settings.model });
@@ -83,6 +82,7 @@ export const createThreadFromCompose = async (
       { ...(worktree !== undefined ? { worktree } : {}) },
     );
   }
+  moveDraft(COMPOSE_DRAFT_ID, chatId);
   if (worktree !== undefined) setDraftPendingWorktree(chatId, undefined);
   clearDraft(chatId);
   return chatId;

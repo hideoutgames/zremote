@@ -106,7 +106,7 @@ export function Icon({
       symbolName={name}
       tintColor={color}
       pointSize={size}
-      style={style}
+      style={[{ width: size, height: size }, style]}
       fallback={
         <MaterialDesignIcons
           name={mdiName}

@@ -5,6 +5,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NitroImage } from 'react-native-nitro-image';
+import { useDismissibleNativeModal } from '../hooks/useDismissibleNativeModal';
 import { Icon } from './Icon';
 import { t } from '../i18n/strings';
 
@@ -18,12 +19,19 @@ export function ImagePreviewModal({
   onDismiss: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const {
+    visible,
+    hide,
+    onRequestClose,
+    onDismiss: onModalDismiss,
+  } = useDismissibleNativeModal(onDismiss);
   return (
     <Modal
-      visible
+      visible={visible}
       animationType="fade"
       presentationStyle="fullScreen"
-      onRequestClose={onDismiss}
+      onRequestClose={onRequestClose}
+      onDismiss={onModalDismiss}
     >
       <View
         style={styles.root}
@@ -33,7 +41,7 @@ export function ImagePreviewModal({
         <Pressable
           testID="image-preview-backdrop"
           style={StyleSheet.absoluteFill}
-          onPress={onDismiss}
+          onPress={hide}
           accessible={false}
         />
         <View pointerEvents="none" style={styles.image}>
@@ -44,7 +52,7 @@ export function ImagePreviewModal({
           />
         </View>
         <Pressable
-          onPress={onDismiss}
+          onPress={hide}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel={t('common.done')}

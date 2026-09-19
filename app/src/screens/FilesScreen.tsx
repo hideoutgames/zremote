@@ -244,7 +244,10 @@ export function FilesScreen({
           {state.error}
         </Text>
       ) : null}
-      <ScrollView>
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+      >
         {rows.length === 0 && state.error === undefined ? (
           <Text style={[styles.empty, { color: theme.textSecondary }]}>
             {t('files.empty')}
@@ -324,6 +327,8 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 11, paddingHorizontal: 12, paddingVertical: 4 },
   empty: { padding: 24, textAlign: 'center' },
+  list: { flex: 1 },
+  listContent: { paddingBottom: 8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

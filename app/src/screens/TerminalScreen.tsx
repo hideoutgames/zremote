@@ -18,11 +18,6 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
-import {
-  KeyboardAvoidingView,
-  useKeyboardState,
-} from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
@@ -146,11 +141,9 @@ interface Tab {
 
 export function TerminalScreen({ chatId }: { chatId: string }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const runtime = useRuntime();
   const chat = useChat(chatId);
   const { width } = useWindowDimensions();
-  const keyboardVisible = useKeyboardState(s => s.isVisible);
   const [viewport, setViewport] = useState(() => ({
     cols: Math.max(20, Math.floor((width - 16) / CHAR_W)),
     rows: 24,
@@ -183,7 +176,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const bump = useCallback(() => setFrame(f => f + 1), []);
 
   const spawn = useCallback(() => {
-    if (runtime === null || chat?.deviceId === undefined) return;
+    if (runtime === null || chat?.deviceId === undefined) {
+      setError(t('terminal.unavailable'));
+      return;
+    }
     const relay = runtime.relayFor(chat.deviceId);
     openTerminal(relay, chatId, cols, rows)
       .then(session => {
@@ -312,10 +308,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     [],
   );
   return (
-    <KeyboardAvoidingView
-      style={[styles.root, styles.termBg]}
-      behavior="padding"
-    >
+    <View style={[styles.root, styles.termBg]}>
       <View style={styles.tabBar}>
         <ScrollView
           horizontal
@@ -416,8 +409,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         />
       </Pressable>
 
-      {error !== undefined ? (
-        <Text style={[styles.errLine, { color: theme.danger }]}>{error}</Text>
+      {tabs.length === 0 ? (
+        <Text style={[styles.empty, { color: theme.textSecondary }]}>
+          {error ?? t('terminal.unavailable')}
+        </Text>
       ) : null}
 
       {/* Hidden input capturing keystrokes */}
@@ -433,12 +428,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         accessibilityLabel={t('terminal.input')}
       />
 
-      <Glass
-        style={[
-          styles.keyBar,
-          { marginBottom: (keyboardVisible ? 0 : insets.bottom) + 8 },
-        ]}
-      >
+      <Glass style={styles.keyBar}>
         {KEY_BAR.map(spec => {
           const selected = spec.key === 'ctrl' && ctrl;
           return (
@@ -476,7 +466,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           );
         })}
       </Glass>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -519,7 +509,7 @@ const styles = StyleSheet.create({
   termRun: { fontFamily: 'monospace', fontSize: 13 },
   cursor: { backgroundColor: '#EEEEEC' },
   exited: { fontFamily: 'monospace', fontSize: 13, paddingTop: 8 },
-  errLine: { fontSize: 12, paddingHorizontal: 12 },
+  empty: { fontSize: 14, textAlign: 'center', padding: 24 },
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   keyBar: {
     flexDirection: 'row',

@@ -5,12 +5,14 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useStore } from 'zustand';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
-import { collectThreadPrs } from '../components/threadPrs';
+import { collectThreadPrs, badgeFromSummary } from '../components/threadPrs';
 import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
 import { prToneColor } from '../components/prChrome';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import { useDemoMode } from '../demo/demoMode';
+import { demoHistoryPrs } from '../demo/fixtures';
 
 export function HistoryScreen({
   chatId,
@@ -20,12 +22,19 @@ export function HistoryScreen({
   onOpenPr?: (badge: PrBadgeModel) => void;
 }) {
   const theme = useTheme();
+  const demo = useDemoMode();
   const summary = useStore(
     changeRequestStore,
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
   const diff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
-  const prs = useMemo(() => collectThreadPrs(summary, diff), [summary, diff]);
+  const prs = useMemo(() => {
+    const live = collectThreadPrs(summary, diff);
+    if (!demo) return live;
+    const extras = demoHistoryPrs(chatId).map(s => badgeFromSummary(s, diff));
+    const seen = new Set(live.map(p => p.number));
+    return [...live, ...extras.filter(p => !seen.has(p.number))];
+  }, [summary, diff, demo, chatId]);
 
   return (
     <View style={styles.root}>
@@ -34,7 +43,10 @@ export function HistoryScreen({
           {t('history.empty')}
         </Text>
       ) : (
-        <ScrollView>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+        >
           {prs.map(badge => {
             const label = t('history.prRow')
               .replace('{number}', String(badge.number))
@@ -82,6 +94,8 @@ export function HistoryScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  list: { flex: 1 },
+  listContent: { paddingBottom: 16 },
   empty: { padding: 24, textAlign: 'center', fontSize: 16 },
   row: {
     minHeight: 44,

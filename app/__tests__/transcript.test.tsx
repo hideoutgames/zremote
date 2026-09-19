@@ -102,6 +102,29 @@ test('UserMessage strips the plan prefix and shows a Plan badge', async () => {
   );
 });
 
+test('UserMessage strips the build prefix and shows a Build badge', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: '/build IMPLEMENT THE PLAN: Implement the plan.',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Build');
+  expect(texts).toContain('Implement the plan.');
+  expect(texts.some(s => typeof s === 'string' && s.includes('/build'))).toBe(
+    false,
+  );
+});
+
 test('AssistantMessage shows a plan card and turn changes', async () => {
   const entry: MessageEntry = {
     ...assistantEntry,

@@ -95,6 +95,7 @@ const en = {
   'session.answered': 'Answered',
   'session.interrupted': 'Interrupted',
   'session.submit': 'Submit',
+  'session.question.custom': 'Your answer',
   'session.working': 'Working',
   'session.toolRunning': 'Running',
   'session.toolFailed': 'Failed',
@@ -150,6 +151,7 @@ const en = {
   'terminal.exit': '[exit {code}]',
   'terminal.exitedNote':
     'Exited shells stay listed for 30 minutes on the host.',
+  'terminal.unavailable': 'Terminal needs a connected desktop.',
 
   // History
   'history.title': 'History',
@@ -259,6 +261,7 @@ const en = {
   'composer.files': 'Files',
   'composer.attach': 'Add attachment',
   'composer.dictate': 'Dictate',
+  'composer.dictationProcessing': 'Processing…',
   'composer.dictationUnavailable': 'Dictation unavailable on this build',
   'composer.removeAttachment': 'Remove {name}',
   'composer.previewAttachment': 'Preview {name}',
@@ -266,6 +269,7 @@ const en = {
   'composer.plan': 'Plan',
   'composer.plan.off': 'Turn off Plan mode',
   'composer.plan.on': 'Plan mode',
+  'composer.build': 'Build',
   'composer.context': 'Context',
   'composer.context.a11y': 'Context usage {percent}',
   'composer.context.used': '{used} / {total}',

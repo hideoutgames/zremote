@@ -47,6 +47,8 @@ import {
 } from '../zeron/state/draftStore';
 import { recentMenuModels } from '../zeron/state/recentModels';
 import {
+  modelSettingsFor,
+  rememberModelSettings,
   setComposeDefaults,
   useComposeDefaults,
   useRecentModels,
@@ -103,7 +105,12 @@ export function ComposeComposer({
   const [reasoning, setReasoning] = useState<string | undefined>(
     saved?.reasoning,
   );
-  const [modelOptions, setModelOptions] = useState<Record<string, unknown>>({});
+  const [modelOptions, setModelOptions] = useState<Record<string, unknown>>(
+    () =>
+      saved !== undefined
+        ? modelSettingsFor(saved.harness, saved.model)?.modelOptions ?? {}
+        : {},
+  );
   const [branch, setBranch] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
@@ -285,22 +292,26 @@ export function ComposeComposer({
     async (
       text: string,
       withAttachments: boolean,
-    ): Promise<SendPlan | void> => {
-      if (runtime === null) return withAttachments ? 'blocked' : undefined;
+    ): Promise<SendPlan | boolean> => {
+      if (runtime === null) return withAttachments ? 'blocked' : false;
       if (deviceId === '' || harness === '') {
         Alert.alert(t('newSession.pickHost'));
-        return withAttachments ? 'blocked' : undefined;
+        return withAttachments ? 'blocked' : false;
       }
-      const chatId = await createThreadFromCompose(runtime, {
-        text,
-        settings: settings(),
-        worktree: draft.pendingWorktree,
-        branch:
-          space !== undefined ? branch ?? DEFAULT_COMPOSE_BRANCH : undefined,
-        attachments: withAttachments ? draft.attachments : undefined,
-      });
-      onCreated(chatId);
-      return withAttachments ? 'legacy' : undefined;
+      try {
+        const chatId = await createThreadFromCompose(runtime, {
+          text,
+          settings: settings(),
+          worktree: draft.pendingWorktree,
+          branch:
+            space !== undefined ? branch ?? DEFAULT_COMPOSE_BRANCH : undefined,
+          attachments: withAttachments ? draft.attachments : undefined,
+        });
+        onCreated(chatId);
+        return withAttachments ? 'legacy' : true;
+      } catch {
+        return withAttachments ? 'blocked' : false;
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -317,9 +328,8 @@ export function ComposeComposer({
   );
 
   const onSend = useCallback(
-    (text: string) => {
-      submit(text, false).catch(() => {});
-    },
+    (text: string): Promise<boolean> =>
+      submit(text, false).then(result => result === true),
     [submit],
   );
   const onSendAttachments = useCallback(
@@ -438,9 +448,12 @@ export function ComposeComposer({
         harnessId={harness === '' ? undefined : harness}
         recentItems={recentItems}
         onPickRecentModel={(h, m) => {
+          const stored = modelSettingsFor(h, m);
           setHarness(h);
           setModel(m);
-          persist({ harness: h, model: m });
+          setReasoning(stored?.reasoning);
+          setModelOptions(stored?.modelOptions ?? {});
+          persist({ harness: h, model: m, reasoning: stored?.reasoning });
         }}
         onOpenMoreModels={() => setPickerOpen(true)}
         effortLabel={effortLabel}
@@ -471,10 +484,13 @@ export function ComposeComposer({
         }}
         onSelectFast={choice => {
           if (fastOption === undefined) return;
-          setModelOptions({
+          const next = {
             ...modelOptions,
             [fastOption.id]: choice,
-          });
+          };
+          setModelOptions(next);
+          if (harness !== '' && model !== '')
+            rememberModelSettings(harness, model, { modelOptions: next });
         }}
         checkout={checkout}
         dictation={dictation}
@@ -512,6 +528,8 @@ export function ComposeComposer({
       onChange={level => {
         setReasoning(level);
         persist({ reasoning: level });
+        if (harness !== '' && model !== '')
+          rememberModelSettings(harness, model, { reasoning: level });
       }}
       onDismiss={() => {
         setEffortOpen(false);

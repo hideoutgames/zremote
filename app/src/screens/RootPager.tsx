@@ -36,6 +36,7 @@ export function RootPager({
   const pagerRef = useRef<PagerView>(null);
   const [chatId, setChatId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [openGeneration, setOpenGeneration] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePage, setActivePage] = useState(HOME_PAGE);
   const [isIdle, setIsIdle] = useState(true);
@@ -43,6 +44,7 @@ export function RootPager({
   const goToSession = useCallback((id: string) => {
     setComposing(false);
     setChatId(id);
+    setOpenGeneration(n => n + 1);
     setActivePage(SESSION_PAGE);
     pagerRef.current?.setPage?.(SESSION_PAGE);
   }, []);
@@ -120,7 +122,11 @@ export function RootPager({
               </AppErrorBoundary>
             ) : chatId !== null ? (
               <AppErrorBoundary resetKey={chatId}>
-                <SessionScreen chatId={chatId} onBack={goHome} />
+                <SessionScreen
+                  chatId={chatId}
+                  openGeneration={openGeneration}
+                  onBack={goHome}
+                />
               </AppErrorBoundary>
             ) : (
               <View style={styles.page} />
