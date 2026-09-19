@@ -6,12 +6,15 @@ import {
   installNewThreadComposerBackground,
   removeNewThreadComposerBackground,
   setNewThreadBackgroundEffect,
+  bindUiPrefs,
+  unbindUiPrefs,
 } from '../uiPrefs';
 import {
   bindBackgroundFs,
   unbindBackgroundFs,
   type BackgroundFs,
 } from '../newThreadBackground';
+import { memDocDisk } from '../../native/memDocDisk';
 
 class MemoryBackgroundFs implements BackgroundFs {
   files = new Map<string, string>();
@@ -43,6 +46,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unbindBackgroundFs();
+  unbindUiPrefs();
 });
 
 test('rememberModelSettings merges per model and does not clobber siblings', () => {
@@ -97,4 +101,53 @@ test('installNewThreadComposerBackground copies then replaces the pointer', asyn
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
   expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
   expect(fs.files.size).toBe(0);
+});
+
+test('install before bindUiPrefs is flushed once persist is bound', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  const installed = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/early.png',
+    name: 'early.png',
+    mimeType: 'image/png',
+    size: 20,
+  });
+  expect(installed.ok).toBe(true);
+  expect(await disk.loadUiPrefs('org', 'user')).toBeUndefined();
+
+  await bindUiPrefs(disk, 'org', 'user');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(
+    (saved?.newThreadComposerBackground as { name?: string } | undefined)?.name,
+  ).toBe('early.png');
+});
+
+test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: {
+      uri: '/docs/new-thread-backgrounds/gone.png',
+      name: 'gone.png',
+    },
+    newThreadBackgroundEffect: 'dither',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+});
+
+test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
+  uiPrefsStore.setState({
+    newThreadComposerBackground: {
+      uri: '/docs/new-thread-backgrounds/x.png',
+      name: 'x.png',
+    },
+    newThreadBackgroundEffect: 'ascii',
+  });
+  unbindUiPrefs();
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
 });

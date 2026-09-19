@@ -936,7 +936,7 @@ export const demoHistoryPrs = (chatId: string): ChangeRequestSummary[] => {
     case CHAT_INPUT:
       return [mkPr(12, 'Cache strategy notes', 'merged', 'main')];
     default:
-      return [];
+      return [mkPr(3, 'Demo change request', 'open', 'main')];
   }
 };
 

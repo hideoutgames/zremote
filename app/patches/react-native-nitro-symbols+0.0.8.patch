@@ -72,7 +72,7 @@ index 8f3db5b..443d9e3 100644
    }
 +
 +  public static func isSymbolViewRecyclable() -> Bool {
-+    return HybridSymbolView.self is any RecyclableView.Type
++    return false
 +  }
  }
 diff --git a/node_modules/react-native-nitro-symbols/nitrogen/generated/ios/c++/views/HybridSymbolViewComponent.mm b/node_modules/react-native-nitro-symbols/nitrogen/generated/ios/c++/views/HybridSymbolViewComponent.mm

@@ -153,6 +153,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const focusedOnce = useRef(false);
   const onScreenLayout = useCallback((e: LayoutChangeEvent) => {
     const { width: w, height: h } = e.nativeEvent.layout;
+    if (w <= 0 || h <= 0) return;
     const next = {
       cols: Math.max(20, Math.floor(w / CHAR_W)),
       rows: Math.max(6, Math.floor(h / CHAR_H)),
@@ -160,6 +161,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     setViewport(prev =>
       prev.cols === next.cols && prev.rows === next.rows ? prev : next,
     );
+    setLayoutReady(true);
     if (!focusedOnce.current) {
       focusedOnce.current = true;
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -170,6 +172,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const [active, setActive] = useState(0);
   const [ctrl, setCtrl] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [layoutReady, setLayoutReady] = useState(false);
   const inputRef = useRef<TextInput>(null);
   // Bumping forces a re-render after PTY data mutates the screen model.
   const [, setFrame] = useState(0);
@@ -212,15 +215,22 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runtime, chat?.deviceId, chatId, cols, rows, bump]);
 
-  // First tab opens on mount.
-  useEffect(() => {
-    if (tabs.length === 0) spawn();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Resize → debounced ResizeTerminal on the live client.
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+
+  // Error immediately when there is no host; otherwise wait for a real
+  // layout before OpenTerminal so the PTY is not sized to a collapsed sheet.
+  useEffect(() => {
+    if (runtime === null || chat?.deviceId === undefined) {
+      setError(t('terminal.unavailable'));
+      return;
+    }
+    if (!layoutReady) return;
+    if (tabsRef.current.length === 0) spawn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime, chat?.deviceId, layoutReady]);
+
+  // Resize → debounced ResizeTerminal on the live client.
   useEffect(() => {
     for (const tb of tabsRef.current) {
       if (!tb.exited) tb.client.resize(cols, rows);

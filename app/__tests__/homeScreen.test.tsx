@@ -6,7 +6,6 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text } from 'react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { BrandMark } from '../src/components/BrandMark';
-import { TOP_CHROME_FADE_BAND } from '../src/components/TopChromeFade';
 import * as Theme from '../src/theme';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import {
@@ -198,7 +197,7 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   const paddingTop = listPad.find(s => s?.paddingTop != null)?.paddingTop as
     | number
     | undefined;
-  expect(paddingTop).toBeGreaterThan(fadeHeight - TOP_CHROME_FADE_BAND);
+  expect(paddingTop).toBeGreaterThanOrEqual(fadeHeight);
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
   const search = searchInput(mounted.root);
   expect(search).toBeDefined();

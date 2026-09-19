@@ -7,6 +7,7 @@ import type { DocDisk } from '../native/docDisk';
 import { rememberRecentModel, type RecentModel } from './recentModels';
 import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
 import {
+  backgroundFileExists,
   copyBackgroundFile,
   getBackgroundFs,
   retireManagedBackground,
@@ -78,6 +79,16 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
+/** Install/remove before bindUiPrefs must still hit disk once persist exists. */
+let prefsDirty = false;
+
+const WALLPAPER_UNSET: Pick<
+  UiPrefs,
+  'newThreadComposerBackground' | 'newThreadBackgroundEffect'
+> = {
+  newThreadComposerBackground: undefined,
+  newThreadBackgroundEffect: 'none',
+};
 
 export const bindUiPrefs = async (
   disk: DocDisk,
@@ -85,6 +96,12 @@ export const bindUiPrefs = async (
   userId: string,
 ): Promise<void> => {
   persist = { disk, orgId, userId };
+  const pendingWallpaper = prefsDirty
+    ? {
+        background: uiPrefsStore.getState().newThreadComposerBackground,
+        effect: uiPrefsStore.getState().newThreadBackgroundEffect,
+      }
+    : undefined;
   const saved = await disk.loadUiPrefs(orgId, userId);
   if (saved !== undefined) {
     const patch = saved as Partial<UiPrefs>;
@@ -97,10 +114,26 @@ export const bindUiPrefs = async (
       },
     }));
   }
+  if (pendingWallpaper !== undefined) {
+    uiPrefsStore.setState({
+      newThreadComposerBackground: pendingWallpaper.background,
+      newThreadBackgroundEffect: pendingWallpaper.effect,
+    });
+  }
+  const background = uiPrefsStore.getState().newThreadComposerBackground;
+  if (background !== undefined) {
+    const ok = await backgroundFileExists(background.uri);
+    if (!ok) {
+      uiPrefsStore.setState(WALLPAPER_UNSET);
+    }
+  }
+  await saveAsync();
 };
 
 export const unbindUiPrefs = (): void => {
   persist = undefined;
+  prefsDirty = false;
+  uiPrefsStore.setState(WALLPAPER_UNSET);
 };
 
 const save = (): void => {
@@ -108,10 +141,17 @@ const save = (): void => {
 };
 
 const saveAsync = (): Promise<void> => {
-  if (persist === undefined) return Promise.resolve();
-  return persist.disk.saveUiPrefs(persist.orgId, persist.userId, {
-    ...uiPrefsStore.getState(),
-  });
+  if (persist === undefined) {
+    prefsDirty = true;
+    return Promise.resolve();
+  }
+  return persist.disk
+    .saveUiPrefs(persist.orgId, persist.userId, {
+      ...uiPrefsStore.getState(),
+    })
+    .then(() => {
+      prefsDirty = false;
+    });
 };
 
 export const setLiveActionPrefersSteer = (v: boolean): void => {
@@ -327,10 +367,7 @@ export const installNewThreadComposerBackground = async (
 
 export const removeNewThreadComposerBackground = async (): Promise<void> => {
   const previous = uiPrefsStore.getState().newThreadComposerBackground;
-  uiPrefsStore.setState({
-    newThreadComposerBackground: undefined,
-    newThreadBackgroundEffect: 'none',
-  });
+  uiPrefsStore.setState(WALLPAPER_UNSET);
   save();
   const fs = getBackgroundFs();
   if (fs === undefined) return;

@@ -12,6 +12,7 @@ export interface Theme {
   textSecondary: string;
   userBubbleBackground: string;
   userBubbleText: string;
+  assistantBubbleBackground: string;
   // Background used wherever liquid glass is not available.
   glassFallbackBackground: string;
   border: string;
@@ -48,8 +49,9 @@ export const darkTheme: Theme = {
   surface: '#1C1C1E',
   text: '#FFFFFF',
   textSecondary: '#8E8E93',
-  userBubbleBackground: '#1C1C1E',
+  userBubbleBackground: 'rgba(28,28,30,0.72)',
   userBubbleText: '#FFFFFF',
+  assistantBubbleBackground: 'rgba(28,28,30,0.55)',
   glassFallbackBackground: '#1C1C1E',
   border: '#2C2C2E',
   sendActive: '#FFFFFF',
@@ -81,8 +83,9 @@ export const lightTheme: Theme = {
   surface: '#F2F2F7',
   text: '#000000',
   textSecondary: '#6C6C70',
-  userBubbleBackground: '#E9E9EB',
+  userBubbleBackground: 'rgba(233,233,235,0.72)',
   userBubbleText: '#000000',
+  assistantBubbleBackground: 'rgba(242,242,247,0.62)',
   glassFallbackBackground: '#F2F2F7',
   border: '#D1D1D6',
   sendActive: '#000000',

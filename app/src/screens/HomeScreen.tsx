@@ -53,7 +53,7 @@ import { useRuntime } from '../app/runtimeContext';
 import type { Chat } from '../zeron/protocol/types';
 import { BrandMark } from '../components/BrandMark';
 import { HarnessMark } from '../components/HarnessMark';
-import { Glass, GlassContainer, GlassControl } from '../components/Glass';
+import { Glass, GlassControl } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { svgForPullRequest } from '../components/harnessBrand';
 import { prToneColor } from '../components/prChrome';
@@ -74,12 +74,15 @@ import {
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
-import { TopChromeFade } from '../components/TopChromeFade';
+import {
+  TopChromeFade,
+  TOP_CHROME_FADE_BAND,
+} from '../components/TopChromeFade';
 import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
-/** Extra list padding so the Threads title sits below the chrome fade. */
-const LIST_GAP_BELOW_CHROME = 20;
+/** Extra list padding so the Threads title sits below the full chrome fade. */
+const LIST_GAP_BELOW_CHROME = TOP_CHROME_FADE_BAND + 16;
 
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
@@ -514,6 +517,7 @@ export function HomeScreen({
           testID="spaceFilter"
         >
           <Icon
+            key={spaceFilter === undefined ? 'folder' : 'folder.fill'}
             name={spaceFilter === undefined ? 'folder' : 'folder.fill'}
             size={18}
             color={theme.text}
@@ -556,26 +560,22 @@ export function HomeScreen({
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );
-  const settingsBtn = (
-    <Pressable
-      onPress={onOpenSettings}
-      style={styles.fill}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={t('settings.title')}
-      testID="home-settings"
-    >
-      <Icon name="gearshape" size={20} color={theme.text} />
-    </Pressable>
-  );
   const trailing = (
     <>
       <Glass interactive style={styles.circle}>
         {folderMenu}
       </Glass>
-      <Glass interactive style={styles.circle}>
-        {settingsBtn}
-      </Glass>
+      <GlassControl
+        interactive
+        onPress={onOpenSettings}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('settings.title')}
+        testID="home-settings"
+        style={styles.circle}
+      >
+        <Icon name="gearshape" size={20} color={theme.text} />
+      </GlassControl>
     </>
   );
 
@@ -729,9 +729,7 @@ export function HomeScreen({
               onBlur={() => setSearchFocused(false)}
             />
           </Glass>
-          <GlassContainer spacing={8} style={styles.trailingCluster}>
-            {trailing}
-          </GlassContainer>
+          <View style={styles.trailingCluster}>{trailing}</View>
         </View>
 
         {connection !== 'connected' ? (
@@ -893,6 +891,7 @@ const styles = StyleSheet.create({
     borderRadius: CIRCLE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   fill: {
     flex: 1,
