@@ -78,6 +78,15 @@ const lastToken = new Map<string, string>();
 /** Returns an unbind function. Subscribes to workspace + session stores +
  * uiPrefs so phase/plan/PR updates land and settings toggles apply. */
 export const bindLiveActivities = (deps: BindDeps): (() => void) => {
+  try {
+    return bindLiveActivitiesUnsafe(deps);
+  } catch (e) {
+    log.warn(`live activities bind failed: ${e}`);
+    return () => {};
+  }
+};
+
+const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
   const mgr = new LiveActivityManager(driver, {
     onPushToken: (chatId, token) => {
       lastToken.set(chatId, token);
@@ -102,19 +111,32 @@ export const bindLiveActivities = (deps: BindDeps): (() => void) => {
     selectedChatId: deps.selectedChatId,
   });
 
-  const pushToStart = addPushToStartTokenListener(e => {
-    registerLiveActivityToken(deps.edgeUrl, deps.tokenSource, deps.orgId, {
-      chatId: '*',
-      token: e.activityPushToStartToken,
-      kind: 'push_to_start',
-      device: deps.phoneDeviceId,
-    }).catch(err => log.warn(`push-to-start register: ${err}`));
-  });
+  let pushToStart: { remove(): void } = { remove() {} };
+  try {
+    pushToStart = addPushToStartTokenListener(e => {
+      registerLiveActivityToken(deps.edgeUrl, deps.tokenSource, deps.orgId, {
+        chatId: '*',
+        token: e.activityPushToStartToken,
+        kind: 'push_to_start',
+        device: deps.phoneDeviceId,
+      }).catch(err => log.warn(`push-to-start register: ${err}`));
+    });
+  } catch (e) {
+    log.warn(`push-to-start listener: ${e}`);
+  }
 
   let seenIds = new Set<string>();
   let sessionUnsubs: (() => void)[] = [];
 
   const tick = (): void => {
+    try {
+      tickUnsafe();
+    } catch (e) {
+      log.warn(`live activities tick: ${e}`);
+    }
+  };
+
+  const tickUnsafe = (): void => {
     if (!uiPrefsStore.getState().liveActivitiesEnabled) {
       mgr.endAll();
       seenIds = new Set();

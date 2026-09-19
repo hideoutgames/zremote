@@ -40,6 +40,7 @@ import { AppServicesContext, type AppServices } from './runtimeContext';
 import { SignInScreen } from '../screens/SignInScreen';
 import { OrgGateScreen } from '../screens/OrgGateScreen';
 import { AdaptiveShell } from '../navigation/AdaptiveShell';
+import { AppErrorBoundary } from './AppErrorBoundary';
 
 const log = createLog();
 
@@ -179,13 +180,17 @@ export function ZeronApp() {
     let unbind: (() => void) | undefined;
     import('../liveActivity/bindLiveActivities')
       .then(m => {
-        unbind = m.bindLiveActivities({
-          edgeUrl: cfg.edgeUrl,
-          tokenSource: auth,
-          orgId: signedIn.orgId,
-          phoneDeviceId: runtime.deviceId,
-          selectedChatId: () => selectedChatRef.current,
-        });
+        try {
+          unbind = m.bindLiveActivities({
+            edgeUrl: cfg.edgeUrl,
+            tokenSource: auth,
+            orgId: signedIn.orgId,
+            phoneDeviceId: runtime.deviceId,
+            selectedChatId: () => selectedChatRef.current,
+          });
+        } catch (e) {
+          log.warn(`live activities unavailable: ${e}`);
+        }
       })
       .catch(e => log.warn(`live activities unavailable: ${e}`));
     return () => unbind?.();
@@ -200,14 +205,18 @@ export function ZeronApp() {
     let unbind: (() => void) | undefined;
     import('../notifications/bindPushNotifications')
       .then(m => {
-        unbind = m.bindPushNotifications({
-          edgeUrl: cfg.edgeUrl,
-          tokenSource: auth,
-          orgId: signedIn.orgId,
-          phoneDeviceId: runtime.deviceId,
-          selectedChatId: () => selectedChatRef.current,
-          openSession,
-        });
+        try {
+          unbind = m.bindPushNotifications({
+            edgeUrl: cfg.edgeUrl,
+            tokenSource: auth,
+            orgId: signedIn.orgId,
+            phoneDeviceId: runtime.deviceId,
+            selectedChatId: () => selectedChatRef.current,
+            openSession,
+          });
+        } catch (e) {
+          log.warn(`push notifications unavailable: ${e}`);
+        }
       })
       .catch(e => log.warn(`push notifications unavailable: ${e}`));
     return () => unbind?.();
@@ -291,7 +300,7 @@ export function ZeronApp() {
           barStyle={theme.scheme === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor="transparent"
         />
-        {body}
+        <AppErrorBoundary resetKey={status.state}>{body}</AppErrorBoundary>
       </View>
     </AppServicesContext.Provider>
   );

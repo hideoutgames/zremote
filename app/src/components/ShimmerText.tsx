@@ -78,6 +78,7 @@ export function ShimmerText({
   maxLines = 3,
   align = 'center',
 }: ShimmerTextProps) {
+  'use no memo';
   const font = useMemo(
     () => matchFont({ fontFamily: 'Helvetica', fontSize, fontWeight }),
     [fontSize, fontWeight],

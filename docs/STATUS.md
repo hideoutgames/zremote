@@ -64,9 +64,10 @@ Needs a Mac build, a device, or a host in the right state:
   no QR scan/device run was possible from this machine; shim fidelity
   (markdown, sheets, menus, glass) is unverified.
 - **iOS CI/TestFlight pipeline** — `ios-compile.yml` (unsigned compile
-  check, no secrets) and `ios-testflight.yml` (ASC-API-key cloud signing)
-  are authored in `.github/workflows/`; unverified until the first macOS
-  runner executes them (docs/TESTFLIGHT.md).
+  check, no secrets) and `ios-testflight.yml` (ASC-API-key cloud signing,
+  on push to `main` and manual dispatch). The IPA is the triggering SHA;
+  Settings shows `version (run_number) · shortSha`. Stacked PRs must
+  land on `main` to ship (docs/TESTFLIGHT.md).
 
 ## Requires host/edge change (`requires-host-edge-change`)
 

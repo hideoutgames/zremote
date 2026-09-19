@@ -52,6 +52,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     workosClientId:
       process.env.ZERON_WORKOS_CLIENT_ID ?? 'client_01KWD0EAKZKD50YCQJNYSRE4BY',
     workosApiBase: 'https://api.workos.com',
+    gitSha: process.env.GITHUB_SHA ?? 'dev',
   },
   plugins: [
     ['expo-build-properties', { ios: { deploymentTarget: '17.0' } }],

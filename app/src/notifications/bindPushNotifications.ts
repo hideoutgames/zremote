@@ -41,6 +41,15 @@ const registration = (
 
 /** Returns an unbind function. Settings toggle off → DELETE the token. */
 export const bindPushNotifications = (deps: BindPushDeps): (() => void) => {
+  try {
+    return bindPushNotificationsUnsafe(deps);
+  } catch (e) {
+    log.warn(`alert-push bind failed: ${e}`);
+    return () => {};
+  }
+};
+
+const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
   let lastToken: string | undefined;
   let cancelled = false;
 

@@ -26,11 +26,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useReducedMotion,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+import { useReducedMotion } from 'react-native-reanimated';
 import { NitroImage } from 'react-native-nitro-image';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
@@ -57,6 +53,7 @@ import {
   type RunPhase,
 } from '../zeron/state/sessionStores';
 import { BorderBeam } from './agentsKit/BorderBeam';
+import { AttachmentStripAnim } from './AttachmentStripAnim';
 import {
   useLiveActionPrefersSteer,
   setLiveActionPrefersSteer,
@@ -380,10 +377,6 @@ export const Composer = React.memo(function ({
   const stripH = hasAttachments ? stripContentHeight : 0;
   const stripO = hasAttachments ? 1 : 0;
   const stripDur = reduceMotion ? 0 : THUMBS_ANIM_MS;
-  const stripStyle = useAnimatedStyle(() => ({
-    height: withTiming(stripH, { duration: stripDur }),
-    opacity: withTiming(stripO, { duration: stripDur }),
-  }));
 
   const right = action.right;
   const showLivePill = live !== 'hidden' && hasText;
@@ -440,9 +433,12 @@ export const Composer = React.memo(function ({
             <CheckoutChips {...checkout} />
           ) : null}
           {/* ── Upper tier: attachment strip + input ──────────────────── */}
-          <Animated.View
-            style={[styles.stripClip, stripStyle]}
+          <AttachmentStripAnim
+            height={stripH}
+            opacity={stripO}
+            duration={stripDur}
             pointerEvents={hasAttachments ? 'auto' : 'none'}
+            style={styles.stripClip}
           >
             <View
               style={styles.strip}
@@ -519,7 +515,7 @@ export const Composer = React.memo(function ({
                 ),
               )}
             </View>
-          </Animated.View>
+          </AttachmentStripAnim>
 
           {/* QuestionPanel renders above the lower tier inside the same
             glass; the input stays mounted, de-emphasized. */}

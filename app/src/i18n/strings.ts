@@ -214,6 +214,11 @@ const en = {
   'settings.devices': 'Devices',
   'settings.agents': 'Agents',
   'settings.edgeUrl': 'Edge URL',
+  'settings.appBuild': 'Build',
+  'error.boundary.title': 'Something went wrong',
+  'error.boundary.body':
+    'The last screen hit an unexpected error. You can retry without restarting.',
+  'error.boundary.retry': 'Try again',
   'settings.lastSeen': 'Last seen',
   'settings.online': 'Online',
   'settings.offline': 'Offline',

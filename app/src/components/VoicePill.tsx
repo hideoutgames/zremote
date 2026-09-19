@@ -37,6 +37,7 @@ export function VoicePill({
   onToggle: () => void;
   onCancel: () => void;
 }) {
+  'use no memo';
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const open = useSharedValue(active ? 1 : 0);

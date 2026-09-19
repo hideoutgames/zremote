@@ -47,6 +47,7 @@ export function BorderBeam({
   reduceMotion,
   highContrast = false,
 }: BorderBeamProps) {
+  'use no memo';
   const theme = useTheme();
   const state: BeamState = beamState(runPhase, roomState, reduceMotion);
 

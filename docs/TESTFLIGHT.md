@@ -6,9 +6,10 @@ Two workflows under `.github/workflows/`:
   `main` touching `app/**` or the iOS workflows. Unsigned Release build
   (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
   `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
-- **`ios-testflight.yml` — iOS TestFlight.** Manual only
-  (`workflow_dispatch`, optional `notes`). Signed archive + upload to App
-  Store Connect via the App Store Connect API key and the team's **one
+- **`ios-testflight.yml` — iOS TestFlight.** Runs on **push to `main`**
+  when `app/**`, this workflow, or `patches/zeron-edge/**` change, and on
+  manual `workflow_dispatch` (optional `notes`). Signed archive + upload to
+  App Store Connect via the App Store Connect API key and the team's **one
   cloud-managed Apple Distribution certificate**. Expo prebuild's
   Automatic / Apple Development identity is **stripped** on the app and
   widget targets (and the project-level `iPhone Developer` setting) so
@@ -17,6 +18,16 @@ Two workflows under `.github/workflows/`:
   pbxproj conflicts ("automatically signed for development"); Manual
   style needs a local cert the runner does not have. No certificates,
   profiles, or key material are committed.
+
+  The archive is always the **checked-out git SHA** of the triggering
+  event (`github.sha` on push, the branch selected in the Actions UI on
+  dispatch). `CFBundleVersion` is `github.run_number` (counts every run
+  of this workflow, including failures). `extra.gitSha` is baked in at
+  prebuild so Settings can show `0.1.0 (N) · abc1234`.
+
+  Stacked Cursor PRs that merge into another feature branch **do not**
+  land on TestFlight. Retarget those PRs at `main` (or merge the stack
+  into `main`) before expecting the IPA to include them.
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
@@ -103,11 +114,18 @@ gated. The job's first step fails with a clear list of missing secret
 
 ## 4. Run
 
-- Actions → **iOS TestFlight** → Run workflow.
+- Actions → **iOS TestFlight** → Run workflow (picks a branch; default
+  `main`).
+- Or merge to `main` — a push that touches `app/**` starts the job.
 
-`IOS_BUILD_NUMBER` is the workflow run number; `aps-environment` stays
+`IOS_BUILD_NUMBER` is the workflow run number; `GITHUB_SHA` is written
+into `expo.extra.gitSha` at prebuild. `aps-environment` stays
 `development` in the entitlements file — Xcode swaps it to `production`
 on App Store export via the distribution profile.
+
+The job summary lists the SHA, commit subject, and build number. Settings
+→ Account shows the same `version (build) · sha` label so a TestFlight
+install can be matched to git.
 
 The archive step does **not** pass `CODE_SIGN_IDENTITY` or
 `CODE_SIGN_STYLE` to `xcodebuild`. Those xcargs apply to every target

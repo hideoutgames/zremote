@@ -47,6 +47,49 @@ import { t } from '../i18n/strings';
  *  `ZeronSplitView` from modules/zeron-split-view. */
 export const USE_NATIVE_SPLIT_VIEW = false;
 
+function InFlowSidebar({
+  visible,
+  width,
+  paddingTop,
+  paddingBottom,
+  children,
+}: {
+  visible: boolean;
+  width: number;
+  paddingTop: number;
+  paddingBottom: number;
+  children: React.ReactNode;
+}) {
+  'use no memo';
+  const reduceMotion = useReducedMotion();
+  const collapse = useSharedValue(visible ? 0 : 1);
+  useEffect(() => {
+    const target = visible ? 0 : 1;
+    collapse.value = reduceMotion
+      ? target
+      : withTiming(target, {
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+        });
+  }, [visible, reduceMotion, collapse]);
+  const anim = useAnimatedStyle(() => ({
+    width: (1 - collapse.value) * width,
+  }));
+  return (
+    <Animated.View
+      style={[styles.sidebarColumn, anim]}
+      pointerEvents={visible ? 'auto' : 'none'}
+      accessibilityState={{ expanded: visible }}
+      accessibilityLabel={t('sidebar.toggle')}
+      testID="threadsSidebar"
+    >
+      <View style={[styles.sidebarInner, { width, paddingTop, paddingBottom }]}>
+        {children}
+      </View>
+    </Animated.View>
+  );
+}
+
 export function AdaptiveShell({
   requestedChat,
   onSelectedChat,
@@ -91,24 +134,6 @@ export function AdaptiveShell({
     setComposing(true);
   }, []);
 
-  // In-flow sidebar: collapse.value 0 = open (full width), 1 = closed (0).
-  const reduceMotion = useReducedMotion();
-  const collapse = useSharedValue(layout.sidebarVisible ? 0 : 1);
-  useEffect(() => {
-    const target = layout.sidebarVisible ? 0 : 1;
-    collapse.value = reduceMotion
-      ? target
-      : withTiming(target, {
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-        });
-  }, [layout.sidebarVisible, reduceMotion, collapse]);
-
-  const sidebarWidth = layout.sidebarWidth;
-  const sidebarAnim = useAnimatedStyle(() => ({
-    width: (1 - collapse.value) * sidebarWidth,
-  }));
-
   if (layout.mode === 'compact') {
     return (
       <RootPager
@@ -120,33 +145,21 @@ export function AdaptiveShell({
 
   return (
     <View style={[styles.row, { backgroundColor: theme.background }]}>
-      <Animated.View
-        style={[styles.sidebarColumn, sidebarAnim]}
-        pointerEvents={layout.sidebarVisible ? 'auto' : 'none'}
-        accessibilityState={{ expanded: layout.sidebarVisible }}
-        accessibilityLabel={t('sidebar.toggle')}
-        testID="threadsSidebar"
+      <InFlowSidebar
+        visible={layout.sidebarVisible}
+        width={layout.sidebarWidth}
+        paddingTop={insets.top + 8}
+        paddingBottom={insets.bottom + 8}
       >
-        <View
-          style={[
-            styles.sidebarInner,
-            {
-              width: layout.sidebarWidth,
-              paddingTop: insets.top + 8,
-              paddingBottom: insets.bottom + 8,
-            },
-          ]}
-        >
-          <Glass style={styles.sidebarGlass}>
-            <HomeScreen
-              variant="sidebar"
-              onOpenSession={openSession}
-              onOpenSettings={openSettings}
-              onCompose={enterCompose}
-            />
-          </Glass>
-        </View>
-      </Animated.View>
+        <Glass style={styles.sidebarGlass}>
+          <HomeScreen
+            variant="sidebar"
+            onOpenSession={openSession}
+            onOpenSettings={openSettings}
+            onCompose={enterCompose}
+          />
+        </Glass>
+      </InFlowSidebar>
 
       <View style={styles.detail}>
         {composing ? (

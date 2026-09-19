@@ -21,7 +21,7 @@ import { workspaceStore } from '../zeron/state/workspaceStore';
 import { authStore } from '../zeron/state/authStore';
 import { catalogStore } from '../zeron/state/catalogStore';
 import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
-import { appConfig } from '../zeron/native/appConfig';
+import { appConfig, appRevisionLabel } from '../zeron/native/appConfig';
 import { useAppServices, useRuntime } from '../app/runtimeContext';
 import type {
   DeviceRow,
@@ -494,6 +494,12 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 ) : null}
                 <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
                   {`${t('settings.edgeUrl')}: ${edgeUrl}`}
+                </Text>
+                <Text
+                  style={[styles.cardSub, { color: theme.textSecondary }]}
+                  testID="settings-app-build"
+                >
+                  {`${t('settings.appBuild')}: ${appRevisionLabel()}`}
                 </Text>
               </View>
             </View>

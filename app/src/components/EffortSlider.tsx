@@ -36,6 +36,7 @@ export interface EffortSliderProps {
 }
 
 export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
+  'use no memo';
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const trackWidth = useRef(0);
@@ -93,19 +94,19 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
     effortSliderThumbInset,
   );
 
+  const progressInset = geo.thumbCenterStart - effortSliderProgressHeight / 2;
+  const travel = geo.travelDistance;
+
   const fillStyle = useAnimatedStyle(() => ({
-    width: effortSliderProgressHeight + geo.travelDistance * position.value,
+    width: effortSliderProgressHeight + travel * position.value,
   }));
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        translateX:
-          effortSliderThumbInset + geo.travelDistance * position.value,
+        translateX: effortSliderThumbInset + travel * position.value,
       },
     ],
   }));
-
-  const progressInset = geo.thumbCenterStart - effortSliderProgressHeight / 2;
 
   return (
     <View
