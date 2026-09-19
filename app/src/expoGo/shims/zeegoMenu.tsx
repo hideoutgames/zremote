@@ -44,26 +44,36 @@ const textOf = (node: ReactNode): string => {
   return '';
 };
 
+const displayNameOf = (el: React.ReactElement): string | undefined =>
+  (el.type as { displayName?: string }).displayName;
+
+/** Find <Content> even when a helper wraps it (recurse unknown nodes). */
+const findContent = (nodes: ReactNode): React.ReactElement | undefined => {
+  for (const el of flatten(nodes)) {
+    if (displayNameOf(el) === 'GoMenuContent') return el;
+    const nested = (el.props as { children?: ReactNode }).children;
+    const found = findContent(nested);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
 /** Pull {title, onSelect, destructive} out of <Content><Item><ItemTitle>…
  * trees (Groups are flattened; Label becomes a disabled header row). */
 const collectItems = (children: ReactNode): ItemDef[] => {
-  const content = flatten(children).find(
-    c => (c.type as { displayName?: string }).displayName === 'GoMenuContent',
-  );
+  const content = findContent(children);
   if (content === undefined) return [];
   const contentProps = content.props as { children?: ReactNode };
   const walk = (nodes: ReactNode): ItemDef[] => {
     const out: ItemDef[] = [];
     for (const el of flatten(nodes)) {
-      const name = (el.type as { displayName?: string }).displayName;
+      const name = displayNameOf(el);
       const props = el.props as Record<string, unknown> & {
         children?: ReactNode;
       };
       if (name === 'GoMenuItem') {
         const titleEl = flatten(props.children).find(
-          c =>
-            (c.type as { displayName?: string }).displayName ===
-            'GoMenuItemTitle',
+          c => displayNameOf(c) === 'GoMenuItemTitle',
         );
         out.push({
           title: textOf(
@@ -127,17 +137,26 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
 
   const Trigger = ({
     children,
-    asChild: _asChild,
+    asChild,
   }: {
     children?: ReactNode;
     asChild?: boolean;
   }) => {
     const { open } = useContext(Ctx);
+    const onPress = longPress ? undefined : open;
+    const onLongPress = longPress ? open : undefined;
+    if (asChild === true && React.isValidElement(children)) {
+      const child = children as React.ReactElement<{
+        onPress?: () => void;
+        onLongPress?: () => void;
+      }>;
+      return React.cloneElement(child, {
+        onPress: onPress ?? child.props.onPress,
+        onLongPress: onLongPress ?? child.props.onLongPress,
+      });
+    }
     return (
-      <Pressable
-        onPress={longPress ? undefined : open}
-        onLongPress={longPress ? open : undefined}
-      >
+      <Pressable onPress={onPress} onLongPress={onLongPress}>
         {children}
       </Pressable>
     );

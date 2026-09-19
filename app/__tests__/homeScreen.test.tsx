@@ -250,3 +250,23 @@ test('inactive threads are dimmed; working threads stay full color', async () =>
   expect(bodyStyle('live')).toBeUndefined();
   expect(bodyStyle('idle')).toBe(0.55);
 });
+
+test('search starts collapsed and expands to an input', async () => {
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  const searchBtn = mounted.root.findAll(
+    n =>
+      n.props.testID === 'home-search' && typeof n.props.onPress === 'function',
+  );
+  expect(searchBtn).toHaveLength(1);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'home-search-input'),
+  ).toHaveLength(0);
+  await act(async () => {
+    searchBtn[0].props.onPress();
+  });
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'home-search-input').length,
+  ).toBeGreaterThan(0);
+});

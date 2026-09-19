@@ -17,7 +17,7 @@ import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import { stripPlanPrefix } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
-import { MessageCopyMenu } from './MessageCopyMenu';
+import { messageCopyContent } from './MessageCopyMenu';
 
 const FOLD_CHARS = 400;
 const FOLD_LINES = 5;
@@ -125,7 +125,7 @@ export const UserMessage = React.memo(function ({
             ) : null}
           </Animated.View>
         </ContextMenu.Trigger>
-        <MessageCopyMenu text={visible} />
+        {messageCopyContent(visible)}
       </ContextMenu.Root>
     </View>
   );

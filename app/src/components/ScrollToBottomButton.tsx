@@ -1,7 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
-import { Glass } from './Glass';
+import { GlassControl } from './Glass';
 import { Icon } from './Icon';
 import { theme } from '../theme';
 
@@ -14,11 +14,15 @@ export function ScrollToBottomButton({ onPress }: { onPress: () => void }) {
       entering={ZoomIn.duration(160)}
       exiting={ZoomOut.duration(140)}
     >
-      <Pressable onPress={onPress} hitSlop={10}>
-        <Glass interactive style={styles.circle}>
-          <Icon name="chevron.down" size={18} color={theme.text} />
-        </Glass>
-      </Pressable>
+      <GlassControl
+        interactive
+        onPress={onPress}
+        hitSlop={10}
+        style={styles.circle}
+        accessibilityRole="button"
+      >
+        <Icon name="chevron.down" size={18} color={theme.text} />
+      </GlassControl>
     </Animated.View>
   );
 }
@@ -30,6 +34,5 @@ const styles = StyleSheet.create({
     borderRadius: SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
 });

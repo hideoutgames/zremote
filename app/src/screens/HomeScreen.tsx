@@ -3,9 +3,16 @@
 // the folder control; iPhone mounts the compose Composer here, iPad keeps
 // a New thread button that enters detail compose.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
+  LayoutAnimation,
   Pressable,
   RefreshControl,
   type StyleProp,
@@ -255,6 +262,8 @@ export function HomeScreen({
       </Glass>
     );
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<TextInput>(null);
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -268,6 +277,15 @@ export function HomeScreen({
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
+
+  const animateSearch = (open: boolean) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSearchOpen(open);
+  };
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -329,6 +347,77 @@ export function HomeScreen({
       onCompose?.({ spaceId });
     },
     [spaces, onCompose],
+  );
+
+  const folderMenu = (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Pressable
+          style={styles.fill}
+          accessibilityRole="button"
+          accessibilityLabel={folderLabel}
+          testID="spaceFilter"
+        >
+          <Icon
+            name={spaceFilter === undefined ? 'folder' : 'folder.fill'}
+            size={18}
+            color={theme.text}
+          />
+        </Pressable>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content>
+        <DropdownMenu.Item key="all" onSelect={() => setSpaceFilter(undefined)}>
+          <DropdownMenu.ItemTitle>{t('home.allSpaces')}</DropdownMenu.ItemTitle>
+        </DropdownMenu.Item>
+        {spaceFilter !== undefined ? (
+          <DropdownMenu.Item
+            key="newHere"
+            onSelect={() => enterCompose(spaceFilter)}
+          >
+            <DropdownMenu.ItemTitle>
+              {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
+            </DropdownMenu.ItemTitle>
+          </DropdownMenu.Item>
+        ) : null}
+        {devices.map(device => {
+          const deviceSpaces = spaces.filter(s => s.deviceId === device.id);
+          if (deviceSpaces.length === 0) return null;
+          return (
+            <DropdownMenu.Group key={device.id}>
+              <DropdownMenu.Label>{device.name}</DropdownMenu.Label>
+              {deviceSpaces.map(s => (
+                <DropdownMenu.Item
+                  key={s.id}
+                  onSelect={() => setSpaceFilter(s.id)}
+                >
+                  <DropdownMenu.ItemTitle>
+                    {s.name ?? s.path}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Group>
+          );
+        })}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+  const settingsBtn = (
+    <Pressable
+      onPress={onOpenSettings}
+      style={styles.fill}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t('settings.title')}
+      testID="home-settings"
+    >
+      <Icon name="gearshape" size={20} color={theme.text} />
+    </Pressable>
+  );
+  const trailing = (
+    <>
+      {control(styles.circle, folderMenu)}
+      {control(styles.circle, settingsBtn)}
+    </>
   );
 
   return (
@@ -412,92 +501,57 @@ export function HomeScreen({
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
-        <GlassContainer spacing={8} style={styles.topRow}>
-          <Glass interactive style={styles.search}>
-            <Icon
-              name="magnifyingglass"
-              size={18}
-              color={theme.textSecondary}
-            />
-            <TextInput
-              style={[styles.searchInput, { color: theme.text }]}
-              placeholder={t('home.search')}
-              placeholderTextColor={theme.textSecondary}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-            />
-          </Glass>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <Glass
-                interactive
-                style={styles.circle}
-                accessibilityRole="button"
-                accessibilityLabel={folderLabel}
-                testID="spaceFilter"
-              >
-                <Icon
-                  name={spaceFilter === undefined ? 'folder' : 'folder.fill'}
-                  size={18}
-                  color={theme.text}
-                />
-              </Glass>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-              <DropdownMenu.Item
-                key="all"
-                onSelect={() => setSpaceFilter(undefined)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('home.allSpaces')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              {spaceFilter !== undefined ? (
-                <DropdownMenu.Item
-                  key="newHere"
-                  onSelect={() => enterCompose(spaceFilter)}
+        <View
+          style={[
+            styles.topRow,
+            variant === 'sidebar' ? styles.topRowSidebar : undefined,
+          ]}
+        >
+          {searchOpen || query !== ''
+            ? control(
+                styles.search,
+                <>
+                  <Icon
+                    name="magnifyingglass"
+                    size={18}
+                    color={theme.textSecondary}
+                  />
+                  <TextInput
+                    ref={searchRef}
+                    style={[styles.searchInput, { color: theme.text }]}
+                    placeholder={t('home.search')}
+                    placeholderTextColor={theme.textSecondary}
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCapitalize="none"
+                    autoFocus
+                    testID="home-search-input"
+                    onBlur={() => {
+                      if (query.trim() === '') animateSearch(false);
+                    }}
+                  />
+                </>,
+              )
+            : control(
+                styles.circle,
+                <Pressable
+                  onPress={() => animateSearch(true)}
+                  style={styles.fill}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.search')}
+                  testID="home-search"
                 >
-                  <DropdownMenu.ItemTitle>
-                    {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
-                  </DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
-              ) : null}
-              {devices.map(device => {
-                const deviceSpaces = spaces.filter(
-                  s => s.deviceId === device.id,
-                );
-                if (deviceSpaces.length === 0) return null;
-                return (
-                  <DropdownMenu.Group key={device.id}>
-                    <DropdownMenu.Label>{device.name}</DropdownMenu.Label>
-                    {deviceSpaces.map(s => (
-                      <DropdownMenu.Item
-                        key={s.id}
-                        onSelect={() => setSpaceFilter(s.id)}
-                      >
-                        <DropdownMenu.ItemTitle>
-                          {s.name ?? s.path}
-                        </DropdownMenu.ItemTitle>
-                      </DropdownMenu.Item>
-                    ))}
-                  </DropdownMenu.Group>
-                );
-              })}
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-          <Pressable
-            onPress={onOpenSettings}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('settings.title')}
-            testID="home-settings"
-          >
-            <Glass interactive style={styles.circle}>
-              <Icon name="gearshape" size={20} color={theme.text} />
-            </Glass>
-          </Pressable>
-        </GlassContainer>
+                  <Icon name="magnifyingglass" size={18} color={theme.text} />
+                </Pressable>,
+              )}
+          {variant === 'sidebar' ? (
+            <View style={styles.trailingCluster}>{trailing}</View>
+          ) : (
+            <GlassContainer spacing={8} style={styles.trailingCluster}>
+              {trailing}
+            </GlassContainer>
+          )}
+        </View>
 
         {connection !== 'connected' ? (
           <View
@@ -561,10 +615,12 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
-    paddingHorizontal: 16,
     paddingBottom: 12,
+    paddingHorizontal: 16,
   },
+  topRowSidebar: { paddingHorizontal: 0 },
   search: {
     flex: 1,
     flexDirection: 'row',
@@ -573,7 +629,6 @@ const styles = StyleSheet.create({
     height: CIRCLE,
     borderRadius: CIRCLE / 2,
     paddingHorizontal: 16,
-    overflow: 'hidden',
   },
   searchInput: { flex: 1, fontSize: 17, padding: 0 },
   pill: {
@@ -641,7 +696,6 @@ const styles = StyleSheet.create({
     gap: 8,
     height: CIRCLE,
     borderRadius: CIRCLE / 2,
-    overflow: 'hidden',
   },
   newChatText: { fontSize: 17, fontWeight: '600' },
   circle: {
@@ -650,7 +704,17 @@ const styles = StyleSheet.create({
     borderRadius: CIRCLE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+  },
+  fill: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trailingCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   homeComposer: {
     position: 'absolute',
