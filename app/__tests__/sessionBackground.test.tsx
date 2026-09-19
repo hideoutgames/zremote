@@ -4,6 +4,13 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { SessionScreen } from '../src/screens/SessionScreen';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
+import { FadeBlur } from '../src/components/FadeBlur';
+import {
+  COMPACT_WALLPAPER_BLUR,
+  REGULAR_CHAT_COLUMN_EDGE,
+  REGULAR_THREADS_EDGE,
+  wallpaperBlurFor,
+} from '../src/components/SessionBackgroundBlur';
 import {
   AppServicesContext,
   type AppServices,
@@ -143,4 +150,28 @@ test('no artwork means no wallpaper or blur layers', async () => {
   const mounted = await render(<AdaptiveShell requestedChat={null} />);
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'session-background-blur')).toBe(0);
+});
+
+test('compact wallpaper blur is full-bleed; iPad keeps padded edges', () => {
+  expect(wallpaperBlurFor(390, 'threads')).toEqual({
+    intensity: COMPACT_WALLPAPER_BLUR,
+    fade: 'none',
+  });
+  expect(wallpaperBlurFor(390, 'chat', false)).toEqual({
+    intensity: COMPACT_WALLPAPER_BLUR,
+    fade: 'none',
+  });
+  expect(wallpaperBlurFor(1024, 'threads').fadeHold).toBe(REGULAR_THREADS_EDGE);
+  expect(wallpaperBlurFor(1024, 'chat', true).fadeHold).toBe(
+    REGULAR_CHAT_COLUMN_EDGE,
+  );
+});
+
+test('home list uses padded regular blur at the 750pt test window', async () => {
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  const blur = mounted.root.findAllByType(FadeBlur)[0];
+  expect(blur.props.fade).toBe('horizontal');
+  expect(blur.props.fadeHold).toBe(REGULAR_THREADS_EDGE);
 });

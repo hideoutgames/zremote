@@ -113,6 +113,7 @@ export function Icon({
       style={[styles.clip, { width: size, height: size }, style]}
     >
       <SymbolView
+        key={name}
         symbolName={name}
         tintColor={color}
         pointSize={size}

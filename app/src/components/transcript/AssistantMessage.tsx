@@ -172,6 +172,9 @@ const PartView = ({
   }
 };
 
+const bubbledPart = (part: MessagePart): boolean =>
+  part.kind === 'error' || (part.kind === 'text' && part.text !== '');
+
 export const AssistantMessage = React.memo(function ({
   entry,
   onOpenReasoning,
@@ -213,6 +216,23 @@ export const AssistantMessage = React.memo(function ({
                 onFetchOutput={onFetchOutput}
                 autoOpen={streaming && i === items.length - 1}
               />
+            ) : bubbledPart(item.part) ? (
+              <View
+                key={item.part.id}
+                testID="assistant-bubble"
+                style={[
+                  styles.bubble,
+                  { backgroundColor: theme.assistantBubbleBackground },
+                ]}
+              >
+                <PartView
+                  part={item.part}
+                  streaming={streaming}
+                  isLastText={item.part.id === lastTextId}
+                  onOpenReasoning={onOpenReasoning}
+                  onFetchOutput={onFetchOutput}
+                />
+              </View>
             ) : (
               <PartView
                 key={item.part.id}
@@ -225,9 +245,17 @@ export const AssistantMessage = React.memo(function ({
             ),
           )}
           {entry.status === 'aborted' ? (
-            <Text style={[styles.error, { color: theme.danger }]}>
-              {t('session.interrupted')}
-            </Text>
+            <View
+              testID="assistant-bubble"
+              style={[
+                styles.bubble,
+                { backgroundColor: theme.assistantBubbleBackground },
+              ]}
+            >
+              <Text style={[styles.error, { color: theme.danger }]}>
+                {t('session.interrupted')}
+              </Text>
+            </View>
           ) : null}
           {plan !== undefined ? (
             <PlanCard
@@ -246,7 +274,19 @@ export const AssistantMessage = React.memo(function ({
 });
 
 const styles = StyleSheet.create({
-  row: { paddingHorizontal: 16, paddingVertical: 4 },
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  bubble: {
+    alignSelf: 'flex-start',
+    maxWidth: '82%',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   traceRow: {
     flexDirection: 'row',
     alignItems: 'center',

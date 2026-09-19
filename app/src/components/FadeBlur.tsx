@@ -1,7 +1,8 @@
 // Masked BlurView that fades to transparency. Used behind the composer
 // (fade up), the centered effort slider (soft rectangle with faded
-// edges on all sides), and the session wallpaper (horizontal fade into
-// sharp gutters). Skia is intentionally avoided here (Release worklet
+// edges on all sides), the session wallpaper (horizontal fade into
+// sharp gutters on iPad; unmasked full-bleed on iPhone), and the top
+// chrome dissolve. Skia is intentionally avoided here (Release worklet
 // crashes).
 
 import React, { useEffect, useState } from 'react';
@@ -46,7 +47,7 @@ export function FadeBlur({
 }: {
   intensity: number;
   style?: StyleProp<ViewStyle>;
-  fade?: 'up' | 'down' | 'vertical' | 'radial' | 'horizontal';
+  fade?: 'up' | 'down' | 'vertical' | 'radial' | 'horizontal' | 'none';
   /** For `down`, the 0–1 location where the opaque plateau ends.
    *  For `horizontal`, the 0–1 edge inset of the fade on each side. */
   fadeHold?: number;
@@ -68,6 +69,16 @@ export function FadeBlur({
     theme.scheme === 'dark'
       ? 'systemThinMaterialDark'
       : 'systemThinMaterialLight';
+  if (fade === 'none') {
+    return (
+      <BlurView
+        pointerEvents="none"
+        tint={tint}
+        intensity={intensity}
+        style={style}
+      />
+    );
+  }
   const blur = (
     <BlurView
       tint={tint}

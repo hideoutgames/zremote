@@ -115,6 +115,7 @@ export const UserMessage = React.memo(function UserMessageInner({
             ) : null}
             {showBubble ? (
               <View
+                testID="user-bubble"
                 style={[
                   styles.bubble,
                   { backgroundColor: theme.userBubbleBackground },
@@ -169,7 +170,6 @@ const styles = StyleSheet.create({
   stack: {
     alignSelf: 'flex-end',
     alignItems: 'flex-end',
-    maxWidth: '82%',
   },
   attachmentRow: {
     flexDirection: 'row',
@@ -190,7 +190,8 @@ const styles = StyleSheet.create({
   },
   attachmentName: { fontSize: 12 },
   bubble: {
-    width: '100%',
+    alignSelf: 'flex-end',
+    maxWidth: '82%',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -201,6 +202,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   text: { fontSize: 16, lineHeight: 21 },
-  bubbleText: { flex: 1, flexShrink: 1 },
+  bubbleText: { flexShrink: 1 },
   fold: { fontSize: 13, fontWeight: '500', marginTop: 4 },
 });

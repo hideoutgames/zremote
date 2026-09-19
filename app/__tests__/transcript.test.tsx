@@ -276,3 +276,29 @@ test('UserMessage plays send entering when animateEnter is set', async () => {
   expect(enteringViews(tree!.root).length).toBeGreaterThan(0);
   expect(onEntered).toHaveBeenCalledWith(userEntry.id);
 });
+
+test('UserMessage shows the sent text inside a bubble sized to content', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={userEntry} />);
+  });
+  expect(textOf(tree!.root)).toContain('hello from the phone');
+  const bubble = tree!.root.findByProps({ testID: 'user-bubble' });
+  const style = Array.isArray(bubble.props.style)
+    ? bubble.props.style.flat()
+    : [bubble.props.style];
+  expect(style.some(s => s?.maxWidth === '82%')).toBe(true);
+  expect(style.some(s => s?.width === '100%')).toBe(false);
+});
+
+test('AssistantMessage wraps text in a chat bubble', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
+    );
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'assistant-bubble').length,
+  ).toBeGreaterThan(0);
+});

@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { ThreadDetailsSheet } from '../src/components/ThreadDetailsSheet';
 import { SubagentsSheet } from '../src/components/SubagentsSheet';
 import { HistoryScreen } from '../src/screens/HistoryScreen';
@@ -370,6 +370,22 @@ test('session sheet insets content below the overlay grabber', async () => {
     ? sheet.props.style.flat()
     : [sheet.props.style];
   expect(style.some(s => s && s.paddingTop === 24)).toBe(true);
+});
+
+test('session sheet fill does not collapse body content', async () => {
+  const listed = await render(
+    <SessionSheet title="History" fill onDismiss={() => {}}>
+      <Text>body</Text>
+    </SessionSheet>,
+  );
+  const wrap = StyleSheet.flatten(
+    byTestId(listed.root, 'session-sheet')[0].props.style,
+  );
+  expect(wrap).toEqual(expect.objectContaining({ flex: 1, minHeight: '100%' }));
+  const body = StyleSheet.flatten(
+    byTestId(listed.root, 'session-sheet-body')[0].props.style,
+  );
+  expect(body).toEqual(expect.objectContaining({ flex: 1, minHeight: 0 }));
 });
 
 test('session sheet uses a compact title and optional full detent', async () => {

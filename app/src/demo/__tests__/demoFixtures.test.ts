@@ -17,6 +17,8 @@ test('demo workspace listing includes ignored rows and never lists .git', () => 
 
 test('demo history PRs cover working thread plus other chats', () => {
   expect(demoHistoryPrs(CHAT_WORKING).map(p => p.number)).toEqual([42, 41, 39]);
+  expect(demoHistoryPrs('c-offline').length).toBeGreaterThan(0);
+  expect(demoHistoryPrs('unknown-chat').length).toBeGreaterThan(0);
   expect(demoChangeRequestFor('demo/replay', demoPaths.zremote)?.number).toBe(
     42,
   );

@@ -1,9 +1,12 @@
 // Shared session-tool sheet chrome: 75% first detent, grabber, no close
 // button. View details, Sub-agents, History, Files, and Terminal all use
 // this so they dismiss the same way (swipe / grabber / Android back).
+// TrueSheet needs a real detent height — `minHeight: '100%'` on the fill
+// wrapper (same pattern as GlassSheet) so ScrollView / Terminal children
+// do not collapse to 0 on iPhone.
 
 import React, { type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useTheme } from '../theme';
@@ -31,6 +34,8 @@ export function SessionSheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const cap = Math.max(240, Math.round(windowHeight - insets.top));
 
   return (
     <TrueSheet
@@ -38,6 +43,7 @@ export function SessionSheet({
       initialDetentIndex={initialDetentIndex}
       onDidDismiss={onDismiss}
       grabber
+      maxContentHeight={cap}
       backgroundColor={theme.background}
     >
       <View
@@ -58,7 +64,13 @@ export function SessionSheet({
             {title}
           </Text>
         ) : null}
-        {fill ? <View style={styles.fill}>{children}</View> : children}
+        {fill ? (
+          <View testID="session-sheet-body" style={styles.body}>
+            {children}
+          </View>
+        ) : (
+          children
+        )}
         <MenuDismissShield />
       </View>
     </TrueSheet>
@@ -66,7 +78,8 @@ export function SessionSheet({
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, minHeight: 0 },
+  fill: { flex: 1, minHeight: '100%' },
+  body: { flex: 1, minHeight: 0 },
   title: {
     fontSize: 17,
     fontWeight: '600',

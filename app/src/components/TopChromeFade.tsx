@@ -10,6 +10,10 @@ import { FadeBlur } from './FadeBlur';
 import { useTheme } from '../theme';
 
 export const TOP_CHROME_FADE_BAND = 56;
+/** Strong blur under a mostly-transparent color wash so wallpaper remains. */
+export const TOP_CHROME_BLUR_INTENSITY = 90;
+const TOP_FADE_ALPHA = 0.12;
+const MID_FADE_ALPHA = 0.06;
 
 export const hexToRgba = (hex: string, alpha: number): string => {
   const raw = hex.replace('#', '');
@@ -40,8 +44,8 @@ export function TopChromeFade({
   const theme = useTheme();
   const height = Math.max(inset, 0) + TOP_CHROME_FADE_BAND;
   const fadeHold = height <= 0 ? 0.12 : Math.max(inset, 0) / height;
-  const opaque = theme.background;
-  const mid = hexToRgba(theme.background, 0.55);
+  const top = hexToRgba(theme.background, TOP_FADE_ALPHA);
+  const mid = hexToRgba(theme.background, MID_FADE_ALPHA);
   const clear = hexToRgba(theme.background, 0);
   const midAt = Math.min(1, fadeHold + 0.22);
   return (
@@ -53,11 +57,11 @@ export function TopChromeFade({
       <FadeBlur
         fade="down"
         fadeHold={fadeHold}
-        intensity={22}
+        intensity={TOP_CHROME_BLUR_INTENSITY}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
-        colors={[opaque, opaque, mid, clear]}
+        colors={[top, top, mid, clear]}
         locations={[0, fadeHold, midAt, 1]}
         style={StyleSheet.absoluteFill}
       />
