@@ -6,6 +6,7 @@ import React, { type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useTheme } from '../theme';
+import { MenuDismissShield } from './menus/MenuDismissShield';
 
 export const SESSION_SHEET_DETENTS: (number | 'auto')[] = [0.75, 1];
 
@@ -41,6 +42,7 @@ export function SessionSheet({
           </Text>
         ) : null}
         {fill ? <View style={styles.fill}>{children}</View> : children}
+        <MenuDismissShield />
       </View>
     </TrueSheet>
   );

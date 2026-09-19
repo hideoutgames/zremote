@@ -17,7 +17,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';

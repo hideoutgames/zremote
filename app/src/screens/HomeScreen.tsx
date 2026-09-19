@@ -27,8 +27,8 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as DropdownMenu from 'zeego/dropdown-menu';
-import * as ContextMenu from 'zeego/context-menu';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
+import * as ContextMenu from '../components/menus/context-menu';
 import { useStore } from 'zustand';
 import {
   workspaceStore,
@@ -62,7 +62,13 @@ import { Icon } from '../components/Icon';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
 import { useThreadPrDot } from '../zeron/state/changeRequestStore';
-import { setComposeDefaults } from '../zeron/state/uiPrefs';
+import {
+  setComposeDefaults,
+  toggleChatPinned,
+  useChatPinned,
+  usePinnedChatIds,
+} from '../zeron/state/uiPrefs';
+import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 
@@ -109,8 +115,45 @@ const ChatRow = React.memo(function ({
   const prTone = useThreadPrDot(chat.id);
   const live = isAgentRunning(indicator);
   const [hovered, setHovered] = useState(false);
+  const pinned = useChatPinned(chat.id);
+  const suppressOpen = useRef(false);
+  const suppressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const at = chat.lastMessageAt ?? chat.createdAt;
   const mark = svgForHarness(chat.config?.harness);
+
+  const armSuppress = useCallback(() => {
+    suppressOpen.current = true;
+    if (suppressTimer.current !== undefined) {
+      clearTimeout(suppressTimer.current);
+      suppressTimer.current = undefined;
+    }
+  }, []);
+
+  const onMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        armSuppress();
+        return;
+      }
+      suppressTimer.current = setTimeout(() => {
+        suppressOpen.current = false;
+        suppressTimer.current = undefined;
+      }, 100);
+    },
+    [armSuppress],
+  );
+
+  useEffect(
+    () => () => {
+      if (suppressTimer.current !== undefined)
+        clearTimeout(suppressTimer.current);
+    },
+    [],
+  );
+
+  const onPin = useCallback(() => toggleChatPinned(chat.id), [chat.id]);
 
   const onRename = useCallback(() => {
     Alert.prompt(
@@ -146,14 +189,16 @@ const ChatRow = React.memo(function ({
   const hostName = hostLabel(chat, host === undefined ? [] : [host]);
 
   return (
-    <ContextMenu.Root>
+    <ContextMenu.Root onOpenChange={onMenuOpenChange}>
       <ContextMenu.Trigger>
         <Pressable
           style={[styles.row, hovered ? styles.rowHover : undefined]}
           onPress={() => {
+            if (suppressOpen.current) return;
             if (runtime !== null) markChatSeen(runtime, chat.id);
             onOpen(chat.id);
           }}
+          onLongPress={armSuppress}
           onHoverIn={() => setHovered(true)}
           onHoverOut={() => setHovered(false)}
           accessibilityRole="button"
@@ -194,6 +239,11 @@ const ChatRow = React.memo(function ({
               >
                 {sessionTitle(chat)}
               </Text>
+              {pinned ? (
+                <View testID={`thread-pin-${chat.id}`}>
+                  <Icon name="pin.fill" size={12} color={theme.textSecondary} />
+                </View>
+              ) : null}
             </View>
             <Text
               style={[styles.subtitle, { color: theme.textSecondary }]}
@@ -217,6 +267,16 @@ const ChatRow = React.memo(function ({
         </Pressable>
       </ContextMenu.Trigger>
       <ContextMenu.Content>
+        <ContextMenu.Group>
+          <ContextMenu.Item key="pin" onSelect={onPin}>
+            <ContextMenu.ItemTitle>
+              {pinned ? t('session.unpin') : t('session.pin')}
+            </ContextMenu.ItemTitle>
+            <ContextMenu.ItemIcon
+              ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+            />
+          </ContextMenu.Item>
+        </ContextMenu.Group>
         <ContextMenu.Item key="rename" onSelect={onRename}>
           <ContextMenu.ItemTitle>{t('home.row.rename')}</ContextMenu.ItemTitle>
         </ContextMenu.Item>
@@ -300,6 +360,7 @@ export function HomeScreen({
   const connection = useStore(workspaceStore, s => s.connection);
   const sessions = useStore(workspaceStore, s => s.sessions);
 
+  const pinnedIds = usePinnedChatIds();
   const chats = useMemo(() => {
     const scoped =
       spaceFilter === undefined
@@ -316,6 +377,10 @@ export function HomeScreen({
           );
     return sortOverviewThreads(filtered, sessions, now);
   }, [overview, spaceFilter, query, sessions, now]);
+  const { pinned, rest } = useMemo(
+    () => partitionPinnedChats(chats, pinnedIds),
+    [chats, pinnedIds],
+  );
 
   useOverviewChangeRequestWatches(runtime, chats);
 
@@ -430,7 +495,7 @@ export function HomeScreen({
       ]}
     >
       <LegendList
-        data={chats}
+        data={rest}
         keyExtractor={item => item.id}
         estimatedItemSize={66}
         recycleItems
@@ -438,14 +503,28 @@ export function HomeScreen({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListHeaderComponent={
-          <Text style={[styles.section, { color: theme.textSecondary }]}>
-            {t('home.sessions')}
-          </Text>
+          <>
+            {pinned.length > 0 ? (
+              <>
+                <Text style={[styles.section, { color: theme.textSecondary }]}>
+                  {t('home.pinned')}
+                </Text>
+                {pinned.map(c => (
+                  <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
+                ))}
+              </>
+            ) : null}
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {t('home.sessions')}
+            </Text>
+          </>
         }
         ListEmptyComponent={
-          <Text style={[styles.empty, { color: theme.textSecondary }]}>
-            {t('home.empty')}
-          </Text>
+          pinned.length === 0 ? (
+            <Text style={[styles.empty, { color: theme.textSecondary }]}>
+              {t('home.empty')}
+            </Text>
+          ) : null
         }
         ListFooterComponent={
           archived.length > 0 ? (

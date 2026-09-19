@@ -1,9 +1,10 @@
-// Composer model chip: harness brand mark + model label. Tap opens a
+// Composer model chip: harness brand mark + model label + chevron. Tap opens a
 // Liquid Glass dropdown of up to 3 recent/catalog models plus More.
 
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import { Pressable } from 'react-native';
+import * as DropdownMenu from './menus/dropdown-menu';
+import { ComposerMenuChip } from './ComposerMenuChip';
 import { HarnessMark } from './HarnessMark';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -27,15 +28,18 @@ export function ModelMenuButton({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         <Pressable
-          style={[styles.chip, { backgroundColor: theme.inputBackground }]}
           hitSlop={4}
           accessibilityRole="button"
           accessibilityLabel={modelLabel}
         >
-          <HarnessMark harnessId={harnessId} size={14} color={theme.text} />
-          <Text style={[styles.text, { color: theme.text }]} numberOfLines={1}>
-            {modelLabel}
-          </Text>
+          <ComposerMenuChip
+            label={modelLabel}
+            color={theme.text}
+            chevronColor={theme.textSecondary}
+            leading={
+              <HarnessMark harnessId={harnessId} size={14} color={theme.text} />
+            }
+          />
         </Pressable>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
@@ -54,15 +58,3 @@ export function ModelMenuButton({
     </DropdownMenu.Root>
   );
 }
-
-const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 32,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    gap: 6,
-  },
-  text: { fontSize: 13, maxWidth: 160 },
-});

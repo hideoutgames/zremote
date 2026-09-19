@@ -25,7 +25,7 @@ import {
   KeyboardController,
   KeyboardStickyView,
 } from 'react-native-keyboard-controller';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
 import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
@@ -638,11 +638,16 @@ function ActiveSessionScreen({
                     {t('session.rename')}
                   </DropdownMenu.ItemTitle>
                 </DropdownMenu.Item>
-                <DropdownMenu.Item key="pin" onSelect={onPin}>
-                  <DropdownMenu.ItemTitle>
-                    {pinned ? t('session.unpin') : t('session.pin')}
-                  </DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
+                <DropdownMenu.Group>
+                  <DropdownMenu.Item key="pin" onSelect={onPin}>
+                    <DropdownMenu.ItemTitle>
+                      {pinned ? t('session.unpin') : t('session.pin')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon
+                      ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+                    />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Group>
                 <DropdownMenu.Item key="archive" onSelect={onArchive}>
                   <DropdownMenu.ItemTitle>
                     {chat?.archived

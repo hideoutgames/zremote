@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from './menus/dropdown-menu';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
 import type { Chat, DeviceRow, RepoRef, Space } from '../zeron/protocol/types';
 import { listRefs } from '../zeron/runtime/catalog';

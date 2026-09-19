@@ -143,20 +143,49 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
     asChild?: boolean;
   }) => {
     const { open } = useContext(Ctx);
-    const onPress = longPress ? undefined : open;
-    const onLongPress = longPress ? open : undefined;
-    if (asChild === true && React.isValidElement(children)) {
-      const child = children as React.ReactElement<{
-        onPress?: () => void;
-        onLongPress?: () => void;
-      }>;
-      return React.cloneElement(child, {
-        onPress: onPress ?? child.props.onPress,
-        onLongPress: onLongPress ?? child.props.onLongPress,
-      });
+    const menuPress = longPress ? undefined : open;
+    const menuLongPress = longPress ? open : undefined;
+    const child =
+      React.Children.count(children) === 1
+        ? React.Children.only(children)
+        : undefined;
+    const childEl = React.isValidElement(child) ? child : undefined;
+    const childPress =
+      childEl !== undefined
+        ? (childEl.props as {
+            onPress?: (event: unknown) => void;
+            onLongPress?: (event: unknown) => void;
+          })
+        : undefined;
+    const shouldClone =
+      childEl !== undefined &&
+      (asChild === true ||
+        childPress?.onPress !== undefined ||
+        childPress?.onLongPress !== undefined);
+    if (shouldClone && childEl !== undefined) {
+      return React.cloneElement(
+        childEl as React.ReactElement<{
+          onPress?: (event: unknown) => void;
+          onLongPress?: (event: unknown) => void;
+        }>,
+        {
+          onPress: longPress
+            ? childPress?.onPress
+            : (event: unknown) => {
+                childPress?.onPress?.(event);
+                open();
+              },
+          onLongPress: longPress
+            ? (event: unknown) => {
+                childPress?.onLongPress?.(event);
+                open();
+              }
+            : childPress?.onLongPress,
+        },
+      );
     }
     return (
-      <Pressable onPress={onPress} onLongPress={onLongPress}>
+      <Pressable onPress={menuPress} onLongPress={menuLongPress}>
         {children}
       </Pressable>
     );

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Clipboard from 'expo-clipboard';
-import * as ContextMenu from 'zeego/context-menu';
+import * as ContextMenu from '../components/menus/context-menu';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
 import { METHODS } from '../zeron/protocol/rpc';

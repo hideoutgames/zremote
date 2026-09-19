@@ -28,7 +28,7 @@ import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { KeyboardController } from 'react-native-keyboard-controller';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from './menus/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
 import { ImagePreviewModal } from './ImagePreviewModal';
@@ -38,6 +38,8 @@ import { Glass } from './Glass';
 import { FadeBlur } from './FadeBlur';
 import { Icon } from './Icon';
 import { ModelMenuButton } from './ModelMenuButton';
+import { FastMenuButton } from './FastMenuButton';
+import { ComposerMenuChip } from './ComposerMenuChip';
 import { PlanBadge } from './PlanBadge';
 import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
@@ -611,64 +613,18 @@ export const Composer = React.memo(function ({
                       accessibilityRole="button"
                       accessibilityLabel={effortLabel}
                     >
-                      <Glass interactive style={styles.effortChip}>
-                        <Icon
-                          name="slider.horizontal.3"
-                          size={14}
-                          color={theme.text}
-                        />
-                        <Text
-                          style={[styles.effortText, { color: theme.text }]}
-                          numberOfLines={1}
-                        >
-                          {effortLabel}
-                        </Text>
-                      </Glass>
+                      <ComposerMenuChip
+                        label={effortLabel}
+                        color={theme.text}
+                        chevronColor={theme.textSecondary}
+                      />
                     </Pressable>
                   ) : null}
                   {fastSupported ? (
-                    <Pressable
-                      style={[
-                        styles.effortChip,
-                        {
-                          backgroundColor: fastEnabled
-                            ? theme.fastAccent
-                            : theme.inputBackground,
-                        },
-                      ]}
-                      onPress={() => onToggleFast(!fastEnabled)}
-                      hitSlop={4}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('picker.fastMode')}
-                      accessibilityState={{ selected: fastEnabled }}
-                    >
-                      <Icon
-                        name="bolt.fill"
-                        size={14}
-                        color={
-                          fastEnabled
-                            ? theme.scheme === 'dark'
-                              ? '#000000'
-                              : '#FFFFFF'
-                            : theme.text
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.effortText,
-                          {
-                            color: fastEnabled
-                              ? theme.scheme === 'dark'
-                                ? '#000000'
-                                : '#FFFFFF'
-                              : theme.text,
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {t('picker.fastMode')}
-                      </Text>
-                    </Pressable>
+                    <FastMenuButton
+                      enabled={fastEnabled}
+                      onToggle={onToggleFast}
+                    />
                   ) : null}
                 </ScrollView>
                 <View style={styles.trailingOverlay} pointerEvents="box-none">
@@ -921,15 +877,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  effortChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 32,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    gap: 6,
-  },
   effortChipHidden: { opacity: 0 },
-  effortText: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 12, textAlign: 'center' },
 });
