@@ -260,11 +260,11 @@ export class AppRuntime {
       c = undefined;
     }
     if (c === undefined) {
-      c = new SessionController(chatId, {
+      const depsFor = (sessionMode: SessionMode) => ({
         ...this.deps,
-        sessionMode: this.sessionMode,
+        sessionMode,
         chatMeta: this.chatMeta(chatId),
-        relayFor: id => {
+        relayFor: (id: string) => {
           try {
             return this.relayFor(id);
           } catch {
@@ -280,6 +280,13 @@ export class AppRuntime {
           return new Set(dev?.capabilities ?? []);
         },
       });
+      try {
+        c = new SessionController(chatId, depsFor(this.sessionMode));
+      } catch (e) {
+        const name = e instanceof Error ? e.name : 'Error';
+        this.deps.log?.(`session construct failed (${name}) — relay`);
+        c = new SessionController(chatId, depsFor('relay'));
+      }
       c.start().catch(() => {});
       // Re-arm queued-attachment escorts left stashed by a prior launch
       // (SessionStore.swift respawnEscorts).
