@@ -23,7 +23,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { Composer } from './Composer';
 import { DEFAULT_COMPOSE_BRANCH } from './CheckoutSelector';
-import { EffortOverlay, type EffortOrigin } from './EffortOverlay';
+import {
+  EffortOverlay,
+  measureWindowRect,
+  type EffortOrigin,
+} from './EffortOverlay';
+import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import {
   fastOffChoice,
@@ -112,9 +117,13 @@ export function ComposeComposer({
   const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
     undefined,
   );
+  const [effortAnchor, setEffortAnchor] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
   const composerRef = useRef<View>(null);
+  const wrapRef = useRef<View>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -423,6 +432,7 @@ export function ComposeComposer({
 
   const composer = (
     <View
+      ref={wrapRef}
       style={
         composerMaxWidth !== undefined
           ? [styles.measureCap, { maxWidth: composerMaxWidth }]
@@ -455,7 +465,15 @@ export function ComposeComposer({
         onOpenEffort={origin => {
           Keyboard.dismiss();
           setEffortOrigin(origin);
-          setEffortOpen(true);
+          if (windowWidth < REGULAR_MIN_WIDTH) {
+            setEffortAnchor(undefined);
+            setEffortOpen(true);
+            return;
+          }
+          measureWindowRect(wrapRef.current, rect => {
+            setEffortAnchor(rect);
+            setEffortOpen(true);
+          });
         }}
         onToggleFast={on => {
           if (fastOption === undefined) return;
@@ -498,6 +516,7 @@ export function ComposeComposer({
       levels={effortLevels}
       value={reasoning}
       origin={effortOrigin}
+      anchor={effortAnchor}
       onChange={level => {
         setReasoning(level);
         persist({ reasoning: level });
@@ -505,6 +524,7 @@ export function ComposeComposer({
       onDismiss={() => {
         setEffortOpen(false);
         setEffortOrigin(undefined);
+        setEffortAnchor(undefined);
       }}
     />
   ) : null;

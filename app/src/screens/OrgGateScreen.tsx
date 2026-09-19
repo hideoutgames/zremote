@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthSession } from '../app/runtimeContext';
 import { Glass } from '../components/Glass';
 import { useTheme } from '../theme';
@@ -24,6 +25,7 @@ interface Org {
 
 export function OrgGateScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const auth = useAuthSession();
   const [orgs, setOrgs] = useState<Org[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -80,7 +82,15 @@ export function OrgGateScreen() {
   }, [auth, name]);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: theme.background,
+          paddingTop: insets.top + 24,
+        },
+      ]}
+    >
       <Text style={[styles.title, { color: theme.text }]}>
         {t('orgGate.title')}
       </Text>

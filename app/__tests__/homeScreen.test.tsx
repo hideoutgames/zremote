@@ -77,6 +77,15 @@ const statusOf = (root: TestRenderer.ReactTestInstance, id: string): string => {
   return flattenText(node?.props.children);
 };
 
+const searchInput = (
+  root: TestRenderer.ReactTestInstance,
+): TestRenderer.ReactTestInstance =>
+  root.findAll(
+    n =>
+      n.props.testID === 'home-search-input' &&
+      typeof n.props.onChangeText === 'function',
+  )[0];
+
 const bodyText = (root: TestRenderer.ReactTestInstance, id: string): string => {
   const body = root.findAll(
     n => n.props.testID === `thread-body-${id}` && typeof n.type === 'string',
@@ -152,7 +161,7 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   )[0];
   expect(trigger).toBeDefined();
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
-  const search = mounted.root.findAll(n => n.props.testID === 'home-search')[0];
+  const search = searchInput(mounted.root);
   expect(search).toBeDefined();
   expect(search.props.accessibilityLabel).toBe('Search sessions');
 });
@@ -371,22 +380,46 @@ test('pinning every thread does not show the empty state', async () => {
   expect(found).not.toContain('No sessions yet');
 });
 
-test('search starts collapsed and expands to an input', async () => {
+test('search is an always-visible field and hides the composer while focused', async () => {
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
-  const searchBtn = mounted.root.findAll(
-    n =>
-      n.props.testID === 'home-search' && typeof n.props.onPress === 'function',
-  );
-  expect(searchBtn).toHaveLength(1);
+  const search = searchInput(mounted.root);
+  expect(search).toBeDefined();
   expect(
-    mounted.root.findAll(n => n.props.testID === 'home-search-input'),
-  ).toHaveLength(0);
+    mounted.root.findAll(n => n.props.testID === 'compose-composer').length,
+  ).toBeGreaterThan(0);
   await act(async () => {
-    searchBtn[0].props.onPress();
+    search.props.onFocus();
   });
   expect(
-    mounted.root.findAll(n => n.props.testID === 'home-search-input').length,
+    mounted.root.findAll(n => n.props.testID === 'compose-composer'),
+  ).toHaveLength(0);
+  await act(async () => {
+    search.props.onBlur();
+  });
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'compose-composer').length,
   ).toBeGreaterThan(0);
+});
+
+test('sidebar New thread hides while search is focused', async () => {
+  const mounted = await render(
+    <HomeScreen
+      variant="sidebar"
+      onOpenSession={() => {}}
+      onOpenSettings={() => {}}
+      onCompose={() => {}}
+    />,
+  );
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'home-new-thread').length,
+  ).toBeGreaterThan(0);
+  const search = searchInput(mounted.root);
+  await act(async () => {
+    search.props.onFocus();
+  });
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'home-new-thread'),
+  ).toHaveLength(0);
 });
