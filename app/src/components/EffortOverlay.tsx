@@ -231,16 +231,13 @@ export function EffortOverlay({
           pointerEvents="none"
           style={[
             styles.label,
+            theme.scheme === 'dark'
+              ? styles.labelShadowDark
+              : styles.labelShadowLight,
             {
               color: theme.text,
               top: dest.y - LABEL_OFFSET,
               opacity: contentOpacity,
-              textShadowColor:
-                theme.scheme === 'dark'
-                  ? 'rgba(0,0,0,0.85)'
-                  : 'rgba(255,255,255,0.9)',
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 8,
             },
           ]}
         >
@@ -289,6 +286,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '600',
+  },
+  labelShadowDark: {
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  labelShadowLight: {
+    textShadowColor: 'rgba(255,255,255,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   pillWrap: {
     position: 'absolute',
