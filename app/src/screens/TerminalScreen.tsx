@@ -327,10 +327,11 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
                 style={[styles.tab, tb.exited ? styles.tabExited : undefined]}
               >
                 <Text
-                  style={{
-                    color: selected ? theme.accent : theme.text,
-                    fontWeight: selected ? '600' : '400',
-                  }}
+                  style={[
+                    styles.tabLabel,
+                    selected ? styles.tabLabelActive : undefined,
+                    { color: selected ? theme.accent : theme.text },
+                  ]}
                   maxFontSizeMultiplier={1.6}
                 >
                   {shell}
@@ -443,11 +444,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
                 />
               ) : (
                 <Text
-                  style={{
-                    color: selected ? '#fff' : theme.text,
-                    fontWeight: '600',
-                    fontSize: 13,
-                  }}
+                  style={[
+                    styles.keyLabel,
+                    { color: selected ? '#fff' : theme.text },
+                  ]}
                 >
                   {spec.label}
                 </Text>
@@ -480,6 +480,8 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   tabExited: { opacity: 0.45 },
+  tabLabel: { fontSize: 15, fontWeight: '400' },
+  tabLabelActive: { fontWeight: '600' },
   tabClose: {
     minWidth: 24,
     minHeight: 24,
@@ -516,4 +518,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 8,
   },
+  keyLabel: { fontSize: 13, fontWeight: '600' },
 });
