@@ -157,16 +157,20 @@ const ChatRow = React.memo(function ({
                 styles.dot,
                 { backgroundColor: prDotColor(theme, prTone) },
               ]}
-              testID={`pr-dot-${prTone}`}
+              testID={`pr-dot-${chat.id}-${prTone}`}
             />
           ) : (
-            <View style={styles.dotPlaceholder} testID="pr-dot-none" />
+            <View
+              style={styles.dotPlaceholder}
+              testID={`pr-dot-${chat.id}-none`}
+            />
           )}
           <View
             style={[
               styles.rowText,
               live ? undefined : { opacity: INACTIVE_OPACITY },
             ]}
+            testID={`thread-body-${chat.id}`}
           >
             <View style={styles.titleRow}>
               {mark !== undefined ? <BrandMark svg={mark} size={16} /> : null}

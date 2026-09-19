@@ -78,6 +78,7 @@ afterEach(() => {
     tree?.unmount();
   });
   tree = undefined;
+  jest.clearAllTimers();
 });
 
 test('renders Threads header, title, and project · host subtitle', async () => {
@@ -204,18 +205,15 @@ test('PR dots follow checkout change-request state', async () => {
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'pr-dot-open').length,
-  ).toBe(1);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'pr-dot-draft').length,
-  ).toBe(1);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'pr-dot-merged').length,
-  ).toBe(1);
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'pr-dot-none').length,
-  ).toBe(1);
+  const hostId = (id: string, tone: string) =>
+    mounted.root.findAll(
+      n =>
+        n.props.testID === `pr-dot-${id}-${tone}` && typeof n.type === 'string',
+    );
+  expect(hostId('open', 'open')).toHaveLength(1);
+  expect(hostId('draft', 'draft')).toHaveLength(1);
+  expect(hostId('merged', 'merged')).toHaveLength(1);
+  expect(hostId('none', 'none')).toHaveLength(1);
 });
 
 test('inactive threads are dimmed; working threads stay full color', async () => {
@@ -240,22 +238,15 @@ test('inactive threads are dimmed; working threads stay full color', async () =>
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
-  const liveTitle = mounted.root
-    .findAllByType(Text)
-    .find(n => n.props.children === 'Live agent');
-  const idleTitle = mounted.root
-    .findAllByType(Text)
-    .find(n => n.props.children === 'Idle thread');
-  expect(liveTitle).toBeDefined();
-  expect(idleTitle).toBeDefined();
-  const wrapOpacity = (node: TestRenderer.ReactTestInstance) => {
-    const parent = node.parent as TestRenderer.ReactTestInstance | null;
-    const row = parent?.parent as TestRenderer.ReactTestInstance | null;
-    const style = Array.isArray(row?.props.style)
-      ? row!.props.style.flat()
-      : [row?.props.style];
+  const bodyStyle = (id: string) => {
+    const body = mounted.root.findAll(
+      n => n.props.testID === `thread-body-${id}` && typeof n.type === 'string',
+    )[0];
+    const style = Array.isArray(body.props.style)
+      ? body.props.style.flat()
+      : [body.props.style];
     return style.find(s => s && typeof s.opacity === 'number')?.opacity;
   };
-  expect(wrapOpacity(liveTitle!)).toBeUndefined();
-  expect(wrapOpacity(idleTitle!)).toBe(0.55);
+  expect(bodyStyle('live')).toBeUndefined();
+  expect(bodyStyle('idle')).toBe(0.55);
 });
