@@ -134,11 +134,11 @@ export function railStackLayout(
   availableHeight: number,
 ): RailStackLayout {
   const itemSize = railItemSize(count, availableHeight);
-  const stackHeight = count <= 0 ? 0 : itemSize * count;
+  const overflowing = count * RAIL_ITEM_SIZE >= availableHeight;
+  const stackHeight =
+    count <= 0 ? 0 : overflowing ? availableHeight : itemSize * count;
   const offset =
-    stackHeight > 0 && stackHeight < availableHeight
-      ? (availableHeight - stackHeight) / 2
-      : 0;
+    stackHeight > 0 && !overflowing ? (availableHeight - stackHeight) / 2 : 0;
   return { itemSize, stackHeight, offset };
 }
 
