@@ -24,6 +24,9 @@ import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
 
+const leaf = (path: string): string =>
+  path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
 export function FileEditorScreen({
   client,
   target,
@@ -106,7 +109,6 @@ export function FileEditorScreen({
     [client, file, path, text, saving, target, load],
   );
 
-  const lineCount = text === '' ? 0 : text.split('\n').length;
   const readOnly = file?.readOnlyReason !== undefined;
 
   return (
@@ -125,32 +127,27 @@ export function FileEditorScreen({
           style={[styles.name, { color: theme.text }]}
           numberOfLines={1}
           maxFontSizeMultiplier={1.6}
-          accessibilityLabel={path}
+          accessibilityLabel={dirty ? `${path}, ${t('files.unsaved')}` : path}
         >
-          {path}
-          {dirty ? ` · ${t('files.unsaved')}` : ''}
+          {leaf(path)}
         </Text>
-        {image !== true && !readOnly ? (
+        {image !== true && !readOnly && dirty ? (
           <Pressable
             onPress={() => save()}
-            disabled={!dirty || saving}
+            disabled={saving}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={t('files.save')}
-            accessibilityState={{ disabled: !dirty || saving }}
+            accessibilityState={{ disabled: saving }}
             style={styles.barBtn}
           >
-            <Text
-              style={[
-                styles.saveText,
-                { color: dirty ? theme.accent : theme.textSecondary },
-                dirty ? undefined : styles.saveDim,
-              ]}
-            >
+            <Text style={[styles.saveText, { color: theme.accent }]}>
               {t('files.save')}
             </Text>
           </Pressable>
-        ) : null}
+        ) : (
+          <View style={styles.barBtn} />
+        )}
       </View>
       {image === true ? (
         imageUri !== undefined ? (
@@ -192,14 +189,23 @@ export function FileEditorScreen({
             accessibilityLabel={path}
             accessibilityState={{ disabled: readOnly }}
           />
-          <Text
-            style={[styles.footer, { color: theme.textSecondary }]}
-            maxFontSizeMultiplier={1.6}
-          >
-            {`${lineCount} ${t('files.lines')}`}
-            {readOnly ? ` · ${t('files.readOnly')}` : ''}
-            {file.truncated ? ' · truncated' : ''}
-          </Text>
+          {readOnly || file.truncated ? (
+            <View style={styles.footer}>
+              {readOnly ? (
+                <View accessibilityLabel={t('files.readOnly')}>
+                  <Icon name="lock" size={12} color={theme.textSecondary} />
+                </View>
+              ) : null}
+              {file.truncated ? (
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  maxFontSizeMultiplier={1.6}
+                >
+                  …
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </>
       )}
     </View>
@@ -227,7 +233,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { flex: 1, fontSize: 14 },
+  name: { flex: 1, fontSize: 17, fontWeight: '600', textAlign: 'center' },
   editor: {
     flex: 1,
     fontFamily: 'monospace',
@@ -236,7 +242,12 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   image: { flex: 1 },
-  footer: { fontSize: 11, paddingHorizontal: 12, paddingVertical: 6 },
-  saveText: {},
-  saveDim: { opacity: 0.4 },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  saveText: { fontSize: 17, fontWeight: '600' },
 });

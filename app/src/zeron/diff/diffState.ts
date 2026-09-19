@@ -2,7 +2,7 @@
 // (crates/ui/src/diff*.rs): preparing while no diff has landed, clean when
 // the latest diff is empty, error on RPC failure, rows otherwise.
 
-import type { CheckoutDiff, DiffFileSummary } from '../protocol/types';
+import type { CheckoutDiff } from '../protocol/types';
 
 export type DiffPaneState =
   | { kind: 'preparing' }
@@ -54,12 +54,3 @@ export const diffPaneReducer = (
     }
   }
 };
-
-export const statusGlyph = (f: DiffFileSummary): string =>
-  f.status === 'added'
-    ? 'A'
-    : f.status === 'deleted'
-    ? 'D'
-    : f.status === 'renamed'
-    ? 'R'
-    : 'M';

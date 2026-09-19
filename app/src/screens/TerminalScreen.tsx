@@ -10,6 +10,7 @@ import {
   Alert,
   type LayoutChangeEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
+import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
 import { TerminalClient, openTerminal } from '../zeron/terminal/client';
@@ -25,6 +27,7 @@ import type { TerminalEvent } from '../zeron/protocol/types';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
+import { Glass } from '../components/Glass';
 
 // xterm 16-color palette (dim + bright).
 const PALETTE16 = [
@@ -113,6 +116,21 @@ const KEY_BYTES: Record<string, number[]> = {
   left: [0x1b, 0x5b, 0x44],
   ctrlc: [0x03],
 };
+
+const KEY_BAR: {
+  key: string;
+  label: string;
+  icon?: SFSymbol;
+}[] = [
+  { key: 'esc', label: 'esc' },
+  { key: 'ctrl', label: 'ctrl' },
+  { key: 'tab', label: '⇥' },
+  { key: 'left', label: 'left', icon: 'arrow.left' },
+  { key: 'down', label: 'down', icon: 'arrow.down' },
+  { key: 'up', label: 'up', icon: 'arrow.up' },
+  { key: 'right', label: 'right', icon: 'arrow.right' },
+  { key: 'ctrlc', label: '^C' },
+];
 
 interface Tab {
   client: TerminalClient;
@@ -283,50 +301,64 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   );
   return (
     <View style={[styles.root, styles.termBg]}>
-      {/* Tab bar */}
-      <View style={[styles.tabBar, { borderBottomColor: theme.border }]}>
-        {tabs.map((tb, i) => (
-          <Pressable
-            key={i}
-            onPress={() => setActive(i)}
-            accessibilityRole="button"
-            accessibilityLabel={`${tb.client.handle.session.shell} ${i + 1}`}
-            accessibilityState={{ selected: i === active }}
-            style={[
-              styles.tabChip,
-              i === active && { borderColor: theme.accent },
-            ]}
-          >
-            <Text
-              style={{ color: i === active ? theme.accent : theme.text }}
-              maxFontSizeMultiplier={1.6}
-            >
-              {`${tb.client.handle.session.shell}${
-                tb.exited ? ` (exited ${tb.exitCode ?? ''})` : ''
-              }`}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+          style={styles.tabScroll}
+        >
+          {tabs.map((tb, i) => {
+            const shell = tb.client.handle.session.shell;
+            const selected = i === active;
+            const a11y = tb.exited
+              ? `${shell} ${i + 1}, ${t('terminal.exit').replace(
+                  '{code}',
+                  String(tb.exitCode ?? '?'),
+                )}`
+              : `${shell} ${i + 1}`;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => setActive(i)}
+                accessibilityRole="button"
+                accessibilityLabel={a11y}
+                accessibilityState={{ selected }}
+                style={[styles.tab, tb.exited ? styles.tabExited : undefined]}
+              >
+                <Text
+                  style={{
+                    color: selected ? theme.accent : theme.text,
+                    fontWeight: selected ? '600' : '400',
+                  }}
+                  maxFontSizeMultiplier={1.6}
+                >
+                  {shell}
+                </Text>
+                {selected && !tb.exited ? (
+                  <Pressable
+                    onPress={confirmClose}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('terminal.closeShell')}
+                    style={styles.tabClose}
+                  >
+                    <Icon name="xmark" size={12} color={theme.textSecondary} />
+                  </Pressable>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
         <Pressable
           onPress={spawn}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t('terminal.new')}
-          style={styles.keyBtn}
+          style={styles.iconBtn}
         >
           <Icon name="plus" size={16} color={theme.text} />
         </Pressable>
-        {tab !== undefined && !tab.exited ? (
-          <Pressable
-            onPress={confirmClose}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('terminal.closeShell')}
-            style={styles.keyBtn}
-          >
-            <Icon name="xmark" size={16} color={theme.danger} />
-          </Pressable>
-        ) : null}
       </View>
 
       {/* Screen — monospace rows of styled runs; tap focuses the hidden input */}
@@ -358,7 +390,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           ListFooterComponent={
             tab?.exited ? (
               <Text style={[styles.exited, { color: theme.textSecondary }]}>
-                {`[exited ${tab.exitCode ?? '?'}]\n${t('terminal.exitedNote')}`}
+                {t('terminal.exit').replace(
+                  '{code}',
+                  String(tab.exitCode ?? '?'),
+                )}
               </Text>
             ) : null
           }
@@ -382,39 +417,45 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         accessibilityLabel={t('terminal.input')}
       />
 
-      {/* Key bar */}
-      <View style={[styles.keyBar, { borderTopColor: theme.border }]}>
-        {(
-          [
-            ['esc', 'esc'],
-            ['ctrl', 'ctrl'],
-            ['tab', '⇥'],
-            ['left', '←'],
-            ['down', '↓'],
-            ['up', '↑'],
-            ['right', '→'],
-            ['ctrlc', '^C'],
-          ] as const
-        ).map(([key, label]) => (
-          <Pressable
-            key={key}
-            onPress={() => {
-              if (key === 'ctrl') setCtrl(v => !v);
-              else send([...KEY_BYTES[key]]);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            accessibilityState={{ selected: key === 'ctrl' && ctrl }}
-            style={[
-              styles.keyBtn,
-              { borderColor: theme.border },
-              key === 'ctrl' && ctrl ? { borderColor: theme.accent } : null,
-            ]}
-          >
-            <Text style={{ color: theme.text }}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <Glass style={styles.keyBar}>
+        {KEY_BAR.map(spec => {
+          const selected = spec.key === 'ctrl' && ctrl;
+          return (
+            <Pressable
+              key={spec.key}
+              onPress={() => {
+                if (spec.key === 'ctrl') setCtrl(v => !v);
+                else send([...(KEY_BYTES[spec.key] ?? [])]);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={spec.label}
+              accessibilityState={{ selected }}
+              style={[
+                styles.keyBtn,
+                selected ? { backgroundColor: theme.accent } : null,
+              ]}
+            >
+              {spec.icon !== undefined ? (
+                <Icon
+                  name={spec.icon}
+                  size={16}
+                  color={selected ? '#fff' : theme.text}
+                />
+              ) : (
+                <Text
+                  style={{
+                    color: selected ? '#fff' : theme.text,
+                    fontWeight: '600',
+                    fontSize: 13,
+                  }}
+                >
+                  {spec.label}
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </Glass>
     </View>
   );
 }
@@ -425,16 +466,30 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 8,
+    paddingRight: 4,
+    paddingVertical: 4,
   },
-  tabChip: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+  tabScroll: { flex: 1 },
+  tabs: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     minHeight: 36,
+  },
+  tabExited: { opacity: 0.45 },
+  tabClose: {
+    minWidth: 24,
+    minHeight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtn: {
+    minWidth: 44,
+    minHeight: 40,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   screen: { flex: 1, padding: 8 },
@@ -446,18 +501,19 @@ const styles = StyleSheet.create({
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   keyBar: {
     flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'center',
+    marginHorizontal: 8,
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
   },
   keyBtn: {
     minWidth: 44,
-    minHeight: 40,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 8,
   },
 });
