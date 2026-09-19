@@ -3,9 +3,10 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { FlatList, Text } from 'react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { BrandMark } from '../src/components/BrandMark';
+import { TOP_CHROME_FADE_BAND } from '../src/components/TopChromeFade';
 import * as Theme from '../src/theme';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import {
@@ -182,9 +183,22 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
     n => n.props.testID === 'spaceFilter',
   )[0];
   expect(trigger).toBeDefined();
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
-  ).toBeGreaterThan(0);
+  const fade = mounted.root.findAll(
+    n => n.props.testID === 'top-chrome-fade',
+  )[0];
+  expect(fade).toBeDefined();
+  const fadeStyle = Array.isArray(fade.props.style)
+    ? fade.props.style.flat()
+    : [fade.props.style];
+  const fadeHeight = fadeStyle.find(s => s?.height != null)?.height as number;
+  const list = mounted.root.findByType(FlatList);
+  const listPad = Array.isArray(list.props.contentContainerStyle)
+    ? list.props.contentContainerStyle.flat()
+    : [list.props.contentContainerStyle];
+  const paddingTop = listPad.find(s => s?.paddingTop != null)?.paddingTop as
+    | number
+    | undefined;
+  expect(paddingTop).toBeGreaterThan(fadeHeight - TOP_CHROME_FADE_BAND);
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
   const search = searchInput(mounted.root);
   expect(search).toBeDefined();

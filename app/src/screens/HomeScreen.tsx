@@ -75,6 +75,9 @@ import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 import { TopChromeFade } from '../components/TopChromeFade';
 
+/** Extra list padding so the Threads title sits below the chrome fade. */
+const LIST_GAP_BELOW_CHROME = 20;
+
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
   if (s < 60) return `${s}s`;
@@ -577,6 +580,7 @@ export function HomeScreen({
     : bottomH !== 0
     ? bottomH + 12
     : insets.bottom + 76;
+  const chromeH = headerH !== 0 ? headerH : insets.top + 64;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -667,7 +671,7 @@ export function HomeScreen({
         contentContainerStyle={[
           styles.listContent,
           {
-            paddingTop: headerH !== 0 ? headerH : insets.top + 64,
+            paddingTop: chromeH + LIST_GAP_BELOW_CHROME,
             paddingBottom: bottomPad,
           },
         ]}
@@ -680,7 +684,7 @@ export function HomeScreen({
         renderItem={renderRow}
       />
 
-      <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 64} />
+      <TopChromeFade inset={chromeH} />
 
       <View
         style={[styles.topBar, { paddingTop: insets.top + 8 }]}
