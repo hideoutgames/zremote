@@ -11,5 +11,7 @@ export function HarnessMark({
   size?: number;
   color?: string;
 }) {
-  return <BrandMark svg={svgForHarness(harnessId, color)} size={size} />;
+  const svg = svgForHarness(harnessId, color);
+  if (svg === undefined) return null;
+  return <BrandMark svg={svg} size={size} />;
 }
