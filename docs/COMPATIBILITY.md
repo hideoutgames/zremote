@@ -121,13 +121,18 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
    (`{edge}/auth/cli/callback`, iOS 17.4+) plus PKCE. This reuses the
    already-registered redirect URI; iOS intercepts the redirect and hands
    `code`+`state` to the app. Requirement: the app declares
-   `applinks:<edge host>` in Associated Domains and the edge serves
-   `/.well-known/apple-app-site-association` (`patches/zeron-edge/0001`).
-   `zeron://` Linking is a second return path. There is no in-app paste-code
-   UI; cancel/error shows a generic message and the user taps Sign in again.
+   `applinks:<edge host>` in Associated Domains, `openAuthSessionAsync` is
+   called with `preferUniversalLinks: true` (the HTTPS `.https(host:path:)`
+   API — the default legacy scheme `"https"` fails to start), and the edge
+   serves `/.well-known/apple-app-site-association` when `IOS_APP_IDS` is
+   set (`patches/zeron-edge/0001`). `zeron://` Linking is a second return
+   path. There is no in-app paste-code UI; cancel/error shows a generic
+   message and the user taps Sign in again.
 2. `state` is minted per attempt, stored until consumed, and bound to the
    intercepted code (same CSRF discipline as the engine).
-3. **PKCE**: `PKCE_ENABLED` is on. The edge exchange route must forward
+3. **PKCE**: `PKCE_ENABLED` is on. `SignInScreen` injects `expo-crypto`
+   `randomBytes` / `sha256` into `beginSignIn` (Hermes Web Crypto is not
+   the production path). The edge exchange route must forward
    `code_verifier` (`0001`); without that patch HTTPS-callback sign-in fails
    PKCE validation. See `docs/HOST_EDGE_CHANGES.md`.
 

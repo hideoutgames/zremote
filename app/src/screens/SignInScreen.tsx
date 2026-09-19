@@ -8,6 +8,8 @@ import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { openAuthSession } from '../zeron/native/authBrowser';
 import { appConfig } from '../zeron/native/appConfig';
+import { parseCallbackUrl } from '../zeron/auth/authKit';
+import { randomBytes, sha256 } from '../zeron/native/expoCrypto';
 import { useAuthSession } from '../app/runtimeContext';
 import { Glass } from '../components/Glass';
 import { Icon } from '../components/Icon';
@@ -37,6 +39,8 @@ export function SignInScreen() {
       const { url } = await auth.beginSignIn({
         redirectUri: `${edgeUrl}/auth/cli/callback`,
         pkce: PKCE_ENABLED,
+        random: randomBytes,
+        sha256,
       });
       if (isExpoGo) {
         // Universal links can't land back in Expo Go. The zeron:// listener
@@ -47,16 +51,21 @@ export function SignInScreen() {
       }
       const result = await openAuthSession(url, `${edgeUrl}/auth/cli/callback`);
       if (result.type === 'success') {
-        const link = new URL(result.url);
+        const link = parseCallbackUrl(result.url);
+        if (link.error !== undefined || link.code === undefined) {
+          setError(t('signIn.error.generic'));
+          return;
+        }
         await auth.completeSignIn({
-          code: link.searchParams.get('code') ?? '',
-          state: link.searchParams.get('state') ?? '',
+          code: link.code,
+          state: link.state ?? '',
         });
       } else if (result.type !== 'cancel') {
         setError(t('signIn.error.generic'));
       }
     } catch (e) {
-      log.warn(`sign-in failed: ${e}`);
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`sign-in failed (${name})`);
       setError(t('signIn.error.generic'));
     } finally {
       setBusy(false);
