@@ -1,12 +1,12 @@
-// Sign-in: ASWebAuthenticationSession with zeron:// callback + PKCE. WorkOS
-// still uses the registered HTTPS redirect; the edge hops iOS back into the
-// app. Demo remains under Advanced.
+// Sign-in: ASWebAuthenticationSession intercepts the WorkOS HTTPS callback
+// (iOS 17.4+); zeron:// is the start-failure fallback. PKCE throughout.
+// Demo remains under Advanced.
 
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  AUTH_CALLBACK_URL,
+  httpsAuthCallbackUrl,
   openAuthSessionOrBrowser,
 } from '../zeron/native/authBrowser';
 import { appConfig } from '../zeron/native/appConfig';
@@ -37,13 +37,14 @@ export function SignInScreen() {
     setBusy(true);
     setError(null);
     try {
+      const httpsCallback = httpsAuthCallbackUrl(edgeUrl);
       const { url } = await auth.beginSignIn({
-        redirectUri: `${edgeUrl}/auth/cli/callback`,
+        redirectUri: httpsCallback,
         pkce: PKCE_ENABLED,
         random: randomBytes,
         sha256,
       });
-      const result = await openAuthSessionOrBrowser(url, AUTH_CALLBACK_URL);
+      const result = await openAuthSessionOrBrowser(url, httpsCallback);
       if (result.type === 'success') {
         const link = parseCallbackUrl(result.url);
         if (link.error !== undefined || link.code === undefined) {

@@ -113,10 +113,12 @@ registry routes still answer.
 ## 5. iOS AuthKit callback hop — `edge/src/auth-routes.ts`
 
 `GET /auth/cli/callback` still renders the paste-code page for desktop CLI
-(`zeron login`). iPhone/iPad (and iPadOS desktop-class) user-agents are
-immediately redirected to `zeron://auth/callback?code&state` so
-`ASWebAuthenticationSession` can complete without a paste UI. Patch
-`0004`. Desktop browsers are unchanged.
+(`zeron login`). iPhone/iPad (and iPadOS desktop-class) user-agents, and
+pending states the iOS app prefixes with `zr1.`, are **302**-redirected to
+`zeron://auth/callback?code&state` so `ASWebAuthenticationSession` can
+complete without a paste UI. Patch `0004` introduced the hop as an HTML
+page; patch `0005` makes it an HTTP 302 and drops the copy-code fallback
+on that path. Desktop browsers without the prefix are unchanged.
 
 ## Deploy
 
@@ -126,6 +128,7 @@ git am <zremote>/patches/zeron-edge/0001-*.patch
 git am <zremote>/patches/zeron-edge/0002-*.patch
 git am <zremote>/patches/zeron-edge/0003-*.patch
 git am <zremote>/patches/zeron-edge/0004-*.patch
+git am <zremote>/patches/zeron-edge/0005-*.patch
 wrangler secret put APNS_P8        # PKCS8 PEM
 wrangler secret put APNS_KEY_ID
 wrangler secret put APNS_TEAM_ID
@@ -136,7 +139,9 @@ npm run test:unit && wrangler deploy
 ## What works WITHOUT these patches
 
 - Sign-in cannot complete via PKCE (`0001`) or the iOS `zeron://` hop
-  (`0004`). There is no in-app paste-code fallback.
+  (`0004`/`0005`) on iOS 17.0–17.3 / Safari fallback. iOS 17.4+ intercepts
+  the HTTPS WorkOS callback in-session without the hop. There is no in-app
+  paste-code fallback.
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
 - Live Activities still render locally while the app is foregrounded; only
   APNs-driven updates/start are missing.

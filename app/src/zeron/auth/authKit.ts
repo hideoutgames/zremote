@@ -65,15 +65,26 @@ export const parseCallbackUrl = (url: string): CallbackResult => {
   return out;
 };
 
+/** Prefix so the edge can 302-hop to zeron:// without relying on UA.
+ * iPad desktop-class Safari is often Macintosh without "Mobile". */
+export const MOBILE_SIGN_IN_STATE_PREFIX = 'zr1.';
+
 /** Parse a pasted `state.code` (the edge's cli/callback page shows one) —
- * split on the FIRST '.', both halves non-empty. */
+ * split on the FIRST '.' after an optional mobile prefix, both halves
+ * non-empty. */
 export const parsePastedCode = (
   text: string,
 ): { state: string; code: string } | undefined => {
   const trimmed = text.trim();
-  const dot = trimmed.indexOf('.');
-  if (dot <= 0 || dot === trimmed.length - 1) return undefined;
-  return { state: trimmed.slice(0, dot), code: trimmed.slice(dot + 1) };
+  const prefixed = trimmed.startsWith(MOBILE_SIGN_IN_STATE_PREFIX);
+  const prefix = prefixed ? MOBILE_SIGN_IN_STATE_PREFIX : '';
+  const rest = trimmed.slice(prefix.length);
+  const dot = rest.indexOf('.');
+  if (dot <= 0 || dot === rest.length - 1) return undefined;
+  return {
+    state: `${prefix}${rest.slice(0, dot)}`,
+    code: rest.slice(dot + 1),
+  };
 };
 
 // ── PKCE (RFC 7636) — crypto injected (Node tests use `crypto`; the app
