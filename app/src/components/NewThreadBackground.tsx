@@ -5,7 +5,7 @@
 // (Jest, Expo Go, compile errors). Mount once at AdaptiveShell / RootPager
 // so every surface shares the same crop.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import {
@@ -25,6 +25,11 @@ import {
   NEW_THREAD_BACKGROUND_FROSTED_OPACITY,
   type NewThreadBackgroundEffect,
 } from '../zeron/state/newThreadBackground';
+import {
+  averageLuminanceFromRgba,
+  contrastSchemeFromLuminance,
+  setWallpaperContrast,
+} from '../zeron/state/wallpaperContrast';
 
 const SCANLINES = `
 uniform shader image;
@@ -196,10 +201,64 @@ function Artwork({
   );
 }
 
+const SAMPLE_SIZE = 32;
+
+function WallpaperContrastSampler({ uri }: { uri: string }) {
+  const image = useImage(uri);
+  useEffect(() => {
+    let cancelled = false;
+    setWallpaperContrast(uri, undefined);
+    if (image != null) {
+      try {
+        const srcW = image.width();
+        const srcH = image.height();
+        const commit = (scheme: 'light' | 'dark') => {
+          if (!cancelled) setWallpaperContrast(uri, scheme);
+        };
+        if (srcW <= 0 || srcH <= 0) {
+          commit('dark');
+        } else {
+          const surface = Skia.Surface.MakeOffscreen(SAMPLE_SIZE, SAMPLE_SIZE);
+          if (surface == null) {
+            commit('dark');
+          } else {
+            const canvas = surface.getCanvas();
+            const paint = Skia.Paint();
+            canvas.drawImageRect(
+              image,
+              Skia.XYWHRect(0, 0, srcW, srcH),
+              Skia.XYWHRect(0, 0, SAMPLE_SIZE, SAMPLE_SIZE),
+              paint,
+            );
+            const snap = surface.makeImageSnapshot();
+            const pixels = snap.readPixels();
+            const luma =
+              pixels === null || pixels === undefined
+                ? undefined
+                : averageLuminanceFromRgba(pixels);
+            commit(
+              luma === undefined ? 'dark' : contrastSchemeFromLuminance(luma),
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) setWallpaperContrast(uri, 'dark');
+      }
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [image, uri]);
+  return null;
+}
+
 export function NewThreadBackground() {
   const theme = useTheme();
   const background = useNewThreadComposerBackground();
   const effect = useNewThreadBackgroundEffect();
+  useEffect(() => {
+    if (background === undefined) setWallpaperContrast(undefined, undefined);
+  }, [background]);
   if (background === undefined) return null;
   return (
     <View
@@ -207,6 +266,7 @@ export function NewThreadBackground() {
       testID="new-thread-background"
       style={styles.fill}
     >
+      <WallpaperContrastSampler uri={background.uri} />
       <View
         style={[
           StyleSheet.absoluteFill,

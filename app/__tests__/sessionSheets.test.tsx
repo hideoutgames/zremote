@@ -26,6 +26,7 @@ import type {
   MessagePart,
 } from '../src/zeron/protocol/types';
 import type { PrBadgeModel } from '../src/components/prBadge';
+import { BrandMark } from '../src/components/BrandMark';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { entryFrom } from '../src/zeron/doc/sessionDoc';
 import { CHAT_WORKING, demoTranscripts } from '../src/demo/fixtures';
@@ -211,6 +212,48 @@ test('running sub-agent status shimmers Working copy', async () => {
   });
 });
 
+test('history PR row dismisses the sheet then opens PrSheet', async () => {
+  act(() => {
+    setChangeRequestForChat('c1', {
+      checkoutId: 'ck',
+      deviceId: 'h1',
+      cwd: '/repo',
+      branch: 'feat',
+      changeRequest: {
+        provider: 'github',
+        number: 9,
+        title: 'Session sheets',
+        url: 'https://github.com/hideoutgames/zremote/pull/9',
+        state: 'open',
+        baseRef: 'main',
+        headRef: 'feat',
+      },
+      updatedAt: '2026-09-18T00:00:00Z',
+    });
+  });
+  const tree = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
+  const historyItem = tree.root
+    .findAll(n => n.props.testID === 'DropdownItem')
+    .find(n => texts(n).includes('History'));
+  expect(historyItem).toBeTruthy();
+  await act(async () => {
+    historyItem!.props.onSelect();
+  });
+  expect(byTestId(tree.root, 'session-sheet')).toHaveLength(1);
+  expect(byTestId(tree.root, 'pr-sheet')).toHaveLength(0);
+  const row = tree.root.findAll(
+    n =>
+      typeof n.props.onPress === 'function' &&
+      n.props.accessibilityLabel === '#9 Session sheets, Open',
+  )[0];
+  expect(row).toBeTruthy();
+  await act(async () => {
+    row.props.onPress();
+  });
+  expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);
+  expect(byTestId(tree.root, 'pr-sheet')).toHaveLength(1);
+});
+
 test('history lists the checkout PR and opens it on press', async () => {
   act(() => {
     setChangeRequestForChat('c1', {
@@ -235,6 +278,7 @@ test('history lists the checkout PR and opens it on press', async () => {
     <HistoryScreen chatId="c1" onOpenPr={b => opened.push(b)} />,
   );
   expect(texts(tree.root)).toContain('Session sheets');
+  expect(tree.root.findAllByType(BrandMark).length).toBeGreaterThan(0);
   const row = tree.root.findAll(
     n =>
       typeof n.props.onPress === 'function' &&

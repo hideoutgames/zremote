@@ -1,14 +1,43 @@
 // Expo Go preview shim — not used in production builds.
 // react-native-enriched-markdown is a Nitro view; in Go we render with the
-// pure-JS react-native-markdown-display. `streamingAnimation` is ignored.
+// pure-JS react-native-markdown-display. Fenced blocks get the same overlay
+// copy control as production (`CodeFenceBlock`). `streamingAnimation` is ignored.
 
 import React from 'react';
 import { Linking, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import { CodeFenceBlock } from '../../components/transcript/CodeFenceBlock';
 
 /** The production `MarkdownStyle` slots, loosely mapped onto
  * markdown-display's style keys. Unknown/extra keys are ignored there. */
 type AnyStyle = Record<string, unknown>;
+
+type FenceNode = {
+  key?: string;
+  content?: string;
+  sourceInfo?: string;
+};
+
+const fenceText = (node: FenceNode): string => {
+  const raw = typeof node.content === 'string' ? node.content : '';
+  return raw.endsWith('\n') ? raw.slice(0, -1) : raw;
+};
+
+const fenceLang = (node: FenceNode): string =>
+  typeof node.sourceInfo === 'string' ? node.sourceInfo.trim() : '';
+
+const fenceRules = {
+  fence: (node: FenceNode) => (
+    <CodeFenceBlock
+      key={node.key}
+      lang={fenceLang(node)}
+      text={fenceText(node)}
+    />
+  ),
+  code_block: (node: FenceNode) => (
+    <CodeFenceBlock key={node.key} lang="" text={fenceText(node)} />
+  ),
+};
 
 const toMarkdownDisplayStyle = (s: AnyStyle | undefined): AnyStyle => {
   if (s === undefined) return {};
@@ -77,6 +106,7 @@ export const EnrichedMarkdownText = ({
 }: EnrichedMarkdownTextProps) => (
   <Markdown
     style={toMarkdownDisplayStyle(markdownStyle)}
+    rules={fenceRules}
     onLinkPress={url => {
       const r = onLinkPress?.({ url });
       if (r === false) return false;

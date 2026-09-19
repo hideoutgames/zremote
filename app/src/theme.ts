@@ -3,6 +3,11 @@
 // non-hook call sites that can't take a hook.
 
 import { useColorScheme } from 'react-native';
+import {
+  chromeSchemeForWallpaper,
+  useWallpaperContrastScheme,
+  useWallpaperContrastUri,
+} from './zeron/state/wallpaperContrast';
 
 export interface Theme {
   scheme: 'light' | 'dark';
@@ -115,11 +120,15 @@ export const lightTheme: Theme = {
  * per theme in the components that matter). */
 export const theme = darkTheme;
 
-export const useTheme = (): Theme =>
-  useColorScheme() === 'light' ? lightTheme : darkTheme;
+export const useTheme = (): Theme => {
+  const system = useColorScheme() === 'light' ? 'light' : 'dark';
+  const wallpaperUri = useWallpaperContrastUri();
+  const sampled = useWallpaperContrastScheme();
+  const scheme = chromeSchemeForWallpaper(wallpaperUri, sampled, system);
+  return scheme === 'light' ? lightTheme : darkTheme;
+};
 
-export const useColorSchemeName = (): 'light' | 'dark' =>
-  useColorScheme() === 'light' ? 'light' : 'dark';
+export const useColorSchemeName = (): 'light' | 'dark' => useTheme().scheme;
 
 // Shared markdown design tokens. markdownStyle derives the
 // EnrichedMarkdownText style from these, so the transcript and the reasoning

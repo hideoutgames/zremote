@@ -632,17 +632,25 @@ export const Composer = React.memo(function ({
               {showLivePill ? (
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger>
-                    <View
-                      style={[styles.livePill, { borderColor: theme.accent }]}
-                    >
-                      <Text
-                        style={[styles.livePillText, { color: theme.accent }]}
-                      >
-                        {live === 'queue'
+                    <Pressable
+                      hitSlop={4}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        live === 'queue'
                           ? t('session.queue')
-                          : t('session.steer')}
-                      </Text>
-                    </View>
+                          : t('session.steer')
+                      }
+                    >
+                      <ComposerMenuChip
+                        label={
+                          live === 'queue'
+                            ? t('session.queue')
+                            : t('session.steer')
+                        }
+                        color={theme.text}
+                        chevronColor={theme.textSecondary}
+                      />
+                    </Pressable>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Content>
                     <DropdownMenu.Item
@@ -913,13 +921,6 @@ const styles = StyleSheet.create({
   },
   inputDimmed: { opacity: 0.45 },
   stripClip: { overflow: 'hidden' },
-  livePill: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  livePillText: { fontSize: 12, fontWeight: '600' },
   leftCluster: {
     flex: 1,
     flexDirection: 'row',

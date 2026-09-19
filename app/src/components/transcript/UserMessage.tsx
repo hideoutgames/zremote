@@ -1,7 +1,7 @@
 // User transcript row (message bubble): text bubble, attachment chips, and
-// the "Show more" fold at ~400 chars / 5 lines like desktop.
-// Message-row shape follows Agents Kit beui/message + prompt-kit/message
-// (both MIT) — a plain bubble; no avatar chrome on this client.
+// the "Show more" fold at 1000 characters. Short messages are never
+// ellipsized. Message-row shape follows Agents Kit beui/message +
+// prompt-kit/message (both MIT) — a plain bubble; no avatar chrome.
 
 import React, { useLayoutEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,8 +19,7 @@ import { stripPlanPrefix } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
 import { messageCopyContent } from './MessageCopyMenu';
 
-const FOLD_CHARS = 400;
-const FOLD_LINES = 5;
+export const FOLD_CHARS = 1000;
 
 const textOf = (entry: MessageEntry): string =>
   entry.parts
@@ -121,23 +120,15 @@ export const UserMessage = React.memo(function UserMessageInner({
                   { backgroundColor: theme.userBubbleBackground },
                 ]}
               >
-                <View style={styles.bubbleInner}>
-                  {kind !== null ? <PlanBadge kind={kind} /> : null}
-                  {shown !== '' ? (
-                    <Text
-                      style={[
-                        styles.text,
-                        styles.bubbleText,
-                        { color: theme.userBubbleText },
-                      ]}
-                      numberOfLines={expanded ? undefined : FOLD_LINES}
-                    >
-                      {shown}
-                    </Text>
-                  ) : null}
-                </View>
+                {kind !== null ? <PlanBadge kind={kind} /> : null}
+                {shown !== '' ? (
+                  <Text style={[styles.text, { color: theme.userBubbleText }]}>
+                    {shown}
+                  </Text>
+                ) : null}
                 {foldable ? (
                   <Pressable
+                    testID="user-bubble-fold"
                     onPress={() => setExpanded(e => !e)}
                     hitSlop={6}
                     accessibilityRole="button"
@@ -146,7 +137,7 @@ export const UserMessage = React.memo(function UserMessageInner({
                     }
                     accessibilityState={{ expanded }}
                   >
-                    <Text style={[styles.fold, { color: theme.accent }]}>
+                    <Text style={[styles.fold, { color: theme.textSecondary }]}>
                       {expanded ? t('session.showLess') : t('session.showMore')}
                     </Text>
                   </Pressable>
@@ -195,13 +186,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 9,
-  },
-  bubbleInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
   },
-  text: { fontSize: 16, lineHeight: 21 },
-  bubbleText: { flexShrink: 1 },
+  text: { fontSize: 16, lineHeight: 21, flexShrink: 0 },
   fold: { fontSize: 13, fontWeight: '500', marginTop: 4 },
 });

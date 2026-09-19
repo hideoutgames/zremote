@@ -12,13 +12,25 @@ export interface TaskItem {
   done: boolean;
 }
 
-export const TaskRows = React.memo(function ({ items }: { items: TaskItem[] }) {
+export const TaskRows = React.memo(function ({
+  items,
+  embedded = false,
+}: {
+  items: TaskItem[];
+  embedded?: boolean;
+}) {
   const theme = useTheme();
   return (
     <View
       style={[
         styles.list,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+        embedded ? styles.embedded : undefined,
+        embedded
+          ? undefined
+          : {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
       ]}
     >
       {items.map((item, i) => (
@@ -51,6 +63,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 6,
     marginVertical: 3,
+  },
+  embedded: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    marginVertical: 0,
+    backgroundColor: 'transparent',
   },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   text: { flex: 1, fontSize: 14, lineHeight: 19 },
