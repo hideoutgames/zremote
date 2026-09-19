@@ -1,9 +1,11 @@
 // Centered effort overlay: soft oval wash behind the level label + slider,
-// Liquid Glass pill. Mounted in a transparent Modal (not KeyboardStickyView).
-// Opens by morphing a glass pill from the composer chip's window rect to
-// mid-screen height, centered on the composer column on iPad (window center
-// on iPhone) via RN Animated (no Reanimated worklets). Fast mode lives on
-// the composer chip, not here.
+// Liquid Glass pill. Composer mounts it in a transparent Modal (not
+// KeyboardStickyView) and morphs a glass pill from the chip's window rect
+// to mid-screen height, centered on the composer column on iPad (window
+// center on iPhone) via RN Animated (no Reanimated worklets). The model
+// picker hosts it `embedded` inside the already-presented sheet so it is
+// not stacked behind the formSheet / TrueSheet. Fast mode lives on the
+// composer chip, not here.
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
@@ -105,6 +107,7 @@ export function EffortOverlay({
   origin,
   anchor,
   onDismiss,
+  embedded = false,
 }: {
   levels: readonly string[];
   value: string | undefined;
@@ -113,6 +116,8 @@ export function EffortOverlay({
   /** When set (iPad), the pill centers on this composer column in X. */
   anchor?: EffortOrigin;
   onDismiss: () => void;
+  /** Host inside an already-presented sheet — no second Modal, flex-centered. */
+  embedded?: boolean;
 }) {
   const theme = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -122,7 +127,7 @@ export function EffortOverlay({
     [anchor, windowWidth, windowHeight],
   );
   const wash = useMemo(() => effortWashRect(dest), [dest]);
-  const skipMorph = reduceMotion === true || origin === undefined;
+  const skipMorph = embedded || reduceMotion === true || origin === undefined;
   const start = skipMorph ? dest : origin;
   const left = useRef(new Animated.Value(start.x)).current;
   const top = useRef(new Animated.Value(start.y)).current;
@@ -195,38 +200,19 @@ export function EffortOverlay({
     washOpacity,
   ]);
 
+  const finishDismiss = useCallback(() => {
+    if (embedded) onDismiss();
+    else hide();
+  }, [embedded, hide, onDismiss]);
+
   const close = useCallback(() => {
     if (closing.current) return;
     closing.current = true;
-    const end = skipMorph ? dest : origin!;
-    Animated.parallel([
-      Animated.timing(left, {
-        toValue: end.x,
-        duration: skipMorph ? 160 : MORPH_MS,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: false,
-      }),
-      Animated.timing(top, {
-        toValue: end.y,
-        duration: skipMorph ? 160 : MORPH_MS,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: false,
-      }),
-      Animated.timing(pillW, {
-        toValue: end.width,
-        duration: skipMorph ? 160 : MORPH_MS,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: false,
-      }),
-      Animated.timing(pillH, {
-        toValue: end.height,
-        duration: skipMorph ? 160 : MORPH_MS,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: false,
-      }),
+    const fadeMs = skipMorph ? 160 : MORPH_MS;
+    const fade = [
       Animated.timing(washOpacity, {
         toValue: 0,
-        duration: skipMorph ? 160 : MORPH_MS,
+        duration: fadeMs,
         useNativeDriver: false,
       }),
       Animated.timing(contentOpacity, {
@@ -234,14 +220,50 @@ export function EffortOverlay({
         duration: 120,
         useNativeDriver: false,
       }),
+    ];
+    if (embedded) {
+      Animated.parallel(fade).start(({ finished }) => {
+        if (finished) finishDismiss();
+        else closing.current = false;
+      });
+      return;
+    }
+    const end = skipMorph ? dest : origin!;
+    Animated.parallel([
+      Animated.timing(left, {
+        toValue: end.x,
+        duration: fadeMs,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(top, {
+        toValue: end.y,
+        duration: fadeMs,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(pillW, {
+        toValue: end.width,
+        duration: fadeMs,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(pillH, {
+        toValue: end.height,
+        duration: fadeMs,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      ...fade,
     ]).start(({ finished }) => {
-      if (finished) hide();
+      if (finished) finishDismiss();
       else closing.current = false;
     });
   }, [
     contentOpacity,
     dest,
-    hide,
+    embedded,
+    finishDismiss,
     left,
     origin,
     pillH,
@@ -250,6 +272,64 @@ export function EffortOverlay({
     top,
     washOpacity,
   ]);
+
+  const slider = (
+    <>
+      {levels.length > 0 ? (
+        <EffortSlider levels={levels} value={value} onChange={onChange} />
+      ) : (
+        <Text style={[styles.unsupported, { color: theme.textSecondary }]}>
+          {t('picker.effortUnsupported')}
+        </Text>
+      )}
+    </>
+  );
+
+  const backdrop = (
+    <Pressable
+      style={StyleSheet.absoluteFill}
+      onPress={close}
+      accessibilityRole="button"
+      accessibilityLabel={t('common.done')}
+    />
+  );
+
+  const labelStyle = [
+    styles.label,
+    theme.scheme === 'dark' ? styles.labelShadowDark : styles.labelShadowLight,
+    { color: theme.text },
+  ];
+
+  if (embedded) {
+    return (
+      <View style={styles.embeddedRoot} pointerEvents="box-none">
+        {backdrop}
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.embeddedWash, { opacity: washOpacity }]}
+        >
+          <FadeBlur
+            fade="radial"
+            intensity={40}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+        <Animated.View
+          pointerEvents="box-none"
+          style={[styles.embeddedCluster, { opacity: contentOpacity }]}
+        >
+          <Text pointerEvents="none" style={[labelStyle, styles.embeddedLabel]}>
+            {label}
+          </Text>
+          <View style={styles.embeddedPill}>
+            <Glass animated interactive style={styles.pill}>
+              <View style={styles.sliderFade}>{slider}</View>
+            </Glass>
+          </View>
+        </Animated.View>
+      </View>
+    );
+  }
 
   return (
     <Modal
@@ -261,12 +341,7 @@ export function EffortOverlay({
       statusBarTranslucent
     >
       <View style={styles.root} pointerEvents="box-none">
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={close}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.done')}
-        />
+        {backdrop}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -289,12 +364,8 @@ export function EffortOverlay({
         <Animated.Text
           pointerEvents="none"
           style={[
-            styles.label,
-            theme.scheme === 'dark'
-              ? styles.labelShadowDark
-              : styles.labelShadowLight,
+            labelStyle,
             {
-              color: theme.text,
               left: dest.x,
               width: dest.width,
               top: dest.y - LABEL_OFFSET,
@@ -312,19 +383,7 @@ export function EffortOverlay({
             <Animated.View
               style={[styles.sliderFade, { opacity: contentOpacity }]}
             >
-              {levels.length > 0 ? (
-                <EffortSlider
-                  levels={levels}
-                  value={value}
-                  onChange={onChange}
-                />
-              ) : (
-                <Text
-                  style={[styles.unsupported, { color: theme.textSecondary }]}
-                >
-                  {t('picker.effortUnsupported')}
-                </Text>
-              )}
+              {slider}
             </Animated.View>
           </Glass>
         </Animated.View>
@@ -335,6 +394,34 @@ export function EffortOverlay({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  embeddedRoot: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  embeddedWash: {
+    position: 'absolute',
+    width: '200%',
+    height: '200%',
+    left: '-50%',
+    top: '-50%',
+  },
+  embeddedCluster: {
+    width: '100%',
+    maxWidth: PILL_MAX_WIDTH,
+    paddingHorizontal: PILL_H_INSET,
+    alignItems: 'center',
+  },
+  embeddedLabel: {
+    position: 'relative',
+    marginBottom: 12,
+    width: '100%',
+  },
+  embeddedPill: {
+    width: '100%',
+    height: effortSliderTrackHeight,
+  },
   band: {
     position: 'absolute',
   },

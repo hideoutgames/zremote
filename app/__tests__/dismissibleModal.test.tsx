@@ -148,6 +148,69 @@ test('iPad model picker formSheet Modal allows swipe / outside dismiss', async (
   });
 });
 
+test('formSheet model picker effort overlay stays inside the sheet Modal', async () => {
+  const catalog: DeviceCatalog = {
+    harnesses: [
+      {
+        id: 'claude',
+        name: 'Claude',
+        reasoningLevels: ['low', 'high'],
+      } as never,
+    ],
+    modelsByHarness: {
+      claude: [
+        {
+          id: 'sonnet',
+          label: 'Sonnet',
+          reasoningLevels: ['low', 'high'],
+          options: [],
+        },
+      ],
+    },
+    loading: false,
+    loadedAt: Date.now(),
+  };
+  catalogStore.setState({ byDevice: { h1: catalog } });
+  const tree = await render(
+    <ModelPickerSheet
+      runtime={{} as never}
+      chat={{
+        id: 'c1',
+        deviceId: 'h1',
+        archived: false,
+        createdAt: 0,
+        config: {
+          harness: 'claude',
+          model: 'sonnet',
+          reasoning: 'high',
+          modelOptions: {},
+        },
+      }}
+      phase="idle"
+      formSheet
+      onClose={() => {}}
+      onApplyConfig={() => {}}
+    />,
+  );
+  expect(tree.root.findAllByType(Modal)).toHaveLength(1);
+  const effort = tree.root.findAll(
+    n =>
+      n.props.accessibilityLabel === 'High' &&
+      n.props.accessibilityRole === 'button',
+  )[0];
+  await act(async () => {
+    effort.props.onPress();
+  });
+  expect(tree.root.findAllByType(Modal)).toHaveLength(1);
+  const sheet = tree.root.findByType(Modal);
+  expect(
+    sheet.findAll(n => n.props.accessibilityRole === 'adjustable').length,
+  ).toBeGreaterThan(0);
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
 test('compact Settings Modal allows swipe / outside dismiss', async () => {
   const tree = await render(<RootPager requestedChat={null} />);
   const modal = tree.root.findByType(Modal);
