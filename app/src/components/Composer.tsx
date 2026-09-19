@@ -89,6 +89,7 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { VoicePill } from './VoicePill';
+import { VOICE_PILL_PROCESS_MS } from './voicePillMath';
 import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
@@ -291,9 +292,37 @@ export const Composer = React.memo(function ({
   // ── Dictation ─────────────────────────────────────────────────────────
   const [dictationSupported, setDictationSupported] = useState(false);
   const [dictating, setDictating] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
   const baseRef = useRef('');
   const selRef = useRef(0);
+  const processingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearProcessingCooldown = useCallback(() => {
+    if (processingTimer.current !== null) {
+      clearTimeout(processingTimer.current);
+      processingTimer.current = null;
+    }
+    setProcessing(false);
+  }, []);
+  const beginProcessingCooldown = useCallback(() => {
+    if (processingTimer.current !== null) return;
+    setProcessing(true);
+    processingTimer.current = setTimeout(() => {
+      processingTimer.current = null;
+      setProcessing(false);
+    }, VOICE_PILL_PROCESS_MS);
+  }, []);
+  const beginProcessingCooldownRef = useRef(beginProcessingCooldown);
+  beginProcessingCooldownRef.current = beginProcessingCooldown;
+  useEffect(
+    () => () => {
+      if (processingTimer.current !== null) {
+        clearTimeout(processingTimer.current);
+        processingTimer.current = null;
+      }
+    },
+    [],
+  );
   // Partials/finals splice into the draft at the caret position captured
   // when dictation started (baseRef/selRef) — partials replace each other,
   // the final replaces the last partial.
@@ -317,8 +346,12 @@ export const Composer = React.memo(function ({
         )}${text}${baseRef.current.slice(selRef.current)}`,
       );
       setDictating(false);
+      beginProcessingCooldownRef.current();
     },
-    onError: () => setDictating(false),
+    onError: () => {
+      setDictating(false);
+      beginProcessingCooldownRef.current();
+    },
   });
   useEffect(() => {
     dictationCb.current.onPartial = text => {
@@ -340,6 +373,7 @@ export const Composer = React.memo(function ({
         )}${text}${baseRef.current.slice(selRef.current)}`,
       );
       setDictating(false);
+      beginProcessingCooldownRef.current();
     };
   }, [chatId]);
 
@@ -371,9 +405,11 @@ export const Composer = React.memo(function ({
   }, [dictation, dictating]);
 
   const toggleDictation = useCallback(() => {
+    if (processing) return;
     if (dictating) {
       dictation.stop().catch(() => {});
       setDictating(false);
+      beginProcessingCooldown();
       return;
     }
     baseRef.current = draft.text;
@@ -384,13 +420,14 @@ export const Composer = React.memo(function ({
       )
       .then(() => setDictating(true))
       .catch(() => setDictating(false));
-  }, [dictating, dictation, draft.text]);
+  }, [dictating, dictation, draft.text, processing, beginProcessingCooldown]);
 
   const cancelDictation = useCallback(() => {
     dictation.cancel().catch(() => {});
     setDraftText(chatId, baseRef.current);
     setDictating(false);
-  }, [dictation, chatId]);
+    clearProcessingCooldown();
+  }, [dictation, chatId, clearProcessingCooldown]);
 
   const submit = useCallback(() => {
     const text = withPlanPrefixIf(planMode, draft.text.trim());
@@ -650,6 +687,7 @@ export const Composer = React.memo(function ({
                   <VoicePill
                     active={dictating}
                     supported={dictationSupported}
+                    processing={processing}
                     levelTick={voiceTick}
                     onToggle={toggleDictation}
                     onCancel={cancelDictation}

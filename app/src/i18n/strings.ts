@@ -257,6 +257,7 @@ const en = {
   'composer.files': 'Files',
   'composer.attach': 'Add attachment',
   'composer.dictate': 'Dictate',
+  'composer.dictationProcessing': 'Processing…',
   'composer.dictationUnavailable': 'Dictation unavailable on this build',
   'composer.removeAttachment': 'Remove {name}',
   'composer.previewAttachment': 'Preview {name}',
