@@ -127,6 +127,31 @@ test('createThreadFromCompose projectless when space is omitted', async () => {
   expect(sendRun.mock.calls[0][1].cwd).toBeUndefined();
 });
 
+test('createThreadFromCompose keeps the compose draft when host is missing', async () => {
+  const runtime = {
+    registryDoc: { write: () => {} },
+    registry: { flushPending: () => {} },
+    openSession: () => ({
+      retain() {
+        return this;
+      },
+      release() {},
+      sendRun: () => {},
+      sendWithAttachments: async () => 'legacy',
+    }),
+  } as unknown as AppRuntime;
+  setDraftText(COMPOSE_DRAFT_ID, 'do not lose this');
+  await expect(
+    createThreadFromCompose(runtime, {
+      text: 'do not lose this',
+      settings: { deviceId: '', harness: '', model: '' },
+    }),
+  ).rejects.toThrow(/host and agent/);
+  expect(draftStore.getState().byChat[COMPOSE_DRAFT_ID]?.text).toBe(
+    'do not lose this',
+  );
+});
+
 test('moveDraft relocates text without dropping it', () => {
   setDraftText(COMPOSE_DRAFT_ID, 'stash');
   moveDraft(COMPOSE_DRAFT_ID, 'c-new');

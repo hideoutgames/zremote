@@ -29,7 +29,7 @@ import {
 } from '../doc/sessionDoc';
 import {
   getSessionStore,
-  type FailedSend,
+  recordFailedSend,
   type PendingSend,
 } from '../state/sessionStores';
 
@@ -406,19 +406,11 @@ export class RelaySessionSource {
       return commandId;
     } catch (e) {
       if (pending !== undefined) {
-        store.setState(s => ({
-          pendingSends: s.pendingSends.filter(
-            p => p.messageId !== pending.messageId,
-          ),
-          failedSends: [
-            ...s.failedSends,
-            {
-              ...pending,
-              commandId: 'relay-rejected',
-              status: 'rejected' as FailedSend['status'],
-            },
-          ],
-        }));
+        recordFailedSend(this.chatId, {
+          ...pending,
+          commandId: 'relay-rejected',
+          status: 'rejected',
+        });
       }
       throw e;
     }

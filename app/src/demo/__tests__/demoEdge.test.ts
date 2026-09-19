@@ -253,3 +253,29 @@ test('every emitted transcript frame replays through applyTranscriptFrame withou
   rt.closeSession(CHAT_LONG);
   rt.stop();
 });
+
+test('demo files listing hides ignored rows unless requested', async () => {
+  const { rt } = await makeRuntime();
+  rt.start();
+  await flush();
+  const relay = rt.relayFor(HOST_LIVE);
+  const hidden = await relay.call<{
+    entries: { name: string; ignored?: boolean }[];
+  }>('ListWorkspaceDirectory', { directory: '', includeIgnored: false });
+  const names = hidden.entries.map(e => e.name);
+  expect(names).toContain('src');
+  expect(names).not.toContain('node_modules');
+  expect(names).not.toContain('.git');
+  const shown = await relay.call<{
+    entries: { name: string; ignored?: boolean }[];
+  }>('ListWorkspaceDirectory', { directory: '', includeIgnored: true });
+  expect(shown.entries.map(e => e.name)).toContain('node_modules');
+  const term = await relay.call<{ id: string; shell: string }>('OpenTerminal', {
+    chatId: CHAT_WORKING,
+    cols: 80,
+    rows: 24,
+  });
+  expect(term.id).toMatch(/^term-/);
+  expect(term.shell).toContain('zsh');
+  rt.stop();
+});

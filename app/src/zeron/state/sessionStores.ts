@@ -15,6 +15,7 @@ import type {
   UserInputQuestion,
 } from '../protocol/types';
 import type { SessionDocMeta } from '../doc/sessionDoc';
+import { draftFor, restoreFailedSend } from './draftStore';
 
 export interface PendingSend {
   messageId: string;
@@ -83,6 +84,23 @@ export const removeSessionStore = (chatId: string): void => {
 
 export const resetSessionStores = (): void => {
   stores.clear();
+};
+
+export const recordFailedSend = (chatId: string, failed: FailedSend): void => {
+  getSessionStore(chatId).setState(s => ({
+    pendingSends: s.pendingSends.filter(p => p.messageId !== failed.messageId),
+    failedSends: s.failedSends.some(f => f.messageId === failed.messageId)
+      ? s.failedSends
+      : [...s.failedSends, failed],
+  }));
+  const cur = draftFor(chatId)?.text ?? '';
+  if (cur.trim() === '') restoreFailedSend(chatId, failed.text);
+};
+
+export const dismissFailedSend = (chatId: string, messageId: string): void => {
+  getSessionStore(chatId).setState(s => ({
+    failedSends: s.failedSends.filter(f => f.messageId !== messageId),
+  }));
 };
 
 // ── runPhase ───────────────────────────────────────────────────────────

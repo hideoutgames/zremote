@@ -9,6 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import type { EffortOrigin } from './EffortOverlay';
 import {
   Modal,
   Pressable,
@@ -35,16 +36,22 @@ import {
 } from '../zeron/state/catalogStore';
 import { loadModels } from '../zeron/runtime/catalog';
 import { setChatConfig } from '../zeron/runtime/workspaceActions';
-import { rememberModelPick } from '../zeron/state/uiPrefs';
+import {
+  rememberModelPick,
+  rememberModelSettings,
+  useModelSettingsMap,
+} from '../zeron/state/uiPrefs';
+import {
+  effortLevelsForModel,
+  modelRowKey,
+  rememberedModelOptions,
+  rememberedReasoning,
+  revalidateSelection,
+} from './modelPicker';
 import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
-import {
-  effortLevelsForModel,
-  modelRowKey,
-  revalidateSelection,
-} from './modelPicker';
 import { FastMenuButton } from './FastMenuButton';
 import { ComposerMenuChip } from './ComposerMenuChip';
 import { EffortOverlay } from './EffortOverlay';
@@ -94,7 +101,7 @@ function ModelRow({
   effortLabel?: string;
   effortSupported: boolean;
   onSelect: () => void;
-  onOpenEffort: () => void;
+  onOpenEffort: (origin?: EffortOrigin) => void;
   fastSupported: boolean;
   fastEnabled: boolean;
   fastOption?: Parameters<typeof FastMenuButton>[0]['option'];
@@ -108,6 +115,17 @@ function ModelRow({
   accentColor: string;
   onLayout?: (y: number) => void;
 }) {
+  const effortRef = useRef<View>(null);
+  const openEffort = () => {
+    const node = effortRef.current;
+    if (node !== null && typeof node.measureInWindow === 'function') {
+      node.measureInWindow((x, y, width, height) => {
+        onOpenEffort({ x, y, width, height });
+      });
+      return;
+    }
+    onOpenEffort();
+  };
   return (
     <View
       onLayout={e => onLayout?.(e.nativeEvent.layout.y)}
@@ -121,49 +139,57 @@ function ModelRow({
             },
       ]}
     >
-      <Pressable
-        style={styles.rowHit}
-        onPress={onSelect}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        accessibilityState={{ selected }}
-      >
-        <Text style={[styles.rowText, { color: textColor }]} numberOfLines={1}>
-          {label}
-        </Text>
-      </Pressable>
-      {effortSupported && effortLabel !== undefined ? (
+      <View style={styles.rowMain}>
         <Pressable
-          onPress={onOpenEffort}
-          hitSlop={4}
+          style={styles.rowHit}
+          onPress={onSelect}
           accessibilityRole="button"
-          accessibilityLabel={effortLabel}
+          accessibilityLabel={label}
+          accessibilityState={{ selected }}
         >
-          <ComposerMenuChip
-            label={effortLabel}
-            color={textColor}
-            chevronColor={secondaryColor}
-            limitWidth={false}
-          />
+          <Text
+            style={[styles.rowText, { color: textColor }]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
         </Pressable>
-      ) : null}
-      {fastSupported ? (
-        <FastMenuButton
-          enabled={fastEnabled}
-          option={fastOption}
-          value={fastChoice}
-          onSelect={onSelectFast}
-        />
-      ) : null}
-      {unavailable ? (
-        <Text style={[styles.badge, { color: dangerColor }]}>
-          {t('picker.unavailable')}
-        </Text>
-      ) : selected ? (
-        <Icon name="checkmark" size={16} color={accentColor} />
-      ) : (
-        <View style={styles.checkSpacer} />
-      )}
+        {effortSupported && effortLabel !== undefined ? (
+          <Pressable
+            ref={effortRef}
+            onPress={openEffort}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={effortLabel}
+          >
+            <ComposerMenuChip
+              label={effortLabel}
+              color={textColor}
+              chevronColor={secondaryColor}
+              limitWidth={false}
+            />
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.rowTrail}>
+        {fastSupported ? (
+          <FastMenuButton
+            enabled={fastEnabled}
+            option={fastOption}
+            value={fastChoice}
+            onSelect={onSelectFast}
+          />
+        ) : null}
+        {unavailable ? (
+          <Text style={[styles.badge, { color: dangerColor }]}>
+            {t('picker.unavailable')}
+          </Text>
+        ) : selected ? (
+          <Icon name="checkmark" size={16} color={accentColor} />
+        ) : (
+          <View style={styles.checkSpacer} />
+        )}
+      </View>
     </View>
   );
 }
@@ -189,10 +215,12 @@ export function ModelPickerSheet({
   const catalog = useStore(catalogStore, s => s.byDevice[deviceId]);
   const catalogTick = catalog?.loadedAt ?? 0;
   const [query, setQuery] = useState('');
+  const modelSettings = useModelSettingsMap();
   const [effort, setEffort] = useState<{
     harness: string;
     model: string;
     levels: string[];
+    origin?: EffortOrigin;
   }>();
   const scrollRef = useRef<ScrollView>(null);
   const rowY = useRef<Record<string, number>>({});
@@ -280,8 +308,13 @@ export function ModelPickerSheet({
       };
       if (onApplyConfig !== undefined) onApplyConfig(next);
       else setChatConfig(runtime, chat.id, next);
-      if (next.harness !== '' && next.model !== undefined)
+      if (next.harness !== '' && next.model !== undefined) {
         rememberModelPick({ harness: next.harness, model: next.model });
+        rememberModelSettings(next.harness, next.model, {
+          reasoning: next.reasoning,
+          modelOptions: next.modelOptions,
+        });
+      }
     },
     [runtime, chat.id, config, onApplyConfig],
   );
@@ -293,21 +326,30 @@ export function ModelPickerSheet({
         model,
         harnesses.find(h => h.id === harness)?.reasoningLevels,
       );
-      const keepReasoning =
+      const stored = modelSettings[modelRowKey(harness, model.id)];
+      const selectedLive =
+        harness === harnessId && config?.model === model.id
+          ? {
+              reasoning: config?.reasoning,
+              modelOptions: config?.modelOptions,
+            }
+          : undefined;
+      const fastOption = fastOptionForModel(model);
+      const reasoning =
         extra?.reasoning ??
-        (harness === harnessId &&
-        config?.reasoning !== undefined &&
-        levels.includes(config.reasoning)
-          ? config.reasoning
-          : levels[0]);
+        rememberedReasoning(stored, levels, selectedLive?.reasoning);
+      const modelOptions =
+        extra?.modelOptions ??
+        rememberedModelOptions(stored, fastOption, selectedLive?.modelOptions);
       apply({
         harness,
         model: model.id,
-        reasoning: keepReasoning,
+        reasoning,
+        modelOptions,
         ...extra,
       });
     },
-    [apply, locked, harnessId, harnesses, config?.reasoning],
+    [apply, locked, harnessId, harnesses, config, modelSettings],
   );
 
   const header = (
@@ -379,13 +421,18 @@ export function ModelPickerSheet({
             const selected = m.id === config?.model && h.id === harnessId;
             const levels = effortLevelsForModel(m, h.reasoningLevels);
             const effortSupported = levels.length > 0;
-            const effortValue =
-              selected &&
-              config?.reasoning !== undefined &&
-              levels.includes(config.reasoning)
-                ? config.reasoning
-                : levels[0];
+            const stored = modelSettings[modelRowKey(h.id, m.id)];
+            const effortValue = rememberedReasoning(
+              stored,
+              levels,
+              selected ? config?.reasoning : undefined,
+            );
             const fastOption = fastOptionForModel(m);
+            const rowOptions = rememberedModelOptions(
+              stored,
+              fastOption,
+              selected ? config?.modelOptions : undefined,
+            );
             const key = modelRowKey(h.id, m.id);
             return (
               <ModelRow
@@ -400,29 +447,30 @@ export function ModelPickerSheet({
                     : undefined
                 }
                 onSelect={() => pickModel(h.id, m)}
-                onOpenEffort={() => {
+                onOpenEffort={origin => {
                   pickModel(h.id, m);
-                  setEffort({ harness: h.id, model: m.id, levels });
+                  setEffort({
+                    harness: h.id,
+                    model: m.id,
+                    levels,
+                    origin,
+                  });
                 }}
                 fastSupported={fastOption !== undefined}
                 fastOption={fastOption}
-                fastEnabled={isFastEnabled(
-                  selected ? config?.modelOptions : undefined,
-                  fastOption,
-                )}
+                fastEnabled={isFastEnabled(rowOptions, fastOption)}
                 fastChoice={
                   fastOption === undefined
                     ? undefined
-                    : selected &&
-                      typeof config?.modelOptions?.[fastOption.id] === 'string'
-                    ? (config.modelOptions[fastOption.id] as string)
+                    : typeof rowOptions[fastOption.id] === 'string'
+                    ? (rowOptions[fastOption.id] as string)
                     : fastOption.defaultChoice
                 }
                 onSelectFast={choiceId => {
                   if (fastOption === undefined) return;
                   pickModel(h.id, m, {
                     modelOptions: {
-                      ...(config?.modelOptions ?? {}),
+                      ...rowOptions,
                       [fastOption.id]: choiceId,
                     },
                   });
@@ -481,11 +529,15 @@ export function ModelPickerSheet({
 
   const effortLevels = effort?.levels ?? [];
   const effortValue =
-    effort !== undefined &&
-    config?.harness === effort.harness &&
-    config.model === effort.model
-      ? config.reasoning
-      : effortLevels[0];
+    effort === undefined
+      ? undefined
+      : rememberedReasoning(
+          modelSettings[modelRowKey(effort.harness, effort.model)],
+          effortLevels,
+          config?.harness === effort.harness && config.model === effort.model
+            ? config.reasoning
+            : undefined,
+        );
 
   return (
     <>
@@ -494,6 +546,7 @@ export function ModelPickerSheet({
         <EffortOverlay
           levels={effortLevels}
           value={effortValue}
+          origin={effort.origin}
           onChange={level =>
             apply({
               harness: effort.harness,
@@ -556,10 +609,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 48,
     paddingHorizontal: 12,
+    gap: 8,
+  },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
-  rowHit: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  rowHit: { flexShrink: 1, minWidth: 0, justifyContent: 'center' },
   rowText: { fontSize: 17, flexShrink: 1 },
+  rowTrail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: 4,
+    marginLeft: 'auto',
+  },
   badge: { fontSize: 11, fontWeight: '600' },
   checkSpacer: { width: 16 },
 });

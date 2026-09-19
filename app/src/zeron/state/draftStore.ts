@@ -206,6 +206,7 @@ export const draftFor = (chatId: string): Draft | undefined =>
  * whatever the user has typed since (append with a blank line if needed). */
 export const restoreFailedSend = (chatId: string, text: string): void => {
   const cur = draftStore.getState().byChat[chatId]?.text ?? '';
+  if (cur === text) return;
   const merged = cur === '' ? text : `${cur}\n\n${text}`;
   patchDraft(chatId, { text: merged });
 };

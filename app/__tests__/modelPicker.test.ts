@@ -5,7 +5,37 @@ import {
   revalidateSelection,
   effortLevelsForModel,
   modelRowKey,
+  rememberedReasoning,
+  rememberedModelOptions,
 } from '../src/components/modelPicker';
+
+test('rememberedReasoning keeps a valid live/stored level', () => {
+  expect(rememberedReasoning({ reasoning: 'high' }, ['low', 'high'])).toBe(
+    'high',
+  );
+  expect(rememberedReasoning({ reasoning: 'gone' }, ['low', 'high'])).toBe(
+    'low',
+  );
+  expect(
+    rememberedReasoning({ reasoning: 'low' }, ['low', 'high'], 'high'),
+  ).toBe('high');
+  expect(rememberedReasoning(undefined, [])).toBeUndefined();
+});
+
+test("rememberedModelOptions never leaks another model's keys", () => {
+  expect(
+    rememberedModelOptions(
+      { modelOptions: { fast: 'on', other: 'x' } },
+      { id: 'fast', defaultChoice: 'off' },
+    ),
+  ).toEqual({ fast: 'on' });
+  expect(
+    rememberedModelOptions(undefined, { id: 'fast', defaultChoice: 'off' }),
+  ).toEqual({ fast: 'off' });
+  expect(
+    rememberedModelOptions({ modelOptions: { fast: 'on' } }, undefined),
+  ).toEqual({});
+});
 
 test('effortLevelsForModel prefers the model ladder', () => {
   expect(

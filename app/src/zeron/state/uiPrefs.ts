@@ -5,6 +5,7 @@
 import { createStore, useStore } from 'zustand';
 import type { DocDisk } from '../native/docDisk';
 import { rememberRecentModel, type RecentModel } from './recentModels';
+import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
@@ -34,6 +35,8 @@ export interface UiPrefs {
   pinnedChatIds: string[];
   /** Last compose-composer settings (host/space/model). */
   composeDefaults?: ComposeDefaults;
+  /** Last-used effort / Fast per catalog model (`harness:modelId`). */
+  modelSettingsByKey: Record<string, ModelSettings>;
 }
 
 export interface ComposeDefaults {
@@ -57,6 +60,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   composerExtraHeight: 0,
   recentModels: [],
   pinnedChatIds: [],
+  modelSettingsByKey: {},
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -68,8 +72,17 @@ export const bindUiPrefs = async (
 ): Promise<void> => {
   persist = { disk, orgId, userId };
   const saved = await disk.loadUiPrefs(orgId, userId);
-  if (saved !== undefined)
-    uiPrefsStore.setState(s => ({ ...s, ...(saved as Partial<UiPrefs>) }));
+  if (saved !== undefined) {
+    const patch = saved as Partial<UiPrefs>;
+    uiPrefsStore.setState(s => ({
+      ...s,
+      ...patch,
+      modelSettingsByKey: {
+        ...s.modelSettingsByKey,
+        ...(patch.modelSettingsByKey ?? {}),
+      },
+    }));
+  }
 };
 
 export const unbindUiPrefs = (): void => {
@@ -216,3 +229,38 @@ export const rememberComposeDefaults = (defaults: ComposeDefaults): void => {
 
 export const useComposeDefaults = (): ComposeDefaults | undefined =>
   useStore(uiPrefsStore, s => s.composeDefaults);
+
+export const rememberModelSettings = (
+  harness: string,
+  model: string,
+  patch: ModelSettings,
+): void => {
+  if (harness === '' || model === '') return;
+  const key = modelRowKey(harness, model);
+  uiPrefsStore.setState(s => {
+    const prev = s.modelSettingsByKey[key] ?? {};
+    return {
+      modelSettingsByKey: {
+        ...s.modelSettingsByKey,
+        [key]: {
+          ...prev,
+          ...patch,
+          modelOptions:
+            patch.modelOptions === undefined
+              ? prev.modelOptions
+              : { ...(prev.modelOptions ?? {}), ...patch.modelOptions },
+        },
+      },
+    };
+  });
+  save();
+};
+
+export const modelSettingsFor = (
+  harness: string,
+  model: string,
+): ModelSettings | undefined =>
+  uiPrefsStore.getState().modelSettingsByKey[modelRowKey(harness, model)];
+
+export const useModelSettingsMap = (): Record<string, ModelSettings> =>
+  useStore(uiPrefsStore, s => s.modelSettingsByKey);

@@ -33,7 +33,12 @@ import {
   type FailedSend,
   type RunPhase,
 } from '../state/sessionStores';
-import { updateAttachment, type StagedAttachment } from '../state/draftStore';
+import {
+  draftFor,
+  restoreFailedSend,
+  updateAttachment,
+  type StagedAttachment,
+} from '../state/draftStore';
 import { withAttachments } from '../protocol/messages';
 import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
 import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
@@ -306,6 +311,7 @@ export class SessionController {
       }
       return true;
     });
+    const knownFailed = new Set(s.failedSends.map(f => f.messageId));
     store.setState({
       entries: proj.entries,
       commands: proj.commands,
@@ -315,6 +321,11 @@ export class SessionController {
       failedSends,
       hostDeviceId: this.deps.chatMeta().hostDeviceId,
     });
+    for (const f of failedSends) {
+      if (knownFailed.has(f.messageId)) continue;
+      if ((draftFor(this.chatId)?.text ?? '').trim() === '')
+        restoreFailedSend(this.chatId, f.text);
+    }
     this.schedulePersist();
   }
 
