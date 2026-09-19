@@ -8,12 +8,18 @@ import { Image } from 'expo-image';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Icon } from '../Icon';
 import { SettingsGroup, SettingsRow } from './SettingsList';
-import { useTheme } from '../../theme';
+import {
+  COLOR_SCHEME_PREFERENCES,
+  useTheme,
+  type ColorSchemePreference,
+} from '../../theme';
 import { t, type StringKey } from '../../i18n/strings';
 import {
   installNewThreadComposerBackground,
   removeNewThreadComposerBackground,
+  setColorSchemePreference,
   setNewThreadBackgroundEffect,
+  useColorSchemePreference,
   useNewThreadBackgroundEffect,
   useNewThreadComposerBackground,
 } from '../../zeron/state/uiPrefs';
@@ -25,6 +31,12 @@ import {
 import { createLog } from '../../zeron/log';
 
 const log = createLog();
+
+const THEME_LABEL: Record<ColorSchemePreference, StringKey> = {
+  system: 'settings.theme.system',
+  dark: 'settings.theme.dark',
+  light: 'settings.theme.light',
+};
 
 const EFFECT_LABEL: Record<NewThreadBackgroundEffect, StringKey> = {
   none: 'settings.backgroundEffect.none',
@@ -111,8 +123,36 @@ function EffectChip({
   );
 }
 
-export function AppearanceBackground() {
+export function ThemePage() {
   const theme = useTheme();
+  const pref = useColorSchemePreference();
+  return (
+    <SettingsGroup header={t('settings.theme')}>
+      {COLOR_SCHEME_PREFERENCES.map(item => (
+        <SettingsRow
+          key={item}
+          title={t(THEME_LABEL[item])}
+          trailing={
+            pref === item ? (
+              <Icon name="checkmark" size={16} color={theme.accent} />
+            ) : undefined
+          }
+          onPress={() => setColorSchemePreference(item)}
+          testID={`settings-theme-${item}`}
+          accessibilityLabel={t(THEME_LABEL[item])}
+        />
+      ))}
+    </SettingsGroup>
+  );
+}
+
+export function AppearanceBackground({
+  onOpenTheme,
+}: {
+  onOpenTheme: () => void;
+}) {
+  const theme = useTheme();
+  const colorScheme = useColorSchemePreference();
   const background = useNewThreadComposerBackground();
   const effect = useNewThreadBackgroundEffect();
   const [available, setAvailable] = useState(true);
@@ -197,6 +237,16 @@ export function AppearanceBackground() {
   return (
     <>
       <SettingsGroup header={t('settings.appearance')}>
+        <SettingsRow
+          title={t('settings.theme')}
+          value={t(THEME_LABEL[colorScheme])}
+          showChevron
+          onPress={onOpenTheme}
+          testID="settings-theme"
+          accessibilityLabel={`${t('settings.theme')}, ${t(
+            THEME_LABEL[colorScheme],
+          )}`}
+        />
         <SettingsRow
           title={t('settings.background')}
           subtitle={subtitle}

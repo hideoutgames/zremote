@@ -16,6 +16,10 @@ import {
   type NewThreadBackgroundEffect,
   type NewThreadComposerBackground,
 } from './newThreadBackground';
+import {
+  parseColorSchemePreference,
+  type ColorSchemePreference,
+} from '../../theme';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
@@ -51,6 +55,8 @@ export interface UiPrefs {
   newThreadComposerBackground?: NewThreadComposerBackground;
   /** Non-destructive treatment composited over the artwork. */
   newThreadBackgroundEffect: NewThreadBackgroundEffect;
+  /** Settings → Appearance theme: follow the OS, or force dark / light. */
+  colorScheme: ColorSchemePreference;
 }
 
 export interface ComposeDefaults {
@@ -78,6 +84,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   pinnedChatIds: [],
   modelSettingsByKey: {},
   newThreadBackgroundEffect: 'none',
+  colorScheme: 'system',
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -110,6 +117,8 @@ export const bindUiPrefs = async (
     uiPrefsStore.setState(s => ({
       ...s,
       ...patch,
+      colorScheme:
+        parseColorSchemePreference(patch.colorScheme) ?? s.colorScheme,
       modelSettingsByKey: {
         ...s.modelSettingsByKey,
         ...(patch.modelSettingsByKey ?? {}),
@@ -335,6 +344,14 @@ export const useNewThreadComposerBackground = ():
 
 export const useNewThreadBackgroundEffect = (): NewThreadBackgroundEffect =>
   useStore(uiPrefsStore, s => s.newThreadBackgroundEffect);
+
+export const setColorSchemePreference = (v: ColorSchemePreference): void => {
+  uiPrefsStore.setState({ colorScheme: v });
+  save();
+};
+
+export const useColorSchemePreference = (): ColorSchemePreference =>
+  useStore(uiPrefsStore, s => s.colorScheme);
 
 export const setNewThreadBackgroundEffect = (
   v: NewThreadBackgroundEffect,

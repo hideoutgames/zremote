@@ -54,7 +54,10 @@ import {
   resolveDictationPort,
 } from '../zeron/native/dictation';
 import type { DictationModelState } from '../../modules/zeron-dictation/src/Dictation.nitro';
-import { AppearanceBackground } from '../components/settings/AppearanceBackground';
+import {
+  AppearanceBackground,
+  ThemePage,
+} from '../components/settings/AppearanceBackground';
 
 const log = createLog();
 
@@ -300,6 +303,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const presence = useStore(workspaceStore, s => s.presence);
   const now = useNow(PRESENCE_TICK_MS);
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
+  const [themeOpen, setThemeOpen] = useState(false);
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
   const notificationsEnabled = useNotificationsEnabled();
@@ -393,9 +397,12 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {agentsFor !== undefined ? (
+          {agentsFor !== undefined || themeOpen ? (
             <Pressable
-              onPress={() => setAgentsFor(undefined)}
+              onPress={() => {
+                if (agentsFor !== undefined) setAgentsFor(undefined);
+                else setThemeOpen(false);
+              }}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={t('settings.title')}
@@ -409,7 +416,11 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           ) : null}
         </View>
         <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-          {agentsFor === undefined ? t('settings.title') : agentsFor.name}
+          {agentsFor !== undefined
+            ? agentsFor.name
+            : themeOpen
+            ? t('settings.theme')
+            : t('settings.title')}
         </Text>
         <View style={styles.headerRight}>
           <Pressable
@@ -434,6 +445,8 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         >
           {agentsFor !== undefined ? (
             <AgentsPage device={agentsFor} />
+          ) : themeOpen ? (
+            <ThemePage />
           ) : (
             <>
               <SettingsGroup header={t('settings.account')}>
@@ -520,7 +533,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 />
               </SettingsGroup>
 
-              <AppearanceBackground />
+              <AppearanceBackground onOpenTheme={() => setThemeOpen(true)} />
 
               <SettingsGroup
                 header={t('settings.liveActivities')}

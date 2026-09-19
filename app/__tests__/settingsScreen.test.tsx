@@ -83,6 +83,7 @@ beforeEach(() => {
   uiPrefsStore.setState({
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',
+    colorScheme: 'system',
   });
 });
 
@@ -123,6 +124,8 @@ test('appearance group offers choose image and hides effects until set', async (
   const mounted = await render(<SettingsScreen onClose={() => {}} />);
   const text = allText(mounted.root);
   expect(text).toContain('Appearance');
+  expect(text).toContain('Theme');
+  expect(text).toContain('System');
   expect(text).toContain('Background image');
   expect(text).toContain(
     'Add an image behind threads, chats, and new threads.',
@@ -194,4 +197,33 @@ test('opening a desktop uses the device name as title and Settings as back', asy
   expect(text).toContain('Settings');
   expect(text).toContain('Name');
   expect(text).not.toContain('Desktops');
+});
+
+test('theme row defaults to System and choosing Dark updates the store', async () => {
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const text = allText(mounted.root);
+  expect(text).toContain('Theme');
+  expect(text).toContain('System');
+  const row = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-theme' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    row.props.onPress();
+  });
+  const page = allText(mounted.root);
+  expect(page).toContain('System');
+  expect(page).toContain('Dark');
+  expect(page).toContain('Light');
+  expect(page).not.toContain('Background image');
+  const dark = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-theme-dark' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    dark.props.onPress();
+  });
+  expect(uiPrefsStore.getState().colorScheme).toBe('dark');
 });
