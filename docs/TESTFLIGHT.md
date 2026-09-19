@@ -22,7 +22,7 @@ Two workflows under `.github/workflows/`:
   The archive is always the **checked-out git SHA** of the branch
   selected in the Actions UI (`github.sha`). `CFBundleVersion` is
   `github.run_number` (counts every run of this workflow, including
-  failures). `extra.gitSha` is baked in at prebuild so Settings can show
+  failures). `extra.gitSha` is baked in at prebuild as
   `0.1.0 (N) · abc1234`. Dispatch `main` after the work has merged
   (AGENTS.md) — stacked PRs that land on another feature branch never
   ship.

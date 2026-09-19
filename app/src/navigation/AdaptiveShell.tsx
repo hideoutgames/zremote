@@ -27,8 +27,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Glass } from '../components/Glass';
 import {
   setSidebarCollapsed,
   useSidebarCollapsed,
@@ -51,14 +49,12 @@ export const USE_NATIVE_SPLIT_VIEW = false;
 function InFlowSidebar({
   visible,
   width,
-  paddingTop,
-  paddingBottom,
+  borderColor,
   children,
 }: {
   visible: boolean;
   width: number;
-  paddingTop: number;
-  paddingBottom: number;
+  borderColor: string;
   children: React.ReactNode;
 }) {
   'use no memo';
@@ -84,7 +80,9 @@ function InFlowSidebar({
       accessibilityLabel={t('sidebar.toggle')}
       testID="threadsSidebar"
     >
-      <View style={[styles.sidebarInner, { width, paddingTop, paddingBottom }]}>
+      <View
+        style={[styles.sidebarInner, { width, borderRightColor: borderColor }]}
+      >
         {children}
       </View>
     </Animated.View>
@@ -99,7 +97,6 @@ export function AdaptiveShell({
   onSelectedChat?: (chatId: string | undefined) => void;
 }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [chatId, setChatId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -149,17 +146,14 @@ export function AdaptiveShell({
       <InFlowSidebar
         visible={layout.sidebarVisible}
         width={layout.sidebarWidth}
-        paddingTop={insets.top + 8}
-        paddingBottom={insets.bottom + 8}
+        borderColor={theme.border}
       >
-        <Glass style={styles.sidebarGlass}>
-          <HomeScreen
-            variant="sidebar"
-            onOpenSession={openSession}
-            onOpenSettings={openSettings}
-            onCompose={enterCompose}
-          />
-        </Glass>
+        <HomeScreen
+          variant="sidebar"
+          onOpenSession={openSession}
+          onOpenSettings={openSettings}
+          onCompose={enterCompose}
+        />
       </InFlowSidebar>
 
       <View style={styles.detail}>
@@ -238,12 +232,8 @@ const styles = StyleSheet.create({
   },
   sidebarInner: {
     flex: 1,
-    paddingHorizontal: 12,
-  },
-  sidebarGlass: {
-    flex: 1,
-    borderRadius: 24,
-    overflow: 'hidden',
+    paddingHorizontal: 20,
+    borderRightWidth: StyleSheet.hairlineWidth,
   },
   detail: { flex: 1 },
   emptyDetail: { flex: 1, alignItems: 'center', justifyContent: 'center' },

@@ -12,7 +12,6 @@ import React, {
 } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthClient } from '../zeron/auth/authClient';
 import { AuthSession } from '../zeron/auth/authSession';
 import { bindAuthSession, useAuthStatus } from '../zeron/state/authStore';
@@ -268,7 +267,6 @@ export function ZeronApp() {
     if (rt !== null) await rt.clearAccountCaches();
   }, [auth, runtime, demoActive]);
 
-  const insets = useSafeAreaInsets();
   const services = useMemo<AppServices>(
     () => ({ auth, runtime, openSession, signOut }),
     [auth, runtime, openSession, signOut],
@@ -288,15 +286,7 @@ export function ZeronApp() {
 
   return (
     <AppServicesContext.Provider value={services}>
-      <View
-        style={[
-          styles.root,
-          {
-            backgroundColor: theme.background,
-            paddingTop: insets.top,
-          },
-        ]}
-      >
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
         <StatusBar
           barStyle={theme.scheme === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor="transparent"

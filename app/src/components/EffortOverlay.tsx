@@ -1,8 +1,8 @@
-// Centered effort overlay: short edge-to-edge fade + Liquid Glass pill.
-// Mounted in a transparent Modal (not KeyboardStickyView). Opens by
-// morphing a glass pill from the composer chip's window rect to screen
-// center via RN Animated (no Reanimated worklets). Fast mode lives on
-// the composer chip, not here.
+// Centered effort overlay: pane-scoped fade behind the level label +
+// Liquid Glass pill. Mounted in a transparent Modal (not KeyboardStickyView).
+// Opens by morphing a glass pill from the composer chip's window rect to the
+// composer (or window) center via RN Animated (no Reanimated worklets).
+// Fast mode lives on the composer chip, not here.
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
@@ -36,18 +36,45 @@ const PILL_MAX_WIDTH = 360;
 const PILL_H_INSET = 28;
 const LABEL_OFFSET = 36;
 
-const destRect = (windowWidth: number, windowHeight: number): EffortOrigin => {
+export const effortDestRect = (
+  windowWidth: number,
+  windowHeight: number,
+  anchor?: EffortOrigin,
+): EffortOrigin => {
+  const bounds = anchor ?? {
+    x: 0,
+    y: 0,
+    width: windowWidth,
+    height: windowHeight,
+  };
   const width = Math.min(
     PILL_MAX_WIDTH,
-    Math.max(windowWidth - PILL_H_INSET * 2, 0),
+    Math.max(bounds.width - PILL_H_INSET * 2, 0),
   );
   const height = effortSliderTrackHeight;
   return {
-    x: (windowWidth - width) / 2,
-    y: (windowHeight - height) / 2,
+    x: bounds.x + (bounds.width - width) / 2,
+    y: bounds.y + (bounds.height - height) / 2,
     width,
     height,
   };
+};
+
+export const measureWindowRect = (
+  node: {
+    measureInWindow?: (
+      callback: (x: number, y: number, width: number, height: number) => void,
+    ) => void;
+  } | null,
+  callback: (rect: EffortOrigin | undefined) => void,
+): void => {
+  if (node !== null && typeof node.measureInWindow === 'function') {
+    node.measureInWindow((x, y, width, height) => {
+      callback({ x, y, width, height });
+    });
+    return;
+  }
+  callback(undefined);
 };
 
 export function EffortOverlay({
@@ -55,20 +82,23 @@ export function EffortOverlay({
   value,
   onChange,
   origin,
+  anchor,
   onDismiss,
 }: {
   levels: readonly string[];
   value: string | undefined;
   onChange: (level: string) => void;
   origin?: EffortOrigin;
+  /** When set (iPad), the pill centers on this composer/detail rect. */
+  anchor?: EffortOrigin;
   onDismiss: () => void;
 }) {
   const theme = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const dest = useMemo(
-    () => destRect(windowWidth, windowHeight),
-    [windowWidth, windowHeight],
+    () => effortDestRect(windowWidth, windowHeight, anchor),
+    [anchor, windowWidth, windowHeight],
   );
   const skipMorph = reduceMotion === true || origin === undefined;
   const start = skipMorph ? dest : origin;
@@ -215,6 +245,8 @@ export function EffortOverlay({
           style={[
             styles.band,
             {
+              left: dest.x,
+              width: dest.width,
               top: dest.y - LABEL_OFFSET - 24,
               height: dest.height + LABEL_OFFSET + 48,
               opacity: washOpacity,
@@ -236,6 +268,8 @@ export function EffortOverlay({
               : styles.labelShadowLight,
             {
               color: theme.text,
+              left: dest.x,
+              width: dest.width,
               top: dest.y - LABEL_OFFSET,
               opacity: contentOpacity,
             },
@@ -276,13 +310,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   band: {
     position: 'absolute',
-    left: 0,
-    right: 0,
   },
   label: {
     position: 'absolute',
-    left: 0,
-    right: 0,
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '600',

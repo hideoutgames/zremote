@@ -66,7 +66,7 @@ Needs a Mac build, a device, or a host in the right state:
 - **iOS CI/TestFlight pipeline** — `ios-compile.yml` (unsigned compile
   check, no secrets) and `ios-testflight.yml` (ASC-API-key cloud signing,
   **manual dispatch only** — not on merge to `main`). The IPA is the
-  dispatched SHA; Settings shows `version (run_number) · shortSha`.
+  dispatched SHA (`version (run_number)` + short SHA in the binary).
   Dispatch `main` after the work has merged (docs/TESTFLIGHT.md).
 
 ## Requires host/edge change (`requires-host-edge-change`)

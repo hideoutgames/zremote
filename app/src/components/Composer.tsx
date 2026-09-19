@@ -50,6 +50,7 @@ import { useAttachments } from '../hooks/useAttachments';
 import { isImageMime } from '../zeron/attachments/validate';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import {
   clearDraft,
   removeAttachment,
@@ -203,6 +204,7 @@ export const Composer = React.memo(function ({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const regular = windowWidth >= REGULAR_MIN_WIDTH;
   const persistedExtra = useComposerExtraHeight();
   const [dragExtra, setDragExtra] = useState<number | null>(null);
   const extraHeight = dragExtra ?? persistedExtra;
@@ -450,7 +452,9 @@ export const Composer = React.memo(function ({
       <View
         style={[
           styles.glassWrap,
-          theme.scheme === 'dark'
+          regular
+            ? undefined
+            : theme.scheme === 'dark'
             ? styles.glassHaloDark
             : styles.glassHaloLight,
         ]}
@@ -461,7 +465,9 @@ export const Composer = React.memo(function ({
           })
         }
       >
-        <FadeBlur intensity={22} style={styles.surroundBlur} />
+        {regular ? null : (
+          <FadeBlur intensity={22} style={styles.surroundBlur} />
+        )}
         <Glass style={styles.glass}>
           <View
             style={styles.grabberHit}
