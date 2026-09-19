@@ -54,7 +54,7 @@ const CAPS = Object.values(EngineCapability) as string[];
 export const demoDevices = {
   live: {
     id: HOST_LIVE,
-    name: "Torea's MacBook Pro",
+    name: 'Studio MacBook Pro',
     platform: 'macos',
     version: '0.2.72',
   },
@@ -73,7 +73,7 @@ export const SPACE_BABYLON = 's-babylon';
 export const demoPaths = {
   zremote: '/demo/code/zremote',
   zeron: '/demo/code/zeron',
-  babylon: '/demo/code/babylon-slate',
+  babylon: '/demo/code/harbor-notes',
 };
 
 export const demoRegistryRows = (nowMs: number): Row[] => [
@@ -138,7 +138,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       id: SPACE_BABYLON,
       deviceId: HOST_DARK,
       path: demoPaths.babylon,
-      name: 'babylon-slate',
+      name: 'harbor-notes',
       gitDetected: true,
       createdAt: BASE_MS - 20 * 86_400_000,
     },
@@ -227,7 +227,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       id: CHAT_OFFLINE,
       deviceId: HOST_DARK,
       spaceId: SPACE_BABYLON,
-      title: 'Babylon slate notes',
+      title: 'Harbor notes',
       archived: false,
       cwd: demoPaths.babylon,
       branch: 'main',
@@ -735,7 +735,7 @@ export const demoFolders = (
       entries: [
         { name: 'zremote', isDir: true, isRepo: true },
         { name: 'zeron', isDir: true, isRepo: true },
-        { name: 'babylon-slate', isDir: true, isRepo: true },
+        { name: 'harbor-notes', isDir: true, isRepo: true },
         { name: 'notes.txt', isDir: false, isRepo: false },
       ],
       truncated: false,

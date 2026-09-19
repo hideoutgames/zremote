@@ -31,7 +31,8 @@ export type SessionActivityPhase =
   | 'stopping'
   | 'errored'
   | 'completed'
-  | 'stale';
+  | 'stale'
+  | 'planReady';
 
 export type SessionActivityProps = {
   /** Activity identity — dedupe key, not rendered. */
@@ -47,27 +48,36 @@ export type SessionActivityProps = {
   tasksTotal?: number;
   /** Privacy default: when false only title + phase render. */
   showContext: boolean;
+  /** Per-agent accent (question / plan / PR / running). */
+  accentColor?: string;
+  glyph?: string;
+  /** Overflow activity: leftover agent titles listed in the expanded view. */
+  overflowTitles?: string[];
 };
 
 const phaseColor = (phase: SessionActivityPhase): string => {
   switch (phase) {
     case 'awaitingInput':
-      return '#E5A50A'; // amber
+      return '#0A84FF';
+    case 'planReady':
+      return '#E5A50A';
     case 'errored':
-      return '#E5484D'; // red
+      return '#E5484D';
     case 'completed':
-      return '#30A46C'; // green
+      return '#30D158';
     case 'stale':
-      return '#8E8E93'; // dimmed
+      return '#8E8E93';
     default:
-      return '#0A84FF'; // accent blue
+      return '#FFFFFF';
   }
 };
 
 const phaseGlyph = (phase: SessionActivityPhase): SFSymbol => {
   switch (phase) {
     case 'awaitingInput':
-      return 'exclamationmark.bubble';
+      return 'questionmark.bubble.fill';
+    case 'planReady':
+      return 'doc.text.fill';
     case 'stopping':
       return 'stop.circle';
     case 'errored':
@@ -77,9 +87,15 @@ const phaseGlyph = (phase: SessionActivityPhase): SFSymbol => {
     case 'stale':
       return 'wifi.slash';
     default:
-      return 'bolt.circle';
+      return 'circle.fill';
   }
 };
+
+const colorOf = (props: SessionActivityProps): string =>
+  props.accentColor ?? phaseColor(props.phase);
+
+const glyphOf = (props: SessionActivityProps): SFSymbol =>
+  (props.glyph as SFSymbol | undefined) ?? phaseGlyph(props.phase);
 
 const progress = (props: SessionActivityProps) =>
   props.tasksDone !== undefined &&
@@ -87,24 +103,24 @@ const progress = (props: SessionActivityProps) =>
   props.tasksTotal > 0 ? (
     <ProgressView
       value={props.tasksDone / props.tasksTotal}
-      modifiers={[progressViewStyle('linear'), tint(phaseColor(props.phase))]}
+      modifiers={[progressViewStyle('linear'), tint(colorOf(props))]}
     />
   ) : (
     // indeterminate bar when no task counts exist
-    <ProgressView modifiers={[tint(phaseColor(props.phase))]} />
+    <ProgressView modifiers={[tint(colorOf(props))]} />
   );
 
 const SessionActivityLayout = (props: SessionActivityProps) => ({
   banner: (
     <HStack modifiers={[padding({ all: 12 })]}>
       <Image
-        systemName={phaseGlyph(props.phase)}
-        modifiers={[foregroundStyle(phaseColor(props.phase))]}
+        systemName={glyphOf(props)}
+        modifiers={[foregroundStyle(colorOf(props))]}
       />
       <VStack modifiers={[padding({ leading: 8 })]}>
         <Text modifiers={[font({ weight: 'semibold' })]}>{props.title}</Text>
         <HStack>
-          <Text modifiers={[foregroundStyle(phaseColor(props.phase))]}>
+          <Text modifiers={[foregroundStyle(colorOf(props))]}>
             {props.phaseLabel}
           </Text>
           {props.showContext && props.hostLabel !== undefined ? (
@@ -120,8 +136,8 @@ const SessionActivityLayout = (props: SessionActivityProps) => ({
   ),
   compactLeading: (
     <Image
-      systemName={phaseGlyph(props.phase)}
-      modifiers={[foregroundStyle(phaseColor(props.phase))]}
+      systemName={glyphOf(props)}
+      modifiers={[foregroundStyle(colorOf(props))]}
     />
   ),
   compactTrailing: (
@@ -129,21 +145,35 @@ const SessionActivityLayout = (props: SessionActivityProps) => ({
   ),
   minimal: (
     <Image
-      systemName={phaseGlyph(props.phase)}
-      modifiers={[foregroundStyle(phaseColor(props.phase))]}
+      systemName={glyphOf(props)}
+      modifiers={[foregroundStyle(colorOf(props))]}
     />
   ),
   expandedCenter: (
     <VStack>
-      <Text modifiers={[font({ weight: 'semibold' })]}>{props.title}</Text>
-      {props.showContext && props.hostLabel !== undefined ? (
-        <Text modifiers={[foregroundStyle('#8E8E93')]}>{props.hostLabel}</Text>
-      ) : null}
-      {progress(props)}
+      {props.overflowTitles !== undefined && props.overflowTitles.length > 0 ? (
+        <>
+          {props.overflowTitles.map(title => (
+            <Text key={title} modifiers={[font({ weight: 'semibold' })]}>
+              {title}
+            </Text>
+          ))}
+        </>
+      ) : (
+        <>
+          <Text modifiers={[font({ weight: 'semibold' })]}>{props.title}</Text>
+          {props.showContext && props.hostLabel !== undefined ? (
+            <Text modifiers={[foregroundStyle('#8E8E93')]}>
+              {props.hostLabel}
+            </Text>
+          ) : null}
+          {progress(props)}
+        </>
+      )}
     </VStack>
   ),
   expandedTrailing: (
-    <Text modifiers={[foregroundStyle(phaseColor(props.phase))]}>
+    <Text modifiers={[foregroundStyle(colorOf(props))]}>
       {props.phaseLabel}
     </Text>
   ),

@@ -58,11 +58,15 @@ export function AdaptiveShell({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [chatId, setChatId] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebarCollapsed = useSidebarCollapsed();
 
   useEffect(() => {
-    if (requestedChat !== null) setChatId(requestedChat);
+    if (requestedChat !== null) {
+      setComposing(false);
+      setChatId(requestedChat);
+    }
   }, [requestedChat]);
 
   const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen: false };
@@ -78,6 +82,14 @@ export function AdaptiveShell({
     [sidebarCollapsed],
   );
   const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openSession = useCallback((id: string) => {
+    setComposing(false);
+    setChatId(id);
+  }, []);
+  const enterCompose = useCallback(() => {
+    setChatId(null);
+    setComposing(true);
+  }, []);
 
   // In-flow sidebar: collapse.value 0 = open (full width), 1 = closed (0).
   const reduceMotion = useReducedMotion();
@@ -127,15 +139,24 @@ export function AdaptiveShell({
           <Glass style={styles.sidebarGlass}>
             <HomeScreen
               variant="sidebar"
-              onOpenSession={setChatId}
+              onOpenSession={openSession}
               onOpenSettings={openSettings}
+              onCompose={enterCompose}
             />
           </Glass>
         </View>
       </Animated.View>
 
       <View style={styles.detail}>
-        {chatId !== null ? (
+        {composing ? (
+          <SessionScreen
+            onBack={toggleSidebar}
+            onCreated={openSession}
+            leadingIcon="sidebar.left"
+            contentMaxWidth={layout.measureCap}
+            composerMaxWidth={layout.composerMaxWidth}
+          />
+        ) : chatId !== null ? (
           <SessionScreen
             chatId={chatId}
             onBack={toggleSidebar}

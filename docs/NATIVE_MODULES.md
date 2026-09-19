@@ -52,19 +52,21 @@ surfaces and has never been compiled. First build happens on a Mac.
 
 - `src/liveActivity/SessionActivity.tsx` — the `'widget'` component:
   Lock Screen banner + Dynamic Island (compact/minimal/expanded) via
-  `@expo/ui/swift-ui`. Distinct visuals: awaitingInput amber, errored red,
-  completed green, stale dimmed; indeterminate progress without task
-  counts.
+  `@expo/ui/swift-ui`. Per-agent accent: question blue `#0A84FF`, plan-ready
+  yellow `#E5A50A`, open PR green `#30D158`, merged PR purple `#BF5AF2`,
+  running/draft/none white. Precedence: question > plan-ready > open PR >
+  merged PR > running. Overflow activity lists leftover agents when the OS
+  refuses further `start()` calls.
 - `src/liveActivity/liveActivityManager.ts` — pure policy (`planActivity`
-  - `LiveActivityManager`): dedupe by chatId, working updates throttled to
-    1/5s, urgent phases immediate, `completed` → end `after(now+30min)`,
-    archive → `immediate`, stale-date now+120s.
-    **Fallback:** if `start()` throws (OS limit/disabled), one aggregate
-    activity is used for the currently-selected session.
-- `src/liveActivity/bindLiveActivities.ts` — store wiring + push-token
-  registration (`/registry/{org}/live-activity`, see
-  `docs/HOST_EDGE_CHANGES.md`); push-to-start tokens register with
-  `chatId: "*"`; rotation rides `addPushTokenListener`; unregister on
+  - `LiveActivityManager`): one activity per running agent, working updates
+    throttled to 1/5s, urgent phases immediate, `completed` → end
+    `after(now+30min)`, archive → `immediate`, stale-date now+120s.
+    **Fallback:** if `start()` throws (OS limit), leftovers pack into one
+    overflow activity (expanded view lists titles).
+- `src/liveActivity/bindLiveActivities.ts` — workspace + **session** store
+  wiring so phase/plan/PR updates land; push-token registration
+  (`/registry/{org}/live-activity`, see `docs/HOST_EDGE_CHANGES.md`);
+  push-to-start tokens register with `chatId: "*"`; unregister on
   end/sign-out.
 - Settings → Live Activities: on/off + "Show host and project on Lock
   Screen" (the privacy default — `showContext`).

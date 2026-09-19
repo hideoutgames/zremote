@@ -75,4 +75,7 @@ test('sidebar panel renders expanded; collapse flips pref + state', async () => 
   found = panel(tree.root);
   expect(found[0].props.accessibilityState.expanded).toBe(true);
   expect(found[0].props.pointerEvents).toBe('auto');
+  await act(async () => {
+    tree.unmount();
+  });
 });
