@@ -77,7 +77,7 @@ afterEach(() => {
 });
 
 test('composer: input labelled, send/stop/mic/model buttons have roles', async () => {
-  const tree = await render(
+  const mounted = await render(
     <Composer
       chatId="c1"
       phase="idle"
@@ -108,9 +108,9 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
       onLayout={() => {}}
     />,
   );
-  const input = tree.root.findByType(TextInput);
+  const input = mounted.root.findByType(TextInput);
   expect(input.props.accessibilityLabel).toBeTruthy();
-  const labels = labelled(tree.root);
+  const labels = labelled(mounted.root);
   expect(labels.some(l => l.role === 'button' && l.label === 'Send')).toBe(
     true,
   );
@@ -120,7 +120,9 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   expect(labels.some(l => l.label === 'Default')).toBe(true);
   expect(labels.some(l => l.label === 'High')).toBe(true);
   expect(
-    tree.root.findAll(n => n.props.testID === 'compose-checkout'),
+    mounted.root.findAll(
+      n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
+    ),
   ).toHaveLength(0);
   expect(labels.some(l => l.label === 'Repo')).toBe(false);
   expect(labels.some(l => l.label === 'Origin')).toBe(false);
@@ -128,7 +130,7 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
 });
 
 test('compose composer: repo, origin, and machine sit above the input', async () => {
-  const tree = await render(
+  const mounted = await render(
     <Composer
       chatId="__compose__"
       mode="compose"
@@ -189,7 +191,7 @@ test('compose composer: repo, origin, and machine sit above the input', async ()
       onLayout={() => {}}
     />,
   );
-  const labels = labelled(tree.root);
+  const labels = labelled(mounted.root);
   expect(labels.some(l => l.role === 'button' && l.label === 'Repo')).toBe(
     true,
   );
@@ -202,7 +204,9 @@ test('compose composer: repo, origin, and machine sit above the input', async ()
   expect(labels.some(l => l.label === 'Default')).toBe(true);
   expect(labels.some(l => l.label === 'High')).toBe(true);
   expect(
-    tree.root.findAll(n => n.props.testID === 'compose-checkout'),
+    mounted.root.findAll(
+      n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
+    ),
   ).toHaveLength(1);
 });
 
@@ -218,10 +222,10 @@ test('session row: role button, label contains title + status + host', async () 
       },
     ],
   });
-  const tree = await render(
+  const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
-  const row = labelled(tree.root).find(
+  const row = labelled(mounted.root).find(
     l => l.role === 'button' && l.label.includes('Fix flaky test'),
   );
   expect(row).toBeDefined();
@@ -238,10 +242,10 @@ test('question panel: options are labelled buttons', async () => {
       multiSelect: false,
     },
   ];
-  const tree = await render(
+  const mounted = await render(
     <QuestionPanel requestId="r1" questions={questions} onSubmit={() => {}} />,
   );
-  const labels = labelled(tree.root);
+  const labels = labelled(mounted.root);
   expect(
     labels.filter(l => l.role === 'button' || l.role === 'checkbox').length,
   ).toBeGreaterThanOrEqual(3); // two options + submit
@@ -255,7 +259,7 @@ test('model picker: search, provider groups, and sandbox are labelled', async ()
     loadedAt: Date.now(),
   };
   catalogStore.setState({ byDevice: { h1: catalog } });
-  const tree = await render(
+  const mounted = await render(
     <ModelPickerSheet
       runtime={{} as never}
       chat={{
@@ -269,14 +273,14 @@ test('model picker: search, provider groups, and sandbox are labelled', async ()
       onClose={() => {}}
     />,
   );
-  const labels = labelled(tree.root);
+  const labels = labelled(mounted.root);
   // Every pressable row carries a role + label.
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
   expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {
-  const tree = await render(
+  const mounted = await render(
     <QueuePanel
       queue={[
         {
@@ -293,7 +297,7 @@ test('queue panel: send now and delete are icon-only labelled buttons', async ()
       onMove={() => {}}
     />,
   );
-  const labels = labelled(tree.root);
+  const labels = labelled(mounted.root);
   expect(labels.some(l => l.role === 'button' && l.label === 'Send now')).toBe(
     true,
   );
