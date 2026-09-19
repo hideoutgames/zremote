@@ -19,7 +19,12 @@ import {
   changeRequestStore,
   setChangeRequestForChat,
 } from '../src/zeron/state/changeRequestStore';
-import type { Chat, DeviceRow } from '../src/zeron/protocol/types';
+import type {
+  Chat,
+  DeviceRow,
+  MessageEntry,
+  MessagePart,
+} from '../src/zeron/protocol/types';
 import type { PrBadgeModel } from '../src/components/prBadge';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { entryFrom } from '../src/zeron/doc/sessionDoc';
@@ -60,6 +65,51 @@ const named = (root: TestRenderer.ReactTestInstance, name: string) =>
 
 const byTestId = (root: TestRenderer.ReactTestInstance, id: string) =>
   root.findAll(n => n.props.testID === id && typeof n.type === 'string');
+
+const spawn = (
+  id: string,
+  name: string,
+  extra: Partial<Extract<MessagePart, { kind: 'tool' }>> & {
+    input?: Record<string, unknown>;
+    subagentStatus?: 'running' | 'done' | 'failed';
+    resolved?: boolean;
+  } = {},
+): Extract<MessagePart, { kind: 'tool' }> => {
+  const { input, subagentStatus, resolved, ...rest } = extra;
+  return {
+    kind: 'tool',
+    id,
+    call: {
+      kind: 'unknown',
+      name,
+      ...(input !== undefined ? { input } : {}),
+    },
+    resolved: resolved ?? true,
+    ...(subagentStatus !== undefined ? { subagentStatus } : {}),
+    ...rest,
+  };
+};
+
+const assistant = (parts: MessageEntry['parts']): MessageEntry => ({
+  id: 'a1',
+  role: 'assistant',
+  parts,
+  createdAt: 1,
+  deviceId: 'd1',
+  status: 'complete',
+});
+
+const statusOf = (root: TestRenderer.ReactTestInstance, id: string) => {
+  const node = root.findAll(n => n.props.testID === `subagent-status-${id}`)[0];
+  if (node === undefined) {
+    return { text: '', shimmer: false };
+  }
+  const shimmer = node.findAll(n => typeof n.props.text === 'string')[0];
+  if (shimmer !== undefined) {
+    return { text: shimmer.props.text as string, shimmer: true };
+  }
+  return { text: texts(node).join(''), shimmer: false };
+};
 
 beforeEach(() => {
   act(() => {
@@ -130,6 +180,35 @@ test('sub-agents has no x close button', async () => {
   );
   expect(named(tree.root, 'xmark')).toHaveLength(0);
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(1);
+});
+
+test('running sub-agent status shimmers Working copy', async () => {
+  const tree = await render(
+    <SubagentsSheet
+      entries={[
+        assistant([
+          spawn('done', 'Agent: Explore composer UI', {
+            input: { subagent_type: 'Explore' },
+            subagentStatus: 'done',
+          }),
+          spawn('run', 'Agent: Trace header styles', {
+            input: { subagent_type: 'Explore' },
+            subagentStatus: 'running',
+            resolved: false,
+          }),
+        ]),
+      ]}
+      onDismiss={() => {}}
+    />,
+  );
+  expect(statusOf(tree.root, 'run')).toEqual({
+    text: 'Working · Explorer',
+    shimmer: true,
+  });
+  expect(statusOf(tree.root, 'done')).toEqual({
+    text: 'Done · Explorer',
+    shimmer: false,
+  });
 });
 
 test('history lists the checkout PR and opens it on press', async () => {
