@@ -18,7 +18,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
@@ -65,6 +64,7 @@ export interface ModelPickerSheetProps {
   chat: Chat;
   phase: RunPhase;
   onClose: () => void;
+  /** Regular width → formSheet; compact (iPhone) defaults to pageSheet. */
   formSheet?: boolean;
   /** Compose: list every provider. Session: lock to the chat harness. */
   lockHarness?: boolean;
@@ -336,12 +336,10 @@ export function ModelPickerSheet({
     [apply, locked, harnessId, harnesses, config, modelSettings],
   );
 
-  const dismiss = formSheet === true ? hide : onClose;
-
   const header = (
     <View style={styles.header}>
       <Pressable
-        onPress={dismiss}
+        onPress={hide}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={t('common.close')}
@@ -356,7 +354,7 @@ export function ModelPickerSheet({
       <GlassControl
         interactive
         tintColor={theme.planButton}
-        onPress={dismiss}
+        onPress={hide}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={t('common.done')}
@@ -526,33 +524,19 @@ export function ModelPickerSheet({
     </View>
   );
 
-  if (formSheet === true) {
-    return (
-      <Modal
-        visible={visible}
-        presentationStyle="formSheet"
-        animationType="fade"
-        allowSwipeDismissal
-        onRequestClose={onRequestClose}
-        onDismiss={onModalDismiss}
-      >
-        <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
-          {body}
-        </View>
-      </Modal>
-    );
-  }
-
   return (
-    <TrueSheet
-      detents={['auto', 1]}
-      initialDetentIndex={1}
-      onDidDismiss={onClose}
-      grabber
-      backgroundColor={theme.background}
+    <Modal
+      visible={visible}
+      presentationStyle={formSheet === true ? 'formSheet' : 'pageSheet'}
+      animationType={formSheet === true ? 'fade' : 'slide'}
+      allowSwipeDismissal
+      onRequestClose={onRequestClose}
+      onDismiss={onModalDismiss}
     >
-      {body}
-    </TrueSheet>
+      <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
+        {body}
+      </View>
+    </Modal>
   );
 }
 

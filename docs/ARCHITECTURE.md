@@ -123,19 +123,21 @@ but exposes no modifier flags on iOS, so Cmd+Enter cannot be distinguished
 from Enter in JS — documented gap; Escape-to-dismiss sheets is likewise not
 reachable from JS and is deferred to the native split-view stage. Sheet
 dismissal: TrueSheet `dismissible` (default true) closes on grabber swipe or
-a tap on the dimmed area; RN `pageSheet`/`formSheet` Modals set
-`allowSwipeDismissal` plus `onRequestClose` so iPad dim-tap and swipe-down
-update `visible`. Overlay popups (`EffortOverlay` on the composer,
-`ImagePreviewModal`) use a full-screen Pressable backdrop. Inside
-`ModelPickerSheet` the effort overlay is `embedded` (absolute fill, no
-second Modal) so it is not stacked behind the formSheet / TrueSheet. The
-Expo Go TrueSheet shim honors `dismissible` the same way.
+a tap on the dimmed area (session tools: `SessionSheet` / `GlassSheet`);
+RN `pageSheet`/`formSheet` Modals set `allowSwipeDismissal` plus
+`onRequestClose` so dim-tap and swipe-down update `visible`. Overlay popups
+(`EffortOverlay` on the composer, `ImagePreviewModal`) use a full-screen
+Pressable backdrop. Inside `ModelPickerSheet` the effort overlay is
+`embedded` (absolute fill, no second Modal) so it is not stacked behind
+the pageSheet / formSheet. The Expo Go TrueSheet shim honors `dismissible`
+the same way.
 
 **Popover anchoring:** `@lodev09/react-native-true-sheet` has no iPad popover
 anchoring — its `anchor`/`anchorOffset` props only center/align the sheet on
-web. So on regular width `ModelPickerSheet` renders inside a `Modal` with
-`presentationStyle="formSheet"`; checkout selection already uses a Zeego
-dropdown (popover-anchored natively).
+web. `ModelPickerSheet` is an RN Modal on both size classes: compact
+`pageSheet` (same host as Settings / the PR sheet), regular `formSheet`.
+Checkout selection already uses a Zeego dropdown (popover-anchored natively).
+TrueSheet remains for session tools (`SessionSheet` / `GlassSheet`).
 
 A started session is bound to `chat.config.harness`. The composer recent
 menu and More sheet list that provider's models only.

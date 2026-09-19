@@ -107,7 +107,7 @@ set superseded by room sync.
 
 ## Deviation log (from stage reports)
 
-- TrueSheet cannot anchor iPad popovers — `Modal formSheet` fallback used.
+- `ModelPickerSheet` is a native Modal (`pageSheet` compact, `formSheet` regular); TrueSheet remains for session tools.
 - `loro-crdt` npm replaced by a Nitro module over loro-swift 1.13.3.
 - Runs always send `sandbox: danger-full-access` and `autoApprove: true`;
   there is no sandbox/auto-approve picker.
