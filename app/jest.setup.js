@@ -172,7 +172,7 @@ jest.mock('@legendapp/list/keyboard', () => {
   const RN = require('react-native');
   const scrollMessageToEnd = jest.fn(() => Promise.resolve());
   const onComposerLayout = jest.fn();
-  const scrollToIndex = jest.fn();
+  const scrollToIndex = jest.fn(() => Promise.resolve());
   return {
     KeyboardAwareLegendList: ReactLib.forwardRef(
       (props: object, ref: unknown) => {

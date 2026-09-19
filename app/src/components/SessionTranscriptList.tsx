@@ -305,9 +305,9 @@ export const SessionTranscriptList = forwardRef<
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: Array<{ item: TranscriptRow }> }) => {
-      const ids = viewableItems
-        .filter(v => v.item.kind === 'entry')
-        .map(v => v.item.entry.id);
+      const ids = viewableItems.flatMap(v =>
+        v.item.kind === 'entry' ? [v.item.entry.id] : [],
+      );
       const prev = viewableIdsRef.current;
       const same =
         ids.length === prev.length && ids.every((id, i) => id === prev[i]);
@@ -344,15 +344,14 @@ export const SessionTranscriptList = forwardRef<
       if (index < 0) return;
       hasOverflowedRef.current = true;
       setFollowing(false);
-      try {
-        listRef.current?.scrollToIndex({
-          index,
-          animated: reduceMotion !== true,
-          viewPosition: 0.5,
-        });
-      } catch {
-        // LegendList throws if the row has not been measured yet.
-      }
+      const jump = listRef.current?.scrollToIndex({
+        index,
+        animated: reduceMotion !== true,
+        viewPosition: 0.5,
+      });
+      jump?.catch(() => {
+        // LegendList rejects if the row has not been measured yet.
+      });
     },
     [entries, followEnd, railItems, reduceMotion],
   );

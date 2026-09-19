@@ -169,7 +169,11 @@ export function PreviewRail({
               top: Math.max(
                 top,
                 Math.min(
-                  top + stackTop + highlightedIndex * itemSize + itemSize / 2 - PREVIEW_HEIGHT / 2,
+                  top +
+                    stackTop +
+                    highlightedIndex * itemSize +
+                    itemSize / 2 -
+                    PREVIEW_HEIGHT / 2,
                   top + railHeight - PREVIEW_HEIGHT,
                 ),
               ),
@@ -200,7 +204,11 @@ export function PreviewRail({
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 2,
   },
   rail: {

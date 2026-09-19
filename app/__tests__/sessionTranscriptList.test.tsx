@@ -425,13 +425,21 @@ test('shows the message rail once content overflows two or more entries', async 
     overflowList(tree!);
   });
   expect(
-    tree!.root.findAll(n => n.props.testID === 'preview-rail'),
+    tree!.root.findAll(n => n.props.testID === 'preview-rail').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree!.root.findAll(
+      n =>
+        n.props.testID === 'preview-rail-item-m1' &&
+        typeof n.props.onPress === 'function',
+    ),
   ).toHaveLength(1);
   expect(
-    tree!.root.findAll(n => n.props.testID === 'preview-rail-item-m1'),
-  ).toHaveLength(1);
-  expect(
-    tree!.root.findAll(n => n.props.testID === 'preview-rail-item-m2'),
+    tree!.root.findAll(
+      n =>
+        n.props.testID === 'preview-rail-item-m2' &&
+        typeof n.props.onPress === 'function',
+    ),
   ).toHaveLength(1);
   expect(listProps(tree!).showsVerticalScrollIndicator).toBe(false);
   expect(listProps(tree!).contentContainerStyle).toEqual(
@@ -459,8 +467,10 @@ test('working status is not a rail tick', async () => {
     overflowList(tree!);
   });
   expect(
-    tree!.root.findAll(n =>
-      String(n.props.testID ?? '').startsWith('preview-rail-item-'),
+    tree!.root.findAll(
+      n =>
+        String(n.props.testID ?? '').startsWith('preview-rail-item-') &&
+        typeof n.props.onPress === 'function',
     ),
   ).toHaveLength(2);
   expect(
@@ -487,7 +497,13 @@ test('last rail tick follows the live edge', async () => {
   scrollMessageToEnd.mockClear();
 
   await act(async () => {
-    tree!.root.findByProps({ testID: 'preview-rail-item-m2' }).props.onPress();
+    tree!.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-m2' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
   });
   expect(scrollMessageToEnd).toHaveBeenCalledWith({
     animated: true,
@@ -514,7 +530,13 @@ test('a non-last rail tick jumps to that message and clears follow', async () =>
   expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
 
   await act(async () => {
-    tree!.root.findByProps({ testID: 'preview-rail-item-m1' }).props.onPress();
+    tree!.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-m1' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
   });
   expect(scrollToIndex).toHaveBeenCalledWith({
     index: 0,

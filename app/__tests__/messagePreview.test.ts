@@ -34,11 +34,9 @@ test('truncateMessageText keeps short text and ellipsizes on a word boundary', (
 
 test('collapseMessageText and entryPreviewText flatten whitespace', () => {
   expect(collapseMessageText('  a \n\t b  ')).toBe('a b');
-  expect(
-    entryPreviewText(
-      entry('m1', 'user', 'hello\n  there'),
-    ),
-  ).toBe('hello there');
+  expect(entryPreviewText(entry('m1', 'user', 'hello\n  there'))).toBe(
+    'hello there',
+  );
 });
 
 test('short user label uses the next assistant message as description', () => {
@@ -78,11 +76,7 @@ test('buildRailItems is one tick per entry and pairs user + assistant', () => {
   const items = buildRailItems(
     [
       entry('u1', 'user', 'What should the first release include?'),
-      entry(
-        'a1',
-        'assistant',
-        'Start with the smallest workflow that still feels complete.',
-      ),
+      entry('a1', 'assistant', 'Start with the smallest workflow.'),
     ],
     {
       emptyLabel: 'Message',
@@ -93,12 +87,12 @@ test('buildRailItems is one tick per entry and pairs user + assistant', () => {
   expect(items[0]).toMatchObject({
     id: 'u1',
     label: 'What should the first release include?',
-    description: 'Start with the smallest workflow that still feels complete.',
+    description: 'Start with the smallest workflow.',
     ariaLabel: 'Go to user message 1 of 2',
   });
   expect(items[1]).toMatchObject({
     id: 'a1',
-    label: 'Start with the smallest workflow that still feels complete.',
+    label: 'Start with the smallest workflow.',
     ariaLabel: 'Go to assistant message 2 of 2',
   });
 });

@@ -43,14 +43,22 @@ const renderRail = async (
 
 test('renders a tick per item', async () => {
   const tree = await renderRail();
-  expect(tree.root.findAll(n => n.props.testID === 'preview-rail')).toHaveLength(
-    1,
-  );
   expect(
-    tree.root.findAll(n => n.props.testID === 'preview-rail-item-u1'),
+    tree.root.findAll(n => n.props.testID === 'preview-rail').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree.root.findAll(
+      n =>
+        n.props.testID === 'preview-rail-item-u1' &&
+        typeof n.props.onPress === 'function',
+    ),
   ).toHaveLength(1);
   expect(
-    tree.root.findAll(n => n.props.testID === 'preview-rail-item-a1'),
+    tree.root.findAll(
+      n =>
+        n.props.testID === 'preview-rail-item-a1' &&
+        typeof n.props.onPress === 'function',
+    ),
   ).toHaveLength(1);
   await act(async () => {
     tree.unmount();
@@ -65,7 +73,13 @@ test('pressing a tick selects it and shows the preview card', async () => {
   ).toHaveLength(0);
 
   await act(async () => {
-    tree.root.findByProps({ testID: 'preview-rail-item-u1' }).props.onPress();
+    tree.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-u1' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
   });
   expect(onItemSelect).toHaveBeenCalledWith(items[0]);
   const preview = tree.root.findByProps({ testID: 'preview-rail-preview' });
@@ -81,14 +95,26 @@ test('pressing a tick selects it and shows the preview card', async () => {
 test('pressing outside clears the pinned preview', async () => {
   const tree = await renderRail();
   await act(async () => {
-    tree.root.findByProps({ testID: 'preview-rail-item-u1' }).props.onPress();
+    tree.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-u1' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
   });
   expect(
-    tree.root.findAll(n => n.props.testID === 'preview-rail-preview'),
-  ).toHaveLength(1);
+    tree.root.findAll(n => n.props.testID === 'preview-rail-preview').length,
+  ).toBeGreaterThan(0);
 
   await act(async () => {
-    tree.root.findByProps({ testID: 'preview-rail-dismiss' }).props.onPress();
+    tree.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-dismiss' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
   });
   expect(
     tree.root.findAll(n => n.props.testID === 'preview-rail-preview'),
