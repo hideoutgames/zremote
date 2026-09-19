@@ -452,6 +452,7 @@ export function ModelPickerSheet({
         visible
         presentationStyle="formSheet"
         animationType="fade"
+        allowSwipeDismissal
         onRequestClose={onClose}
       >
         <View style={[styles.modalFill, { backgroundColor: theme.background }]}>

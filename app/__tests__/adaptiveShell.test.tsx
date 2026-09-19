@@ -3,6 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { Modal } from 'react-native';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import {
   AppServicesContext,
@@ -75,6 +76,17 @@ test('sidebar panel renders expanded; collapse flips pref + state', async () => 
   found = panel(tree.root);
   expect(found[0].props.accessibilityState.expanded).toBe(true);
   expect(found[0].props.pointerEvents).toBe('auto');
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('regular-width Settings Modal allows swipe / outside dismiss', async () => {
+  const tree = await render();
+  const modal = tree.root.findByType(Modal);
+  expect(modal.props.presentationStyle).toBe('formSheet');
+  expect(modal.props.allowSwipeDismissal).toBe(true);
+  expect(typeof modal.props.onRequestClose).toBe('function');
   await act(async () => {
     tree.unmount();
   });

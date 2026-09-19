@@ -39,10 +39,15 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
       maxContentHeight,
       detents,
       initialDetentIndex,
+      dismissible,
       children,
     },
     ref,
   ) => {
+    const canDismiss = dismissible !== false;
+    const dismiss = () => {
+      if (canDismiss) onDidDismiss?.();
+    };
     useImperativeHandle(ref, () => ({
       present: async () => {},
       dismiss: async () => onDidDismiss?.(),
@@ -57,11 +62,11 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
         transparent
         animationType="slide"
         presentationStyle="overFullScreen"
-        onRequestClose={() => onDidDismiss?.()}
+        onRequestClose={dismiss}
       >
         <Pressable
           style={styles.backdrop}
-          onPress={() => onDidDismiss?.()}
+          onPress={canDismiss ? dismiss : undefined}
           accessibilityLabel="Dismiss"
         />
         <View

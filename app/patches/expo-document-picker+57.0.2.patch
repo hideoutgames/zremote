@@ -1,0 +1,50 @@
+diff --git a/node_modules/expo-document-picker/ios/DocumentPickerModule.swift b/node_modules/expo-document-picker/ios/DocumentPickerModule.swift
+index 8b093cd..6a218fb 100644
+--- a/node_modules/expo-document-picker/ios/DocumentPickerModule.swift
++++ b/node_modules/expo-document-picker/ios/DocumentPickerModule.swift
+@@ -57,11 +57,17 @@ public class DocumentPickerModule: Module, PickingResultHandler {
+ 
+     do {
+       if options.multiple {
+-        let assets = try urls.map {
+-          try readDocumentDetails(
+-            documentUrl: $0,
+-            copy: options.copyToCacheDirectory
+-          )
++        var assets: [DocumentInfo] = []
++        for url in urls {
++          do {
++            let asset = try readDocumentDetails(
++              documentUrl: url,
++              copy: options.copyToCacheDirectory
++            )
++            assets.append(asset)
++          } catch {
++            // Keep siblings — one unreadable file must not empty the pick.
++          }
+         }
+         promise.resolve(DocumentPickerResponse(assets: assets))
+       } else {
+@@ -110,6 +116,13 @@ public class DocumentPickerModule: Module, PickingResultHandler {
+   private func readDocumentDetails(documentUrl: URL, copy: Bool) throws -> DocumentInfo {
+     var newUrl = documentUrl
+ 
++    let accessed = documentUrl.startAccessingSecurityScopedResource()
++    defer {
++      if accessed {
++        documentUrl.stopAccessingSecurityScopedResource()
++      }
++    }
++
+     guard let fileSystem = self.appContext?.fileSystem else {
+       throw Exceptions.FileSystemModuleNotFound()
+     }
+@@ -214,7 +227,7 @@ public class DocumentPickerModule: Module, PickingResultHandler {
+       let utTypes = options.type.compactMap { toUTType(mimeType: $0) }
+       return UIDocumentPickerViewController(
+         forOpeningContentTypes: utTypes,
+-        asCopy: true
++        asCopy: !options.multiple
+       )
+     } else {
+       let utiTypes = options.type.map { toUTI(mimeType: $0) }
