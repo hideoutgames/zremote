@@ -10,9 +10,6 @@ export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
    * steering into the live turn instead. */
   liveActionPrefersSteer: boolean;
-  /** Per-chat `RunRequest.autoApprove` — a run-time field (not ChatConfig);
-   * off by default, confirm-gated in the model picker. */
-  autoApproveByChat: Record<string, boolean>;
   /** Live Activities on/off + whether host/project show on the Lock Screen. */
   liveActivitiesEnabled: boolean;
   liveActivityShowHost: boolean;
@@ -45,12 +42,10 @@ export interface ComposeDefaults {
   harness: string;
   model: string;
   reasoning?: string;
-  sandbox?: string;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
   liveActionPrefersSteer: false,
-  autoApproveByChat: {},
   liveActivitiesEnabled: true,
   liveActivityShowHost: true,
   notificationsEnabled: true,
@@ -96,19 +91,6 @@ export const setLiveActionPrefersSteer = (v: boolean): void => {
 
 export const useLiveActionPrefersSteer = (): boolean =>
   useStore(uiPrefsStore, s => s.liveActionPrefersSteer);
-
-export const setAutoApprove = (chatId: string, v: boolean): void => {
-  uiPrefsStore.setState(s => ({
-    autoApproveByChat: { ...s.autoApproveByChat, [chatId]: v },
-  }));
-  save();
-};
-
-export const autoApproveFor = (chatId: string): boolean =>
-  uiPrefsStore.getState().autoApproveByChat[chatId] === true;
-
-export const useAutoApprove = (chatId: string): boolean =>
-  useStore(uiPrefsStore, s => s.autoApproveByChat[chatId] === true);
 
 export const setLiveActivitiesEnabled = (v: boolean): void => {
   uiPrefsStore.setState({ liveActivitiesEnabled: v });

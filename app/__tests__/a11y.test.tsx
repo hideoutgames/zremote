@@ -308,10 +308,44 @@ test('question panel: options are labelled buttons', async () => {
   ).toBeGreaterThanOrEqual(3); // two options + submit
 });
 
-test('model picker: search, provider groups, and sandbox are labelled', async () => {
+test('model picker: search, provider groups, effort, and fast are labelled', async () => {
   const catalog: DeviceCatalog = {
-    harnesses: [{ id: 'claude', name: 'Claude', reasoningLevels: [] } as never],
-    modelsByHarness: { claude: [] },
+    harnesses: [
+      {
+        id: 'claude-code',
+        name: 'Claude',
+        reasoningLevels: ['low', 'high'],
+      } as never,
+      { id: 'codex', name: 'Codex', reasoningLevels: [] } as never,
+    ],
+    modelsByHarness: {
+      'claude-code': [
+        {
+          id: 'sonnet',
+          label: 'Sonnet',
+          reasoningLevels: ['low', 'high'],
+          options: [
+            {
+              id: 'fastMode',
+              label: 'Fast',
+              choices: [
+                { id: 'on', label: 'On' },
+                { id: 'off', label: 'Off' },
+              ],
+              defaultChoice: 'off',
+            },
+          ],
+        },
+      ],
+      codex: [
+        {
+          id: 'gpt',
+          label: 'GPT',
+          reasoningLevels: [],
+          options: [],
+        },
+      ],
+    },
     loading: false,
     loadedAt: Date.now(),
   };
@@ -324,27 +358,43 @@ test('model picker: search, provider groups, and sandbox are labelled', async ()
         deviceId: 'h1',
         archived: false,
         createdAt: 0,
-        config: { harness: 'claude', modelOptions: {} },
+        config: {
+          harness: 'claude-code',
+          model: 'sonnet',
+          reasoning: 'high',
+          modelOptions: {},
+        },
       }}
       phase="idle"
       onClose={() => {}}
+      lockHarness={false}
     />,
   );
   const labels = labelled(mounted.root);
-  // Every pressable row carries a role + label.
   expect(labels.filter(l => l.role === 'button').length).toBeGreaterThan(0);
   expect(labels.some(l => l.label === 'Close')).toBe(true);
   expect(labels.some(l => l.label === 'Search')).toBe(true);
+  expect(labels.some(l => l.label === 'Sonnet')).toBe(true);
+  expect(labels.some(l => l.label === 'GPT')).toBe(true);
+  expect(labels.some(l => l.label === 'High')).toBe(true);
+  expect(labels.some(l => l.label === 'Fast mode')).toBe(true);
   expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
+  expect(labels.some(l => l.label.includes('Codex'))).toBe(true);
+  expect(mounted.root.findAll(n => n.props.children === 'Active')).toEqual([]);
+  expect(mounted.root.findAll(n => n.props.children === 'More')).toEqual([]);
+  expect(mounted.root.findAll(n => n.props.children === 'Sandbox')).toEqual([]);
   expect(
-    mounted.root.findAll(n => n.props.children === 'Active').length,
-  ).toBeGreaterThan(0);
-  expect(
-    mounted.root.findAll(n => n.props.children === 'More').length,
-  ).toBeGreaterThan(0);
+    mounted.root.findAll(n => n.props.children === 'Auto-approve'),
+  ).toEqual([]);
   expect(
     mounted.root.findAll(n => n.props.children === 'Model').length,
   ).toBeGreaterThan(0);
+  const selected = mounted.root.findAll(
+    n =>
+      n.props.accessibilityLabel === 'Sonnet' &&
+      n.props.accessibilityState?.selected === true,
+  );
+  expect(selected.length).toBeGreaterThan(0);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {

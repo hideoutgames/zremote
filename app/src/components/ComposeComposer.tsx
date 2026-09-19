@@ -59,12 +59,13 @@ import {
   resolveDictationPort,
   type DictationPort,
 } from '../zeron/native/dictation';
-import type {
-  Chat,
-  ChatConfig,
-  DeviceRow,
-  RepoRef,
-  Space,
+import {
+  FULL_ACCESS_SANDBOX,
+  type Chat,
+  type ChatConfig,
+  type DeviceRow,
+  type RepoRef,
+  type Space,
 } from '../zeron/protocol/types';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { t } from '../i18n/strings';
@@ -104,7 +105,6 @@ export function ComposeComposer({
   const [reasoning, setReasoning] = useState<string | undefined>(
     saved?.reasoning,
   );
-  const [sandbox, setSandbox] = useState<string | undefined>(saved?.sandbox);
   const [modelOptions, setModelOptions] = useState<Record<string, unknown>>({});
   const [branch, setBranch] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -138,7 +138,6 @@ export function ComposeComposer({
     if (saved.harness !== '') setHarness(saved.harness);
     if (saved.model !== '') setModel(saved.model);
     setReasoning(saved.reasoning);
-    setSandbox(saved.sandbox);
   }, [saved]);
 
   useEffect(() => {
@@ -153,11 +152,10 @@ export function ComposeComposer({
         harness,
         model,
         reasoning,
-        sandbox,
         ...patch,
       });
     },
-    [deviceId, spaceId, harness, model, reasoning, sandbox],
+    [deviceId, spaceId, harness, model, reasoning],
   );
 
   const host: DeviceRow | undefined = devices.find(d => d.id === deviceId);
@@ -260,7 +258,7 @@ export function ComposeComposer({
         harness,
         model: model === '' ? undefined : model,
         reasoning,
-        sandbox,
+        sandbox: FULL_ACCESS_SANDBOX,
         modelOptions,
       },
     }),
@@ -273,7 +271,6 @@ export function ComposeComposer({
       harness,
       model,
       reasoning,
-      sandbox,
       modelOptions,
     ],
   );
@@ -284,7 +281,6 @@ export function ComposeComposer({
     harness,
     model,
     reasoning,
-    sandbox,
   });
 
   const submit = useCallback(
@@ -316,7 +312,6 @@ export function ComposeComposer({
       spaceId,
       model,
       reasoning,
-      sandbox,
       draft,
       branch,
       onCreated,
@@ -344,13 +339,11 @@ export function ComposeComposer({
       setHarness(next.harness);
       setModel(next.model ?? '');
       setReasoning(next.reasoning);
-      setSandbox(next.sandbox);
       setModelOptions(next.modelOptions ?? {});
       persist({
         harness: next.harness,
         model: next.model ?? '',
         reasoning: next.reasoning,
-        sandbox: next.sandbox,
       });
     },
     [persist],

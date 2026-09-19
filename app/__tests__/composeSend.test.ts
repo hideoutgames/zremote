@@ -94,7 +94,7 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
       }),
       cwd: '/repo',
     }),
-    expect.objectContaining({ autoApprove: false }),
+    expect.objectContaining({ autoApprove: true }),
   );
   expect(uiPrefsStore.getState().composeDefaults).toEqual({
     deviceId: 'host1',
