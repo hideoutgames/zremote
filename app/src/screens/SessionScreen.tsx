@@ -305,6 +305,16 @@ function ActiveSessionScreen({
 
   const entries = session.entries;
 
+  // Local send/steer ids play SlideInDown once. Historical rows (thread
+  // open, list recycle) must not — UserMessage entering is mount-time.
+  const enterIdsRef = useRef(new Set<string>());
+  for (const p of session.pendingSends) {
+    enterIdsRef.current.add(p.messageId);
+  }
+  const onUserMessageEntered = useCallback((id: string) => {
+    enterIdsRef.current.delete(id);
+  }, []);
+
   const openReasoning = useCallback((text: string) => setReasoning(text), []);
 
   const onFetchOutput = useCallback(
@@ -320,7 +330,12 @@ function ActiveSessionScreen({
   const renderEntry = useCallback(
     ({ item }: { item: MessageEntry }) =>
       item.role === 'user' ? (
-        <UserMessage entry={item} chatId={chatId} />
+        <UserMessage
+          entry={item}
+          chatId={chatId}
+          animateEnter={enterIdsRef.current.has(item.id)}
+          onEntered={onUserMessageEntered}
+        />
       ) : (
         <AssistantMessage
           entry={item}
@@ -332,7 +347,7 @@ function ActiveSessionScreen({
           onOpenFileDiff={file => setFileDiff(file)}
         />
       ),
-    [phase, openReasoning, onFetchOutput, chatId],
+    [phase, openReasoning, onFetchOutput, chatId, onUserMessageEntered],
   );
 
   const doSend = useCallback(
