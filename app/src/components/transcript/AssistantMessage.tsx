@@ -13,12 +13,10 @@ import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import { markdownStyleFor } from '../../markdownStyle';
 import { useTheme } from '../../theme';
 import { Icon } from '../Icon';
-import { ShimmerText } from '../ShimmerText';
 import { ToolActivity, type ToolPart } from '../agentsKit/ToolActivity';
 import { TaskRows } from '../agentsKit/TaskRows';
 import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
-import type { SFSymbol } from 'sf-symbols-typescript';
 import { detectPlanArtifact, isPlanToolPart } from './detectPlan';
 import { isSubagentSpawn, subagentView } from './detectSubagent';
 import { isCompleteAssistant, turnChanges } from './turnChanges';
@@ -27,6 +25,8 @@ import { PlanCard } from './PlanCard';
 import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
 import { messageCopyContent } from './MessageCopyMenu';
+import { mendMarkdown } from './mendMarkdown';
+import { WorkingWaitLabel } from '../WorkingStatus';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
@@ -107,16 +107,22 @@ const PartView = ({
   const theme = useTheme();
   const mdStyle = markdownStyleFor(theme);
   switch (part.kind) {
-    case 'text':
+    case 'text': {
+      const source =
+        streaming && isLastText ? mendMarkdown(part.text) : part.text;
       return (
         <EnrichedMarkdownText
-          markdown={part.text}
+          markdown={source}
           markdownStyle={mdStyle}
           flavor="github"
           streamingAnimation={streaming && isLastText}
-          onLinkPress={({ url }) => Linking.openURL(url)}
+          onLinkPress={({ url }) => {
+            if (url === 'zeron:pending-link') return;
+            Linking.openURL(url);
+          }}
         />
       );
+    }
     case 'reasoning':
       return (
         <Pressable
@@ -189,6 +195,7 @@ export const AssistantMessage = React.memo(function ({
   onFetchOutput,
   onOpenPlan,
   onOpenFileDiff,
+  chatId,
 }: {
   entry: MessageEntry;
   phase: string;
@@ -209,8 +216,13 @@ export const AssistantMessage = React.memo(function ({
   const lastTextId = [...entry.parts]
     .reverse()
     .find(p => p.kind === 'text')?.id;
-  const waiting =
-    streaming && !entry.parts.some(p => p.kind === 'text' && p.text !== '');
+  const hasVisible = items.some(item =>
+    item.kind === 'tools'
+      ? item.parts.length > 0
+      : item.part.kind !== 'text' ||
+        (item.part.kind === 'text' && item.part.text !== ''),
+  );
+  const waiting = streaming && !hasVisible;
 
   const fullText = entry.parts
     .filter(p => p.kind === 'text')
@@ -222,19 +234,10 @@ export const AssistantMessage = React.memo(function ({
         <View style={styles.row}>
           {waiting ? (
             <View style={styles.statusRow} accessibilityLiveRegion="polite">
-              <Icon
-                name={
-                  (phase === 'working' ? 'sparkles' : 'text.bubble') as SFSymbol
-                }
-                size={15}
-                color={theme.textSecondary}
-              />
-              <ShimmerText
-                text={phaseLabel(phase)}
-                width={140}
-                fontSize={16}
-                maxLines={1}
-                align="left"
+              <WorkingWaitLabel
+                chatId={chatId}
+                startedAt={entry.createdAt}
+                fallback={phaseLabel(phase)}
               />
             </View>
           ) : (
@@ -244,6 +247,7 @@ export const AssistantMessage = React.memo(function ({
                   key={`tools-${i}`}
                   parts={item.parts}
                   onFetchOutput={onFetchOutput}
+                  autoOpen={streaming && i === items.length - 1}
                 />
               ) : (
                 <PartView

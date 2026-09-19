@@ -138,10 +138,11 @@ dropdown (popover-anchored natively).
 A started session is bound to `chat.config.harness`. The composer recent
 menu and More sheet list that provider's models only.
 
-**Compose** (`Composer` `mode: 'compose'`, draft key `__compose__`): iPhone
-replaces the home "New session" control with the same glass composer;
-iPad's sidebar **New thread** button clears the detail column and mounts
-`SessionScreen` without a `chatId` (empty transcript, composer focused).
+**Compose** (`Composer` `mode: 'compose'`, draft key `__compose__`): both
+iPhone and iPad Home show a right-aligned circular liquid-glass **New thread**
+button (`square.and.pencil`). Compact width (`RootPager`) and regular width
+(sidebar detail) both mount `SessionScreen` without a `chatId` (empty
+transcript, composer focused).
 The host / repo / origin dropdowns sit between the grabber and the
 input (`lockHarness={false}` on the model picker). Send creates the chat
 (`createChat` / `createProjectlessChat`), moves the compose draft onto

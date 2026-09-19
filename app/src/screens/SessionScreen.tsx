@@ -120,6 +120,7 @@ import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
+import { WorkingStatusStrip } from '../components/WorkingStatus';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { useKeyboardDismissPan } from '../navigation/keyboardDismissGesture';
@@ -208,15 +209,21 @@ function ComposeSessionScreen({
       >
         <View style={styles.headerRow} pointerEvents="box-none">
           <View style={styles.headerCenter} pointerEvents="box-none">
-            <Glass interactive style={styles.titlePill}>
-              <Text
-                style={[styles.title, { color: theme.text }]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
+            <View style={styles.titlePillWrap} pointerEvents="box-none">
+              <Glass
+                interactive
+                style={styles.titlePill}
+                testID="session-title-pill"
               >
-                {t('home.newThread')}
-              </Text>
-            </Glass>
+                <Text
+                  style={[styles.title, { color: theme.text }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {t('home.newThread')}
+                </Text>
+              </Glass>
+            </View>
           </View>
           <GlassControl
             interactive
@@ -652,61 +659,68 @@ function ActiveSessionScreen({
       >
         <View style={styles.headerRow} pointerEvents="box-none">
           <View style={styles.headerCenter} pointerEvents="box-none">
-            <Glass interactive style={styles.titlePill}>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild>
-                  <Pressable
-                    style={styles.titleHit}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('session.titleMenu')}
-                  >
-                    <Text
-                      style={[styles.title, { color: theme.text }]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
+            <View style={styles.titlePillWrap} pointerEvents="box-none">
+              <Glass
+                interactive
+                style={styles.titlePill}
+                testID="session-title-pill"
+              >
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <Pressable
+                      style={styles.titleHit}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('session.titleMenu')}
                     >
-                      {sessionTitle(chat)}
-                    </Text>
-                    {subtitle !== '' ? (
                       <Text
-                        style={[
-                          styles.subtitle,
-                          { color: theme.textSecondary },
-                        ]}
+                        style={[styles.title, { color: theme.text }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
-                        {subtitle}
+                        {sessionTitle(chat)}
                       </Text>
-                    ) : null}
-                  </Pressable>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content>
-                  <DropdownMenu.Item key="rename" onSelect={onRename}>
-                    <DropdownMenu.ItemTitle>
-                      {t('session.rename')}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Group>
-                    <DropdownMenu.Item key="pin" onSelect={onPin}>
+                      {subtitle !== '' ? (
+                        <Text
+                          style={[
+                            styles.subtitle,
+                            { color: theme.textSecondary },
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          testID="session-header-subtitle"
+                        >
+                          {subtitle}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Content>
+                    <DropdownMenu.Item key="rename" onSelect={onRename}>
                       <DropdownMenu.ItemTitle>
-                        {pinned ? t('session.unpin') : t('session.pin')}
+                        {t('session.rename')}
                       </DropdownMenu.ItemTitle>
-                      <DropdownMenu.ItemIcon
-                        ios={{ name: pinned ? 'pin.slash' : 'pin' }}
-                      />
                     </DropdownMenu.Item>
-                  </DropdownMenu.Group>
-                  <DropdownMenu.Item key="archive" onSelect={onArchive}>
-                    <DropdownMenu.ItemTitle>
-                      {chat?.archived
-                        ? t('home.row.unarchive')
-                        : t('session.archive')}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Root>
-            </Glass>
+                    <DropdownMenu.Group>
+                      <DropdownMenu.Item key="pin" onSelect={onPin}>
+                        <DropdownMenu.ItemTitle>
+                          {pinned ? t('session.unpin') : t('session.pin')}
+                        </DropdownMenu.ItemTitle>
+                        <DropdownMenu.ItemIcon
+                          ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+                        />
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Group>
+                    <DropdownMenu.Item key="archive" onSelect={onArchive}>
+                      <DropdownMenu.ItemTitle>
+                        {chat?.archived
+                          ? t('home.row.unarchive')
+                          : t('session.archive')}
+                      </DropdownMenu.ItemTitle>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Root>
+              </Glass>
+            </View>
           </View>
           <GlassControl
             interactive
@@ -886,6 +900,11 @@ function ActiveSessionScreen({
               : undefined
           }
         >
+          <WorkingStatusStrip
+            chatId={chatId}
+            startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+            working={phase === 'working'}
+          />
           <ComposerChromeRow
             queueCount={session.queue.length}
             onOpenQueue={() => setQueueOpen(true)}
@@ -1198,6 +1217,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 12,
   },
+  titlePillWrap: {
+    width: '100%',
+    alignItems: 'center',
+    minWidth: 0,
+  },
   titlePill: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -1206,14 +1230,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     maxWidth: '100%',
     minWidth: 0,
-    overflow: 'hidden',
+    flexShrink: 1,
   },
   titleHit: {
-    width: '100%',
     maxWidth: '100%',
     minWidth: 0,
     alignItems: 'center',
-    overflow: 'hidden',
+    flexShrink: 1,
   },
   circle: {
     width: 44,
@@ -1229,15 +1252,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    width: '100%',
     minWidth: 0,
+    flexShrink: 1,
     fontSize: 17,
     fontWeight: '600',
     textAlign: 'center',
   },
   subtitle: {
-    width: '100%',
     minWidth: 0,
+    flexShrink: 1,
     fontSize: 12,
     textAlign: 'center',
   },

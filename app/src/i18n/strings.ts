@@ -97,6 +97,8 @@ const en = {
   'session.submit': 'Submit',
   'session.question.custom': 'Your answer',
   'session.working': 'Working',
+  'session.toolRunning': 'Running',
+  'session.toolFailed': 'Failed',
   'session.queuedLocally': 'Queued',
   'session.changes': 'Changes',
   'session.files': 'Files',

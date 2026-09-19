@@ -1,20 +1,9 @@
-// Ported from Agents Kit (permissive collections only):
-//   components/beautiful-ui/tool-chips.tsx  — MIT © Shane Levine
-//   components/beui/... tool-result        — MIT © Saurabh Chauhan
-// A compact rail for one or more consecutive `tool` message parts: one row per
-// call (icon, label, detail), spinner while unresolved, red on error; expand
-// shows summary fields + truncated output + "Show full output (N KB)".
-// DOM/Tailwind replaced with StyleSheet + theme tokens; chip content and the
-// group summary come from the zeron proto port in transcript/toolLabel.ts.
+// Tool group rail — visual port of official iOS ToolGroupView / ToolChipRow
+// (_ref/zeron/apps/ios/Zeron/Transcript/TranscriptView.swift). Chip labels
+// still come from the zeron proto port in transcript/toolLabel.ts.
 
 import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MessagePart } from '../../zeron/protocol/types';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
@@ -47,11 +36,13 @@ const summaryFields = (part: ToolPart): [string, string][] => {
   return fields;
 };
 
-const ToolRow = ({
+const ToolChipRow = ({
   part,
+  continues,
   onFetchOutput,
 }: {
   part: ToolPart;
+  continues: boolean;
   onFetchOutput?: (partId: string) => void;
 }) => {
   const theme = useTheme();
@@ -61,7 +52,8 @@ const ToolRow = ({
   const expandable =
     part.output !== undefined ||
     part.outputRef !== undefined ||
-    summaryFields(part).length > 0;
+    summaryFields(part).length > 0 ||
+    detail !== '';
 
   const toggle = useCallback(
     () => expandable && setExpanded(e => !e),
@@ -71,58 +63,58 @@ const ToolRow = ({
   return (
     <View>
       <Pressable
-        style={styles.row}
+        style={styles.chip}
         onPress={toggle}
         hitSlop={4}
         accessibilityRole="button"
         accessibilityLabel={`${label}${detail === '' ? '' : `, ${detail}`}`}
         accessibilityState={{ expanded, disabled: !expandable }}
       >
-        <View
-          style={[
-            styles.iconTile,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
-          {part.resolved ? (
-            <Icon
-              name={toolIcon(part.call)}
-              size={14}
-              color={errored ? theme.danger : theme.textSecondary}
-            />
-          ) : (
-            <ActivityIndicator size={12} color={theme.textSecondary} />
-          )}
-        </View>
-        <View style={styles.rowText}>
-          <Text
+        <View style={styles.rail}>
+          <View style={[styles.railTick, { backgroundColor: theme.border }]} />
+          <Icon
+            name={toolIcon(part.call)}
+            size={14}
+            color={errored ? theme.danger : theme.textSecondary}
+          />
+          <View
             style={[
-              styles.label,
-              { color: errored ? theme.danger : theme.text },
+              styles.railStem,
+              continues ? { backgroundColor: theme.border } : styles.railOff,
             ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
+          />
+        </View>
+        <View style={styles.chipText}>
+          <View style={styles.chipTitle}>
+            <Text
+              style={[
+                styles.label,
+                { color: errored ? theme.danger : theme.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+            {errored ? (
+              <Text style={[styles.state, { color: theme.danger }]}>
+                {t('session.toolFailed')}
+              </Text>
+            ) : !part.resolved ? (
+              <Text style={[styles.state, { color: theme.textSecondary }]}>
+                {t('session.toolRunning')}
+              </Text>
+            ) : null}
+          </View>
           {detail !== '' ? (
             <Text
-              style={[styles.detail, { color: theme.textSecondary }]}
-              numberOfLines={1}
+              style={[styles.detail, { color: theme.text }]}
+              numberOfLines={expanded ? undefined : 2}
             >
               {detail}
             </Text>
           ) : null}
         </View>
-        {expandable ? (
-          <Icon
-            name="chevron.down"
-            size={12}
-            color={theme.textSecondary}
-            style={expanded ? styles.chevronUp : undefined}
-          />
-        ) : null}
       </Pressable>
-
       {expanded ? (
         <View style={[styles.expanded, { borderColor: theme.border }]}>
           {summaryFields(part).map(([k, v]) => (
@@ -158,67 +150,56 @@ const ToolRow = ({
 };
 
 /** Consecutive tool parts collapse into one rail: a group summary header plus
- * each call's row. */
+ * each call's row. `autoOpen` matches official iOS trailing-group-while-streaming. */
 export const ToolActivity = React.memo(function ({
   parts,
   onFetchOutput,
+  autoOpen = false,
 }: {
   parts: ToolPart[];
   onFetchOutput?: (partId: string) => void;
+  autoOpen?: boolean;
 }) {
   const theme = useTheme();
-  const [open, setOpen] = useState(parts.length === 1);
-  const running = parts.some(p => !p.resolved);
+  const [userOpen, setUserOpen] = useState<boolean | undefined>(undefined);
+  const open = userOpen ?? autoOpen;
   const anyError = parts.some(p => p.isError === true);
 
-  if (parts.length === 1) {
-    return (
-      <View style={styles.group}>
-        <ToolRow part={parts[0]} onFetchOutput={onFetchOutput} />
-      </View>
-    );
-  }
-
   return (
-    <View
-      style={[
-        styles.group,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
-      ]}
-    >
+    <View style={styles.group} testID="tool-group">
       <Pressable
         style={styles.groupHeader}
-        onPress={() => setOpen(o => !o)}
+        onPress={() => setUserOpen(!(userOpen ?? autoOpen))}
         hitSlop={4}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={toolGroupSummary(parts)}
+        testID="tool-group-toggle"
       >
-        {running ? (
-          <ActivityIndicator size={12} color={theme.textSecondary} />
-        ) : (
-          <Icon
-            name="checklist"
-            size={13}
-            color={anyError ? theme.danger : theme.textSecondary}
-          />
-        )}
+        <Icon
+          name="chevron.right"
+          size={11}
+          color={theme.textSecondary}
+          style={open ? styles.chevronOpen : undefined}
+        />
         <Text
           style={[
             styles.groupLabel,
             { color: anyError ? theme.danger : theme.textSecondary },
           ]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {toolGroupSummary(parts)}
         </Text>
-        <Icon
-          name="chevron.down"
-          size={12}
-          color={theme.textSecondary}
-          style={open ? styles.chevronUp : undefined}
-        />
       </Pressable>
       {open
-        ? parts.map(p => (
-            <ToolRow key={p.id} part={p} onFetchOutput={onFetchOutput} />
+        ? parts.map((p, i) => (
+            <ToolChipRow
+              key={p.id}
+              part={p}
+              continues={i < parts.length - 1}
+              onFetchOutput={onFetchOutput}
+            />
           ))
         : null}
     </View>
@@ -227,44 +208,49 @@ export const ToolActivity = React.memo(function ({
 
 const styles = StyleSheet.create({
   group: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
     marginVertical: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 5,
+    gap: 10,
+    minHeight: 44,
   },
-  groupLabel: { flex: 1, fontSize: 13, fontWeight: '500' },
-  row: {
+  groupLabel: { flex: 1, fontSize: 14 },
+  chevronOpen: { transform: [{ rotate: '90deg' }] },
+  chip: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
+    alignItems: 'flex-start',
+    gap: 10,
+    minHeight: 44,
   },
-  iconTile: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
+  rail: {
+    width: 26,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  rowText: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  label: { fontSize: 13, fontWeight: '600' },
-  detail: { flex: 1, fontSize: 13 },
+  railTick: { width: 1, height: 5 },
+  railStem: { width: 1, flex: 1, minHeight: 8 },
+  railOff: { backgroundColor: 'transparent' },
+  chipText: {
+    flex: 1,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  chipTitle: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  label: { fontSize: 14, fontWeight: '500' },
+  state: { fontSize: 12 },
+  detail: { fontSize: 13, fontFamily: 'Menlo' },
   expanded: {
+    marginLeft: 36,
     borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 4,
     paddingTop: 6,
     paddingBottom: 4,
     gap: 3,
   },
   expandedLine: { fontSize: 12, fontFamily: 'Menlo' },
   fetchLink: { fontSize: 13, fontWeight: '500', marginTop: 2 },
-  chevronUp: { transform: [{ rotate: '180deg' }] },
 });

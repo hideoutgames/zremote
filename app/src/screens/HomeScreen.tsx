@@ -1,7 +1,7 @@
 // Home (left pager page): search, spaces filter, the threads list driven by
 // workspaceStore, archived shelf, connection pill. Settings sits next to
-// the folder control; iPhone mounts the compose Composer here, iPad keeps
-// a New thread button that enters detail compose.
+// the folder control. A right-aligned circular New thread button opens a
+// blank chat (compact pager compose / regular detail compose).
 
 import React, {
   useCallback,
@@ -52,10 +52,10 @@ import {
 import { useRuntime } from '../app/runtimeContext';
 import type { Chat } from '../zeron/protocol/types';
 import { HarnessMark } from '../components/HarnessMark';
-import { Glass, GlassContainer } from '../components/Glass';
+import { Glass, GlassContainer, GlassControl } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { ShimmerText } from '../components/ShimmerText';
-import { ComposeComposer } from '../components/ComposeComposer';
+import { formatWorkingElapsed } from '../zeron/state/workingElapsed';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
 import {
   changeRequestStore,
@@ -175,13 +175,16 @@ const ThreadStatus = ({
 const ChatRow = React.memo(function ({
   chat,
   onOpen,
+  now,
 }: {
   chat: Chat;
   onOpen: (id: string) => void;
+  now: number;
 }) {
   const theme = useTheme();
   const runtime = useRuntime();
   const indicator = useIndicator(chat.id);
+  const session = useStore(workspaceStore, s => s.sessions[chat.id]);
   const host = useHostForChat(chat.id);
   const unseen = chatUnseen(chat);
   const prTone = useThreadPrDot(chat.id);
@@ -206,8 +209,13 @@ const ChatRow = React.memo(function ({
     prTone === null
       ? undefined
       : { tone: prTone, additions: prAdds, deletions: prDels },
-    relativeTime(at, Date.now()),
+    relativeTime(at, now),
   );
+  const workingStarted = session?.startedAt ?? session?.updatedAt;
+  const workingElapsed =
+    line.kind === 'working' && workingStarted !== undefined
+      ? formatWorkingElapsed(workingStarted, now)
+      : undefined;
 
   const armSuppress = useCallback(() => {
     suppressOpen.current = true;
@@ -333,6 +341,14 @@ const ChatRow = React.memo(function ({
             </View>
             <ThreadStatus line={line} theme={theme} chatId={chat.id} />
           </View>
+          {workingElapsed !== undefined ? (
+            <Text
+              style={[styles.elapsed, { color: theme.textSecondary }]}
+              testID={`thread-elapsed-${chat.id}`}
+            >
+              {workingElapsed}
+            </Text>
+          ) : null}
         </Pressable>
       </ContextMenu.Trigger>
       <ContextMenu.Content>
@@ -370,9 +386,9 @@ export function HomeScreen({
 }: {
   onOpenSession: (chatId: string) => void;
   onOpenSettings: () => void;
-  /** iPad sidebar: enter compose in the detail column. */
+  /** Compact pager / iPad detail: enter a blank compose session. */
   onCompose?: (opts?: { spaceId?: string }) => void;
-  /** 'sidebar' keeps New thread in this column; compose lives in detail. */
+  /** 'sidebar' tightens top-bar padding; New thread is the same on both. */
   variant?: 'screen' | 'sidebar';
 }) {
   const theme = useTheme();
@@ -385,7 +401,6 @@ export function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const [bottomH, setBottomH] = useState(0);
-  const [composerH, setComposerH] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
   const searching = searchFocused || query.trim() !== '';
@@ -444,9 +459,9 @@ export function HomeScreen({
 
   const renderRow = useCallback(
     ({ item }: LegendListRenderItemProps<Chat>) => (
-      <ChatRow chat={item} onOpen={onOpenSession} />
+      <ChatRow chat={item} onOpen={onOpenSession} now={now} />
     ),
-    [onOpenSession],
+    [onOpenSession, now],
   );
 
   const folderLabel =
@@ -544,13 +559,9 @@ export function HomeScreen({
 
   const bottomPad = searching
     ? insets.bottom + 12
-    : variant === 'sidebar'
-    ? bottomH !== 0
-      ? bottomH + 12
-      : insets.bottom + 76
-    : composerH !== 0
-    ? composerH + 12
-    : insets.bottom + 140;
+    : bottomH !== 0
+    ? bottomH + 12
+    : insets.bottom + 76;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -578,7 +589,12 @@ export function HomeScreen({
                   {t('home.pinned')}
                 </Text>
                 {pinned.map(c => (
-                  <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
+                  <ChatRow
+                    key={c.id}
+                    chat={c}
+                    onOpen={onOpenSession}
+                    now={now}
+                  />
                 ))}
               </View>
             ) : null}
@@ -622,7 +638,12 @@ export function HomeScreen({
               </Pressable>
               {archivedOpen
                 ? archived.map(c => (
-                    <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
+                    <ChatRow
+                      key={c.id}
+                      chat={c}
+                      onOpen={onOpenSession}
+                      now={now}
+                    />
                   ))
                 : null}
             </View>
@@ -637,7 +658,7 @@ export function HomeScreen({
         ]}
         scrollIndicatorInsets={{
           top: headerH,
-          bottom: searching ? 0 : variant === 'sidebar' ? bottomH : composerH,
+          bottom: searching ? 0 : bottomH,
         }}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
@@ -695,35 +716,23 @@ export function HomeScreen({
         ) : null}
       </View>
 
-      {searching ? null : variant === 'sidebar' ? (
+      {searching ? null : (
         <View
           style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
           onLayout={e => setBottomH(e.nativeEvent.layout.height)}
           pointerEvents="box-none"
         >
-          <Pressable
-            style={styles.newChatWrap}
+          <GlassControl
+            interactive
             onPress={() => enterCompose()}
             hitSlop={8}
             testID="home-new-thread"
             accessibilityRole="button"
             accessibilityLabel={t('home.newThread')}
+            style={styles.circle}
           >
-            <Glass interactive style={styles.newChat}>
-              <Icon name="plus" size={16} color={theme.text} />
-              <Text style={[styles.newChatText, { color: theme.text }]}>
-                {t('home.newThread')}
-              </Text>
-            </Glass>
-          </Pressable>
-        </View>
-      ) : (
-        <View
-          style={styles.homeComposer}
-          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
-          pointerEvents="box-none"
-        >
-          <ComposeComposer sticky onCreated={onOpenSession} />
+            <Icon name="square.and.pencil" size={18} color={theme.text} />
+          </GlassControl>
         </View>
       )}
     </View>
@@ -804,6 +813,13 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 17, fontWeight: '400' },
   unseen: { fontWeight: '500' },
   subtitle: { fontSize: 15 },
+  elapsed: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    marginLeft: 12,
+    textAlign: 'right',
+  },
   pinnedSection: { paddingBottom: 12 },
   archivedHeader: {
     flexDirection: 'row',
@@ -830,21 +846,10 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingTop: 8,
-    gap: 10,
   },
-  newChatWrap: { flex: 1 },
-  newChat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: CIRCLE,
-    borderRadius: CIRCLE / 2,
-  },
-  newChatText: { fontSize: 17, fontWeight: '600' },
   circle: {
     width: CIRCLE,
     height: CIRCLE,
@@ -862,11 +867,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  homeComposer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
 });

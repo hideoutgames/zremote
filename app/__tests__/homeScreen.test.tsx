@@ -318,6 +318,7 @@ test('working threads show Working; idle threads stay full color', async () => {
         chatId: 'live',
         deviceId: 'host1',
         status: 'working',
+        startedAt: Date.now() - 12_000,
         updatedAt: Date.now(),
       },
     },
@@ -326,6 +327,10 @@ test('working threads show Working; idle threads stay full color', async () => {
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   expect(statusOf(mounted.root, 'live')).toBe('Working');
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'thread-elapsed-live')[0]
+      ?.props.children,
+  ).toBe('12s');
   const liveTitle = mounted.root
     .findAllByType(Text)
     .find(n => n.props.children === 'Live agent');
@@ -438,27 +443,72 @@ test('pinning every thread does not show the empty state', async () => {
   expect(found).not.toContain('No sessions yet');
 });
 
-test('search is an always-visible field and hides the composer while focused', async () => {
+test('search is an always-visible field and hides New thread while focused', async () => {
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   const search = searchInput(mounted.root);
   expect(search).toBeDefined();
   expect(
-    mounted.root.findAll(n => n.props.testID === 'compose-composer').length,
+    mounted.root.findAll(n => n.props.testID === 'home-new-thread').length,
   ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'compose-composer'),
+  ).toHaveLength(0);
+  expect(texts(mounted.root)).not.toContain('New thread');
   await act(async () => {
     search.props.onFocus();
   });
   expect(
-    mounted.root.findAll(n => n.props.testID === 'compose-composer'),
+    mounted.root.findAll(n => n.props.testID === 'home-new-thread'),
   ).toHaveLength(0);
   await act(async () => {
     search.props.onBlur();
   });
   expect(
-    mounted.root.findAll(n => n.props.testID === 'compose-composer').length,
+    mounted.root.findAll(n => n.props.testID === 'home-new-thread').length,
   ).toBeGreaterThan(0);
+});
+
+test('New thread is a circular icon control with no visible text', async () => {
+  const mounted = await render(
+    <HomeScreen
+      onOpenSession={() => {}}
+      onOpenSettings={() => {}}
+      onCompose={() => {}}
+    />,
+  );
+  const btn = mounted.root.findAll(
+    n => n.props.testID === 'home-new-thread',
+  )[0];
+  expect(btn).toBeDefined();
+  expect(btn.props.accessibilityLabel).toBe('New thread');
+  const icons = btn.findAll(n => n.props.symbolName === 'square.and.pencil');
+  expect(icons.length).toBeGreaterThan(0);
+  expect(texts(mounted.root)).not.toContain('New thread');
+});
+
+test('working elapsed stays in hours past a day', async () => {
+  const now = Date.now();
+  workspaceStore.setState({
+    chats: [chat({ id: 'long', title: 'Long run', lastMessageAt: now })],
+    sessions: {
+      long: {
+        chatId: 'long',
+        deviceId: 'host1',
+        status: 'working',
+        startedAt: now - 47 * 3_600_000,
+        updatedAt: now,
+      },
+    },
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'thread-elapsed-long')[0]
+      ?.props.children,
+  ).toBe('47h');
 });
 
 test('sidebar New thread hides while search is focused', async () => {
