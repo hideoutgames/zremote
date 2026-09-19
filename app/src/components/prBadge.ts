@@ -26,6 +26,7 @@ export interface PrBadgeModel {
   showCounts: boolean;
   additions: number;
   deletions: number;
+  fileCount: number;
   title: string;
   state: ChangeRequestState;
   url: string;
@@ -35,12 +36,42 @@ export interface PrBadgeModel {
   headRef: string;
 }
 
+/** Checkout working-tree totals used on the PR header (not GitHub PR stats). */
+export type PrDiffCounts = Pick<CheckoutDiff, 'additions' | 'deletions'> & {
+  files?: readonly unknown[];
+};
+
 export const isDraftSummary = (summary: ChangeRequestSummary): boolean =>
   summary.draft === true;
 
+export const fileCountOf = (diff?: PrDiffCounts): number =>
+  diff?.files?.length ?? 0;
+
+export const hasPrStats = (
+  badge: Pick<PrBadgeModel, 'additions' | 'deletions' | 'fileCount'>,
+): boolean => badge.additions > 0 || badge.deletions > 0 || badge.fileCount > 0;
+
+export const prStateLabelKey = (
+  badge: Pick<PrBadgeModel, 'state' | 'tone'>,
+): 'pr.open' | 'pr.merged' | 'pr.draft' | 'pr.closed' => {
+  if (badge.state === 'closed') return 'pr.closed';
+  if (badge.tone === 'merged') return 'pr.merged';
+  if (badge.tone === 'draft') return 'pr.draft';
+  return 'pr.open';
+};
+
+export const isCheckoutPr = (
+  badge: Pick<PrBadgeModel, 'url' | 'number'>,
+  summary?: ChangeRequestSummary | null,
+): boolean => {
+  if (summary == null) return false;
+  if (badge.url !== '' && summary.url !== '') return badge.url === summary.url;
+  return badge.number === summary.number;
+};
+
 export const prBadgeModel = (
   summary: ChangeRequestSummary,
-  diff?: Pick<CheckoutDiff, 'additions' | 'deletions'>,
+  diff?: PrDiffCounts,
 ): PrBadgeModel | undefined => {
   if (summary.state === 'closed') return undefined;
   const draft = isDraftSummary(summary);
@@ -54,6 +85,7 @@ export const prBadgeModel = (
     showCounts: draft,
     additions,
     deletions,
+    fileCount: fileCountOf(diff),
     title: summary.title.replace(/[\r\n]+/g, ' '),
     state: summary.state,
     url: summary.url,

@@ -8,27 +8,11 @@ import { useStore } from 'zustand';
 import { useSessionState } from '../zeron/state/sessionStores';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { collectThreadPrs } from '../components/threadPrs';
-import type { PrBadgeModel } from '../components/prBadge';
+import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
+import { prToneColor } from '../components/prChrome';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-
-const stateLabel = (badge: PrBadgeModel): string => {
-  if (badge.state === 'closed') return t('pr.closed');
-  if (badge.tone === 'merged') return t('pr.merged');
-  if (badge.tone === 'draft') return t('pr.draft');
-  return t('pr.open');
-};
-
-const toneColor = (
-  badge: PrBadgeModel,
-  theme: ReturnType<typeof useTheme>,
-): string => {
-  if (badge.state === 'closed') return theme.textSecondary;
-  if (badge.tone === 'merged') return theme.prMerged;
-  if (badge.tone === 'draft') return theme.prDraft;
-  return theme.prOpen;
-};
 
 export function HistoryScreen({
   chatId,
@@ -66,13 +50,13 @@ export function HistoryScreen({
                 key={badge.url !== '' ? badge.url : String(badge.number)}
                 onPress={() => onOpenPr?.(badge)}
                 accessibilityRole="button"
-                accessibilityLabel={`${label}, ${stateLabel(badge)}`}
+                accessibilityLabel={`${label}, ${t(prStateLabelKey(badge))}`}
                 style={[styles.row, { borderBottomColor: theme.border }]}
               >
                 <View
                   style={[
                     styles.dot,
-                    { backgroundColor: toneColor(badge, theme) },
+                    { backgroundColor: prToneColor(theme, badge) },
                   ]}
                 />
                 <Text

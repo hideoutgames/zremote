@@ -199,9 +199,12 @@ These are thin screens over host-relayed RPCs — nothing runs on the phone.
 - **History** (`screens/HistoryScreen.tsx`, `components/threadPrs.ts`):
   pull requests in this thread. The checkout's current change request
   (`WatchCheckoutChangeRequest`) plus `github.com/.../pull/N` URLs in
-  transcript text. Tapping a row opens `PrSheet` (checkout diffs). Git
-  history RPCs (`ListGitHistory` etc.) remain in `zeron/history/history.ts`
-  but are not shown in this UI.
+  transcript text. Tapping a row opens `PrSheet` — GitHub Mobile layout
+  (Open badge, checkout `+/-` and file count, Overview / Discussion /
+  Commits). Overview is the PR body plus checkout diffs (`ChangesScreen`);
+  Discussion and Commits show `ListGitHistory` for the session cwd.
+  Squash & Merge, share, and “Open in browser” open the change-request
+  URL (no in-app merge or CI — the host has no checks/merge RPCs).
 - **Previews** (`screens/PreviewsScreen.tsx`): still implemented
   (`WatchPreviews {chatId}`) but unwired from the session overflow.
 - **Agent accounts** (`screens/AgentAccountsScreen.tsx`,

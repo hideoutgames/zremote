@@ -1,6 +1,8 @@
-// PR modal: state, markdown title/body, and the checkout diff list.
+// PR modal: GitHub Mobile layout filled from Zeron change-request,
+// checkout diffs, and checkout git history. Merge/share open the PR URL —
+// the phone has no checks or squash RPCs.
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,13 +13,28 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
-import { darkMarkdownStyle, lightMarkdownStyle } from '../markdownStyle';
+import * as Clipboard from 'expo-clipboard';
+import * as DropdownMenu from './menus/dropdown-menu';
+import { useStore } from 'zustand';
+import { markdownStyleFor } from '../markdownStyle';
 import { ChangesScreen } from '../screens/ChangesScreen';
-import { Glass } from './Glass';
+import { changeRequestStore } from '../zeron/state/changeRequestStore';
+import { useCheckoutGitHistory } from '../hooks/useCheckoutGitHistory';
+import { Glass, GlassContainer } from './Glass';
 import { Icon } from './Icon';
+import { PrCommitTimeline } from './PrCommitTimeline';
+import {
+  hasPrStats,
+  isCheckoutPr,
+  prStateLabelKey,
+  type PrBadgeModel,
+} from './prBadge';
+import { prToneColor, prToneFill } from './prChrome';
+import { openPrUrl, sharePrUrl } from './prUrl';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import type { PrBadgeModel } from './prBadge';
+
+type PrTab = 'overview' | 'discussion' | 'commits';
 
 export function PrSheet({
   chatId,
@@ -30,9 +47,42 @@ export function PrSheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const toneColor = badge.tone === 'merged' ? theme.prMerged : theme.prOpen;
-  const body =
-    badge.body !== undefined && badge.body !== '' ? badge.body : undefined;
+  const [tab, setTab] = useState<PrTab>('overview');
+  const liveSummary = useStore(
+    changeRequestStore,
+    s => s.byChat[chatId]?.changeRequest ?? undefined,
+  );
+  const liveDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
+  const checkout = isCheckoutPr(badge, liveSummary);
+  const model = useMemo((): PrBadgeModel => {
+    if (!checkout || liveSummary === undefined) return badge;
+    return {
+      ...badge,
+      title: liveSummary.title.replace(/[\r\n]+/g, ' '),
+      body: liveSummary.body ?? liveSummary.description ?? badge.body,
+      state: liveSummary.state,
+      tone:
+        liveSummary.state === 'merged'
+          ? 'merged'
+          : liveSummary.draft === true
+          ? 'draft'
+          : 'open',
+      baseRef: liveSummary.baseRef,
+      headRef: liveSummary.headRef,
+      url: liveSummary.url !== '' ? liveSummary.url : badge.url,
+      additions: liveDiff?.additions ?? badge.additions,
+      deletions: liveDiff?.deletions ?? badge.deletions,
+      fileCount:
+        liveDiff !== undefined ? liveDiff.files.length : badge.fileCount,
+    };
+  }, [badge, checkout, liveDiff, liveSummary]);
+  const history = useCheckoutGitHistory(chatId);
+  const toneColor = prToneColor(theme, model);
+  const hasUrl = model.url !== '';
+  const refs =
+    model.baseRef !== '' && model.headRef !== ''
+      ? `${model.baseRef} ← ${model.headRef}`
+      : '';
 
   return (
     <Modal
@@ -53,43 +103,267 @@ export function PrSheet({
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={t('session.back')}
+            style={styles.headerBtn}
           >
-            <Glass style={styles.close}>
-              <Icon name="xmark" size={15} color={theme.text} />
+            <Glass style={styles.circle}>
+              <Icon name="chevron.left" size={18} color={theme.text} />
             </Glass>
           </Pressable>
-          <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-            {badge.title !== '' ? badge.title : `#${badge.number}`}
-          </Text>
-          <View style={styles.close} />
+          <View style={styles.headerSpacer} />
+          {hasUrl ? (
+            <GlassContainer spacing={8} style={styles.headerRight}>
+              <Pressable
+                onPress={() => sharePrUrl(model.url)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('pr.shareA11y')}
+                testID="pr-share"
+                style={styles.headerBtn}
+              >
+                <Glass style={styles.circle}>
+                  <Icon name="link" size={16} color={theme.text} />
+                </Glass>
+              </Pressable>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('pr.moreA11y')}
+                    testID="pr-more"
+                    style={styles.headerBtn}
+                  >
+                    <Glass style={styles.circle}>
+                      <Icon name="ellipsis" size={16} color={theme.text} />
+                    </Glass>
+                  </Pressable>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  <DropdownMenu.Item
+                    key="copy"
+                    onSelect={() => {
+                      Clipboard.setStringAsync(model.url).catch(() => {});
+                    }}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('pr.copyLink')}
+                    </DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    key="open"
+                    onSelect={() => openPrUrl(model.url)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('pr.openInBrowser')}
+                    </DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </GlassContainer>
+          ) : (
+            <View style={styles.circle} />
+          )}
         </View>
-        <ScrollView contentContainerStyle={styles.meta}>
-          <Text style={[styles.state, { color: toneColor }]}>
-            {badge.tone === 'merged'
-              ? t('pr.merged')
-              : badge.tone === 'draft'
-              ? t('pr.draft')
-              : t('pr.open')}
-            {` · #${badge.number}`}
+
+        <View style={styles.meta}>
+          <View style={styles.statsRow}>
+            <View
+              style={[
+                styles.statePill,
+                { backgroundColor: prToneFill(theme, model) },
+              ]}
+            >
+              <Text style={[styles.stateText, { color: toneColor }]}>
+                {t(prStateLabelKey(model))}
+              </Text>
+            </View>
+            {hasPrStats(model) ? (
+              <Text
+                style={[styles.stats, { color: theme.textSecondary }]}
+                accessibilityLabel={t('pr.statsA11y')
+                  .replace('{additions}', String(model.additions))
+                  .replace('{deletions}', String(model.deletions))
+                  .replace('{files}', String(model.fileCount))}
+              >
+                <Text style={{ color: theme.diffAddText }}>
+                  {`+${model.additions}`}
+                </Text>
+                {` `}
+                <Text style={{ color: theme.diffDelText }}>
+                  {`-${model.deletions}`}
+                </Text>
+                {` · ${t('pr.files').replace(
+                  '{count}',
+                  String(model.fileCount),
+                )}`}
+              </Text>
+            ) : null}
+          </View>
+          <Text
+            style={[styles.prTitle, { color: theme.text }]}
+            accessibilityRole="header"
+          >
+            {model.title}
+            <Text
+              style={{ color: theme.textSecondary }}
+            >{` #${model.number}`}</Text>
           </Text>
-          <Text style={[styles.refs, { color: theme.textSecondary }]}>
-            {`${badge.baseRef} ← ${badge.headRef}`}
-          </Text>
-          {body !== undefined ? (
-            <EnrichedMarkdownText
-              markdown={body}
-              markdownStyle={
-                theme.scheme === 'dark' ? darkMarkdownStyle : lightMarkdownStyle
-              }
-              flavor="github"
+          <View style={styles.tabs} accessibilityRole="tablist">
+            <PrTabButton
+              id="overview"
+              label={t('pr.overview')}
+              selected={tab === 'overview'}
+              onPress={() => setTab('overview')}
             />
-          ) : null}
-        </ScrollView>
-        <View style={styles.diffs}>
-          <ChangesScreen chatId={chatId} embedded />
+            <PrTabButton
+              id="discussion"
+              label={t('pr.discussion')}
+              selected={tab === 'discussion'}
+              onPress={() => setTab('discussion')}
+            />
+            <PrTabButton
+              id="commits"
+              label={t('pr.commits')}
+              count={history.commits.length}
+              selected={tab === 'commits'}
+              onPress={() => setTab('commits')}
+            />
+          </View>
         </View>
+
+        {tab === 'overview' ? (
+          <OverviewTab
+            chatId={chatId}
+            model={model}
+            refs={refs}
+            hasUrl={hasUrl}
+          />
+        ) : (
+          <PrCommitTimeline
+            commits={history.commits}
+            loading={history.loading}
+            error={history.error}
+          />
+        )}
       </View>
     </Modal>
+  );
+}
+
+function OverviewTab({
+  chatId,
+  model,
+  refs,
+  hasUrl,
+}: {
+  chatId: string;
+  model: PrBadgeModel;
+  refs: string;
+  hasUrl: boolean;
+}) {
+  const theme = useTheme();
+  const body = model.body?.trim() ?? '';
+  const showMerge = hasUrl && model.state === 'open' && model.tone !== 'merged';
+  const mergeLabel =
+    model.tone === 'draft' ? t('pr.openOnGitHub') : t('pr.squashMerge');
+
+  return (
+    <View style={styles.fill}>
+      <ScrollView contentContainerStyle={styles.overview}>
+        {refs !== '' || showMerge ? (
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            {refs !== '' ? (
+              <Text
+                style={[styles.refs, { color: theme.text }]}
+                numberOfLines={2}
+              >
+                {refs}
+              </Text>
+            ) : null}
+            {showMerge ? (
+              <Pressable
+                onPress={() => openPrUrl(model.url)}
+                accessibilityRole="button"
+                accessibilityLabel={mergeLabel}
+                testID="pr-squash-merge"
+                style={[styles.merge, { backgroundColor: theme.prOpen }]}
+              >
+                <Text
+                  style={[
+                    styles.mergeLabel,
+                    theme.scheme === 'dark'
+                      ? styles.mergeOnDark
+                      : styles.mergeOnLight,
+                  ]}
+                >
+                  {mergeLabel}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+        {body !== '' ? (
+          <EnrichedMarkdownText
+            markdown={body}
+            markdownStyle={markdownStyleFor(theme)}
+            flavor="github"
+          />
+        ) : null}
+        <Text style={[styles.changed, { color: theme.textSecondary }]}>
+          {t('pr.whatChanged')}
+        </Text>
+      </ScrollView>
+      <View style={styles.diffs}>
+        <ChangesScreen chatId={chatId} embedded />
+      </View>
+    </View>
+  );
+}
+
+function PrTabButton({
+  id,
+  label,
+  count,
+  selected,
+  onPress,
+}: {
+  id: PrTab;
+  label: string;
+  count?: number;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const title = count !== undefined && count > 0 ? `${label} ${count}` : label;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected }}
+      accessibilityLabel={title}
+      testID={`pr-tab-${id}`}
+      style={[
+        styles.tab,
+        selected ? { backgroundColor: theme.surface } : undefined,
+      ]}
+    >
+      <Text
+        style={[
+          styles.tabLabel,
+          { color: selected ? theme.text : theme.textSecondary },
+        ]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -98,21 +372,64 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 8,
   },
-  close: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  headerBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  headerSpacer: { flex: 1 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  title: { flex: 1, fontSize: 17, fontWeight: '600', textAlign: 'center' },
-  meta: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
-  state: { fontSize: 14, fontWeight: '600' },
-  refs: { fontSize: 12 },
-  diffs: { flex: 1, minHeight: 220 },
+  meta: { paddingHorizontal: 16, paddingBottom: 8, gap: 10 },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  statePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  stateText: { fontSize: 13, fontWeight: '600' },
+  stats: { fontSize: 15, fontWeight: '600' },
+  prTitle: { fontSize: 26, fontWeight: '700', lineHeight: 32 },
+  tabs: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  tab: {
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  tabLabel: { fontSize: 15, fontWeight: '500' },
+  overview: { paddingHorizontal: 16, paddingBottom: 12, gap: 14 },
+  card: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 12,
+  },
+  refs: { fontSize: 15, fontWeight: '600' },
+  merge: {
+    borderRadius: 10,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  mergeLabel: { fontSize: 16, fontWeight: '600' },
+  mergeOnDark: { color: '#000000' },
+  mergeOnLight: { color: '#FFFFFF' },
+  changed: { fontSize: 20, fontWeight: '600', marginTop: 4 },
+  diffs: { flex: 1, minHeight: 180 },
 });
