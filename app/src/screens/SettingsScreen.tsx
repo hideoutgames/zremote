@@ -54,6 +54,8 @@ import {
   resolveDictationPort,
 } from '../zeron/native/dictation';
 import type { DictationModelState } from '../../modules/zeron-dictation/src/Dictation.nitro';
+import { AppearanceBackground } from '../components/settings/AppearanceBackground';
+import { TopChromeFade } from '../components/TopChromeFade';
 
 const log = createLog();
 
@@ -425,169 +427,174 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-      >
-        {agentsFor !== undefined ? (
-          <AgentsPage device={agentsFor} />
-        ) : (
-          <>
-            <SettingsGroup header={t('settings.account')}>
-              <SettingsRow
-                title={accountTitle}
-                leading={
-                  <Icon
-                    name="person.crop.circle"
-                    size={28}
-                    color={theme.textSecondary}
-                  />
-                }
-                testID="settings-account"
-                accessibilityLabel={accountTitle}
-              />
-            </SettingsGroup>
-
-            <SettingsGroup>
-              <SettingsRow
-                title={
-                  demoActive ? t('settings.exitDemo') : t('settings.signOut')
-                }
-                destructive
-                onPress={confirmSignOut}
-                testID="settings-sign-out"
-              />
-            </SettingsGroup>
-
-            {devices.length > 0 ? (
-              <SettingsGroup header={t('settings.devices')}>
-                {devices.map(d => {
-                  const connected = deviceConnected(d.id);
-                  const subtitle = connected
-                    ? t('settings.connected')
-                    : t('settings.notConnected');
-                  return (
-                    <SettingsRow
-                      key={d.id}
-                      title={d.name}
-                      subtitle={subtitle}
-                      leading={
-                        <Icon
-                          name="externaldrive"
-                          size={22}
-                          color={theme.textSecondary}
-                        />
-                      }
-                      showChevron
-                      onPress={() => setAgentsFor(d)}
-                      testID={`settings-device-${d.id}`}
-                      accessibilityLabel={`${d.name}, ${subtitle}`}
+      <View style={styles.body}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+        >
+          {agentsFor !== undefined ? (
+            <AgentsPage device={agentsFor} />
+          ) : (
+            <>
+              <SettingsGroup header={t('settings.account')}>
+                <SettingsRow
+                  title={accountTitle}
+                  leading={
+                    <Icon
+                      name="person.crop.circle"
+                      size={28}
+                      color={theme.textSecondary}
                     />
-                  );
-                })}
+                  }
+                  testID="settings-account"
+                  accessibilityLabel={accountTitle}
+                />
               </SettingsGroup>
-            ) : null}
 
-            <SettingsGroup
-              header={t('settings.notifications')}
-              footer={t('settings.notificationsHint')}
-            >
-              <SettingsRow
-                title={t('settings.notifications')}
-                trailing={
-                  <Switch
-                    value={notificationsEnabled}
-                    onValueChange={setNotificationsEnabled}
-                    accessibilityLabel={t('settings.notifications')}
-                  />
-                }
-              />
-            </SettingsGroup>
+              <SettingsGroup>
+                <SettingsRow
+                  title={
+                    demoActive ? t('settings.exitDemo') : t('settings.signOut')
+                  }
+                  destructive
+                  onPress={confirmSignOut}
+                  testID="settings-sign-out"
+                />
+              </SettingsGroup>
 
-            <SettingsGroup header={t('settings.haptics')}>
-              <SettingsRow
-                title={t('settings.haptics')}
-                trailing={
-                  <Switch
-                    value={hapticsEnabled}
-                    onValueChange={setHapticsEnabled}
-                    accessibilityLabel={t('settings.haptics')}
-                  />
-                }
-              />
-            </SettingsGroup>
-
-            <SettingsGroup
-              header={t('settings.liveActivities')}
-              footer={t('settings.liveActivityHint')}
-            >
-              <SettingsRow
-                title={t('settings.liveActivities')}
-                trailing={
-                  <Switch
-                    value={liveActivities}
-                    onValueChange={setLiveActivitiesEnabled}
-                    accessibilityLabel={t('settings.liveActivities')}
-                  />
-                }
-              />
-              <SettingsRow
-                title={t('settings.liveActivityShowHost')}
-                trailing={
-                  <Switch
-                    value={liveActivityShowHost}
-                    onValueChange={setLiveActivityShowHost}
-                    accessibilityLabel={t('settings.liveActivityShowHost')}
-                  />
-                }
-              />
-            </SettingsGroup>
-
-            <SettingsGroup
-              header={t('settings.syncMode')}
-              footer={t('settings.syncModeHint')}
-            >
-              <SettingsRow
-                title={t('settings.syncModeRelay')}
-                trailing={
-                  <Switch
-                    value={forceRelayMode}
-                    onValueChange={setForceRelayMode}
-                    accessibilityLabel={t('settings.syncModeRelay')}
-                  />
-                }
-              />
-            </SettingsGroup>
-
-            <SettingsGroup
-              header={t('settings.dictation')}
-              footer={dictationFooter}
-            >
-              <SettingsRow
-                title={t('settings.dictationLanguage')}
-                value={dictationLocale}
-                trailing={
-                  dictationModelState === 'downloadable' ? (
-                    <Pressable
-                      onPress={downloadDictationModel}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('settings.dictationDownload')}
-                    >
-                      <Icon
-                        name="arrow.down.circle"
-                        size={22}
-                        color={theme.accent}
+              {devices.length > 0 ? (
+                <SettingsGroup header={t('settings.devices')}>
+                  {devices.map(d => {
+                    const connected = deviceConnected(d.id);
+                    const subtitle = connected
+                      ? t('settings.connected')
+                      : t('settings.notConnected');
+                    return (
+                      <SettingsRow
+                        key={d.id}
+                        title={d.name}
+                        subtitle={subtitle}
+                        leading={
+                          <Icon
+                            name="externaldrive"
+                            size={22}
+                            color={theme.textSecondary}
+                          />
+                        }
+                        showChevron
+                        onPress={() => setAgentsFor(d)}
+                        testID={`settings-device-${d.id}`}
+                        accessibilityLabel={`${d.name}, ${subtitle}`}
                       />
-                    </Pressable>
-                  ) : undefined
-                }
-              />
-            </SettingsGroup>
-          </>
-        )}
-      </ScrollView>
+                    );
+                  })}
+                </SettingsGroup>
+              ) : null}
+
+              <SettingsGroup
+                header={t('settings.notifications')}
+                footer={t('settings.notificationsHint')}
+              >
+                <SettingsRow
+                  title={t('settings.notifications')}
+                  trailing={
+                    <Switch
+                      value={notificationsEnabled}
+                      onValueChange={setNotificationsEnabled}
+                      accessibilityLabel={t('settings.notifications')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <SettingsGroup header={t('settings.haptics')}>
+                <SettingsRow
+                  title={t('settings.haptics')}
+                  trailing={
+                    <Switch
+                      value={hapticsEnabled}
+                      onValueChange={setHapticsEnabled}
+                      accessibilityLabel={t('settings.haptics')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <AppearanceBackground />
+
+              <SettingsGroup
+                header={t('settings.liveActivities')}
+                footer={t('settings.liveActivityHint')}
+              >
+                <SettingsRow
+                  title={t('settings.liveActivities')}
+                  trailing={
+                    <Switch
+                      value={liveActivities}
+                      onValueChange={setLiveActivitiesEnabled}
+                      accessibilityLabel={t('settings.liveActivities')}
+                    />
+                  }
+                />
+                <SettingsRow
+                  title={t('settings.liveActivityShowHost')}
+                  trailing={
+                    <Switch
+                      value={liveActivityShowHost}
+                      onValueChange={setLiveActivityShowHost}
+                      accessibilityLabel={t('settings.liveActivityShowHost')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.syncMode')}
+                footer={t('settings.syncModeHint')}
+              >
+                <SettingsRow
+                  title={t('settings.syncModeRelay')}
+                  trailing={
+                    <Switch
+                      value={forceRelayMode}
+                      onValueChange={setForceRelayMode}
+                      accessibilityLabel={t('settings.syncModeRelay')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.dictation')}
+                footer={dictationFooter}
+              >
+                <SettingsRow
+                  title={t('settings.dictationLanguage')}
+                  value={dictationLocale}
+                  trailing={
+                    dictationModelState === 'downloadable' ? (
+                      <Pressable
+                        onPress={downloadDictationModel}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('settings.dictationDownload')}
+                      >
+                        <Icon
+                          name="arrow.down.circle"
+                          size={22}
+                          color={theme.accent}
+                        />
+                      </Pressable>
+                    ) : undefined
+                  }
+                />
+              </SettingsGroup>
+            </>
+          )}
+        </ScrollView>
+        <TopChromeFade inset={0} />
+      </View>
     </View>
   );
 }
@@ -631,6 +638,7 @@ const styles = StyleSheet.create({
   backLabel: { fontSize: 17 },
   doneHit: { minHeight: 44, justifyContent: 'center' },
   done: { fontSize: 17, fontWeight: '600' },
+  body: { flex: 1 },
   content: { paddingTop: 8, paddingBottom: 40 },
   apply: { fontSize: 17 },
   embeddedHeader: {

@@ -41,10 +41,13 @@ export function FadeBlur({
   intensity,
   style,
   fade = 'up',
+  fadeHold,
 }: {
   intensity: number;
   style?: StyleProp<ViewStyle>;
-  fade?: 'up' | 'vertical' | 'radial';
+  fade?: 'up' | 'down' | 'vertical' | 'radial';
+  /** For `down`, the 0–1 location where the opaque plateau ends. */
+  fadeHold?: number;
 }) {
   const theme = useTheme();
   const [reduceTransparency, setReduceTransparency] = useState(false);
@@ -92,9 +95,17 @@ export function FadeBlur({
   const colors =
     fade === 'vertical'
       ? (['transparent', 'black', 'transparent'] as const)
+      : fade === 'down'
+      ? (['black', 'black', 'transparent'] as const)
       : (['transparent', 'black'] as const);
+  const hold =
+    fade === 'down' ? Math.min(0.85, Math.max(0.08, fadeHold ?? 0.55)) : 0.5;
   const locations =
-    fade === 'vertical' ? ([0, 0.5, 1] as const) : ([0, 1] as const);
+    fade === 'vertical'
+      ? ([0, 0.5, 1] as const)
+      : fade === 'down'
+      ? ([0, hold, 1] as const)
+      : ([0, 1] as const);
   return (
     <MaskedView
       pointerEvents="none"

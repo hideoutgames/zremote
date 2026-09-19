@@ -90,6 +90,7 @@ export function SettingsRow({
   last,
   accessibilityLabel,
   testID,
+  titleNumberOfLines,
 }: {
   title: string;
   subtitle?: string;
@@ -102,6 +103,7 @@ export function SettingsRow({
   last?: boolean;
   accessibilityLabel?: string;
   testID?: string;
+  titleNumberOfLines?: number;
 }) {
   const theme = useTheme();
   const label = accessibilityLabel ?? title;
@@ -124,7 +126,7 @@ export function SettingsRow({
             styles.title,
             { color: destructive === true ? theme.danger : theme.text },
           ]}
-          numberOfLines={1}
+          numberOfLines={titleNumberOfLines ?? 1}
         >
           {title}
         </Text>

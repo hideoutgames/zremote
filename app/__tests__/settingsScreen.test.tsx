@@ -8,6 +8,7 @@ import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import { authStore } from '../src/zeron/state/authStore';
 import { demoModeStore } from '../src/demo/demoMode';
+import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import {
   AppServicesContext,
   type AppServices,
@@ -79,6 +80,10 @@ beforeEach(() => {
     connection: 'connected',
     lastSyncAt: undefined,
   });
+  uiPrefsStore.setState({
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'none',
+  });
 });
 
 afterEach(() => {
@@ -108,6 +113,59 @@ test('shows account email and Connected desktop — not edge URL, OS, or version
   expect(text).not.toContain('terminal');
   expect(text).not.toContain('0.1.0');
   expect(text).not.toContain('Build');
+});
+
+test('appearance group offers choose image and hides effects until set', async () => {
+  uiPrefsStore.setState({
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'none',
+  });
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const text = allText(mounted.root);
+  expect(text).toContain('Appearance');
+  expect(text).toContain('New thread composer background');
+  expect(text).toContain(
+    'Add an image behind the composer on empty new threads.',
+  );
+  expect(text).toContain('Choose image');
+  expect(
+    mounted.root.findAll(
+      n =>
+        n.props.testID === 'settings-background-choose' &&
+        typeof n.props.onPress === 'function',
+    ).length,
+  ).toBe(1);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-background-effects')
+      .length,
+  ).toBe(0);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
+  ).toBeGreaterThan(0);
+});
+
+test('installed background shows replace/remove and effect chips', async () => {
+  uiPrefsStore.setState({
+    newThreadComposerBackground: {
+      uri: 'file:///docs/new-thread-backgrounds/x.png',
+      name: 'sunset.png',
+    },
+    newThreadBackgroundEffect: 'none',
+  });
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const text = allText(mounted.root);
+  expect(text).toContain('sunset.png');
+  expect(text).toContain('Replace image');
+  expect(text).toContain('Remove');
+  expect(text).toContain('Background effect');
+  expect(text).toContain('Shows the original artwork.');
+  expect(
+    mounted.root.findAll(
+      n =>
+        n.props.testID === 'settings-background-effect-ascii' &&
+        typeof n.props.onPress === 'function',
+    ).length,
+  ).toBe(1);
 });
 
 test('stale presence shows Not connected', async () => {

@@ -42,6 +42,8 @@ import { OrgGateScreen } from '../screens/OrgGateScreen';
 import { AdaptiveShell } from '../navigation/AdaptiveShell';
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { MenuDismissShield } from '../components/menus/MenuDismissShield';
+import { bindBackgroundFs } from '../zeron/state/newThreadBackground';
+import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
 
 const log = createLog();
 
@@ -80,6 +82,10 @@ export function ZeronApp() {
   }, [cfg.edgeUrl]);
 
   const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    bindBackgroundFs(expoBackgroundFs);
+  }, []);
 
   useEffect(() => {
     WebBrowser.maybeCompleteAuthSession();
