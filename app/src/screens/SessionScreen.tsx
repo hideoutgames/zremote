@@ -668,6 +668,8 @@ function ActiveSessionScreen({
         startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
       />
 
+      <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
+
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
       <View
@@ -675,7 +677,6 @@ function ActiveSessionScreen({
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
-        <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
         <View style={styles.headerRow} pointerEvents="box-none">
           <View style={styles.headerCenter} pointerEvents="box-none">
             <View style={styles.titlePillWrap} pointerEvents="box-none">
@@ -835,6 +836,7 @@ function ActiveSessionScreen({
 
       {composerFocused ? (
         <View
+          testID="composer-focus-dim"
           style={[
             styles.focusDim,
             theme.scheme === 'dark'
