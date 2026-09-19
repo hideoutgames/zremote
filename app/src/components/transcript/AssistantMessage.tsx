@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
   bubble: {
     alignSelf: 'flex-start',
-    maxWidth: '88%',
+    maxWidth: '100%',
     borderRadius: 20,
   },
   bubblePad: {
