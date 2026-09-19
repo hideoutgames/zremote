@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
+import { useDismissibleNativeModal } from '../hooks/useDismissibleNativeModal';
 import { Glass } from './Glass';
 import { FadeBlur } from './FadeBlur';
 import { EffortSlider } from './EffortSlider';
@@ -130,8 +131,11 @@ export function EffortOverlay({
   const contentOpacity = useRef(new Animated.Value(skipMorph ? 1 : 0)).current;
   const washOpacity = useRef(new Animated.Value(skipMorph ? 1 : 0)).current;
   const closing = useRef(false);
-  const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
+  const {
+    visible,
+    hide,
+    onDismiss: onModalDismiss,
+  } = useDismissibleNativeModal(onDismiss);
   const label = capitalizeLevel(value ?? levels[0] ?? '');
 
   useEffect(() => {
@@ -231,12 +235,13 @@ export function EffortOverlay({
         useNativeDriver: false,
       }),
     ]).start(({ finished }) => {
-      if (finished) onDismissRef.current();
+      if (finished) hide();
       else closing.current = false;
     });
   }, [
     contentOpacity,
     dest,
+    hide,
     left,
     origin,
     pillH,
@@ -250,8 +255,9 @@ export function EffortOverlay({
     <Modal
       transparent
       animationType="none"
-      visible
+      visible={visible}
       onRequestClose={close}
+      onDismiss={onModalDismiss}
       statusBarTranslucent
     >
       <View style={styles.root} pointerEvents="box-none">

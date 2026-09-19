@@ -63,6 +63,11 @@ test('tapping the effort overlay backdrop dismisses it', async () => {
     done.props.onPress();
     jest.advanceTimersByTime(300);
   });
+  expect(tree!.root.findByType(Modal).props.visible).toBe(false);
+  expect(onDismiss).not.toHaveBeenCalled();
+  await act(async () => {
+    tree!.root.findByType(Modal).props.onDismiss();
+  });
   expect(onDismiss).toHaveBeenCalledTimes(1);
   await act(async () => {
     tree?.unmount();

@@ -51,6 +51,7 @@ import { EffortOverlay } from './EffortOverlay';
 import { capitalizeLevel } from './effortSliderMath';
 import { fastOptionForModel, isFastEnabled } from './fastMode';
 import { MenuDismissShield } from './menus/MenuDismissShield';
+import { useDismissibleNativeModal } from '../hooks/useDismissibleNativeModal';
 
 export interface ModelPickerSheetProps {
   runtime: AppRuntime;
@@ -178,6 +179,12 @@ export function ModelPickerSheet({
 }: ModelPickerSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const {
+    visible,
+    hide,
+    onRequestClose,
+    onDismiss: onModalDismiss,
+  } = useDismissibleNativeModal(onClose);
   const deviceId = chat.deviceId;
   const catalog = useStore(catalogStore, s => s.byDevice[deviceId]);
   const catalogTick = catalog?.loadedAt ?? 0;
@@ -306,7 +313,7 @@ export function ModelPickerSheet({
   const header = (
     <View style={styles.header}>
       <Pressable
-        onPress={onClose}
+        onPress={formSheet === true ? hide : onClose}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={t('common.close')}
@@ -449,11 +456,12 @@ export function ModelPickerSheet({
   const sheet =
     formSheet === true ? (
       <Modal
-        visible
+        visible={visible}
         presentationStyle="formSheet"
         animationType="fade"
         allowSwipeDismissal
-        onRequestClose={onClose}
+        onRequestClose={onRequestClose}
+        onDismiss={onModalDismiss}
       >
         <View style={[styles.modalFill, { backgroundColor: theme.background }]}>
           {body}

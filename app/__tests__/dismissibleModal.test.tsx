@@ -61,6 +61,11 @@ test('image preview backdrop press dismisses', async () => {
   await act(async () => {
     backdrop.props.onPress();
   });
+  expect(tree.root.findByType(Modal).props.visible).toBe(false);
+  expect(onDismiss).not.toHaveBeenCalled();
+  await act(async () => {
+    tree.root.findByType(Modal).props.onDismiss();
+  });
   expect(onDismiss).toHaveBeenCalledTimes(1);
   const close = tree.root.findAll(
     n =>
@@ -69,8 +74,9 @@ test('image preview backdrop press dismisses', async () => {
   )[0];
   await act(async () => {
     close.props.onPress();
+    tree.root.findByType(Modal).props.onDismiss();
   });
-  expect(onDismiss).toHaveBeenCalledTimes(2);
+  expect(onDismiss).toHaveBeenCalledTimes(1);
   await act(async () => {
     tree.unmount();
   });
@@ -86,6 +92,11 @@ test('TrueSheet shim backdrop dismisses unless dismissible is false', async () =
   )[0];
   await act(async () => {
     dismiss.props.onPress();
+  });
+  expect(open.root.findByType(Modal).props.visible).toBe(false);
+  expect(onDidDismiss).not.toHaveBeenCalled();
+  await act(async () => {
+    open.root.findByType(Modal).props.onDismiss();
   });
   expect(onDidDismiss).toHaveBeenCalledTimes(1);
   await act(async () => {
@@ -135,6 +146,11 @@ test('iPad model picker formSheet Modal allows swipe / outside dismiss', async (
   expect(typeof modal.props.onRequestClose).toBe('function');
   await act(async () => {
     modal.props.onRequestClose();
+  });
+  expect(tree.root.findByType(Modal).props.visible).toBe(false);
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => {
+    tree.root.findByType(Modal).props.onDismiss();
   });
   expect(onClose).toHaveBeenCalledTimes(1);
   await act(async () => {
