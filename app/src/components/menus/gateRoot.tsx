@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { menuClosed, menuOpened } from './menuGate';
 
 type OpenChangeProps = {
@@ -18,6 +18,14 @@ export function gateRoot<P extends OpenChangeProps>(
       if (open) menuOpened();
       else menuClosed();
     };
+    useEffect(
+      () => () => {
+        if (!openRef.current) return;
+        openRef.current = false;
+        menuClosed();
+      },
+      [],
+    );
     return React.createElement(Root, {
       ...props,
       onOpenWillChange: (willOpen: boolean) => {

@@ -12,6 +12,7 @@ import {
   type ColorValue,
   type DimensionValue,
 } from 'react-native';
+import { useDismissibleNativeModal } from '../../hooks/useDismissibleNativeModal';
 
 export interface TrueSheetProps {
   detents?: (number | 'auto')[];
@@ -46,12 +47,17 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
     ref,
   ) => {
     const canDismiss = dismissible !== false;
+    const { visible, hide, onDismiss } = useDismissibleNativeModal(() => {
+      onDidDismiss?.();
+    });
     const dismiss = () => {
-      if (canDismiss) onDidDismiss?.();
+      if (canDismiss) hide();
     };
     useImperativeHandle(ref, () => ({
       present: async () => {},
-      dismiss: async () => onDidDismiss?.(),
+      dismiss: async () => {
+        hide();
+      },
     }));
     const detent = detents?.[initialDetentIndex ?? 0];
     const fraction: DimensionValue | undefined =
@@ -60,11 +66,12 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
     const fill = fraction !== undefined;
     return (
       <Modal
-        visible
+        visible={visible}
         transparent
         animationType="slide"
         presentationStyle="overFullScreen"
         onRequestClose={dismiss}
+        onDismiss={onDismiss}
       >
         <Pressable
           style={styles.backdrop}

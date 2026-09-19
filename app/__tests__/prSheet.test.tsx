@@ -136,6 +136,11 @@ test('PR pageSheet Modal allows swipe / outside dismiss', async () => {
   await act(async () => {
     modal.props.onRequestClose();
   });
+  expect(tree.root.findByType(Modal).props.visible).toBe(false);
+  expect(onDismiss).not.toHaveBeenCalled();
+  await act(async () => {
+    tree.root.findByType(Modal).props.onDismiss();
+  });
   expect(onDismiss).toHaveBeenCalledTimes(1);
 });
 
