@@ -345,9 +345,11 @@ export const useNewThreadComposerBackground = ():
 export const useNewThreadBackgroundEffect = (): NewThreadBackgroundEffect =>
   useStore(uiPrefsStore, s => s.newThreadBackgroundEffect);
 
-export const setColorSchemePreference = (v: ColorSchemePreference): void => {
+export const setColorSchemePreference = (
+  v: ColorSchemePreference,
+): Promise<void> => {
   uiPrefsStore.setState({ colorScheme: v });
-  save();
+  return saveAsync();
 };
 
 export const useColorSchemePreference = (): ColorSchemePreference =>

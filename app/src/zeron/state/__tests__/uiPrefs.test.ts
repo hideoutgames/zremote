@@ -158,7 +158,7 @@ test('colorScheme defaults to system and persists', async () => {
   expect(uiPrefsStore.getState().colorScheme).toBe('system');
   const disk = memDocDisk();
   await bindUiPrefs(disk, 'org', 'user');
-  setColorSchemePreference('dark');
+  await setColorSchemePreference('dark');
   expect(uiPrefsStore.getState().colorScheme).toBe('dark');
   const saved = await disk.loadUiPrefs('org', 'user');
   expect(saved?.colorScheme).toBe('dark');
