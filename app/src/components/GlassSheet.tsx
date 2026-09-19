@@ -1,6 +1,8 @@
 // Shared Liquid Glass sheet chrome used by Thought process and the queue
 // panel. TrueSheet hosts the sheet; Glass frosts the body. Default detent
-// is half the screen; swipe up for full.
+// is half the screen; swipe up for full. The glass fills the detent so
+// ScrollView children (thought process, queue, text preview) get a real
+// height instead of collapsing.
 
 import React, { useRef, type ReactNode } from 'react';
 import {
@@ -54,34 +56,39 @@ export function GlassSheet({
       backgroundColor="transparent"
       grabber
     >
-      <Glass
-        style={[
-          styles.body,
-          styles.bodyFill,
-          { paddingBottom: insets.bottom + 16 },
-        ]}
-      >
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => sheet.current?.dismiss()}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <View style={styles.closeButton}>
-              <Icon name="xmark" size={15} color={theme.text} />
-            </View>
-          </Pressable>
-          {title !== undefined ? (
-            <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-          ) : (
-            <View style={styles.titleSpacer} />
-          )}
-          <View style={styles.closeButton} />
-        </View>
-        <View style={styles.bodyFill}>{children}</View>
-        <MenuDismissShield />
-      </Glass>
+      <View testID="glass-sheet" style={styles.fill}>
+        <Glass
+          testID="glass-sheet-body"
+          style={[
+            styles.body,
+            styles.bodyExpanded,
+            { paddingBottom: insets.bottom + 16 },
+          ]}
+        >
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => sheet.current?.dismiss()}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <View style={styles.closeButton}>
+                <Icon name="xmark" size={15} color={theme.text} />
+              </View>
+            </Pressable>
+            {title !== undefined ? (
+              <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+            ) : (
+              <View style={styles.titleSpacer} />
+            )}
+            <View style={styles.closeButton} />
+          </View>
+          <View testID="glass-sheet-content" style={styles.bodyFill}>
+            {children}
+          </View>
+          <MenuDismissShield />
+        </Glass>
+      </View>
     </TrueSheet>
   );
 }
@@ -89,7 +96,9 @@ export function GlassSheet({
 const CLOSE = 32;
 
 const styles = StyleSheet.create({
+  fill: { flex: 1, minHeight: '100%' },
   body: { borderRadius: 20, overflow: 'hidden' },
+  bodyExpanded: { flex: 1, minHeight: '100%' },
   bodyFill: { flex: 1, minHeight: 0 },
   header: {
     flexDirection: 'row',
