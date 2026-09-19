@@ -166,7 +166,8 @@ export const ContextUsageChip = React.memo(function ({
   const resolved = resolveContextUsage(usage);
   if (resolved === undefined) return null;
   const ratio = contextUsageRatio(resolved.tokens, resolved.window);
-  const trackColor = theme.sendInactive;
+  const trackColor =
+    theme.scheme === 'dark' ? theme.textSecondary : theme.sendInactive;
   const color = ratio > CONTEXT_DANGER_RATIO ? theme.danger : theme.text;
   const percent = formatContextPercent(ratio);
   return (
