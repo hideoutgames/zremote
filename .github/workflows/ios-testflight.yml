@@ -1,10 +1,9 @@
-# iOS TestFlight — signed archive + App Store Connect upload via the ASC
+# iOS TestFlight — unsigned archive + App Store Connect upload via the ASC
 # API key. Manual only (workflow_dispatch); merges to main and tag pushes
-# do not start it. Uses the team's one cloud-managed Apple Distribution
-# certificate (no per-runner development certs, no profiles in the repo).
-# App targets stay on Automatic signing with CODE_SIGN_IDENTITY stripped
-# so Xcode 26 can cloud-sign the archive; identity is never passed as an
-# xcarg. Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID /
+# do not start it. Archive is unsigned (CODE_SIGNING_ALLOWED=NO) so
+# ephemeral runners never mint Apple Development certificates. Export
+# cloud-signs with the team's one Apple Distribution certificate.
+# Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID /
 # ASC_PRIVATE_KEY (the .p8 file contents, pasted as-is; base64 also
 # accepted) / APPLE_TEAM_ID. Optional variables IOS_BUNDLE_ID (default
 # no.hideout.zremote) / ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
@@ -109,23 +108,6 @@ jobs:
           COCOAPODS_DISABLE_STATS: "1"
         run: bundle exec pod install
 
-      # Expo prebuild leaves ZRemote / ExpoWidgetsTarget on Automatic +
-      # Apple Development. Pinning Apple Distribution — as an xcarg OR in
-      # the pbxproj — conflicts on Xcode 26 ("automatically signed for
-      # development"). Manual style without a local Distribution cert /
-      # profile specifier also fails. Strip the development identity from
-      # the app xcodeproj only so Automatic cloud signing can pick the
-      # team's one Distribution cert for a generic iOS archive.
-      - name: Pin app targets to Automatic cloud signing
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          python3 ../.github/scripts/configure-ios-distribution-signing.py --self-test
-          python3 ../.github/scripts/configure-ios-distribution-signing.py \
-            ios/ZRemote.xcodeproj/project.pbxproj
-          grep -E "CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|ProvisioningStyle|PROVISIONING_PROFILE" \
-            ios/ZRemote.xcodeproj/project.pbxproj
-
       - name: Write App Store Connect API key
         env:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
@@ -140,29 +122,23 @@ jobs:
           chmod 600 "$key"
           grep -q "BEGIN PRIVATE KEY" "$key" || { echo "ASC_PRIVATE_KEY is not a valid .p8"; exit 1; }
 
-      - name: Archive (distribution signing)
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Archive (unsigned)
         run: |
           set -o pipefail
-          # Do not pass CODE_SIGN_IDENTITY / CODE_SIGN_STYLE here: xcargs
-          # apply to every target in the workspace, including Pods, and
-          # Xcode 26 treats a Distribution identity on Automatic targets
-          # as a hard provisioning conflict.
-          # Do not pass -allowProvisioningDeviceRegistration: that mints a
-          # new Apple Development certificate on each ephemeral runner
-          # until the team hits the 3-certificate cap.
+          # Unsigned on purpose: Automatic archive on Xcode 26 still asks
+          # for Apple Development certs/profiles. -allowProvisioningUpdates
+          # then mints a new development cert on each runner until the
+          # team's 3-certificate cap. Export (below) is the only step that
+          # talks to Apple for signing — it reuses the one cloud-managed
+          # Distribution cert. Workspace-wide CODE_SIGNING_ALLOWED=NO is
+          # safe (unlike a Distribution identity xcarg) and matches
+          # ios-compile.yml, including ExpoWidgetsTarget and Pods.
           xcodebuild -workspace ios/ZRemote.xcworkspace \
             -scheme ZRemote -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
             archive -quiet 2>&1 | tee build.log || {
               grep -E "error:" build.log || true
               exit 1
