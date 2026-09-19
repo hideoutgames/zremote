@@ -77,7 +77,12 @@ import {
   setPlanMode,
   useComposerExtraHeight,
   setComposerExtraHeight,
+  setComposerExtraHeightLive,
 } from '../zeron/state/uiPrefs';
+import {
+  clampComposerExtraHeight,
+  composerExtraMax,
+} from './composerExtraHeight';
 import type { HarnessDescriptor, ModelOption } from '../zeron/protocol/types';
 import {
   composerAction,
@@ -89,15 +94,17 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { VoicePill } from './VoicePill';
-import { VOICE_PILL_PROCESS_MS } from './voicePillMath';
+import {
+  VOICE_PILL_PROCESS_MS,
+  VOICE_PILL_TRAILING_GAP,
+} from './voicePillMath';
 import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
 // lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
 const INPUT_MAX_HEIGHT_COMPACT = 148;
 const INPUT_MAX_HEIGHT_REGULAR = 214;
-const COMPOSER_EXTRA_MAX = 280;
-const COMPOSER_EXTRA_WINDOW_FRAC = 0.4;
+const INPUT_MIN_HEIGHT = 60;
 const THUMBS_ANIM_MS = 220;
 const CHIP_FADE = 28;
 
@@ -211,19 +218,16 @@ export const Composer = React.memo(function ({
   const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const regular = windowWidth >= REGULAR_MIN_WIDTH;
-  const persistedExtra = useComposerExtraHeight();
-  const [dragExtra, setDragExtra] = useState<number | null>(null);
-  const extraHeight = dragExtra ?? persistedExtra;
+  const extraMax = composerExtraMax(windowHeight);
+  const extraHeight = clampComposerExtraHeight(
+    useComposerExtraHeight(),
+    extraMax,
+  );
   const extraRef = useRef(extraHeight);
   extraRef.current = extraHeight;
   const extraStartRef = useRef(0);
-  const extraMaxRef = useRef(COMPOSER_EXTRA_MAX);
-  extraMaxRef.current = Math.min(
-    COMPOSER_EXTRA_MAX,
-    Math.round(windowHeight * COMPOSER_EXTRA_WINDOW_FRAC),
-  );
-  const setDragExtraRef = useRef(setDragExtra);
-  setDragExtraRef.current = setDragExtra;
+  const extraMaxRef = useRef(extraMax);
+  extraMaxRef.current = extraMax;
   const focusedRef = useRef(false);
   const effortChipRef = useRef<View>(null);
   const openEffort = useCallback(() => {
@@ -244,15 +248,18 @@ export const Composer = React.memo(function ({
         extraStartRef.current = extraRef.current;
       },
       onPanResponderMove: (_e, g) => {
-        const max = extraMaxRef.current;
-        const next = Math.max(0, Math.min(max, extraStartRef.current - g.dy));
-        setDragExtraRef.current(next);
+        const next = clampComposerExtraHeight(
+          extraStartRef.current - g.dy,
+          extraMaxRef.current,
+        );
+        setComposerExtraHeightLive(next);
       },
       onPanResponderRelease: (_e, g) => {
-        const max = extraMaxRef.current;
-        const next = Math.max(0, Math.min(max, extraStartRef.current - g.dy));
+        const next = clampComposerExtraHeight(
+          extraStartRef.current - g.dy,
+          extraMaxRef.current,
+        );
         setComposerExtraHeight(next);
-        setDragExtraRef.current(null);
         if (
           focusedRef.current &&
           extraStartRef.current === 0 &&
@@ -499,6 +506,7 @@ export const Composer = React.memo(function ({
   const sendArmed =
     right === 'send' &&
     (action.primary === 'send' || live === 'queue' || live === 'steer');
+  const coverSend = dictating || processing;
   const homeInset = (keyboardVisible ? 0 : insets.bottom) + 8;
 
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
@@ -561,45 +569,49 @@ export const Composer = React.memo(function ({
             />
           ) : null}
 
-          <TextInput
-            ref={inputRef}
-            value={draft.text}
-            autoFocus={autoFocus}
-            onChangeText={text => setDraftText(chatId, text)}
-            onSelectionChange={e =>
-              (selRef.current = e.nativeEvent.selection.start)
-            }
-            onFocus={() => {
-              focusedRef.current = true;
-              onFocusChange?.(true);
-            }}
-            onBlur={() => {
-              focusedRef.current = false;
-              onFocusChange?.(false);
-            }}
-            placeholder={
-              live === 'queue'
-                ? t('session.queuePlaceholder')
-                : action.primary === 'steer'
-                ? t('session.steerPlaceholder')
-                : t('session.messagePlaceholder')
-            }
-            placeholderTextColor={theme.textSecondary}
-            style={[
-              styles.input,
-              {
-                color: theme.text,
-                maxHeight: inputMaxHeight,
-                minHeight: 60 + extraHeight,
-              },
-              question !== undefined ? styles.inputDimmed : undefined,
-            ]}
-            multiline
-            accessibilityLabel={t('session.messagePlaceholder')}
-            // Cmd+Enter: RN 0.86 onKeyPress exposes key but no modifier
-            // flags on iOS — handled in the parent where available; the
-            // modifier gap is documented in docs/ARCHITECTURE.md.
-          />
+          {/* minHeight spacer: layout grows by extraHeight 1:1, independent
+            of iOS multiline TextInput intrinsic size. Text can still fill
+            the extra via maxHeight. */}
+          <View style={{ minHeight: INPUT_MIN_HEIGHT + extraHeight }}>
+            <TextInput
+              ref={inputRef}
+              value={draft.text}
+              autoFocus={autoFocus}
+              onChangeText={text => setDraftText(chatId, text)}
+              onSelectionChange={e =>
+                (selRef.current = e.nativeEvent.selection.start)
+              }
+              onFocus={() => {
+                focusedRef.current = true;
+                onFocusChange?.(true);
+              }}
+              onBlur={() => {
+                focusedRef.current = false;
+                onFocusChange?.(false);
+              }}
+              placeholder={
+                live === 'queue'
+                  ? t('session.queuePlaceholder')
+                  : action.primary === 'steer'
+                  ? t('session.steerPlaceholder')
+                  : t('session.messagePlaceholder')
+              }
+              placeholderTextColor={theme.textSecondary}
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                  maxHeight: inputMaxHeight,
+                },
+                question !== undefined ? styles.inputDimmed : undefined,
+              ]}
+              multiline
+              accessibilityLabel={t('session.messagePlaceholder')}
+              // Cmd+Enter: RN 0.86 onKeyPress exposes key but no modifier
+              // flags on iOS — handled in the parent where available; the
+              // modifier gap is documented in docs/ARCHITECTURE.md.
+            />
+          </View>
 
           <View style={styles.lowerRow}>
             <View style={styles.leftCluster}>
@@ -704,7 +716,9 @@ export const Composer = React.memo(function ({
                   />
                   <Pressable
                     onPress={
-                      right === 'stop'
+                      coverSend
+                        ? undefined
+                        : right === 'stop'
                         ? onStop
                         : right === 'cancel'
                         ? onCancel
@@ -713,7 +727,14 @@ export const Composer = React.memo(function ({
                         : undefined
                     }
                     disabled={
-                      right === 'stopping' || (right === 'send' && !sendArmed)
+                      coverSend ||
+                      right === 'stopping' ||
+                      (right === 'send' && !sendArmed)
+                    }
+                    pointerEvents={coverSend ? 'none' : 'auto'}
+                    accessibilityElementsHidden={coverSend}
+                    importantForAccessibility={
+                      coverSend ? 'no-hide-descendants' : 'auto'
                     }
                     hitSlop={6}
                     accessibilityRole="button"
@@ -728,6 +749,7 @@ export const Composer = React.memo(function ({
                     }
                     accessibilityState={{
                       disabled:
+                        coverSend ||
                         right === 'stopping' ||
                         (right === 'send' && !sendArmed),
                       busy: right === 'stopping',
@@ -880,7 +902,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 4,
-    minHeight: 60,
+    minHeight: INPUT_MIN_HEIGHT,
     textAlignVertical: 'top',
   },
   inputDimmed: { opacity: 0.45 },
@@ -914,9 +936,10 @@ const styles = StyleSheet.create({
   trailingCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: VOICE_PILL_TRAILING_GAP,
     flexShrink: 0,
     height: 44,
+    overflow: 'visible',
   },
   iconClip: {
     width: CIRCLE,

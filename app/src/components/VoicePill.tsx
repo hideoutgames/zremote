@@ -1,6 +1,7 @@
 // Composer dictation control: rest circle → capsule with clock + simulated
 // level bars (React Bits VoicePill, RN reimplementation). Toggle matches
-// DictationPort start/stop; slide-left cancels. No second mic path.
+// DictationPort start/stop; slide-left cancels. While listening or in the
+// 2s processing cooldown the circle covers send (layout slot stays 32px).
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -27,6 +28,7 @@ import {
   simulatedVoiceLevels,
   VOICE_PILL_BAR_COUNT,
   VOICE_PILL_OPEN_MS,
+  VOICE_PILL_SEND_HIT,
   VOICE_PILL_SIZE,
 } from './voicePillMath';
 
@@ -47,7 +49,9 @@ export function VoicePill({
 }) {
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
+  const covering = active || processing;
   const open = useSharedValue(active ? 1 : 0);
+  const cover = useSharedValue(covering ? 1 : 0);
   const slide = useSharedValue(0);
   const [elapsed, setElapsed] = useState('0:00');
   const [levels, setLevels] = useState(() =>
@@ -60,8 +64,13 @@ export function VoicePill({
   onCancelRef.current = onCancel;
 
   useEffect(() => {
+    const duration = reduceMotion ? 0 : VOICE_PILL_OPEN_MS;
     open.value = withTiming(active ? 1 : 0, {
-      duration: reduceMotion ? 0 : VOICE_PILL_OPEN_MS,
+      duration,
+      easing: Easing.out(Easing.cubic),
+    });
+    cover.value = withTiming(covering ? 1 : 0, {
+      duration,
       easing: Easing.out(Easing.cubic),
     });
     if (active) {
@@ -71,7 +80,7 @@ export function VoicePill({
       startedAt.current = null;
       slide.value = 0;
     }
-  }, [active, open, reduceMotion, slide]);
+  }, [active, covering, cover, open, reduceMotion, slide]);
 
   useEffect(() => {
     if (!active) return;
@@ -133,88 +142,105 @@ export function VoicePill({
     : theme.textSecondary;
 
   return (
-    <Pressable
-      onPress={() => {
-        if (cancelledRef.current) {
-          cancelledRef.current = false;
-          return;
-        }
-        if (processing) return;
-        if (supported) onToggle();
-      }}
-      disabled={!supported || processing}
-      hitSlop={{ top: 6, bottom: 6, right: 6, left: 0 }}
-      accessibilityRole="button"
-      accessibilityLabel={
-        processing ? t('composer.dictationProcessing') : t('composer.dictate')
-      }
-      accessibilityState={{
-        disabled: !supported || processing,
-        busy: active || processing,
-      }}
-      accessibilityHint={
-        supported ? undefined : t('composer.dictationUnavailable')
-      }
-      style={styles.hit}
-    >
+    <View style={styles.slot} pointerEvents="box-none">
       <VoicePillShell
         open={open}
+        cover={cover}
         slide={slide}
         panHandlers={active ? pan.panHandlers : undefined}
         style={[
           styles.pill,
+          styles.float,
           { backgroundColor: fill },
           supported ? undefined : styles.pillDim,
         ]}
       >
-        {active ? (
-          <View style={styles.openRow} pointerEvents="none">
-            {sliding ? (
-              <Text style={[styles.cancel, { color: accent }]}>
-                {t('common.cancel')}
-              </Text>
-            ) : null}
-            <Text style={[styles.clock, { color: accent }]}>{elapsed}</Text>
-            <View style={styles.bars}>
-              {levels.map((level, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.bar,
-                    {
-                      height: 4 + level * 14,
-                      backgroundColor: accent,
-                    },
-                  ]}
-                />
-              ))}
+        <Pressable
+          onPress={() => {
+            if (cancelledRef.current) {
+              cancelledRef.current = false;
+              return;
+            }
+            if (processing) return;
+            if (supported) onToggle();
+          }}
+          disabled={!supported || processing}
+          hitSlop={{ top: 6, bottom: 6, right: 6, left: 0 }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            processing
+              ? t('composer.dictationProcessing')
+              : active
+              ? t('composer.stopDictation')
+              : t('composer.dictate')
+          }
+          accessibilityState={{
+            disabled: !supported || processing,
+            busy: active || processing,
+          }}
+          accessibilityHint={
+            supported ? undefined : t('composer.dictationUnavailable')
+          }
+          style={styles.press}
+        >
+          {active ? (
+            <View style={styles.openRow} pointerEvents="none">
+              {sliding ? (
+                <Text style={[styles.cancel, { color: accent }]}>
+                  {t('common.cancel')}
+                </Text>
+              ) : null}
+              <Text style={[styles.clock, { color: accent }]}>{elapsed}</Text>
+              <View style={styles.bars}>
+                {levels.map((level, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.bar,
+                      {
+                        height: 4 + level * 14,
+                        backgroundColor: accent,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
+          ) : null}
+          <View style={styles.iconSlot}>
+            {processing && !active ? (
+              <ActivityIndicator size="small" color={theme.textSecondary} />
+            ) : (
+              <Icon
+                name={active ? 'stop.fill' : 'mic'}
+                size={active ? 13 : 17}
+                color={iconColor}
+              />
+            )}
           </View>
-        ) : null}
-        <View style={styles.iconSlot}>
-          {processing && !active ? (
-            <ActivityIndicator size="small" color={theme.textSecondary} />
-          ) : (
-            <Icon
-              name={active ? 'stop.fill' : 'mic'}
-              size={active ? 13 : 17}
-              color={iconColor}
-            />
-          )}
-        </View>
+        </Pressable>
       </VoicePillShell>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hit: {
-    minWidth: VOICE_PILL_SIZE,
-    minHeight: 44,
+  slot: {
+    width: VOICE_PILL_SIZE,
+    height: VOICE_PILL_SEND_HIT,
+    zIndex: 2,
+  },
+  float: {
+    position: 'absolute',
+    left: 0,
+    top: (VOICE_PILL_SEND_HIT - VOICE_PILL_SIZE) / 2,
+  },
+  press: {
+    flex: 1,
+    height: VOICE_PILL_SIZE,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 0,
-    paddingLeft: 0,
+    justifyContent: 'flex-end',
   },
   pill: {
     height: VOICE_PILL_SIZE,

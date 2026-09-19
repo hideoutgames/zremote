@@ -188,6 +188,11 @@ export const setPlanMode = (chatId: string, v: boolean): void => {
 export const usePlanMode = (chatId: string): boolean =>
   useStore(uiPrefsStore, s => s.planModeByChat[chatId] === true);
 
+/** Live grabber extra height — no disk write (pan frames). */
+export const setComposerExtraHeightLive = (v: number): void => {
+  uiPrefsStore.setState({ composerExtraHeight: v });
+};
+
 export const setComposerExtraHeight = (v: number): void => {
   uiPrefsStore.setState({ composerExtraHeight: v });
   save();

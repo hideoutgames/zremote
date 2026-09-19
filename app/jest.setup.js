@@ -171,6 +171,7 @@ jest.mock('@legendapp/list/keyboard', () => {
   const ReactLib = require('react');
   const RN = require('react-native');
   const scrollMessageToEnd = jest.fn(() => Promise.resolve());
+  const onComposerLayout = jest.fn();
   return {
     KeyboardAwareLegendList: ReactLib.forwardRef(
       (props: object, ref: unknown) =>
@@ -178,13 +179,14 @@ jest.mock('@legendapp/list/keyboard', () => {
     ),
     useKeyboardChatComposerInset: () => ({
       contentInsetEndAdjustment: 0,
-      onComposerLayout: jest.fn(),
+      onComposerLayout,
     }),
     useKeyboardScrollToEnd: () => ({
       freeze: false,
       scrollMessageToEnd,
     }),
     __scrollMessageToEnd: scrollMessageToEnd,
+    __onComposerLayout: onComposerLayout,
   };
 });
 
