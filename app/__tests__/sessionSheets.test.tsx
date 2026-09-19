@@ -211,10 +211,13 @@ test('session header subtitle ellipsizes instead of clipping', async () => {
 
 test('compose session is a blank chat with the composer', async () => {
   const tree = await render(<SessionScreen onBack={() => {}} />);
-  expect(texts(tree.root)).toContain('New thread');
-  expect(texts(tree.root)).toContain(
+  expect(texts(tree.root)).not.toContain('New thread');
+  expect(texts(tree.root)).not.toContain(
     'Nothing here yet — send a message to start.',
   );
+  expect(
+    tree.root.findAll(n => n.props.testID === 'session-title-pill').length,
+  ).toBe(0);
   expect(
     tree.root.findAll(n => n.props.testID === 'compose-composer').length,
   ).toBeGreaterThan(0);
