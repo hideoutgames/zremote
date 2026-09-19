@@ -68,7 +68,7 @@ e2e for transport/runtime changes · edge `test:unit` for edge changes.
   WorkOS tokens for agent logins.
 - **`.git` is never listed** in file browsing (jail boundary — see
   ARCHITECTURE.md).
-- Attachments are **image-only, ≤24MB**, chunked base64 — device-local URIs
-  never leave the phone.
+- Attachments are **≤24MB**, chunked base64 — images plus documents
+  (text/pdf/json/…); device-local URIs never leave the phone.
 - No AI-generated artwork.
 - Standard GitHub runners only.

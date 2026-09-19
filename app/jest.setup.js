@@ -260,6 +260,9 @@ jest.mock('expo-file-system', () => ({
     base64() {
       return Promise.resolve('');
     }
+    text() {
+      return Promise.resolve('');
+    }
   },
   Directory: class {},
   Paths: { document: { uri: 'file:///docs' }, cache: { uri: 'file:///cache' } },

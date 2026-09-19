@@ -26,7 +26,10 @@ export function AttachmentStripAnim({
 }) {
   'use no memo';
   const anim = useAnimatedStyle(() => ({
-    height: withTiming(height, { duration }),
+    // Height tracks layout immediately so the chat inset stays in lockstep
+    // with the strip (timed height desynced the transcript). Opacity still
+    // eases.
+    height,
     opacity: withTiming(opacity, { duration }),
   }));
   return (

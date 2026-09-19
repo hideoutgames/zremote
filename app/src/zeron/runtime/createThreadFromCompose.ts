@@ -24,6 +24,7 @@ export type CreateThreadFromComposeOpts = {
   text: string;
   settings: ComposeDefaults;
   worktree?: WorktreeSpec;
+  branch?: string;
   autoApprove?: boolean;
   attachments?: readonly StagedAttachment[];
 };
@@ -58,6 +59,7 @@ export const createThreadFromCompose = async (
           spaceId: space.id,
           cwd: space.path,
           config,
+          ...(opts.branch !== undefined ? { branch: opts.branch } : {}),
         })
       : createProjectlessChat(runtime, settings.deviceId, config);
   moveDraft(COMPOSE_DRAFT_ID, chatId);

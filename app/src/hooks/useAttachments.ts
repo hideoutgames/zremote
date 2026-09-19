@@ -1,6 +1,6 @@
 // Composer attachment staging: photos/camera/files land in draftStore as
 // 'staged' StagedAttachments. Validation is shared with the send path
-// (attachments/validate) — non-images are rejected with a reason, never
+// (attachments/validate) — oversized files are rejected with a reason, never
 // silently dropped.
 
 import { useCallback } from 'react';
@@ -95,9 +95,8 @@ export function useAttachments(chatId: string): {
     return out;
   }, [chatId]);
 
-  // The transport is image-only end to end (host read-back jail +
-  // `accept="image/*"` on desktop) — the picker is pre-filtered, and any
-  // stragglers still get the shared validation.
+  // Files picker is unfiltered (`*/*`); shared validation only enforces
+  // the 24MB cap. Photos/camera stay on the image pickers.
   const pickFiles = useCallback(async () => {
     const out: StageResult = { staged: [], rejected: [] };
     const result = await DocumentPicker.getDocumentAsync({

@@ -32,6 +32,7 @@ export function GlassSheet({
       initialDetentIndex={0}
       onDidDismiss={onDismiss}
       maxContentHeight={maxContentHeight}
+      backgroundColor="transparent"
       grabber
     >
       <Glass style={[styles.body, { paddingBottom: insets.bottom + 16 }]}>

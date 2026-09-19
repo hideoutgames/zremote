@@ -58,11 +58,11 @@ the real entry with that id the pending echo is dropped, never duplicated.
 
 ## Attachments
 
-Bytes never ride the doc. Images/files are staged on the **host device** over
-the relay (`UploadChunk` → `UploadCommit` → durable path) or, on hosts that
+Bytes never ride the doc. Images and documents are staged on the **host device**
+over the relay (`UploadChunk` → `UploadCommit` → durable path) or, on hosts that
 advertise `message-queue-attachments-v1`, referenced as `pending://{uploadId}/{name}`
 while the bytes chase the command. The run request carries both the
-`attachments` paths and the `Attached images (local files …)` prompt trailer,
+`attachments` paths and the `Attached files (local files …)` prompt trailer,
 matching desktop. Device-local URIs are never sent to a host.
 
 ## Background continuity
