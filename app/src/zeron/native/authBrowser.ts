@@ -1,7 +1,9 @@
 // AuthKit browser shell: ASWebAuthenticationSession via expo-web-browser.
-// Primary: HTTPS callback (iOS 17.4+ `.https(host:path:)` intercepts WorkOS
-// landing on /auth/cli/callback). Fallback: zeron:// so iOS 17.0–17.3 can
-// start; the edge 302-hops that scheme. expo-linking covers Safari returns.
+// Primary: zeron:// so the sheet actually presents. HTTPS AuthSession with
+// preferUniversalLinks silently cancels without verified AASA/webcredentials
+// and never opens api.workos.com. WorkOS still redirects to the registered
+// HTTPS URI; the edge 302-hops to zeron://. expo-linking covers Safari
+// returns if AuthSession fails to start.
 
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -17,38 +19,28 @@ export const httpsAuthCallbackUrl = (edgeUrl: string): string =>
 
 export const openAuthSession = async (
   url: string,
-  redirectUrl: string,
+  redirectUrl: string = AUTH_CALLBACK_URL,
 ): Promise<AuthBrowserResult> => {
-  // HTTPS callbacks must use the iOS 17.4+ `.https(host:path:)` API
-  // (preferUniversalLinks true). Custom-scheme callbacks use the legacy
-  // initializer — that is what actually presents ASWebAuthenticationSession
-  // on iOS 17.0–17.3, where scheme "https" fails to start.
-  const https = redirectUrl.startsWith('https:');
   const result = await WebBrowser.openAuthSessionAsync(url, redirectUrl, {
     preferEphemeralSession: false,
-    preferUniversalLinks: https,
+    preferUniversalLinks: false,
   });
   if (result.type === 'success') return { type: 'success', url: result.url };
   return { type: result.type === 'cancel' ? 'cancel' : 'dismiss' };
 };
 
-/** HTTPS AuthSession first (17.4+ intercepts the WorkOS landing URL). If
- * that fails to start, retry with `zeron://`. If that also fails, open
- * Safari and let Linking finish. */
+/** Custom-scheme AuthSession so WorkOS actually presents. If start throws,
+ * open Safari and let Linking finish. `{ type: 'cancel' }` is the user
+ * tapping Done — do not treat it as a start failure. */
 export const openAuthSessionOrBrowser = async (
   url: string,
-  httpsRedirect: string,
   schemeRedirect: string = AUTH_CALLBACK_URL,
 ): Promise<AuthBrowserResult> => {
   try {
-    return await openAuthSession(url, httpsRedirect);
+    return await openAuthSession(url, schemeRedirect);
   } catch {
-    try {
-      return await openAuthSession(url, schemeRedirect);
-    } catch {
-      await WebBrowser.openBrowserAsync(url).catch(() => {});
-      return { type: 'dismiss' };
-    }
+    await WebBrowser.openBrowserAsync(url).catch(() => {});
+    return { type: 'dismiss' };
   }
 };
 

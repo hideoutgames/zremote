@@ -5,7 +5,14 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { AuthClient } from '../authClient';
-import { AuthSession, DevAuthSession, type AuthState } from '../authSession';
+import {
+  AuthSession,
+  DevAuthSession,
+  SECURE_STORE_KEY_RE,
+  authPendingStoreKey,
+  authStoreKey,
+  type AuthState,
+} from '../authSession';
 import {
   buildAuthorizeUrl,
   challengeFor,
@@ -15,7 +22,7 @@ import {
   parsePastedCode,
   MOBILE_SIGN_IN_STATE_PREFIX,
 } from '../authKit';
-import { MemorySecureStore } from '../secureStore';
+import { MemorySecureStore, type SecureStorePort } from '../secureStore';
 import { FakeClock } from '../../transport/clock';
 import type { FetchImpl } from '../../transport/edgeHttp';
 
@@ -79,7 +86,10 @@ const authFetch = (handler: {
   return { fetchImpl, calls };
 };
 
-const makeSession = (fetchImpl: FetchImpl, store = new MemorySecureStore()) => {
+const makeSession = (
+  fetchImpl: FetchImpl,
+  store: SecureStorePort = new MemorySecureStore(),
+) => {
   const clock = new FakeClock(1_700_000_000_000);
   const client = new AuthClient({ baseUrl: BASE, fetchImpl });
   const session = new AuthSession({
@@ -91,6 +101,34 @@ const makeSession = (fetchImpl: FetchImpl, store = new MemorySecureStore()) => {
   });
   return { session, clock, store };
 };
+
+/** Mirrors expo-secure-store's `/^[\w.-]+$/` key rule. */
+class ValidatingMemoryStore implements SecureStorePort {
+  private readonly inner = new MemorySecureStore();
+
+  private check(key: string): void {
+    if (!SECURE_STORE_KEY_RE.test(key)) {
+      throw new Error(
+        'Invalid key provided to SecureStore. Keys must not be empty and contain only alphanumeric characters, ".", "-", and "_".',
+      );
+    }
+  }
+
+  async get(key: string): Promise<string | undefined> {
+    this.check(key);
+    return this.inner.get(key);
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    this.check(key);
+    return this.inner.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.check(key);
+    return this.inner.delete(key);
+  }
+}
 
 const signedInTokens = (exp = 1_800_000_000, orgId = 'org_1') => ({
   user,
@@ -270,7 +308,7 @@ describe('AuthSession sign-in', () => {
 describe('AuthSession token lifecycle', () => {
   const seedStore = (store: MemorySecureStore, accessToken: string) =>
     store.set(
-      `zeron.auth.${BASE}`,
+      authStoreKey(BASE),
       JSON.stringify({
         user,
         accessToken,
@@ -342,7 +380,7 @@ describe('AuthSession token lifecycle', () => {
     await expect(session.currentToken()).resolves.toBeUndefined();
     expect(session.state.state).toBe('signedOut');
     expect(states).toContain('signedOut');
-    await expect(store.get(`zeron.auth.${BASE}`)).resolves.toBeUndefined();
+    await expect(store.get(authStoreKey(BASE))).resolves.toBeUndefined();
   });
 
   test('refresh network failure → state kept, undefined token, retry scheduled', async () => {
@@ -367,6 +405,63 @@ describe('AuthSession token lifecycle', () => {
     await Promise.resolve();
     expect(calls).toBe(2);
     await expect(session.currentToken()).resolves.toContain('.');
+  });
+});
+
+describe('AuthSession Keychain keys', () => {
+  test('sanitized store keys match expo-secure-store rules', () => {
+    expect(authStoreKey(BASE)).toMatch(SECURE_STORE_KEY_RE);
+    expect(authPendingStoreKey(BASE)).toMatch(SECURE_STORE_KEY_RE);
+    expect(authStoreKey(BASE)).not.toMatch(/[:/]/);
+    expect(authStoreKey(BASE)).toBe('zeron.auth.https___edge.test');
+    expect(authPendingStoreKey(BASE)).toBe(
+      'zeron.auth.pending.https___edge.test',
+    );
+  });
+
+  test('persist round-trips through a store that enforces the key rule', async () => {
+    const { fetchImpl } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const store = new ValidatingMemoryStore();
+    const { session } = makeSession(fetchImpl, store);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'https://edge.test/auth/cli/callback',
+      pkce: false,
+    });
+    await session.completeSignIn({ code: 'thecode', state });
+    const raw = await store.get(authStoreKey(BASE));
+    expect(raw).toBeDefined();
+    const next = makeSession(authFetch({}).fetchImpl, store).session;
+    await next.restore();
+    expect(next.state).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
+  });
+
+  test('pending PKCE survives restore then completeSignIn', async () => {
+    const { fetchImpl, calls } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const store = new ValidatingMemoryStore();
+    const sha256 = async (b: Uint8Array) =>
+      new Uint8Array(createHash('sha256').update(b).digest());
+    const { session } = makeSession(fetchImpl, store);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'https://edge.test/auth/cli/callback',
+      pkce: true,
+      random: n => new Uint8Array(randomBytes(n)),
+      sha256,
+    });
+    const pendingRaw = await store.get(authPendingStoreKey(BASE));
+    expect(pendingRaw).toBeDefined();
+
+    const { session: resumed } = makeSession(fetchImpl, store);
+    await resumed.restore();
+    const next = await resumed.completeSignIn({ code: 'thecode', state });
+    expect(next.state).toBe('signedIn');
+    const body = calls.find(c => c.url.endsWith('/auth/exchange'))?.body;
+    expect(body?.code).toBe('thecode');
+    expect(body?.codeVerifier).toMatch(/^[A-Za-z0-9\-._~]{64}$/);
+    await expect(store.get(authPendingStoreKey(BASE))).resolves.toBeUndefined();
   });
 });
 

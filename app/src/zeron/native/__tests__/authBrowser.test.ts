@@ -25,12 +25,12 @@ describe('openAuthSession', () => {
     );
   });
 
-  test('HTTPS callbacks still opt into iOS universal-link AuthSession', async () => {
-    await openAuthSession(AUTHORIZE, HTTPS_CALLBACK);
+  test('defaults the callback to zeron:// so the WorkOS sheet can start', async () => {
+    await openAuthSession(AUTHORIZE);
     expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
       AUTHORIZE,
-      HTTPS_CALLBACK,
-      { preferEphemeralSession: false, preferUniversalLinks: true },
+      AUTH_CALLBACK_URL,
+      { preferEphemeralSession: false, preferUniversalLinks: false },
     );
   });
 
@@ -46,45 +46,18 @@ describe('openAuthSessionOrBrowser', () => {
     (WebBrowser.openBrowserAsync as jest.Mock).mockClear();
   });
 
-  test('tries the HTTPS callback first', async () => {
+  test('starts AuthSession with zeron://, not the HTTPS WorkOS redirect', async () => {
     (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValueOnce({
       type: 'success',
-      url: `${HTTPS_CALLBACK}?code=c&state=s`,
+      url: `${AUTH_CALLBACK_URL}?code=c&state=s`,
     });
-    const result = await openAuthSessionOrBrowser(AUTHORIZE, HTTPS_CALLBACK);
-    expect(result).toEqual({
-      type: 'success',
-      url: `${HTTPS_CALLBACK}?code=c&state=s`,
-    });
-    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(1);
-    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
-      AUTHORIZE,
-      HTTPS_CALLBACK,
-      { preferEphemeralSession: false, preferUniversalLinks: true },
-    );
-    expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
-  });
-
-  test('retries zeron:// when HTTPS AuthSession fails to start', async () => {
-    (WebBrowser.openAuthSessionAsync as jest.Mock)
-      .mockRejectedValueOnce(new Error('failed to start'))
-      .mockResolvedValueOnce({
-        type: 'success',
-        url: `${AUTH_CALLBACK_URL}?code=c&state=s`,
-      });
-    const result = await openAuthSessionOrBrowser(AUTHORIZE, HTTPS_CALLBACK);
+    const result = await openAuthSessionOrBrowser(AUTHORIZE);
     expect(result).toEqual({
       type: 'success',
       url: `${AUTH_CALLBACK_URL}?code=c&state=s`,
     });
-    expect(WebBrowser.openAuthSessionAsync).toHaveBeenNthCalledWith(
-      1,
-      AUTHORIZE,
-      HTTPS_CALLBACK,
-      { preferEphemeralSession: false, preferUniversalLinks: true },
-    );
-    expect(WebBrowser.openAuthSessionAsync).toHaveBeenNthCalledWith(
-      2,
+    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(1);
+    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
       AUTHORIZE,
       AUTH_CALLBACK_URL,
       { preferEphemeralSession: false, preferUniversalLinks: false },
@@ -92,13 +65,23 @@ describe('openAuthSessionOrBrowser', () => {
     expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
   });
 
-  test('falls back to Safari when both AuthSessions fail to start', async () => {
+  test('does not treat cancel as a start failure', async () => {
+    (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValueOnce({
+      type: 'cancel',
+    });
+    const result = await openAuthSessionOrBrowser(AUTHORIZE);
+    expect(result).toEqual({ type: 'cancel' });
+    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(1);
+    expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+  });
+
+  test('falls back to Safari when AuthSession fails to start', async () => {
     (WebBrowser.openAuthSessionAsync as jest.Mock).mockRejectedValue(
       new Error('failed to start'),
     );
-    const result = await openAuthSessionOrBrowser(AUTHORIZE, HTTPS_CALLBACK);
+    const result = await openAuthSessionOrBrowser(AUTHORIZE);
     expect(result.type).toBe('dismiss');
-    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(2);
+    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(1);
     expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(AUTHORIZE);
   });
 });
