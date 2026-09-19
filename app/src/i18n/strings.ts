@@ -102,6 +102,9 @@ const en = {
   'session.queuedLocally': 'Queued',
   'session.changes': 'Changes',
   'session.files': 'Files',
+  'session.message': 'Message',
+  'session.messageNavigation': 'Message navigation',
+  'session.goToMessage': 'Go to {role} message {n} of {total}',
 
   // Inspector (iPad)
   'inspector.changes': 'Changes',
