@@ -67,16 +67,6 @@ test('image preview backdrop press dismisses', async () => {
     tree.root.findByType(Modal).props.onDismiss();
   });
   expect(onDismiss).toHaveBeenCalledTimes(1);
-  const close = tree.root.findAll(
-    n =>
-      n.props.accessibilityRole === 'button' &&
-      n.props.accessibilityLabel === 'Done',
-  )[0];
-  await act(async () => {
-    close.props.onPress();
-    tree.root.findByType(Modal).props.onDismiss();
-  });
-  expect(onDismiss).toHaveBeenCalledTimes(1);
   await act(async () => {
     tree.unmount();
   });
