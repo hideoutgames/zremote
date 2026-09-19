@@ -5,7 +5,6 @@ import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { HarnessMark } from './HarnessMark';
-import { Icon } from './Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
@@ -37,7 +36,6 @@ export function ModelMenuButton({
           <Text style={[styles.text, { color: theme.text }]} numberOfLines={1}>
             {modelLabel}
           </Text>
-          <Icon name="chevron.down" size={11} color={theme.textSecondary} />
         </Pressable>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>

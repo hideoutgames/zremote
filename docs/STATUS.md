@@ -19,7 +19,7 @@ logic:
 - **Registry writes**: createSpace, deleteSpace, createChat, renameChat,
   archive/unarchive, markSeen, deleteChat, setChatConfig.
 - **Composer logic**: send routing, `autoApprove=false` default, sandbox,
-  picker logic incl. mid-chat harness lock, drafts, checkout rules +
+  picker logic incl. provider-bound sessions, drafts, checkout rules +
   version gate.
 - **Transcript projection**, message context menu, a11y labels/roles.
 - **Attachments logic**: chunked upload, retry/deadlines, escorts.

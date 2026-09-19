@@ -764,6 +764,12 @@ export function SessionScreen({
             recentItems={recentItems}
             onPickRecentModel={(h, m) => {
               if (runtime === null || chat === undefined) return;
+              if (
+                chat.config?.harness !== undefined &&
+                chat.config.harness !== '' &&
+                h !== chat.config.harness
+              )
+                return;
               setChatConfig(runtime, chat.id, {
                 harness: h,
                 model: m,
@@ -812,7 +818,10 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       {queueOpen ? (
-        <GlassSheet onDismiss={() => setQueueOpen(false)}>
+        <GlassSheet
+          title={t('queue.title')}
+          onDismiss={() => setQueueOpen(false)}
+        >
           <QueuePanel
             queue={session.queue}
             actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
@@ -885,7 +894,6 @@ export function SessionScreen({
           runtime={runtime}
           chat={chat}
           phase={phase}
-          hasMessages={entries.length > 0}
           onClose={() => setPickerOpen(false)}
           formSheet={windowWidth >= 700}
         />
