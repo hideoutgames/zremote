@@ -344,6 +344,11 @@ function ActiveSessionScreen({
 
   const entries = session.entries;
   const openKey = `${chatId}:${openGeneration}`;
+  const agentWorking =
+    phase === 'working' ||
+    phase === 'queuedLocally' ||
+    phase === 'synchronized';
+  const lastEntryId = entries[entries.length - 1]?.id;
 
   // Local send/steer ids play SlideInDown once. Historical rows (thread
   // open, list recycle) must not — UserMessage entering is mount-time.
@@ -383,9 +388,23 @@ function ActiveSessionScreen({
           onFetchOutput={onFetchOutput}
           onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
           onOpenFileDiff={file => setFileDiff(file)}
+          commands={session.commands}
+          showWorking={agentWorking && item.id === lastEntryId}
+          workingChatId={chatId}
+          workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
         />
       ),
-    [openReasoning, onFetchOutput, chatId, onUserMessageEntered],
+    [
+      openReasoning,
+      onFetchOutput,
+      chatId,
+      onUserMessageEntered,
+      session.commands,
+      agentWorking,
+      lastEntryId,
+      row?.startedAt,
+      row?.updatedAt,
+    ],
   );
 
   const doSend = useCallback(
@@ -519,7 +538,8 @@ function ActiveSessionScreen({
   );
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
-  const dismissPan = useKeyboardDismissPan();
+  const keyboardHeight = useKeyboardState(s => s.height);
+  const keyboardWasVisible = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
@@ -548,6 +568,16 @@ function ActiveSessionScreen({
         : undefined;
     if (key !== undefined) AccessibilityInfo.announceForAccessibility(t(key));
   }, [phase]);
+
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      keyboardWasVisible.current = true;
+      return;
+    }
+    if (!keyboardWasVisible.current) return;
+    keyboardWasVisible.current = false;
+    setComposerFocused(false);
+  }, [keyboardHeight]);
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
   useEffect(() => {
@@ -665,11 +695,7 @@ function ActiveSessionScreen({
         insetsBottom={insets.bottom}
         onComposerHeight={setComposerHeight}
         onShowScrollDown={setShowScrollDown}
-        working={
-          phase === 'working' ||
-          phase === 'queuedLocally' ||
-          phase === 'synchronized'
-        }
+        working={agentWorking}
         chatId={chatId}
         startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
       />
@@ -841,7 +867,7 @@ function ActiveSessionScreen({
       </View>
 
       {composerFocused ? (
-        <View
+        <Pressable
           testID="composer-focus-dim"
           style={[
             styles.focusDim,
@@ -852,13 +878,10 @@ function ActiveSessionScreen({
           accessible
           accessibilityRole="button"
           accessibilityLabel={t('composer.dismissKeyboard')}
-          accessibilityActions={[{ name: 'activate' }]}
-          onAccessibilityAction={event => {
-            if (event.nativeEvent.actionName === 'activate') {
-              KeyboardController.dismiss();
-            }
+          onPress={() => {
+            KeyboardController.dismiss();
+            setComposerFocused(false);
           }}
-          {...dismissPan.panHandlers}
         />
       ) : null}
 
@@ -1173,7 +1196,13 @@ function ActiveSessionScreen({
           fill
           onDismiss={() => setToolSheet(null)}
         >
-          <HistoryScreen chatId={chatId} onOpenPr={setPrSheet} />
+          <HistoryScreen
+            chatId={chatId}
+            onOpenPr={badge => {
+              setToolSheet(null);
+              setPrSheet(badge);
+            }}
+          />
         </SessionSheet>
       ) : null}
       {toolSheet === 'files' ? (

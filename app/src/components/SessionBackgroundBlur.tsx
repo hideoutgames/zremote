@@ -1,8 +1,8 @@
 // Soft wallpaper blur behind the threads list and the existing-chat
 // content column. Compact (iPhone) is full-bleed so the image is frosted
 // everywhere except new-thread compose, which does not mount this.
-// Regular (iPad) keeps a horizontal fade, with wider edges so the
-// sharp→blur transition around the content column is more padded.
+// Regular iPad sidebar is fully frosted (no edge fade) with a darken
+// overlay; chat uses a wide column so bubbles sit on blur, not sharp art.
 
 import React from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -13,9 +13,11 @@ import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 export const COMPACT_WALLPAPER_BLUR = 80;
 export const REGULAR_THREADS_INTENSITY = 42;
 export const REGULAR_CHAT_INTENSITY = 36;
-export const REGULAR_THREADS_EDGE = 0.2;
-export const REGULAR_CHAT_COLUMN_EDGE = 0.28;
-export const REGULAR_CHAT_VIGNETTE_EDGE = 0.22;
+export const REGULAR_CHAT_COLUMN_EDGE = 0.1;
+export const REGULAR_CHAT_VIGNETTE_EDGE = 0.08;
+export const SIDEBAR_DARKEN = 'rgba(0,0,0,0.35)';
+/** Extra width beyond the transcript measure cap so iPad blur covers bubbles. */
+export const CHAT_BLUR_EXTRA = 280;
 
 export type WallpaperBlurSpec = {
   intensity: number;
@@ -34,8 +36,7 @@ export const wallpaperBlurFor = (
   if (kind === 'threads') {
     return {
       intensity: REGULAR_THREADS_INTENSITY,
-      fade: 'horizontal',
-      fadeHold: REGULAR_THREADS_EDGE,
+      fade: 'none',
     };
   }
   return {
@@ -45,11 +46,19 @@ export const wallpaperBlurFor = (
   };
 };
 
+export const chatBlurMaxWidth = (
+  contentMaxWidth?: number,
+): number | undefined =>
+  contentMaxWidth === undefined
+    ? undefined
+    : contentMaxWidth + CHAT_BLUR_EXTRA * 2;
+
 export function ThreadsBackgroundBlur() {
   const background = useNewThreadComposerBackground();
   const { width } = useWindowDimensions();
   if (background === undefined) return null;
   const spec = wallpaperBlurFor(width, 'threads');
+  const dim = width >= REGULAR_MIN_WIDTH;
   return (
     <View
       pointerEvents="none"
@@ -62,6 +71,12 @@ export function ThreadsBackgroundBlur() {
         intensity={spec.intensity}
         style={StyleSheet.absoluteFill}
       />
+      {dim ? (
+        <View
+          testID="session-background-dim"
+          style={[styles.dim, { backgroundColor: SIDEBAR_DARKEN }]}
+        />
+      ) : null}
     </View>
   );
 }
@@ -76,6 +91,7 @@ export function ChatBackgroundBlur({
   if (background === undefined) return null;
   const column = contentMaxWidth !== undefined;
   const spec = wallpaperBlurFor(width, 'chat', column);
+  const blurWidth = chatBlurMaxWidth(contentMaxWidth);
   const paddedColumn = column && spec.fade === 'horizontal';
   return (
     <View
@@ -86,7 +102,7 @@ export function ChatBackgroundBlur({
       <View
         style={
           paddedColumn
-            ? [styles.column, { maxWidth: contentMaxWidth }]
+            ? [styles.column, { maxWidth: blurWidth }]
             : StyleSheet.absoluteFill
         }
       >
@@ -110,5 +126,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     alignSelf: 'center',
+  },
+  dim: {
+    ...StyleSheet.absoluteFill,
   },
 });

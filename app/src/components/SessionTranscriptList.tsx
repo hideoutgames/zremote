@@ -37,7 +37,7 @@ import {
   composerExtraMax,
   composerListInset,
 } from './composerExtraHeight';
-import { WorkingStatusRow } from './WorkingStatus';
+import { WorkingStatusBubble } from './WorkingStatus';
 import { PreviewRail } from './agentsKit/PreviewRail';
 import {
   buildRailItems,
@@ -47,6 +47,7 @@ import {
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 const RAIL_PADDING_RIGHT = 40;
+export const RAIL_RIGHT = 4;
 const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
 
 export const WORKING_STATUS_ID = '__working-status__';
@@ -114,6 +115,7 @@ export const SessionTranscriptList = forwardRef<
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
   const [contentHeight, setContentHeight] = useState(0);
   const [listHeight, setListHeight] = useState(0);
+  const [listWidth, setListWidth] = useState(0);
   const [composerInset, setComposerInset] = useState(0);
   const [viewableIds, setViewableIds] = useState<string[]>([]);
   const [scrollMetrics, setScrollMetrics] = useState({
@@ -152,7 +154,9 @@ export const SessionTranscriptList = forwardRef<
       kind: 'entry',
       entry,
     }));
-    if (working) rows.push({ kind: 'working' });
+    const last = entries[entries.length - 1];
+    const workingInLastAssistant = working && last?.role === 'assistant';
+    if (working && !workingInLastAssistant) rows.push({ kind: 'working' });
     return rows;
   }, [entries, working]);
 
@@ -173,11 +177,7 @@ export const SessionTranscriptList = forwardRef<
   const overflowing = contentHeight > listHeight + 1 && entries.length > 1;
   const railTop = insetsTop + 96;
   const railHeight = Math.max(0, listHeight - railTop - composerInset);
-  const columnWidth =
-    contentMaxWidth !== undefined
-      ? Math.min(contentMaxWidth, windowWidth)
-      : windowWidth;
-  const railRight = (windowWidth - columnWidth) / 2 + 4;
+  const railRight = RAIL_RIGHT;
   const activeRailId = following
     ? itemIds[itemIds.length - 1] ?? ''
     : pickActiveRailId({
@@ -235,6 +235,17 @@ export const SessionTranscriptList = forwardRef<
       () => {},
     );
   }, [working, scrollMessageToEnd]);
+
+  const prevListWidthRef = useRef(0);
+  useEffect(() => {
+    const prev = prevListWidthRef.current;
+    prevListWidthRef.current = listWidth;
+    if (prev === 0 || listWidth === 0 || prev === listWidth) return;
+    if (!followingRef.current) return;
+    scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
+      () => {},
+    );
+  }, [listWidth, scrollMessageToEnd]);
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -296,7 +307,7 @@ export const SessionTranscriptList = forwardRef<
   const renderItem = useCallback(
     ({ item }: { item: TranscriptRow }) =>
       item.kind === 'working' ? (
-        <WorkingStatusRow chatId={chatId} startedAt={startedAt} />
+        <WorkingStatusBubble chatId={chatId} startedAt={startedAt} />
       ) : (
         renderEntry({ item: item.entry })
       ),
@@ -361,8 +372,9 @@ export const SessionTranscriptList = forwardRef<
       testID="session-transcript"
       style={styles.fill}
       onLayout={event => {
-        const height = event.nativeEvent.layout.height;
+        const { width, height } = event.nativeEvent.layout;
         setListHeight(prev => (prev === height ? prev : height));
+        setListWidth(prev => (prev === width ? prev : width));
       }}
     >
       <KeyboardAwareLegendList
@@ -403,7 +415,10 @@ export const SessionTranscriptList = forwardRef<
         }
         maintainScrollAtEndThreshold={1}
         estimatedItemSize={64}
-        estimatedListSize={{ width: windowWidth, height: windowHeight }}
+        estimatedListSize={{
+          width: listWidth || windowWidth,
+          height: listHeight || windowHeight,
+        }}
         onEndVisible={(v: boolean) => {
           onShowScrollDown(!v);
           if (v && hasOverflowedRef.current) setFollowing(true);

@@ -11,9 +11,11 @@ const leaf = (path: string): string =>
 export function TurnChangesCard({
   files,
   onOpenFile,
+  embedded = false,
 }: {
   files: TurnChange[];
   onOpenFile: (file: TurnChange) => void;
+  embedded?: boolean;
 }) {
   const theme = useTheme();
   if (files.length === 0) return null;
@@ -21,7 +23,13 @@ export function TurnChangesCard({
     <View
       style={[
         styles.card,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+        embedded ? styles.embedded : undefined,
+        embedded
+          ? undefined
+          : {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
       ]}
     >
       {files.map(file => (
@@ -69,6 +77,12 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 6,
     marginTop: 10,
+  },
+  embedded: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    marginTop: 0,
+    backgroundColor: 'transparent',
   },
   row: {
     flexDirection: 'row',

@@ -18,7 +18,13 @@ const stateLabel = (state: SubagentStatus): string => {
   }
 };
 
-export function SubAgentCard({ view }: { view: SubagentView }) {
+export function SubAgentCard({
+  view,
+  embedded = false,
+}: {
+  view: SubagentView;
+  embedded?: boolean;
+}) {
   const theme = useTheme();
   const state = stateLabel(view.state);
   const subtitle =
@@ -36,7 +42,13 @@ export function SubAgentCard({ view }: { view: SubagentView }) {
       accessibilityLabel={`${view.title}. ${subtitle}`}
       style={[
         styles.card,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+        embedded ? styles.embedded : undefined,
+        embedded
+          ? undefined
+          : {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
       ]}
     >
       <View style={[styles.dot, { backgroundColor: dot }]} />
@@ -87,6 +99,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginTop: 8,
+  },
+  embedded: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    marginTop: 0,
+    backgroundColor: 'transparent',
   },
   dot: {
     width: 8,

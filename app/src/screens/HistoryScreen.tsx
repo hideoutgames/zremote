@@ -8,6 +8,8 @@ import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { collectThreadPrs, badgeFromSummary } from '../components/threadPrs';
 import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
 import { prToneColor } from '../components/prChrome';
+import { BrandMark } from '../components/BrandMark';
+import { svgForPullRequest } from '../components/harnessBrand';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -59,11 +61,9 @@ export function HistoryScreen({
                 accessibilityLabel={`${label}, ${t(prStateLabelKey(badge))}`}
                 style={[styles.row, { borderBottomColor: theme.border }]}
               >
-                <View
-                  style={[
-                    styles.dot,
-                    { backgroundColor: prToneColor(theme, badge) },
-                  ]}
+                <BrandMark
+                  svg={svgForPullRequest(prToneColor(theme, badge))}
+                  size={16}
                 />
                 <Text
                   style={[styles.title, { color: theme.text }]}
@@ -106,7 +106,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
   title: { flex: 1, fontSize: 16, fontWeight: '600' },
   number: { fontSize: 13, fontVariant: ['tabular-nums'] },
 });

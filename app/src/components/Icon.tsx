@@ -100,6 +100,11 @@ type IconProps = {
   style?: StyleProp<ViewStyle>;
 };
 
+/** Extra clip around `pointSize` so wide SF glyphs (folder, sidebar.left)
+ *  are not cropped, and a keyboard-nudged hosting view still paints inside
+ *  the box instead of going blank. */
+export const ICON_OPTICAL_PAD = 4;
+
 export function Icon({
   name,
   size = 20,
@@ -107,17 +112,22 @@ export function Icon({
   style,
 }: IconProps) {
   const mdiName = (SF_TO_MDI[name] ?? 'help-circle-outline') as MdiName;
+  const box = size + ICON_OPTICAL_PAD * 2;
   return (
     <View
       collapsable={false}
-      style={[styles.clip, { width: size, height: size }, style]}
+      style={[
+        styles.clip,
+        { width: box, height: box, margin: -ICON_OPTICAL_PAD },
+        style,
+      ]}
     >
       <SymbolView
         key={name}
         symbolName={name}
         tintColor={color}
         pointSize={size}
-        style={{ width: size, height: size }}
+        style={{ width: box, height: box }}
         fallback={
           <MaterialDesignIcons
             name={mdiName}
@@ -131,5 +141,9 @@ export function Icon({
 }
 
 const styles = StyleSheet.create({
-  clip: { overflow: 'hidden' },
+  clip: {
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

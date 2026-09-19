@@ -1,37 +1,14 @@
-// Top chrome wash: blur + theme-color fade sitting under floating header
-// buttons, dissolving list/transcript content as it scrolls up. Mirrors
-// desktop EdgeFade below the titlebar. Reduce Transparency drops the blur
-// (FadeBlur returns null) and keeps the color gradient.
+// Top chrome dissolve: masked blur sitting under floating header buttons
+// so list/transcript content fades as it scrolls up. No light/dark color
+// wash — Reduce Transparency drops the blur and leaves the band empty.
 
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { FadeBlur } from './FadeBlur';
-import { useTheme } from '../theme';
 
 export const TOP_CHROME_FADE_BAND = 56;
-/** Strong blur under a mostly-transparent color wash so wallpaper remains. */
+/** Strong blur under the header so wallpaper remains, without a color wash. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
-const TOP_FADE_ALPHA = 0.12;
-const MID_FADE_ALPHA = 0.06;
-
-export const hexToRgba = (hex: string, alpha: number): string => {
-  const raw = hex.replace('#', '');
-  const full =
-    raw.length === 3
-      ? raw
-          .split('')
-          .map(c => c + c)
-          .join('')
-      : raw;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
-    return `rgba(0,0,0,${alpha})`;
-  }
-  return `rgba(${r},${g},${b},${alpha})`;
-};
 
 export function TopChromeFade({
   inset,
@@ -41,13 +18,8 @@ export function TopChromeFade({
   inset: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const theme = useTheme();
   const height = Math.max(inset, 0) + TOP_CHROME_FADE_BAND;
   const fadeHold = height <= 0 ? 0.12 : Math.max(inset, 0) / height;
-  const top = hexToRgba(theme.background, TOP_FADE_ALPHA);
-  const mid = hexToRgba(theme.background, MID_FADE_ALPHA);
-  const clear = hexToRgba(theme.background, 0);
-  const midAt = Math.min(1, fadeHold + 0.22);
   return (
     <View
       pointerEvents="none"
@@ -58,11 +30,6 @@ export function TopChromeFade({
         fade="down"
         fadeHold={fadeHold}
         intensity={TOP_CHROME_BLUR_INTENSITY}
-        style={StyleSheet.absoluteFill}
-      />
-      <LinearGradient
-        colors={[top, top, mid, clear]}
-        locations={[0, fadeHold, midAt, 1]}
         style={StyleSheet.absoluteFill}
       />
     </View>

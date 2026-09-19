@@ -8,7 +8,8 @@ import { FadeBlur } from '../src/components/FadeBlur';
 import {
   COMPACT_WALLPAPER_BLUR,
   REGULAR_CHAT_COLUMN_EDGE,
-  REGULAR_THREADS_EDGE,
+  REGULAR_THREADS_INTENSITY,
+  chatBlurMaxWidth,
   wallpaperBlurFor,
 } from '../src/components/SessionBackgroundBlur';
 import {
@@ -16,6 +17,7 @@ import {
   type AppServices,
 } from '../src/app/runtimeContext';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
+import { setWallpaperContrast } from '../src/zeron/state/wallpaperContrast';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 
 const services: AppServices = {
@@ -65,6 +67,7 @@ afterEach(() => {
     tree?.unmount();
   });
   tree = undefined;
+  setWallpaperContrast(undefined, undefined);
 });
 
 test('shell wallpaper sits behind home and the detail column', async () => {
@@ -158,7 +161,7 @@ test('no artwork means no wallpaper or blur layers', async () => {
   expect(count(mounted.root, 'session-background-blur')).toBe(0);
 });
 
-test('compact wallpaper blur is full-bleed; iPad keeps padded edges', () => {
+test('compact wallpaper blur is full-bleed; iPad sidebar is unmasked', () => {
   expect(wallpaperBlurFor(390, 'threads')).toEqual({
     intensity: COMPACT_WALLPAPER_BLUR,
     fade: 'none',
@@ -167,17 +170,21 @@ test('compact wallpaper blur is full-bleed; iPad keeps padded edges', () => {
     intensity: COMPACT_WALLPAPER_BLUR,
     fade: 'none',
   });
-  expect(wallpaperBlurFor(1024, 'threads').fadeHold).toBe(REGULAR_THREADS_EDGE);
+  expect(wallpaperBlurFor(1024, 'threads')).toEqual({
+    intensity: REGULAR_THREADS_INTENSITY,
+    fade: 'none',
+  });
   expect(wallpaperBlurFor(1024, 'chat', true).fadeHold).toBe(
     REGULAR_CHAT_COLUMN_EDGE,
   );
+  expect(chatBlurMaxWidth(720)).toBeGreaterThan(720);
 });
 
-test('home list uses padded regular blur at the 750pt test window', async () => {
+test('home list uses full-bleed regular blur at the 750pt test window', async () => {
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   const blur = mounted.root.findAllByType(FadeBlur)[0];
-  expect(blur.props.fade).toBe('horizontal');
-  expect(blur.props.fadeHold).toBe(REGULAR_THREADS_EDGE);
+  expect(blur.props.fade).toBe('none');
+  expect(count(mounted.root, 'session-background-dim')).toBeGreaterThan(0);
 });

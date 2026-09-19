@@ -239,14 +239,25 @@ test('InputCard summarizes an open question', async () => {
   );
 });
 
-test('InputCard shows Answered once resolved', async () => {
+test('InputCard shows the question, the chosen labels, and Answered', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <InputCard part={{ ...inputPart, resolved: true }} />,
+      <InputCard
+        part={{ ...inputPart, resolved: true }}
+        answers={[
+          {
+            questionId: 'q-sync',
+            labels: ['Event-driven fold with coalesced commits'],
+          },
+        ]}
+      />,
     );
   });
-  expect(textOf(tree!.root)).toContain('Answered');
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Which sync strategy should the rewrite use?');
+  expect(texts).toContain('Event-driven fold with coalesced commits');
+  expect(texts).toContain('Answered');
 });
 
 test('messageCopyContent is a zeego Content element', () => {
@@ -301,4 +312,60 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(
     tree!.root.findAll(n => n.props.testID === 'assistant-bubble').length,
   ).toBeGreaterThan(0);
+});
+
+test('UserMessage never ellipsizes a short prompt', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [{ kind: 'text', id: 't0', text: 'Test' }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  expect(textOf(tree!.root)).toContain('Test');
+  expect(textOf(tree!.root).some(s => s === 'T…' || s === 'T...')).toBe(false);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'user-bubble-fold'),
+  ).toHaveLength(0);
+});
+
+test('UserMessage folds after 1000 characters', async () => {
+  const long = 'x'.repeat(1001);
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [{ kind: 'text', id: 't0', text: long }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  expect(textOf(tree!.root)).toContain(`${'x'.repeat(1000)}…`);
+  const fold = tree!.root.findByProps({ testID: 'user-bubble-fold' });
+  await act(async () => {
+    fold.props.onPress();
+  });
+  expect(textOf(tree!.root)).toContain(long);
+});
+
+test('AssistantMessage puts tools, changes, and working inside the bubble', async () => {
+  const now = Date.now();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={assistantEntry}
+        onOpenReasoning={() => {}}
+        onOpenFileDiff={() => {}}
+        showWorking
+        workingChatId="c1"
+        workingStartedAt={now}
+      />,
+    );
+  });
+  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
+  expect(
+    bubble.findAll(n => n.props.testID === 'working-status-strip').length,
+  ).toBeGreaterThan(0);
+  expect(textOf(tree!.root)).toContain('Ran 2 commands');
 });

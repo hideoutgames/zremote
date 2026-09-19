@@ -26,6 +26,7 @@ import type {
   MessagePart,
 } from '../src/zeron/protocol/types';
 import type { PrBadgeModel } from '../src/components/prBadge';
+import { BrandMark } from '../src/components/BrandMark';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { entryFrom } from '../src/zeron/doc/sessionDoc';
 import { CHAT_WORKING, demoTranscripts } from '../src/demo/fixtures';
@@ -235,6 +236,7 @@ test('history lists the checkout PR and opens it on press', async () => {
     <HistoryScreen chatId="c1" onOpenPr={b => opened.push(b)} />,
   );
   expect(texts(tree.root)).toContain('Session sheets');
+  expect(tree.root.findAllByType(BrandMark).length).toBeGreaterThan(0);
   const row = tree.root.findAll(
     n =>
       typeof n.props.onPress === 'function' &&

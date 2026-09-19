@@ -74,9 +74,11 @@ export function WorkingSpinner({ cellSize = 2.5 }: { cellSize?: number }) {
 export function WorkingStatusRow({
   chatId,
   startedAt,
+  compact = false,
 }: {
   chatId: string;
   startedAt: number;
+  compact?: boolean;
 }) {
   const theme = useTheme();
   const [now, setNow] = useState(() => Date.now());
@@ -88,7 +90,7 @@ export function WorkingStatusRow({
   const elapsedSecs = Math.max(0, Math.floor((now - startedAt) / 1000));
   return (
     <View
-      style={styles.statusRow}
+      style={[styles.statusRow, compact ? styles.statusRowCompact : undefined]}
       testID="working-status-strip"
       accessibilityLiveRegion="polite"
     >
@@ -109,6 +111,31 @@ export function WorkingStatusRow({
   );
 }
 
+/** Standalone assistant bubble used when the agent is working and the last
+ *  transcript row is not yet an assistant message. */
+export function WorkingStatusBubble({
+  chatId,
+  startedAt,
+}: {
+  chatId: string;
+  startedAt: number;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.bubbleRow}>
+      <View
+        testID="assistant-bubble"
+        style={[
+          styles.bubble,
+          { backgroundColor: theme.assistantBubbleBackground },
+        ]}
+      >
+        <WorkingStatusRow compact chatId={chatId} startedAt={startedAt} />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   grid: { gap: 2, justifyContent: 'center' },
   row: { flexDirection: 'row' },
@@ -120,6 +147,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 4,
   },
+  statusRowCompact: {
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+  },
   flavour: { fontSize: 16, flexShrink: 1 },
   elapsed: { fontSize: 13, fontVariant: ['tabular-nums'] },
+  bubbleRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    alignItems: 'flex-start',
+  },
+  bubble: {
+    alignSelf: 'flex-start',
+    maxWidth: '88%',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
 });

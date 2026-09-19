@@ -8,9 +8,11 @@ import type { PlanArtifact } from './detectPlan';
 export function PlanCard({
   plan,
   onOpen,
+  embedded = false,
 }: {
   plan: PlanArtifact;
   onOpen: () => void;
+  embedded?: boolean;
 }) {
   const theme = useTheme();
   return (
@@ -20,7 +22,13 @@ export function PlanCard({
       accessibilityLabel={plan.name}
       style={[
         styles.card,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+        embedded ? styles.embedded : undefined,
+        embedded
+          ? undefined
+          : {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
       ]}
     >
       <PlanBadge />
@@ -43,6 +51,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 8,
     alignItems: 'flex-start',
+  },
+  embedded: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    marginTop: 0,
+    backgroundColor: 'transparent',
   },
   row: {
     flexDirection: 'row',

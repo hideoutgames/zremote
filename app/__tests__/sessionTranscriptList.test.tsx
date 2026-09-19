@@ -6,6 +6,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text, View, type LayoutChangeEvent } from 'react-native';
 import {
   SessionTranscriptList,
+  RAIL_RIGHT,
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
 import type { MessageEntry } from '../src/zeron/protocol/types';
@@ -56,11 +57,15 @@ function Harness({
   openKey,
   working = false,
   startedAt = 1,
+  windowWidth = 390,
+  contentMaxWidth,
 }: {
   entries: MessageEntry[];
   openKey: string;
   working?: boolean;
   startedAt?: number;
+  windowWidth?: number;
+  contentMaxWidth?: number;
 }) {
   const composerRef = useRef<View>(null);
   return (
@@ -69,7 +74,8 @@ function Harness({
       entries={entries}
       renderEntry={({ item }: { item: MessageEntry }) => <Text>{item.id}</Text>}
       composerRef={composerRef}
-      windowWidth={390}
+      contentMaxWidth={contentMaxWidth}
+      windowWidth={windowWidth}
       windowHeight={844}
       insetsTop={47}
       insetsBottom={34}
@@ -545,6 +551,91 @@ test('a non-last rail tick jumps to that message and clears follow', async () =>
   });
   expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
 
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('does not append a working row when the last entry is the assistant', async () => {
+  const assistant: MessageEntry = { ...entry('a1'), role: 'assistant' };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), assistant]}
+        openKey="c1:1"
+        working
+        startedAt={1}
+      />,
+    );
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip'),
+  ).toHaveLength(0);
+  const ids = listProps(tree!).data.map(
+    (row: { kind: string; entry?: MessageEntry }) =>
+      row.kind === 'working' ? 'working' : row.entry?.id,
+  );
+  expect(ids).toEqual(['m1', 'a1']);
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('message rail stays right-aligned on a wide iPad column', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), entry('m2')]}
+        openKey="c1:1"
+        windowWidth={1024}
+        contentMaxWidth={720}
+      />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 684, height: 844 } },
+    });
+    listProps(tree!).onContentSizeChange(684, 2000);
+  });
+  const positioned = tree!.root.findAll(n => {
+    const style = Array.isArray(n.props.style)
+      ? n.props.style.flat()
+      : [n.props.style];
+    return style.some(
+      (s: { right?: number } | undefined) => s?.right === RAIL_RIGHT,
+    );
+  });
+  expect(positioned.length).toBeGreaterThan(0);
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('width change while following re-anchors to the end', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  scrollMessageToEnd.mockClear();
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 844 } },
+    });
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 800, height: 844 } },
+    });
+  });
+  expect(scrollMessageToEnd).toHaveBeenCalledWith({
+    animated: false,
+    closeKeyboard: false,
+  });
   await act(async () => {
     tree!.unmount();
   });
