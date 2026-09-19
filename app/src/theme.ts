@@ -4,6 +4,7 @@
 
 import { useColorScheme } from 'react-native';
 import {
+  chromeSchemeForWallpaper,
   useWallpaperContrastScheme,
   useWallpaperContrastUri,
 } from './zeron/state/wallpaperContrast';
@@ -123,8 +124,7 @@ export const useTheme = (): Theme => {
   const system = useColorScheme() === 'light' ? 'light' : 'dark';
   const wallpaperUri = useWallpaperContrastUri();
   const sampled = useWallpaperContrastScheme();
-  const scheme =
-    wallpaperUri !== undefined && sampled !== undefined ? sampled : system;
+  const scheme = chromeSchemeForWallpaper(wallpaperUri, sampled, system);
   return scheme === 'light' ? lightTheme : darkTheme;
 };
 

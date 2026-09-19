@@ -48,6 +48,9 @@ import {
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 const RAIL_PADDING_RIGHT = 40;
 export const RAIL_RIGHT = 4;
+/** Remount LegendList after a sidebar-sized width jump so hit testing
+ *  picks up the new column. Smaller layout ticks only re-anchor. */
+export const LIST_RESIZE_REMOUNT_DELTA = 40;
 const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
 
 export const WORKING_STATUS_ID = '__working-status__';
@@ -124,6 +127,7 @@ export const SessionTranscriptList = forwardRef<
     contentHeight: 0,
   });
   const [dismissKey, setDismissKey] = useState(0);
+  const [listHitKey, setListHitKey] = useState(0);
   const hasOverflowedRef = useRef(false);
   const scrolledForKeyRef = useRef<string | null>(null);
   const wasWorkingRef = useRef(working);
@@ -241,11 +245,22 @@ export const SessionTranscriptList = forwardRef<
     const prev = prevListWidthRef.current;
     prevListWidthRef.current = listWidth;
     if (prev === 0 || listWidth === 0 || prev === listWidth) return;
+    if (Math.abs(listWidth - prev) >= LIST_RESIZE_REMOUNT_DELTA) {
+      setListHitKey(key => key + 1);
+    }
     if (!followingRef.current) return;
     scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
       () => {},
     );
   }, [listWidth, scrollMessageToEnd]);
+
+  useEffect(() => {
+    if (listHitKey === 0) return;
+    if (!followingRef.current) return;
+    scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
+      () => {},
+    );
+  }, [listHitKey, scrollMessageToEnd]);
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -378,6 +393,7 @@ export const SessionTranscriptList = forwardRef<
       }}
     >
       <KeyboardAwareLegendList
+        key={listHitKey}
         ref={listRef}
         style={styles.fill}
         data={data}

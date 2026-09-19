@@ -16,6 +16,14 @@ export const contrastSchemeFromLuminance = (
 ): WallpaperContrastScheme =>
   luma >= WALLPAPER_LUMA_CUTOFF ? 'light' : 'dark';
 
+/** Wallpaper present → sampled scheme, else light text on a dark scrim. */
+export const chromeSchemeForWallpaper = (
+  wallpaperUri: string | undefined,
+  sampled: WallpaperContrastScheme | undefined,
+  system: WallpaperContrastScheme,
+): WallpaperContrastScheme =>
+  wallpaperUri === undefined ? system : sampled ?? 'dark';
+
 export const averageLuminanceFromRgba = (
   pixels: ArrayLike<number>,
 ): number | undefined => {

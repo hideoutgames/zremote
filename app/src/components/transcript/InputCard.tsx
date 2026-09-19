@@ -83,9 +83,9 @@ const styles = StyleSheet.create({
     marginVertical: 0,
     backgroundColor: 'transparent',
   },
-  block: { gap: 4 },
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  title: { flex: 1, flexShrink: 1, fontSize: 14, fontWeight: '500' },
-  answer: { fontSize: 14, marginLeft: 23 },
+  block: { gap: 6 },
+  head: { gap: 6 },
+  title: { fontSize: 14, fontWeight: '500' },
+  answer: { fontSize: 14 },
   answered: { fontSize: 12, fontWeight: '600' },
 });

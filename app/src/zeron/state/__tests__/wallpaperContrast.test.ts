@@ -1,5 +1,6 @@
 import {
   averageLuminanceFromRgba,
+  chromeSchemeForWallpaper,
   contrastSchemeFromLuminance,
   luminanceOfRgb,
 } from '../wallpaperContrast';
@@ -18,4 +19,10 @@ test('contrastSchemeFromLuminance splits around the cutoff', () => {
 test('averageLuminanceFromRgba skips transparent pixels', () => {
   const pixels = Uint8Array.of(255, 255, 255, 0, 0, 0, 0, 255);
   expect(averageLuminanceFromRgba(pixels)).toBeCloseTo(0);
+});
+
+test('chromeSchemeForWallpaper uses sampled scheme and falls back to dark', () => {
+  expect(chromeSchemeForWallpaper(undefined, undefined, 'light')).toBe('light');
+  expect(chromeSchemeForWallpaper('file://x', undefined, 'light')).toBe('dark');
+  expect(chromeSchemeForWallpaper('file://x', 'light', 'dark')).toBe('light');
 });

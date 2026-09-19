@@ -258,6 +258,12 @@ test('InputCard shows the question, the chosen labels, and Answered', async () =
   expect(texts).toContain('Which sync strategy should the rewrite use?');
   expect(texts).toContain('Event-driven fold with coalesced commits');
   expect(texts).toContain('Answered');
+  const question = tree!.root.findAll(
+    n =>
+      typeof n.props.children === 'string' &&
+      n.props.children === 'Which sync strategy should the rewrite use?',
+  )[0];
+  expect(question.props.numberOfLines).toBeUndefined();
 });
 
 test('messageCopyContent is a zeego Content element', () => {

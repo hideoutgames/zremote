@@ -49,6 +49,7 @@ import {
   useChatPinned,
   useNewThreadComposerBackground,
   useRecentModels,
+  useSidebarCollapsed,
 } from '../zeron/state/uiPrefs';
 import {
   sessionTitle,
@@ -537,9 +538,11 @@ function ActiveSessionScreen({
     undefined,
   );
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
+  const pendingPrRef = useRef<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const keyboardHeight = useKeyboardState(s => s.height);
   const keyboardWasVisible = useRef(false);
+  const sidebarCollapsed = useSidebarCollapsed();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
@@ -578,6 +581,18 @@ function ActiveSessionScreen({
     keyboardWasVisible.current = false;
     setComposerFocused(false);
   }, [keyboardHeight]);
+
+  useEffect(() => {
+    setComposerFocused(false);
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (toolSheet !== null) return;
+    const badge = pendingPrRef.current;
+    if (badge == null) return;
+    pendingPrRef.current = null;
+    setPrSheet(badge);
+  }, [toolSheet]);
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
   useEffect(() => {
@@ -776,7 +791,11 @@ function ActiveSessionScreen({
           </View>
           <GlassControl
             interactive
-            onPress={onBack}
+            onPress={() => {
+              setComposerFocused(false);
+              KeyboardController.dismiss();
+              onBack();
+            }}
             accessibilityRole="button"
             accessibilityLabel={
               leadingIcon !== undefined
@@ -866,7 +885,7 @@ function ActiveSessionScreen({
         </View>
       </View>
 
-      {composerFocused ? (
+      {composerFocused && keyboardHeight > 0 ? (
         <Pressable
           testID="composer-focus-dim"
           style={[
@@ -1199,8 +1218,8 @@ function ActiveSessionScreen({
           <HistoryScreen
             chatId={chatId}
             onOpenPr={badge => {
+              pendingPrRef.current = badge;
               setToolSheet(null);
-              setPrSheet(badge);
             }}
           />
         </SessionSheet>

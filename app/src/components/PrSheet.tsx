@@ -101,6 +101,7 @@ export function PrSheet({
       onDismiss={onModalDismiss}
     >
       <View
+        testID="pr-sheet"
         style={[
           styles.fill,
           { backgroundColor: theme.background, paddingTop: insets.top },

@@ -1,6 +1,7 @@
 import React from 'react';
 import { TextInput } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { SessionScreen } from '../src/screens/SessionScreen';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
@@ -68,6 +69,9 @@ afterEach(() => {
   });
   tree = undefined;
   setWallpaperContrast(undefined, undefined);
+  (useKeyboardState as jest.Mock).mockImplementation(
+    (selector: (s: { height: number }) => unknown) => selector({ height: 0 }),
+  );
 });
 
 test('shell wallpaper sits behind home and the detail column', async () => {
@@ -129,7 +133,7 @@ test('active session keeps the chrome fade and adds a column blur', async () => 
   expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
 });
 
-test('focused composer dim sits above the top chrome fade', async () => {
+test('composer dim is absent until the keyboard is visible', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -146,9 +150,36 @@ test('focused composer dim sits above the top chrome fade', async () => {
   await act(async () => {
     input.props.onFocus();
   });
+  expect(count(mounted.root, 'composer-focus-dim')).toBe(0);
+});
+
+test('focused composer dim sits above the top chrome fade', async () => {
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mocked = useKeyboardState as jest.Mock;
+  mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
+    selector({ height: 336 }),
+  );
+  const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
+  const input = mounted.root.findByType(TextInput);
+  await act(async () => {
+    input.props.onFocus();
+  });
   const dim = mounted.root.findByProps({ testID: 'composer-focus-dim' });
   const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
   expect(zIndexOf(dim)).toBeGreaterThan(zIndexOf(fade));
+  mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
+    selector({ height: 0 }),
+  );
 });
 
 test('no artwork means no wallpaper or blur layers', async () => {
