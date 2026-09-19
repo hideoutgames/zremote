@@ -68,8 +68,8 @@ surfaces and has never been compiled. First build happens on a Mac.
   (`/registry/{org}/live-activity`, see `docs/HOST_EDGE_CHANGES.md`);
   push-to-start tokens register with `chatId: "*"`; unregister on
   end/sign-out.
-- Settings → Live Activities: on/off + "Show host and project on Lock
-  Screen" (the privacy default — `showContext`).
+- Settings → Live Activities: on/off + Host and Project (the privacy
+  default — `showContext`; footer explains Lock Screen).
 
 ### zeron-split-view (Fabric component — NOT compiled)
 
