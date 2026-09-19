@@ -1,10 +1,12 @@
-// Composer Fast control: outline/filled bolt. Dropdown is On/Off, or the
-// catalog's extra choices when the provider exposes more than a binary switch.
+// Composer Fast control: outline/filled bolt + trailing chevron, matching
+// the model/effort chips. Dropdown is On/Off, or the catalog's extra
+// choices when the provider exposes more than a binary switch.
 
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable } from 'react-native';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { Icon } from './Icon';
+import { ComposerMenuChip } from './ComposerMenuChip';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import type { ModelOption } from '../zeron/protocol/types';
@@ -55,15 +57,18 @@ export function FastMenuButton({
           accessibilityRole="button"
           accessibilityLabel={t('picker.fastMode')}
           accessibilityState={{ selected: enabled }}
-          style={styles.hit}
         >
-          <View style={styles.iconWrap}>
-            <Icon
-              name={enabled ? 'bolt.fill' : 'bolt'}
-              size={16}
-              color={color}
-            />
-          </View>
+          <ComposerMenuChip
+            color={color}
+            chevronColor={theme.textSecondary}
+            leading={
+              <Icon
+                name={enabled ? 'bolt.fill' : 'bolt'}
+                size={16}
+                color={color}
+              />
+            }
+          />
         </Pressable>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
@@ -86,19 +91,3 @@ export function FastMenuButton({
     </DropdownMenu.Root>
   );
 }
-
-const styles = StyleSheet.create({
-  hit: {
-    height: 32,
-    minWidth: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  iconWrap: {
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

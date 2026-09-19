@@ -3,7 +3,7 @@
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
-//   action row: [+] · live Queue/Steer · Plan · model · effort · fast · voice · send.
+//   action row: [+] · live Queue/Steer · Plan · model · effort · fast · context · voice · send.
 // Host / repo / origin live on the thread Details sheet for existing sessions.
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
@@ -42,6 +42,7 @@ import { ModelMenuButton } from './ModelMenuButton';
 import { FastMenuButton } from './FastMenuButton';
 import { ComposerMenuChip } from './ComposerMenuChip';
 import { PlanBadge } from './PlanBadge';
+import { ContextUsageChip } from './agentsKit/ContextUsage';
 import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
@@ -450,14 +451,7 @@ export const Composer = React.memo(function ({
       style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
     >
       <View
-        style={[
-          styles.glassWrap,
-          regular
-            ? undefined
-            : theme.scheme === 'dark'
-            ? styles.glassHaloDark
-            : styles.glassHaloLight,
-        ]}
+        style={styles.glassWrap}
         onLayout={e =>
           setGlassSize({
             w: e.nativeEvent.layout.width,
@@ -556,7 +550,8 @@ export const Composer = React.memo(function ({
                 onPickPhotos={pickImages}
                 onPickCamera={pickCamera}
                 onPickFiles={pickFiles}
-                onEnablePlan={() => setPlanMode(chatId, true)}
+                planEnabled={planMode}
+                onTogglePlan={on => setPlanMode(chatId, on)}
               />
 
               {showLivePill ? (
@@ -640,6 +635,7 @@ export const Composer = React.memo(function ({
                         onSelect={onSelectFast}
                       />
                     ) : null}
+                    <ContextUsageChip usage={session.meta.contextUsage} />
                   </ScrollView>
                 </ChipRowMask>
                 <View style={styles.trailingOverlay} pointerEvents="box-none">
@@ -779,20 +775,6 @@ const styles = StyleSheet.create({
     right: -8,
     bottom: -8,
     overflow: 'hidden',
-  },
-  glassHaloDark: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.55,
-    shadowRadius: 32,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 20,
-  },
-  glassHaloLight: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.24,
-    shadowRadius: 32,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 18,
   },
   grabberHit: {
     alignItems: 'center',

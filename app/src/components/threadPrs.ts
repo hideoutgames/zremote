@@ -93,3 +93,17 @@ export const collectThreadPrs = (
   }
   return out;
 };
+
+const hasPrIdentity = (badge: PrBadgeModel): boolean =>
+  badge.url !== '' || badge.number > 0;
+
+/** Composer chrome pill: a real, non-closed PR in this thread (draft, open,
+ * or merged). Closed-only checkout CRs and placeholder summaries stay hidden. */
+export const composerPrBadge = (
+  entries: MessageEntry[],
+  checkout?: ChangeRequestSummary | null,
+  diff?: PrDiffCounts,
+): PrBadgeModel | undefined =>
+  collectThreadPrs(entries, checkout, diff).find(
+    p => p.state !== 'closed' && hasPrIdentity(p),
+  );
