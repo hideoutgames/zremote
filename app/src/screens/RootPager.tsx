@@ -35,15 +35,29 @@ export function RootPager({
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<PagerView>(null);
   const [chatId, setChatId] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePage, setActivePage] = useState(HOME_PAGE);
   const [isIdle, setIsIdle] = useState(true);
 
   const goToSession = useCallback((id: string) => {
+    setComposing(false);
     setChatId(id);
-    pagerRef.current?.setPage(SESSION_PAGE);
+    setActivePage(SESSION_PAGE);
+    pagerRef.current?.setPage?.(SESSION_PAGE);
   }, []);
-  const goHome = useCallback(() => pagerRef.current?.setPage(HOME_PAGE), []);
+  const goHome = useCallback(() => {
+    setComposing(false);
+    setActivePage(HOME_PAGE);
+    pagerRef.current?.setPage?.(HOME_PAGE);
+    KeyboardController.dismiss();
+  }, []);
+  const enterCompose = useCallback(() => {
+    setChatId(null);
+    setComposing(true);
+    setActivePage(SESSION_PAGE);
+    pagerRef.current?.setPage?.(SESSION_PAGE);
+  }, []);
   const goHomeRef = useRef(goHome);
   goHomeRef.current = goHome;
   const edgePan = useRef(
@@ -62,9 +76,11 @@ export function RootPager({
 
   useEffect(() => {
     onSelectedChat?.(
-      activePage === SESSION_PAGE ? chatId ?? undefined : undefined,
+      activePage === SESSION_PAGE && !composing
+        ? chatId ?? undefined
+        : undefined,
     );
-  }, [activePage, chatId, onSelectedChat]);
+  }, [activePage, chatId, composing, onSelectedChat]);
 
   const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
     const { position } = event.nativeEvent;
@@ -93,11 +109,16 @@ export function RootPager({
           <HomeScreen
             onOpenSession={goToSession}
             onOpenSettings={() => setSettingsOpen(true)}
+            onCompose={enterCompose}
           />
         </View>
         <View key="session" style={styles.page}>
           <Freeze freeze={isIdle && activePage !== SESSION_PAGE}>
-            {chatId !== null ? (
+            {composing ? (
+              <AppErrorBoundary resetKey="compose">
+                <SessionScreen onBack={goHome} onCreated={goToSession} />
+              </AppErrorBoundary>
+            ) : chatId !== null ? (
               <AppErrorBoundary resetKey={chatId}>
                 <SessionScreen chatId={chatId} onBack={goHome} />
               </AppErrorBoundary>

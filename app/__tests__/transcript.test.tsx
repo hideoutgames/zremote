@@ -163,6 +163,58 @@ test('AssistantMessage groups the tool parts into one rail', async () => {
   const texts = textOf(tree!.root);
   // the two exec calls collapse into the group summary
   expect(texts).toContain('Ran 2 commands');
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'tool-group-toggle')[0]?.props
+      .accessibilityState.expanded,
+  ).toBe(false);
+});
+
+test('streaming trailing tool group auto-opens', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+    parts: assistantEntry.parts.filter(p => p.kind === 'tool'),
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        phase="working"
+        onOpenReasoning={() => {}}
+      />,
+    );
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'tool-group-toggle')[0]?.props
+      .accessibilityState.expanded,
+  ).toBe(true);
+  expect(textOf(tree!.root)).toContain('cargo test --workspace');
+});
+
+test('waiting assistant shows the working spinner instead of shimmer copy', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+    parts: [{ kind: 'text', id: 't0', text: '' }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        phase="working"
+        chatId="c1"
+        onOpenReasoning={() => {}}
+      />,
+    );
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-spinner').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-wait').length,
+  ).toBeGreaterThan(0);
 });
 
 test('InputCard summarizes an open question', async () => {

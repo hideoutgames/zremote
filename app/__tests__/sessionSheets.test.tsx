@@ -178,6 +178,48 @@ test('session overflow has History/Files/Terminal and not Changes/Previews', asy
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);
 });
 
+test('session header subtitle ellipsizes instead of clipping', async () => {
+  act(() => {
+    workspaceStore.setState(s => ({
+      ...s,
+      chats: [
+        {
+          ...chat,
+          cwd: '/very/long/path/to/the/current/worktree',
+          branch: 'feature/extremely-long-branch-name-that-overflows',
+        },
+      ],
+    }));
+  });
+  const tree = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
+  const subtitle = tree.root.findAll(
+    n => n.props.testID === 'session-header-subtitle',
+  )[0];
+  expect(subtitle).toBeDefined();
+  expect(subtitle.props.numberOfLines).toBe(1);
+  expect(subtitle.props.ellipsizeMode).toBe('tail');
+  const pill = tree.root.findAll(
+    n => n.props.testID === 'session-title-pill',
+  )[0];
+  const pillStyle = Array.isArray(pill.props.style)
+    ? pill.props.style.flat()
+    : [pill.props.style];
+  expect(pillStyle.some(s => s?.maxWidth === '100%')).toBe(true);
+  expect(pillStyle.some(s => s?.flexShrink === 1)).toBe(true);
+  expect(pillStyle.some(s => s?.overflow === 'hidden')).toBe(false);
+});
+
+test('compose session is a blank chat with the composer', async () => {
+  const tree = await render(<SessionScreen onBack={() => {}} />);
+  expect(texts(tree.root)).toContain('New thread');
+  expect(texts(tree.root)).toContain(
+    'Nothing here yet — send a message to start.',
+  );
+  expect(
+    tree.root.findAll(n => n.props.testID === 'compose-composer').length,
+  ).toBeGreaterThan(0);
+});
+
 test('populated demo transcript does not abort into the error boundary', async () => {
   const raw = demoTranscripts(1_800_000_000_000)[CHAT_WORKING] ?? [];
   const entries = raw

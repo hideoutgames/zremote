@@ -96,6 +96,8 @@ const en = {
   'session.interrupted': 'Interrupted',
   'session.submit': 'Submit',
   'session.working': 'Working',
+  'session.toolRunning': 'Running',
+  'session.toolFailed': 'Failed',
   'session.queuedLocally': 'Queued',
   'session.changes': 'Changes',
   'session.files': 'Files',

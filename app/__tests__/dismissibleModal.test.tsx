@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Modal } from 'react-native';
+import { Modal, Text } from 'react-native';
 import { ImagePreviewModal } from '../src/components/ImagePreviewModal';
 import { TrueSheet } from '../src/expoGo/shims/trueSheet';
 import { ModelPickerSheet } from '../src/components/ModelPickerSheet';
@@ -148,6 +148,24 @@ test('compact Settings Modal allows swipe / outside dismiss', async () => {
   expect(modal.props.presentationStyle).toBe('pageSheet');
   expect(modal.props.allowSwipeDismissal).toBe(true);
   expect(typeof modal.props.onRequestClose).toBe('function');
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('compact New thread opens a blank compose session', async () => {
+  const tree = await render(<RootPager requestedChat={null} />);
+  const btn = tree.root.findAll(n => n.props.testID === 'home-new-thread')[0];
+  expect(btn).toBeDefined();
+  await act(async () => {
+    btn.props.onPress();
+  });
+  expect(
+    tree.root.findAll(n => n.props.testID === 'compose-composer').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree.root.findAllByType(Text).some(n => n.props.children === 'New thread'),
+  ).toBe(true);
   await act(async () => {
     tree.unmount();
   });
