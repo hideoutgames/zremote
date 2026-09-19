@@ -1,6 +1,6 @@
-// Compose-mode wiring around the shared Composer: host is switchable, the
-// model picker is unlocked, drafts live at `__compose__`, and send creates
-// the thread then runs.
+// Compose-mode wiring around the shared Composer: repo / origin / machine
+// sit between the grabber and the input, the model picker is unlocked,
+// drafts live at `__compose__`, and send creates the thread then runs.
 
 import React, {
   useCallback,
@@ -349,7 +349,6 @@ export function ComposeComposer({
           runtime,
           chat: composeChat,
           host,
-          phase: 'idle' as const,
           repoPath: space?.path,
           spaces,
           projectLabel:
@@ -360,7 +359,7 @@ export function ComposeComposer({
             draft.pendingWorktree?.base ??
             composeChat.branch ??
             t('checkout.worktree'),
-          hostSwitchable: true,
+          machineLabel: host?.name ?? t('newSession.host'),
           hosts: devices,
           onSelectHost: (device: DeviceRow) => {
             setDeviceId(device.id);

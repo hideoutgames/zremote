@@ -465,7 +465,6 @@ function ActiveSessionScreen({
       ? undefined
       : s.spaces.find(sp => sp.id === chat.spaceId),
   );
-  const spaces = useStore(workspaceStore, s => s.spaces);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
@@ -876,23 +875,6 @@ function ActiveSessionScreen({
             fastEnabled={fastEnabled}
             onOpenEffort={() => setEffortOpen(true)}
             onFocusChange={setComposerFocused}
-            checkout={
-              runtime !== null && chat !== undefined
-                ? {
-                    runtime,
-                    chat,
-                    host,
-                    phase,
-                    repoPath: space?.path,
-                    spaces,
-                    projectLabel:
-                      space?.name ??
-                      space?.path.split(/[\\/]/).filter(Boolean).pop() ??
-                      t('checkout.noProject'),
-                    worktreeLabel: chat.branch ?? t('checkout.worktree'),
-                  }
-                : undefined
-            }
             dictation={dictation}
             onSend={doSend}
             onSteer={doSteer}

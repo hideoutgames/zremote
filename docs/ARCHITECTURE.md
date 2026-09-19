@@ -130,10 +130,12 @@ menu and More sheet list that provider's models only.
 replaces the home "New session" control with the same glass composer;
 iPad's sidebar **New thread** button clears the detail column and mounts
 `SessionScreen` without a `chatId` (empty transcript, composer focused).
-The host chip is switchable and the model picker is unlocked
-(`lockHarness={false}`). Send creates the chat (`createChat` /
-`createProjectlessChat`), moves the compose draft onto the new id, then
-`sendRun`. Last host/space/model persist in `uiPrefs.composeDefaults`.
+The host / repo / origin dropdowns sit between the grabber and the
+input (`lockHarness={false}` on the model picker). Send creates the chat
+(`createChat` / `createProjectlessChat`), moves the compose draft onto
+the new id, then `sendRun`. Last host/space/model persist in
+`uiPrefs.composeDefaults`. Existing sessions leave host/cwd/branch on
+the thread Details sheet.
 
 ## Auth callback
 

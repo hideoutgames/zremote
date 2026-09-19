@@ -317,6 +317,9 @@ const en = {
   // Checkout selector
   'checkout.label': 'Checkout',
   'checkout.project': 'Project',
+  'checkout.repo': 'Repo',
+  'checkout.origin': 'Origin',
+  'checkout.machine': 'Machine',
   'checkout.currentHost': 'current',
   'checkout.noProject': 'No project',
   'checkout.current': 'Current checkout ({branch})',

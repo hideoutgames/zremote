@@ -119,6 +119,91 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
   );
   expect(labels.some(l => l.label === 'Default')).toBe(true);
   expect(labels.some(l => l.label === 'High')).toBe(true);
+  expect(
+    tree.root.findAll(n => n.props.testID === 'compose-checkout'),
+  ).toHaveLength(0);
+  expect(labels.some(l => l.label === 'Repo')).toBe(false);
+  expect(labels.some(l => l.label === 'Origin')).toBe(false);
+  expect(labels.some(l => l.label === 'Machine')).toBe(false);
+});
+
+test('compose composer: repo, origin, and machine sit above the input', async () => {
+  const tree = await render(
+    <Composer
+      chatId="__compose__"
+      mode="compose"
+      phase="idle"
+      roomState="connected"
+      harness={undefined}
+      capabilities={new Set()}
+      modelLabel="Default"
+      harnessId="claude-code"
+      recentItems={[
+        { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
+      ]}
+      onPickRecentModel={() => {}}
+      onOpenMoreModels={() => {}}
+      effortLabel="High"
+      effortSupported
+      fastEnabled={false}
+      onOpenEffort={() => {}}
+      checkout={{
+        runtime: {} as never,
+        chat: {
+          id: '__compose__',
+          deviceId: 'h1',
+          archived: false,
+          createdAt: 0,
+        },
+        host: {
+          id: 'h1',
+          name: 'Studio MacBook Pro',
+          platform: 'macos',
+          capabilities: [],
+          version: '0.2.72',
+        },
+        spaces: [],
+        projectLabel: 'harbor-notes',
+        worktreeLabel: 'main',
+        machineLabel: 'Studio MacBook Pro',
+        hosts: [
+          {
+            id: 'h1',
+            name: 'Studio MacBook Pro',
+            platform: 'macos',
+            capabilities: [],
+            version: '0.2.72',
+          },
+        ],
+      }}
+      dictation={dictationUnavailable}
+      onSend={() => {}}
+      onSteer={() => {}}
+      onQueue={() => {}}
+      onStop={() => {}}
+      onCancel={() => {}}
+      onSendAttachments={() => Promise.resolve('sent' as never)}
+      onRespondInput={() => {}}
+      onSendBlocked={() => {}}
+      composerRef={{ current: null }}
+      onLayout={() => {}}
+    />,
+  );
+  const labels = labelled(tree.root);
+  expect(labels.some(l => l.role === 'button' && l.label === 'Repo')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.role === 'button' && l.label === 'Origin')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.role === 'button' && l.label === 'Machine')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.label === 'Default')).toBe(true);
+  expect(labels.some(l => l.label === 'High')).toBe(true);
+  expect(
+    tree.root.findAll(n => n.props.testID === 'compose-checkout'),
+  ).toHaveLength(1);
 });
 
 test('session row: role button, label contains title + status + host', async () => {
