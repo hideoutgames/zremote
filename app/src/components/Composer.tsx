@@ -89,7 +89,10 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { VoicePill } from './VoicePill';
-import { VOICE_PILL_PROCESS_MS } from './voicePillMath';
+import {
+  VOICE_PILL_PROCESS_MS,
+  VOICE_PILL_TRAILING_GAP,
+} from './voicePillMath';
 import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
@@ -499,6 +502,7 @@ export const Composer = React.memo(function ({
   const sendArmed =
     right === 'send' &&
     (action.primary === 'send' || live === 'queue' || live === 'steer');
+  const coverSend = dictating || processing;
   const homeInset = (keyboardVisible ? 0 : insets.bottom) + 8;
 
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
@@ -704,7 +708,9 @@ export const Composer = React.memo(function ({
                   />
                   <Pressable
                     onPress={
-                      right === 'stop'
+                      coverSend
+                        ? undefined
+                        : right === 'stop'
                         ? onStop
                         : right === 'cancel'
                         ? onCancel
@@ -713,7 +719,14 @@ export const Composer = React.memo(function ({
                         : undefined
                     }
                     disabled={
-                      right === 'stopping' || (right === 'send' && !sendArmed)
+                      coverSend ||
+                      right === 'stopping' ||
+                      (right === 'send' && !sendArmed)
+                    }
+                    pointerEvents={coverSend ? 'none' : 'auto'}
+                    accessibilityElementsHidden={coverSend}
+                    importantForAccessibility={
+                      coverSend ? 'no-hide-descendants' : 'auto'
                     }
                     hitSlop={6}
                     accessibilityRole="button"
@@ -728,6 +741,7 @@ export const Composer = React.memo(function ({
                     }
                     accessibilityState={{
                       disabled:
+                        coverSend ||
                         right === 'stopping' ||
                         (right === 'send' && !sendArmed),
                       busy: right === 'stopping',
@@ -914,9 +928,10 @@ const styles = StyleSheet.create({
   trailingCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: VOICE_PILL_TRAILING_GAP,
     flexShrink: 0,
     height: 44,
+    overflow: 'visible',
   },
   iconClip: {
     width: CIRCLE,

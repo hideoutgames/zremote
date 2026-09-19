@@ -7,7 +7,7 @@ import { Composer } from '../src/components/Composer';
 import { Icon } from '../src/components/Icon';
 import { VoicePill } from '../src/components/VoicePill';
 import { VOICE_PILL_PROCESS_MS } from '../src/components/voicePillMath';
-import { resetDrafts } from '../src/zeron/state/draftStore';
+import { resetDrafts, setDraftText } from '../src/zeron/state/draftStore';
 import { resetSessionStores } from '../src/zeron/state/sessionStores';
 import type { DictationPort } from '../src/zeron/native/dictation';
 
@@ -71,6 +71,20 @@ test('processing replaces the mic with a disabled spinner', async () => {
   });
 });
 
+test('active pill is labelled Stop dictation', async () => {
+  const tree = await renderPill({ active: true });
+  const btn = pillButton(tree.root);
+  expect(btn.props.accessibilityLabel).toBe('Stop dictation');
+  expect(btn.props.accessibilityState).toEqual({
+    disabled: false,
+    busy: true,
+  });
+  expect(tree.root.findByType(Icon).props.name).toBe('stop.fill');
+  act(() => {
+    tree.unmount();
+  });
+});
+
 const composerProps = {
   chatId: 'c1',
   phase: 'idle' as const,
@@ -108,11 +122,14 @@ const supportedPort = (): DictationPort => ({
   cancel: jest.fn(async () => {}),
 });
 
-const renderComposer = async (dictation: DictationPort) => {
+const renderComposer = async (
+  dictation: DictationPort,
+  extra: Partial<typeof composerProps> = {},
+) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <Composer {...composerProps} dictation={dictation} />,
+      <Composer {...composerProps} {...extra} dictation={dictation} />,
     );
   });
   return tree!;
@@ -120,6 +137,13 @@ const renderComposer = async (dictation: DictationPort) => {
 
 const voiceButton = (root: TestRenderer.ReactTestInstance) =>
   root.findByType(VoicePill);
+
+const sendButton = (root: TestRenderer.ReactTestInstance) =>
+  root.find(
+    n =>
+      n.props.accessibilityRole === 'button' &&
+      n.props.accessibilityLabel === 'Send',
+  );
 
 beforeEach(() => {
   resetDrafts();
@@ -180,6 +204,94 @@ test('cancelling dictation does not show the processing spinner', async () => {
   expect(pill.props.active).toBe(false);
   expect(pill.findAllByType(ActivityIndicator)).toHaveLength(0);
   expect(pill.findByType(Icon).props.name).toBe('mic');
+  act(() => {
+    tree.unmount();
+  });
+  jest.useRealTimers();
+});
+
+const expectSendCovered = (
+  root: TestRenderer.ReactTestInstance,
+  covered: boolean,
+) => {
+  const send = sendButton(root);
+  expect(send.props.disabled).toBe(covered);
+  expect(send.props.accessibilityState.disabled).toBe(covered);
+  expect(send.props.accessibilityElementsHidden).toBe(covered);
+  expect(send.props.importantForAccessibility).toBe(
+    covered ? 'no-hide-descendants' : 'auto',
+  );
+  expect(send.props.pointerEvents).toBe(covered ? 'none' : 'auto');
+};
+
+test('dictating and processing cover send; send re-enables after 2s', async () => {
+  jest.useFakeTimers();
+  const dictation = supportedPort();
+  const onSend = jest.fn();
+  await act(async () => {
+    setDraftText('c1', 'hello');
+  });
+  const tree = await renderComposer(dictation, { onSend });
+  expectSendCovered(tree.root, false);
+
+  await act(async () => {
+    voiceButton(tree.root).props.onToggle();
+  });
+  expect(voiceButton(tree.root).props.active).toBe(true);
+  expectSendCovered(tree.root, true);
+  await act(async () => {
+    sendButton(tree.root).props.onPress?.();
+  });
+  expect(onSend).not.toHaveBeenCalled();
+
+  await act(async () => {
+    voiceButton(tree.root).props.onToggle();
+  });
+  expect(voiceButton(tree.root).props.processing).toBe(true);
+  expect(voiceButton(tree.root).props.active).toBe(false);
+  expectSendCovered(tree.root, true);
+  await act(async () => {
+    sendButton(tree.root).props.onPress?.();
+  });
+  expect(onSend).not.toHaveBeenCalled();
+
+  await act(async () => {
+    jest.advanceTimersByTime(VOICE_PILL_PROCESS_MS);
+  });
+  expect(voiceButton(tree.root).props.processing).toBe(false);
+  expectSendCovered(tree.root, false);
+  await act(async () => {
+    sendButton(tree.root).props.onPress();
+  });
+  expect(onSend).toHaveBeenCalledTimes(1);
+  act(() => {
+    tree.unmount();
+  });
+  jest.useRealTimers();
+});
+
+test('cancelling dictation uncovers send without a processing lock', async () => {
+  jest.useFakeTimers();
+  const dictation = supportedPort();
+  const onSend = jest.fn();
+  await act(async () => {
+    setDraftText('c1', 'hello');
+  });
+  const tree = await renderComposer(dictation, { onSend });
+  await act(async () => {
+    voiceButton(tree.root).props.onToggle();
+  });
+  expectSendCovered(tree.root, true);
+  await act(async () => {
+    voiceButton(tree.root).props.onCancel();
+  });
+  expect(voiceButton(tree.root).props.active).toBe(false);
+  expect(voiceButton(tree.root).props.processing).toBe(false);
+  expectSendCovered(tree.root, false);
+  await act(async () => {
+    sendButton(tree.root).props.onPress();
+  });
+  expect(onSend).toHaveBeenCalledTimes(1);
   act(() => {
     tree.unmount();
   });

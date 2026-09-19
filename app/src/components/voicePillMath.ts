@@ -7,6 +7,29 @@ export const VOICE_PILL_BAR_COUNT = 14;
 export const VOICE_PILL_CANCEL_DISTANCE = 64;
 export const VOICE_PILL_OPEN_MS = 200;
 export const VOICE_PILL_PROCESS_MS = 2000;
+/** Gap between the mic slot and the send hit target in Composer's trailing cluster. */
+export const VOICE_PILL_TRAILING_GAP = 4;
+/** Send Pressable `minWidth` / `minHeight` — the 32px circle is centered inside. */
+export const VOICE_PILL_SEND_HIT = 44;
+/** Idle center-to-center offset so the mic circle lands on send. */
+export const VOICE_PILL_COVER_OFFSET =
+  VOICE_PILL_SIZE +
+  VOICE_PILL_TRAILING_GAP +
+  (VOICE_PILL_SEND_HIT - VOICE_PILL_SIZE) / 2;
+
+/** Reanimated worklet: slide the pill over send while growing left from that slot. */
+export const voicePillCoverTranslate = (
+  open: number,
+  cover: number,
+  slide: number,
+): number => {
+  'worklet';
+  return (
+    cover * VOICE_PILL_COVER_OFFSET -
+    open * (VOICE_PILL_OPEN_WIDTH - VOICE_PILL_SIZE) +
+    slide
+  );
+};
 
 export const formatVoiceElapsed = (ms: number): string => {
   const total = Math.max(0, Math.floor(ms / 1000));
