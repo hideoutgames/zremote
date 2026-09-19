@@ -5,6 +5,7 @@
 import {
   validateStagedAttachment,
   harnessInlinesAttachments,
+  isImageMime,
   MAX_ATTACHMENT_BYTES,
 } from '../src/zeron/attachments/validate';
 import { sendPlan } from '../src/zeron/attachments/sendPlan';
@@ -49,24 +50,36 @@ test('over the byte cap → tooLarge', () => {
   ).toEqual({ ok: false, reason: 'tooLarge' });
 });
 
-test('non-image mime → notImage (transport is image-only end to end)', () => {
+test('text/pdf/json under the cap validate (send + local text preview)', () => {
+  expect(
+    validateStagedAttachment({
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      size: 1000,
+    }),
+  ).toEqual({ ok: true });
   expect(
     validateStagedAttachment({
       name: 'doc.pdf',
       mimeType: 'application/pdf',
       size: 1000,
     }),
-  ).toEqual({ ok: false, reason: 'notImage' });
-});
-
-test('image mime the host read-back jail rejects → unsupportedMime', () => {
+  ).toEqual({ ok: true });
   expect(
     validateStagedAttachment({
-      name: 'x.img',
-      mimeType: 'image/x-psion',
-      size: 10,
+      name: 'data.json',
+      mimeType: 'application/json',
+      size: 1000,
     }),
-  ).toEqual({ ok: false, reason: 'unsupportedMime' });
+  ).toEqual({ ok: true });
+});
+
+test('isImageMime is the composer preview split (fullscreen vs text sheet)', () => {
+  expect(isImageMime('image/png')).toBe(true);
+  expect(isImageMime('IMAGE/JPEG')).toBe(true);
+  expect(isImageMime('application/pdf')).toBe(false);
+  expect(isImageMime('application/json')).toBe(false);
+  expect(isImageMime('text/plain')).toBe(false);
 });
 
 test('harness inline matrix: claude + opencode only', () => {

@@ -233,6 +233,29 @@ describe('AuthSession sign-in', () => {
     const next = await session.completePastedCode(`${state}.pastedcode`);
     expect(next.state).toBe('signedIn');
   });
+
+  test('PKCE beginSignIn adds S256 challenge and exchanges the verifier', async () => {
+    const { fetchImpl, calls } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const { session } = makeSession(fetchImpl);
+    const sha256 = async (b: Uint8Array) =>
+      new Uint8Array(createHash('sha256').update(b).digest());
+    const { url, state } = await session.beginSignIn({
+      redirectUri: 'https://edge.test/auth/cli/callback',
+      pkce: true,
+      random: n => new Uint8Array(randomBytes(n)),
+      sha256,
+    });
+    expect(url).toContain('code_challenge=');
+    expect(url).toContain('code_challenge_method=S256');
+    expect(url).not.toContain('code_challenge_method=S256&code_challenge=');
+    const next = await session.completeSignIn({ code: 'thecode', state });
+    expect(next.state).toBe('signedIn');
+    const body = calls.find(c => c.url.endsWith('/auth/exchange'))?.body;
+    expect(body?.code).toBe('thecode');
+    expect(body?.codeVerifier).toMatch(/^[A-Za-z0-9\-._~]{64}$/);
+  });
 });
 
 describe('AuthSession token lifecycle', () => {

@@ -83,9 +83,9 @@ export function QueuePanel({
           return (
             <View
               key={item.id}
+              testID="queue-row"
               style={[
                 styles.row,
-                { borderColor: theme.border },
                 dragging
                   ? [styles.dragging, { transform: [{ translateY: dragDy }] }]
                   : undefined,
@@ -183,16 +183,15 @@ export function QueuePanel({
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 8, paddingHorizontal: 16 },
+  panel: { gap: 8, paddingHorizontal: 16, backgroundColor: 'transparent' },
   error: { fontSize: 12 },
   empty: { fontSize: 13, paddingVertical: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 10,
+    backgroundColor: 'transparent',
+    paddingVertical: 10,
     minHeight: ROW_H,
   },
   dragging: { zIndex: 2 },

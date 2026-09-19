@@ -13,8 +13,7 @@ import React, {
 import {
   AccessibilityInfo,
   Alert,
-  type LayoutChangeEvent,
-  Platform,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -26,12 +25,6 @@ import {
   KeyboardController,
   KeyboardStickyView,
 } from 'react-native-keyboard-controller';
-import { type LegendListRef } from '@legendapp/list/react-native';
-import {
-  KeyboardAwareLegendList,
-  useKeyboardChatComposerInset,
-  useKeyboardScrollToEnd,
-} from '@legendapp/list/keyboard';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
@@ -44,7 +37,6 @@ import {
   setPlanMode,
   toggleChatPinned,
   useChatPinned,
-  useComposerExtraHeight,
   useRecentModels,
 } from '../zeron/state/uiPrefs';
 import {
@@ -57,6 +49,7 @@ import {
   setChatConfig,
   renameChat,
 } from '../zeron/runtime/workspaceActions';
+import type { SessionController } from '../zeron/runtime/sessionController';
 import { restoreFailedSend } from '../zeron/state/draftStore';
 import { edgeFetchBytes } from '../zeron/transport/edgeHttp';
 import { blobUrl } from '../zeron/transport/edge';
@@ -84,7 +77,11 @@ import { Glass } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
-import { EffortOverlay } from '../components/EffortOverlay';
+import {
+  SessionTranscriptList,
+  type SessionTranscriptListHandle,
+} from '../components/SessionTranscriptList';
+import { EffortOverlay, type EffortOrigin } from '../components/EffortOverlay';
 import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
@@ -123,12 +120,11 @@ const ReasoningSheet = React.lazy(() =>
   })),
 );
 
-const ANCHOR_MAX_SIZE = 2 * 21 + 32;
-
 // Do not add Reanimated worklets in this screen. React Compiler + worklets
 // 0.10.x serializes a wide memo cache (props, runtime, Sets) and 0.10.1
 // throws, which RCTFatal aborts in Release/TestFlight. Extract a tiny child
-// if a worklet is required.
+// if a worklet is required. ActiveSessionScreen is `'use no memo'` for the
+// same reason; the transcript list is a separate compiled-off child.
 
 export function SessionScreen({
   chatId,
@@ -248,24 +244,37 @@ function ActiveSessionScreen({
   contentMaxWidth?: number;
   composerMaxWidth?: number;
 }) {
+  'use no memo';
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const auth = useAuthSession();
 
-  // retain on mount, release on unmount — the runtime closes the room only
-  // when no view holds it.
-  const controller = useMemo(
-    () => (runtime === null ? undefined : runtime.openSession(chatId)),
-    [runtime, chatId],
+  // Open off the render path: `loro()` / Nitro LoroDoc throws must not
+  // become a first-paint ErrorBoundary. retain on mount, release on unmount.
+  const [controller, setController] = useState<SessionController | undefined>(
+    undefined,
   );
   useEffect(() => {
-    const c = controller?.retain();
-    return () => {
-      c?.release();
-    };
-  }, [controller]);
+    if (runtime === null) {
+      setController(undefined);
+      return;
+    }
+    try {
+      const c = runtime.openSession(chatId).retain();
+      setController(c);
+      return () => {
+        c.release();
+        setController(undefined);
+      };
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`openSession failed (${name})`);
+      setController(undefined);
+      return;
+    }
+  }, [runtime, chatId]);
 
   const session = useSessionState(chatId);
   const chat = useChat(chatId);
@@ -289,11 +298,8 @@ function ActiveSessionScreen({
   const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [reasoning, setReasoning] = useState<string | null>(null);
-  const [following, setFollowing] = useState(false);
-  const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
-  const hasOverflowedRef = useRef(false);
-  const listRef = useRef<LegendListRef>(null);
   const composerRef = useRef<View>(null);
+  const transcriptRef = useRef<SessionTranscriptListHandle>(null);
 
   const entries = session.entries;
 
@@ -327,29 +333,6 @@ function ActiveSessionScreen({
     [phase, openReasoning, onFetchOutput, chatId],
   );
 
-  const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
-    useKeyboardChatComposerInset(listRef, composerRef);
-  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
-  const extraHeight = useComposerExtraHeight();
-
-  const onComposerLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const height = event.nativeEvent.layout.height;
-      setComposerHeight(height);
-      reportComposerInset({
-        ...event,
-        nativeEvent: {
-          ...event.nativeEvent,
-          layout: {
-            ...event.nativeEvent.layout,
-            height: Math.max(0, height - extraHeight),
-          },
-        },
-      });
-    },
-    [reportComposerInset, extraHeight],
-  );
-
   const doSend = useCallback(
     (text: string) => {
       if (controller === undefined) return;
@@ -363,19 +346,13 @@ function ActiveSessionScreen({
         },
       );
       if (wt !== undefined) setDraftPendingWorktree(chatId, undefined);
-      setAnchorIndex(entries.length);
-      hasOverflowedRef.current = false;
-      setFollowing(false);
-      scrollMessageToEnd({ animated: entries.length > 0, closeKeyboard: true });
+      transcriptRef.current?.noteSent(entries.length);
+      transcriptRef.current?.scrollMessageToEnd({
+        animated: entries.length > 0,
+        closeKeyboard: true,
+      });
     },
-    [
-      controller,
-      draft.pendingWorktree,
-      chat,
-      chatId,
-      entries.length,
-      scrollMessageToEnd,
-    ],
+    [controller, draft.pendingWorktree, chat, chatId, entries.length],
   );
 
   const doSteer = useCallback(
@@ -477,6 +454,9 @@ function ActiveSessionScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const dismissPan = useKeyboardDismissPan();
@@ -594,64 +574,18 @@ function ActiveSessionScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <KeyboardAwareLegendList
-        ref={listRef}
-        style={styles.fill}
-        data={entries}
-        keyExtractor={(item: MessageEntry) => item.id}
-        renderItem={renderEntry}
-        applyWorkaroundForContentInsetHitTestBug
-        maintainVisibleContentPosition={
-          Platform.OS !== 'android'
-            ? undefined
-            : anchorIndex != null && !following
-        }
-        keyboardLiftBehavior="whenAtEnd"
-        keyboardOffset={insets.bottom}
-        contentInsetEndAdjustment={contentInsetEndAdjustment}
-        freeze={freeze}
-        anchoredEndSpace={
-          anchorIndex != null
-            ? {
-                anchorIndex,
-                anchorMaxSize: ANCHOR_MAX_SIZE,
-                anchorOffset: insets.top + 56,
-                onSizeChanged: size => {
-                  if (size <= 0 && !hasOverflowedRef.current) {
-                    hasOverflowedRef.current = true;
-                    setFollowing(true);
-                  }
-                },
-              }
-            : undefined
-        }
-        maintainScrollAtEnd={
-          following ? { on: { dataChange: true, itemLayout: true } } : undefined
-        }
-        maintainScrollAtEndThreshold={1}
-        estimatedItemSize={64}
-        estimatedListSize={{ width: windowWidth, height: windowHeight }}
-        onEndVisible={v => {
-          setShowScrollDown(!v);
-          if (v && hasOverflowedRef.current) setFollowing(true);
-        }}
-        onScrollBeginDrag={() => {
-          if (hasOverflowedRef.current) setFollowing(false);
-        }}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + 96 },
-          contentMaxWidth !== undefined
-            ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-            : undefined,
-        ]}
-        scrollIndicatorInsets={{ top: insets.top + 96 }}
-        keyboardDismissMode="interactive"
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: theme.textSecondary }]}>
-            {t('session.empty')}
-          </Text>
-        }
+      <SessionTranscriptList
+        ref={transcriptRef}
+        entries={entries}
+        renderEntry={renderEntry}
+        composerRef={composerRef}
+        contentMaxWidth={contentMaxWidth}
+        windowWidth={windowWidth}
+        windowHeight={windowHeight}
+        insetsTop={insets.top}
+        insetsBottom={insets.bottom}
+        onComposerHeight={setComposerHeight}
+        onShowScrollDown={setShowScrollDown}
       />
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
@@ -838,7 +772,10 @@ function ActiveSessionScreen({
         {showScrollDown ? (
           <ScrollToBottomButton
             onPress={() =>
-              scrollMessageToEnd({ animated: true, closeKeyboard: false })
+              transcriptRef.current?.scrollMessageToEnd({
+                animated: true,
+                closeKeyboard: false,
+              })
             }
           />
         ) : null}
@@ -846,6 +783,8 @@ function ActiveSessionScreen({
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
         <View
+          ref={composerRef}
+          onLayout={event => transcriptRef.current?.onComposerLayout(event)}
           style={
             composerMaxWidth !== undefined
               ? [styles.measureCap, { maxWidth: composerMaxWidth }]
@@ -889,8 +828,34 @@ function ActiveSessionScreen({
             onOpenMoreModels={() => setPickerOpen(true)}
             effortLabel={effortLabel}
             effortSupported={effortLevels.length > 0}
+            fastSupported={fastOption !== undefined}
             fastEnabled={fastEnabled}
-            onOpenEffort={() => setEffortOpen(true)}
+            effortOpen={effortOpen}
+            onOpenEffort={origin => {
+              Keyboard.dismiss();
+              setEffortOrigin(origin);
+              setEffortOpen(true);
+            }}
+            onToggleFast={on => {
+              if (
+                runtime === null ||
+                chat === undefined ||
+                fastOption === undefined
+              )
+                return;
+              setChatConfig(runtime, chat.id, {
+                harness: chat.config?.harness ?? '',
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                sandbox: chat.config?.sandbox,
+                modelOptions: {
+                  ...(chat.config?.modelOptions ?? {}),
+                  [fastOption.id]: on
+                    ? fastOnChoice(fastOption)
+                    : fastOffChoice(fastOption),
+                },
+              });
+            }}
             onFocusChange={setComposerFocused}
             dictation={dictation}
             onSend={doSend}
@@ -901,11 +866,31 @@ function ActiveSessionScreen({
             onSendAttachments={doSendAttachments}
             onRespondInput={doRespond}
             onSendBlocked={onSendBlocked}
-            composerRef={composerRef}
-            onLayout={onComposerLayout}
           />
         </View>
       </KeyboardStickyView>
+
+      {effortOpen ? (
+        <EffortOverlay
+          levels={effortLevels}
+          value={chat?.config?.reasoning}
+          origin={effortOrigin}
+          onChange={level => {
+            if (runtime === null || chat === undefined) return;
+            setChatConfig(runtime, chat.id, {
+              harness: chat.config?.harness ?? '',
+              model: chat.config?.model,
+              modelOptions: chat.config?.modelOptions ?? {},
+              reasoning: level,
+              sandbox: chat.config?.sandbox,
+            });
+          }}
+          onDismiss={() => {
+            setEffortOpen(false);
+            setEffortOrigin(undefined);
+          }}
+        />
+      ) : null}
 
       {queueOpen ? (
         <GlassSheet
@@ -929,46 +914,6 @@ function ActiveSessionScreen({
             }}
           />
         </GlassSheet>
-      ) : null}
-
-      {effortOpen ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={chat?.config?.reasoning}
-          onChange={level => {
-            if (runtime === null || chat === undefined) return;
-            setChatConfig(runtime, chat.id, {
-              harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              modelOptions: chat.config?.modelOptions ?? {},
-              reasoning: level,
-              sandbox: chat.config?.sandbox,
-            });
-          }}
-          showFast={fastOption !== undefined}
-          fastEnabled={fastEnabled}
-          onToggleFast={on => {
-            if (
-              runtime === null ||
-              chat === undefined ||
-              fastOption === undefined
-            )
-              return;
-            setChatConfig(runtime, chat.id, {
-              harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              reasoning: chat.config?.reasoning,
-              sandbox: chat.config?.sandbox,
-              modelOptions: {
-                ...(chat.config?.modelOptions ?? {}),
-                [fastOption.id]: on
-                  ? fastOnChoice(fastOption)
-                  : fastOffChoice(fastOption),
-              },
-            });
-          }}
-          onDismiss={() => setEffortOpen(false)}
-        />
       ) : null}
 
       {prSheet !== null ? (
@@ -1073,7 +1018,6 @@ function ActiveSessionScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  fill: { flex: 1 },
   composer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3 },
   scrollDown: {
     position: 'absolute',
@@ -1081,7 +1025,6 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
-  listContent: { paddingBottom: 4 },
   empty: { fontSize: 15, textAlign: 'center', padding: 32 },
   composeEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {

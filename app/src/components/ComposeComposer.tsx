@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import {
   Alert,
+  Keyboard,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -20,7 +21,7 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { Composer } from './Composer';
-import { EffortOverlay } from './EffortOverlay';
+import { EffortOverlay, type EffortOrigin } from './EffortOverlay';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import {
   fastOffChoice,
@@ -106,6 +107,9 @@ export function ComposeComposer({
   const [branch, setBranch] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
   const composerRef = useRef<View>(null);
@@ -396,7 +400,7 @@ export function ComposeComposer({
         }
       : undefined;
 
-  const inner = (
+  const composer = (
     <View
       style={
         composerMaxWidth !== undefined
@@ -424,8 +428,23 @@ export function ComposeComposer({
         onOpenMoreModels={() => setPickerOpen(true)}
         effortLabel={effortLabel}
         effortSupported={effortLevels.length > 0}
+        fastSupported={fastOption !== undefined}
         fastEnabled={fastEnabled}
-        onOpenEffort={() => setEffortOpen(true)}
+        effortOpen={effortOpen}
+        onOpenEffort={origin => {
+          Keyboard.dismiss();
+          setEffortOrigin(origin);
+          setEffortOpen(true);
+        }}
+        onToggleFast={on => {
+          if (fastOption === undefined) return;
+          setModelOptions({
+            ...modelOptions,
+            [fastOption.id]: on
+              ? fastOnChoice(fastOption)
+              : fastOffChoice(fastOption),
+          });
+        }}
         checkout={checkout}
         dictation={dictation}
         onSend={onSend}
@@ -439,28 +458,6 @@ export function ComposeComposer({
         composerRef={composerRef}
         onLayout={onLayout ?? (() => {})}
       />
-      {effortOpen ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={reasoning}
-          onChange={level => {
-            setReasoning(level);
-            persist({ reasoning: level });
-          }}
-          showFast={fastOption !== undefined}
-          fastEnabled={fastEnabled}
-          onToggleFast={on => {
-            if (fastOption === undefined) return;
-            setModelOptions({
-              ...modelOptions,
-              [fastOption.id]: on
-                ? fastOnChoice(fastOption)
-                : fastOffChoice(fastOption),
-            });
-          }}
-          onDismiss={() => setEffortOpen(false)}
-        />
-      ) : null}
       {pickerOpen && runtime !== null ? (
         <ModelPickerSheet
           runtime={runtime}
@@ -475,14 +472,40 @@ export function ComposeComposer({
     </View>
   );
 
-  if (!sticky) return inner;
+  const overlay = effortOpen ? (
+    <EffortOverlay
+      levels={effortLevels}
+      value={reasoning}
+      origin={effortOrigin}
+      onChange={level => {
+        setReasoning(level);
+        persist({ reasoning: level });
+      }}
+      onDismiss={() => {
+        setEffortOpen(false);
+        setEffortOrigin(undefined);
+      }}
+    />
+  ) : null;
+
+  if (!sticky) {
+    return (
+      <>
+        {overlay}
+        {composer}
+      </>
+    );
+  }
   return (
-    <KeyboardStickyView
-      offset={{ opened: insets.bottom }}
-      style={styles.sticky}
-    >
-      {inner}
-    </KeyboardStickyView>
+    <>
+      {overlay}
+      <KeyboardStickyView
+        offset={{ opened: insets.bottom }}
+        style={styles.sticky}
+      >
+        {composer}
+      </KeyboardStickyView>
+    </>
   );
 }
 

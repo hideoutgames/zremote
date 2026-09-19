@@ -1,8 +1,8 @@
 // Queue + PR Liquid Glass pills that sit above the composer.
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Glass } from './Glass';
+import { Pressable, StyleSheet, Text } from 'react-native';
+import { Glass, GlassContainer } from './Glass';
 import { BrandMark } from './BrandMark';
 import { svgForPullRequest } from './harnessBrand';
 import { useTheme } from '../theme';
@@ -31,29 +31,32 @@ export function ComposerChromeRow({
       : theme.prOpen;
 
   return (
-    <View style={styles.row}>
+    <GlassContainer spacing={8} style={styles.row}>
       {queueCount > 0 ? (
-        <Pressable
-          onPress={onOpenQueue}
-          accessibilityRole="button"
-          accessibilityLabel={`${queueCount} ${t('session.queuedLocally')}`}
-        >
-          <Glass style={styles.pill}>
+        <Glass interactive style={styles.pill}>
+          <Pressable
+            onPress={onOpenQueue}
+            accessibilityRole="button"
+            accessibilityLabel={`${queueCount} ${t('session.queuedLocally')}`}
+            testID="queued-pill"
+            style={styles.pillHit}
+          >
             <Text style={[styles.pillText, { color: theme.text }]}>
               {`${queueCount} ${t('session.queuedLocally')}`}
             </Text>
-          </Glass>
-        </Pressable>
+          </Pressable>
+        </Glass>
       ) : null}
       {pr !== undefined ? (
-        <Pressable
-          onPress={onOpenPr}
-          accessibilityRole="button"
-          accessibilityLabel={t(
-            pr.label === 'viewPrDraft' ? 'pr.viewDraftA11y' : 'pr.viewA11y',
-          )}
-        >
-          <Glass style={styles.pill}>
+        <Glass interactive style={styles.pill}>
+          <Pressable
+            onPress={onOpenPr}
+            accessibilityRole="button"
+            accessibilityLabel={t(
+              pr.label === 'viewPrDraft' ? 'pr.viewDraftA11y' : 'pr.viewA11y',
+            )}
+            style={styles.pillHit}
+          >
             <BrandMark svg={svgForPullRequest(prColor)} size={14} />
             <Text style={[styles.pillText, { color: theme.text }]}>
               {pr.label === 'viewPrDraft' ? t('pr.viewDraft') : t('pr.view')}
@@ -68,10 +71,10 @@ export function ComposerChromeRow({
                 </Text>
               </>
             ) : null}
-          </Glass>
-        </Pressable>
+          </Pressable>
+        </Glass>
       ) : null}
-    </View>
+    </GlassContainer>
   );
 }
 
@@ -84,13 +87,15 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   pill: {
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  pillHit: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    overflow: 'hidden',
   },
   pillText: { fontSize: 14, fontWeight: '500' },
   count: { fontSize: 13, fontWeight: '600' },
