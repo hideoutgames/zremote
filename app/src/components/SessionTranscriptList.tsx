@@ -53,7 +53,7 @@ export const SessionTranscriptList = forwardRef<
     onComposerHeight: (height: number) => void;
     onShowScrollDown: (show: boolean) => void;
   }
->(function SessionTranscriptList(
+>(function SessionTranscriptListInner(
   {
     entries,
     renderEntry,
