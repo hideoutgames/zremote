@@ -1,5 +1,6 @@
 import React, { type ComponentProps } from 'react';
 import {
+  StyleSheet,
   View,
   type ColorValue,
   type StyleProp,
@@ -109,7 +110,7 @@ export function Icon({
   return (
     <View
       collapsable={false}
-      style={[{ width: size, height: size, overflow: 'hidden' }, style]}
+      style={[styles.clip, { width: size, height: size }, style]}
     >
       <SymbolView
         symbolName={name}
@@ -127,3 +128,7 @@ export function Icon({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  clip: { overflow: 'hidden' },
+});
