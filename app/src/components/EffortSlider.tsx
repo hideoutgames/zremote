@@ -41,17 +41,24 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
   const trackWidth = useRef(0);
   const [measured, setMeasured] = useState(0);
   const current = detentForValue(levels, value);
-  const currentRef = useRef(current);
-  currentRef.current = current;
-  const position = useSharedValue(stopFraction(current, levels.length));
+  const lastIndexRef = useRef(current);
   const pressed = useRef(false);
+  // Props can lag a frame (or more, for session Loro writes) behind a drag.
+  // Freeze the last committed index while pressed so a stale `value` cannot
+  // re-arm selection ticks on every move event.
+  if (!pressed.current) {
+    lastIndexRef.current = current;
+  }
+  const position = useSharedValue(stopFraction(current, levels.length));
 
   const commitIndex = useCallback(
     (index: number) => {
-      if (index !== currentRef.current && levels[index] !== undefined) {
-        selectionTick();
-        onChange(levels[index]);
+      if (index === lastIndexRef.current || levels[index] === undefined) {
+        return;
       }
+      lastIndexRef.current = index;
+      selectionTick();
+      onChange(levels[index]);
     },
     [levels, onChange],
   );
@@ -74,7 +81,7 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
         return;
       }
       position.value = pulled;
-      if (next !== currentRef.current) commitIndex(next);
+      commitIndex(next);
     },
     [commitIndex, levels.length, position, reduceMotion],
   );
@@ -115,22 +122,25 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
         pressed.current = false;
         onTouch(e, true);
       }}
+      onResponderTerminate={() => {
+        pressed.current = false;
+      }}
       accessibilityRole="adjustable"
       accessibilityValue={{ text: levels[current] }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={e => {
         const dir = e.nativeEvent.actionName === 'increment' ? 1 : -1;
-        const next = Math.min(Math.max(current + dir, 0), levels.length - 1);
-        if (next !== current && levels[next] !== undefined) {
-          selectionTick();
-          onChange(levels[next]);
-          position.value = reduceMotion
-            ? stopFraction(next, levels.length)
-            : withTiming(stopFraction(next, levels.length), {
-                duration: effortSliderSnapMs,
-                easing: Easing.out(Easing.cubic),
-              });
-        }
+        const next = Math.min(
+          Math.max(lastIndexRef.current + dir, 0),
+          levels.length - 1,
+        );
+        commitIndex(next);
+        position.value = reduceMotion
+          ? stopFraction(next, levels.length)
+          : withTiming(stopFraction(next, levels.length), {
+              duration: effortSliderSnapMs,
+              easing: Easing.out(Easing.cubic),
+            });
       }}
     >
       {geo.tickCenters.map((cx, i) => (
