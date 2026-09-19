@@ -52,6 +52,11 @@ e2e for transport/runtime changes · edge `test:unit` for edge changes.
 - **Never log prompts, message text, or secrets.** `zeron/log.ts` is the
   redacting logger; use it.
 - **Never commit** unless explicitly asked; never push to main.
+- **PRs always target `main`.** Feature branches and worktrees are for
+  development only. Do not open or merge a PR into another feature /
+  Cursor branch — stacked PRs never reach TestFlight (`ios-testflight.yml`
+  archives `main`). Rebase onto `main` and retarget the PR if the work
+  started on a stacked branch.
 - **Prettier is pinned at 2.8.8** in `app/` — run `npx prettier` inside
   `app/`, not at the repo root (root has no package.json and resolves v3).
 - **`ios.useFrameworks` stays unset** — Nitro requires static linking.

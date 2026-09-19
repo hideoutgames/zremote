@@ -38,6 +38,10 @@ test('inspector column is never shown — tools launch from the overflow menu', 
   expect(l.inspectorWidth).toBeLessThanOrEqual(480);
 });
 
-test('measure cap is ~720', () => {
+test('measure cap is ~720; iPad composer caps at half the window', () => {
   expect(layoutFor(REGULAR_MIN_WIDTH, prefs).measureCap).toBe(720);
+  expect(layoutFor(REGULAR_MIN_WIDTH, prefs).composerMaxWidth).toBe(
+    Math.round(REGULAR_MIN_WIDTH * 0.5),
+  );
+  expect(layoutFor(390, prefs).composerMaxWidth).toBeUndefined();
 });

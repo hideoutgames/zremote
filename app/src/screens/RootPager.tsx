@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeScreen } from './HomeScreen';
 import { SessionScreen } from './SessionScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { AppErrorBoundary } from '../app/AppErrorBoundary';
 import { useTheme } from '../theme';
 import {
   EDGE_BACK_WIDTH,
@@ -97,7 +98,9 @@ export function RootPager({
         <View key="session" style={styles.page}>
           <Freeze freeze={isIdle && activePage !== SESSION_PAGE}>
             {chatId !== null ? (
-              <SessionScreen chatId={chatId} onBack={goHome} />
+              <AppErrorBoundary resetKey={chatId}>
+                <SessionScreen chatId={chatId} onBack={goHome} />
+              </AppErrorBoundary>
             ) : (
               <View style={styles.page} />
             )}

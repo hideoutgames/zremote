@@ -1,9 +1,10 @@
 // Session composer — one two-tier Liquid Glass container:
+//   grabber, then (compose only) repo / origin / machine,
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
-//   action row: [+] · live Queue/Steer · project · worktree · voice · send,
-//   chip row: Plan · model menu · effort (scrollable, faded edges).
+//   action row: [+] · live Queue/Steer · Plan · model · effort · voice · send.
+// Host / repo / origin live on the thread Details sheet for existing sessions.
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
 // legacy upload-first — never a device-local URI on the wire).
@@ -25,11 +26,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useReducedMotion,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+import { useReducedMotion } from 'react-native-reanimated';
 import { NitroImage } from 'react-native-nitro-image';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
@@ -56,6 +53,7 @@ import {
   type RunPhase,
 } from '../zeron/state/sessionStores';
 import { BorderBeam } from './agentsKit/BorderBeam';
+import { AttachmentStripAnim } from './AttachmentStripAnim';
 import {
   useLiveActionPrefersSteer,
   setLiveActionPrefersSteer,
@@ -82,6 +80,9 @@ const THUMBS_ANIM_MS = 220;
 
 export interface ComposerProps {
   chatId: string;
+  /** Session is today's bound-thread composer; compose creates a thread on send. */
+  mode?: 'session' | 'compose';
+  autoFocus?: boolean;
   phase: RunPhase;
   roomState: RoomState;
   harness?: HarnessDescriptor;
@@ -121,6 +122,8 @@ export interface ComposerProps {
 
 export const Composer = React.memo(function ({
   chatId,
+  mode = 'session',
+  autoFocus = false,
   phase,
   roomState,
   harness,
@@ -187,6 +190,10 @@ export const Composer = React.memo(function ({
   const inputMaxHeight =
     (windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT) +
     extraHeight;
+  const inputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus, mode]);
   const planMode = usePlanMode(chatId);
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
@@ -370,10 +377,6 @@ export const Composer = React.memo(function ({
   const stripH = hasAttachments ? stripContentHeight : 0;
   const stripO = hasAttachments ? 1 : 0;
   const stripDur = reduceMotion ? 0 : THUMBS_ANIM_MS;
-  const stripStyle = useAnimatedStyle(() => ({
-    height: withTiming(stripH, { duration: stripDur }),
-    opacity: withTiming(stripO, { duration: stripDur }),
-  }));
 
   const right = action.right;
   const showLivePill = live !== 'hidden' && hasText;
@@ -426,10 +429,16 @@ export const Composer = React.memo(function ({
               style={[styles.grabber, { backgroundColor: theme.textSecondary }]}
             />
           </View>
+          {mode === 'compose' && checkout !== undefined ? (
+            <CheckoutChips {...checkout} />
+          ) : null}
           {/* ── Upper tier: attachment strip + input ──────────────────── */}
-          <Animated.View
-            style={[styles.stripClip, stripStyle]}
+          <AttachmentStripAnim
+            height={stripH}
+            opacity={stripO}
+            duration={stripDur}
             pointerEvents={hasAttachments ? 'auto' : 'none'}
+            style={styles.stripClip}
           >
             <View
               style={styles.strip}
@@ -506,7 +515,7 @@ export const Composer = React.memo(function ({
                 ),
               )}
             </View>
-          </Animated.View>
+          </AttachmentStripAnim>
 
           {/* QuestionPanel renders above the lower tier inside the same
             glass; the input stays mounted, de-emphasized. */}
@@ -519,7 +528,9 @@ export const Composer = React.memo(function ({
           ) : null}
 
           <TextInput
+            ref={inputRef}
             value={draft.text}
+            autoFocus={autoFocus}
             onChangeText={text => setDraftText(chatId, text)}
             onSelectionChange={e =>
               (selRef.current = e.nativeEvent.selection.start)
@@ -595,7 +606,55 @@ export const Composer = React.memo(function ({
                 </DropdownMenu.Root>
               ) : null}
 
-              {checkout !== undefined ? <CheckoutChips {...checkout} /> : null}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.actionChips}
+                style={styles.actionChipsScroll}
+              >
+                {planMode ? (
+                  <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
+                ) : null}
+                <ModelMenuButton
+                  harnessId={harnessId}
+                  modelLabel={modelLabel}
+                  items={recentItems}
+                  onPick={onPickRecentModel}
+                  onMore={onOpenMoreModels}
+                />
+                {effortSupported ? (
+                  <Pressable
+                    style={[
+                      styles.effortChip,
+                      {
+                        backgroundColor: fastEnabled
+                          ? theme.fastAccent
+                          : theme.inputBackground,
+                      },
+                    ]}
+                    onPress={onOpenEffort}
+                    hitSlop={4}
+                    accessibilityRole="button"
+                    accessibilityLabel={effortLabel}
+                  >
+                    <Text
+                      style={[
+                        styles.effortText,
+                        {
+                          color: fastEnabled
+                            ? theme.scheme === 'dark'
+                              ? '#000000'
+                              : '#FFFFFF'
+                            : theme.text,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {effortLabel}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </ScrollView>
             </View>
 
             <View style={styles.spacer} />
@@ -680,77 +739,6 @@ export const Composer = React.memo(function ({
                 </View>
               </Pressable>
             </View>
-          </View>
-
-          <View style={styles.chipRowWrap}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}
-            >
-              {planMode ? (
-                <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
-              ) : null}
-              <ModelMenuButton
-                harnessId={harnessId}
-                modelLabel={modelLabel}
-                items={recentItems}
-                onPick={onPickRecentModel}
-                onMore={onOpenMoreModels}
-              />
-              {effortSupported ? (
-                <Pressable
-                  style={[
-                    styles.effortChip,
-                    {
-                      backgroundColor: fastEnabled
-                        ? theme.fastAccent
-                        : theme.inputBackground,
-                    },
-                  ]}
-                  onPress={onOpenEffort}
-                  hitSlop={4}
-                  accessibilityRole="button"
-                  accessibilityLabel={effortLabel}
-                >
-                  <Text
-                    style={[
-                      styles.effortText,
-                      {
-                        color: fastEnabled
-                          ? theme.scheme === 'dark'
-                            ? '#000000'
-                            : '#FFFFFF'
-                          : theme.text,
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {effortLabel}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </ScrollView>
-            <View
-              pointerEvents="none"
-              style={[
-                styles.chipFade,
-                styles.chipFadeLeft,
-                theme.scheme === 'dark'
-                  ? styles.chipFadeDark
-                  : styles.chipFadeLight,
-              ]}
-            />
-            <View
-              pointerEvents="none"
-              style={[
-                styles.chipFade,
-                styles.chipFadeRight,
-                theme.scheme === 'dark'
-                  ? styles.chipFadeDark
-                  : styles.chipFadeLight,
-              ]}
-            />
           </View>
         </Glass>
         <BorderBeam
@@ -917,25 +905,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   spacer: { flex: 1, minWidth: 8 },
-  chipRowWrap: { position: 'relative', marginTop: 2 },
-  chipRow: {
+  actionChipsScroll: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  actionChips: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    paddingTop: 2,
+    paddingRight: 8,
   },
-  chipFade: {
-    position: 'absolute',
-    top: 0,
-    bottom: 8,
-    width: 16,
-  },
-  chipFadeLeft: { left: 0 },
-  chipFadeRight: { right: 0 },
-  chipFadeDark: { backgroundColor: 'rgba(0,0,0,0.35)' },
-  chipFadeLight: { backgroundColor: 'rgba(255,255,255,0.35)' },
   effortChip: {
     height: 32,
     borderRadius: 16,

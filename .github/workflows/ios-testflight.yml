@@ -1,13 +1,13 @@
 # iOS TestFlight — signed archive + App Store Connect upload via the ASC
-# API key. Manual only (workflow_dispatch); tag pushes do not start it.
-# Uses the team's one cloud-managed Apple Distribution certificate (no
-# per-runner development certs, no profiles in the repo). App targets stay
-# on Automatic signing with CODE_SIGN_IDENTITY stripped so Xcode 26 can
-# cloud-sign the archive; identity is never passed as an xcarg. Requires
-# repo secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY (the .p8 file
-# contents, pasted as-is; base64 also accepted) / APPLE_TEAM_ID. Optional
-# variables IOS_BUNDLE_ID (default no.hideout.zremote) / ZERON_EDGE_URL
-# (see docs/TESTFLIGHT.md).
+# API key. Runs on push to main (app/**) and on workflow_dispatch. Tag
+# pushes do not start it. Uses the team's one cloud-managed Apple
+# Distribution certificate (no per-runner development certs, no profiles
+# in the repo). App targets stay on Automatic signing with
+# CODE_SIGN_IDENTITY stripped so Xcode 26 can cloud-sign the archive;
+# identity is never passed as an xcarg. Requires repo secrets ASC_KEY_ID /
+# ASC_ISSUER_ID / ASC_PRIVATE_KEY (the .p8 file contents, pasted as-is;
+# base64 also accepted) / APPLE_TEAM_ID. Optional variables IOS_BUNDLE_ID
+# (default no.hideout.zremote) / ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
 
 name: iOS TestFlight
 
@@ -18,6 +18,16 @@ on:
         description: "Release notes (informational only)"
         required: false
         type: string
+  # Every merge to main that touches the app (or this workflow) archives
+  # that SHA. workflow_dispatch still works for a one-off rebuild of the
+  # branch selected in the Actions UI. Stacked PRs that merge into a
+  # Cursor feature branch never reach this job — retarget them at main.
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/ios-testflight.yml"
+      - "patches/zeron-edge/**"
 
 permissions:
   contents: read
@@ -35,6 +45,21 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
+
+      - name: Record revision
+        working-directory: .
+        run: |
+          sha=$(git rev-parse HEAD)
+          short=$(git rev-parse --short HEAD)
+          subject=$(git log -1 --pretty=%s)
+          {
+            echo "## TestFlight revision"
+            echo "- SHA: \`$sha\`"
+            echo "- Subject: $subject"
+            echo "- Build number: \`${{ github.run_number }}\`"
+            echo "- Ref: \`${{ github.ref }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Archiving $short — $subject (build ${{ github.run_number }})"
 
       - name: Check required secrets are present
         env:
@@ -85,6 +110,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           IOS_BUILD_NUMBER: ${{ github.run_number }}
           ZERON_EDGE_URL: ${{ vars.ZERON_EDGE_URL || 'https://edge.zeron.sh' }}
+          GITHUB_SHA: ${{ github.sha }}
         run: npx expo prebuild --platform ios --clean --no-install
 
       - name: CocoaPods install

@@ -42,6 +42,10 @@ export interface ModelPickerSheetProps {
   phase: RunPhase;
   onClose: () => void;
   formSheet?: boolean;
+  /** Compose: list every provider. Session: lock to the chat harness. */
+  lockHarness?: boolean;
+  /** Compose: persist picker changes without writing a chat row. */
+  onApplyConfig?: (config: ChatConfig) => void;
 }
 
 const SANDBOX_LEVELS = [
@@ -56,6 +60,8 @@ export function ModelPickerSheet({
   phase,
   onClose,
   formSheet,
+  lockHarness,
+  onApplyConfig,
 }: ModelPickerSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -79,7 +85,8 @@ export function ModelPickerSheet({
     }
   }, [harnesses, runtime, deviceId, catalogTick]);
 
-  const locked = harnessId !== undefined && harnessId !== '';
+  const locked =
+    (lockHarness ?? true) && harnessId !== undefined && harnessId !== '';
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
     return harnesses
@@ -135,11 +142,12 @@ export function ModelPickerSheet({
         ...config,
         ...patch,
       };
-      setChatConfig(runtime, chat.id, next);
+      if (onApplyConfig !== undefined) onApplyConfig(next);
+      else setChatConfig(runtime, chat.id, next);
       if (next.harness !== '' && next.model !== undefined)
         rememberModelPick({ harness: next.harness, model: next.model });
     },
-    [runtime, chat.id, config],
+    [runtime, chat.id, config, onApplyConfig],
   );
 
   const pickModel = useCallback(

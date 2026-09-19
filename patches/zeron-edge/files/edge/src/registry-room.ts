@@ -23,6 +23,7 @@ import { applyOp, validateOp, type Op, type Row } from "./registry-core";
 import { AUTH_USER_HEADER, type Env } from "./env";
 import {
   apnsConfigured,
+  isQuestionAlert,
   isRunFinished,
   sendAlertPush,
   sendLiveActivityPush,
@@ -578,13 +579,17 @@ export class RegistryRoom implements DurableObject {
 
       // Alert banners (native device tokens). Independent of Live Activities
       // so a backgrounded phone with no activity instance still gets a banner.
-      if (finished) {
+      if (finished || isQuestionAlert(prevStatus, status)) {
         const alertTokens = [
           ...this.ctx.storage.sql.exec(
             "SELECT token FROM live_activity_tokens WHERE kind = 'alert'"
           )
         ].map(r => r.token as string);
-        const body = status === "errored" ? "Run failed" : "Run completed";
+        const body = isQuestionAlert(prevStatus, status)
+          ? "The agent needs your input"
+          : status === "errored"
+            ? "Run failed"
+            : "Run completed";
         for (const token of alertTokens) {
           const res = await sendAlertPush(
             this.env,

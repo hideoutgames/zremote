@@ -138,6 +138,12 @@ export const isRunFinished = (
     (prevStatus === "working" || prevStatus === "awaitingInput")) ||
   status === "errored";
 
+/** True when a run paused to ask the user a question. */
+export const isQuestionAlert = (
+  prevStatus: string | undefined,
+  status: string
+): boolean => prevStatus === "working" && status === "awaitingInput";
+
 export type AlertPushProps = {
   chatId: string;
   title: string;

@@ -4,17 +4,16 @@ Patches live in `patches/zeron-edge/` (`*.patch` from
 `git format-patch 853872d` on branch `zremote-edge-patches`, worktree
 `../_ref/zeron-edge-patch`; full file copies under `files/` for
 readability). Apply to a zeron edge deployment at revision 853872d
-(v0.2.72). Unit tests: `cd edge && npm run test:unit` (59 tests incl. the
-new `live-activity` + `edge-patches` suites; workerd pool not run on
-Windows).
+(v0.2.72). Unit tests: `cd edge && npm run test:unit` (live-activity + edge-patches
+suites; workerd pool not run on Windows).
 
 ## 1. Apple App Site Association — `edge/src/apple-association.ts`
 
 `GET /.well-known/apple-app-site-association` →
 `{"applinks":{"details":[{"appIDs":[…],"components":[{"/":"/auth/cli/callback*"}]}]}}`.
 Public (pre-bearer), `application/json`, 404 when `IOS_APP_IDS` is unset.
-Required for the iOS sign-in universal link; without it the app falls back
-to paste-code sign-in (fully working).
+Required for the iOS sign-in universal link; without it HTTPS-callback
+sign-in does not return into the app.
 
 Env: `IOS_APP_IDS` — comma-separated `TEAMID.bundleid` entries.
 
@@ -23,7 +22,7 @@ Env: `IOS_APP_IDS` — comma-separated `TEAMID.bundleid` entries.
 `POST /auth/exchange` accepts an optional `codeVerifier` and forwards it to
 WorkOS `user_management/authenticate` as `code_verifier`. Required for the
 public-client PKCE flow on iOS (no client secret on the phone). Without it,
-HTTPS-callback sign-in fails PKCE validation; paste-code sign-in still works.
+HTTPS-callback sign-in fails PKCE validation.
 
 ## 3. Live Activity push producer — `edge/src/registry-room.ts` +
 
@@ -83,6 +82,29 @@ On the same `sessions` status-change path:
 - Same JWT, host, prune-on-`BadDeviceToken`/410 as Live Activities.
   Inert without `APNS_*`.
 
+## 5. Question alerts when the agent needs input — same files as §3–4
+
+Patch `0003`. On `working` → `awaitingInput` the edge sends `kind: "alert"`
+APNs to the same token table as finish banners:
+
+```json
+{
+  "aps": {
+    "alert": { "title": "<chat title>", "body": "The agent needs your input" },
+    "sound": "default",
+    "thread-id": "<chatId>"
+  },
+  "chatId": "<chatId>",
+  "url": "zeron://session/<chatId>"
+}
+```
+
+No prompt or question text. The phone has no background socket, so
+lock-screen question alerts cannot be local. While the app is active the
+client still presents the flip via `shouldPresentBanner` (hides only when
+that thread is selected). One Settings toggle covers finish **and**
+questions. Helper: `isQuestionAlert` in `live-activity.ts`.
+
 Env/secrets: `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`,
 `APNS_P8` (PKCS8 PEM), `APNS_ENV` (`sandbox` optional). Everything is gated
 on the secrets being set — without them the producer is inert and the
@@ -94,6 +116,7 @@ registry routes still answer.
 cd <edge checkout>
 git am <zremote>/patches/zeron-edge/0001-*.patch
 git am <zremote>/patches/zeron-edge/0002-*.patch
+git am <zremote>/patches/zeron-edge/0003-*.patch
 wrangler secret put APNS_P8        # PKCS8 PEM
 wrangler secret put APNS_KEY_ID
 wrangler secret put APNS_TEAM_ID
@@ -103,9 +126,10 @@ npm run test:unit && wrangler deploy
 
 ## What works WITHOUT these patches
 
-- Sign-in via paste-code (the in-app fallback) — everything except the
-  HTTPS/universal-link callback.
+- Sign-in cannot complete via the HTTPS/universal-link callback (PKCE
+  exchange + AASA live in `0001`). There is no in-app paste-code fallback.
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
 - Live Activities still render locally while the app is foregrounded; only
   APNs-driven updates/start are missing.
-- Finish-banner alerts are missing (no `kind: "alert"` producer).
+- Finish-banner and question-alert pushes are missing (no `kind: "alert"`
+  producer).

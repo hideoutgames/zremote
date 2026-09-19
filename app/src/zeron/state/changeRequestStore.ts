@@ -7,7 +7,12 @@ import type {
   CheckoutChangeRequestStatus,
   CheckoutDiff,
 } from '../protocol/types';
-import { prBadgeModel, type PrBadgeModel } from '../../components/prBadge';
+import {
+  prBadgeModel,
+  threadPrDot,
+  type PrBadgeModel,
+  type ThreadPrDot,
+} from '../../components/prBadge';
 
 export interface ChangeRequestState {
   byChat: Record<string, CheckoutChangeRequestStatus | undefined>;
@@ -68,3 +73,8 @@ export const usePrBadge = (chatId: string): PrBadgeModel | undefined =>
     if (summary === undefined) return undefined;
     return prBadgeModel(summary, s.diffByChat[chatId]);
   });
+
+export const useThreadPrDot = (chatId: string): ThreadPrDot | null =>
+  useStore(changeRequestStore, s =>
+    threadPrDot(s.byChat[chatId]?.changeRequest ?? undefined),
+  );

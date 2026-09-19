@@ -80,6 +80,7 @@ import type { MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/Glass';
 import { Composer } from '../components/Composer';
+import { ComposeComposer } from '../components/ComposeComposer';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
 import { EffortOverlay } from '../components/EffortOverlay';
 import { GlassSheet } from '../components/GlassSheet';
@@ -129,15 +130,119 @@ const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 export function SessionScreen({
   chatId,
   onBack,
+  onCreated,
   leadingIcon,
   contentMaxWidth,
+  composerMaxWidth,
+}: {
+  chatId?: string;
+  onBack: () => void;
+  onCreated?: (chatId: string) => void;
+  /** iPad split view: replaces the back chevron with a sidebar toggle. */
+  leadingIcon?: string;
+  /** iPad: cap the transcript measure (~720pt), centered. */
+  contentMaxWidth?: number;
+  /** iPad: cap the composer stack at 50% of the window width. */
+  composerMaxWidth?: number;
+}) {
+  if (chatId === undefined) {
+    return (
+      <ComposeSessionScreen
+        onBack={onBack}
+        onCreated={onCreated}
+        leadingIcon={leadingIcon}
+        composerMaxWidth={composerMaxWidth}
+      />
+    );
+  }
+  return (
+    <ActiveSessionScreen
+      chatId={chatId}
+      onBack={onBack}
+      leadingIcon={leadingIcon}
+      contentMaxWidth={contentMaxWidth}
+      composerMaxWidth={composerMaxWidth}
+    />
+  );
+}
+
+function ComposeSessionScreen({
+  onBack,
+  onCreated,
+  leadingIcon,
+  composerMaxWidth,
+}: {
+  onBack: () => void;
+  onCreated?: (chatId: string) => void;
+  leadingIcon?: string;
+  composerMaxWidth?: number;
+}) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const keyboardOffset = { opened: insets.bottom };
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
+        pointerEvents="box-none"
+      >
+        <Pressable
+          onPress={onBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            leadingIcon !== undefined ? t('sidebar.toggle') : t('session.back')
+          }
+          style={styles.headerBtn}
+        >
+          <Glass interactive style={styles.circle}>
+            <Icon
+              name={(leadingIcon ?? 'chevron.left') as never}
+              size={18}
+              color={theme.text}
+            />
+          </Glass>
+        </Pressable>
+        <View style={styles.headerText}>
+          <Glass style={styles.titlePill}>
+            <Text
+              style={[styles.title, { color: theme.text }]}
+              numberOfLines={1}
+            >
+              {t('home.newThread')}
+            </Text>
+          </Glass>
+        </View>
+        <View style={styles.headerRight} />
+      </View>
+      <View style={styles.composeEmpty}>
+        <Text style={[styles.empty, { color: theme.textSecondary }]}>
+          {t('session.empty')}
+        </Text>
+      </View>
+      <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
+        <ComposeComposer
+          autoFocus
+          composerMaxWidth={composerMaxWidth}
+          onCreated={id => onCreated?.(id)}
+        />
+      </KeyboardStickyView>
+    </View>
+  );
+}
+
+function ActiveSessionScreen({
+  chatId,
+  onBack,
+  leadingIcon,
+  contentMaxWidth,
+  composerMaxWidth,
 }: {
   chatId: string;
   onBack: () => void;
-  /** iPad split view: replaces the back chevron with a sidebar toggle. */
   leadingIcon?: string;
-  /** iPad: cap the transcript/composer measure (~720pt), centered. */
   contentMaxWidth?: number;
+  composerMaxWidth?: number;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -365,7 +470,6 @@ export function SessionScreen({
       ? undefined
       : s.spaces.find(sp => sp.id === chat.spaceId),
   );
-  const spaces = useStore(workspaceStore, s => s.spaces);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
@@ -731,8 +835,8 @@ export function SessionScreen({
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
         <View
           style={
-            contentMaxWidth !== undefined
-              ? [styles.measureCap, { maxWidth: contentMaxWidth }]
+            composerMaxWidth !== undefined
+              ? [styles.measureCap, { maxWidth: composerMaxWidth }]
               : undefined
           }
         >
@@ -776,23 +880,6 @@ export function SessionScreen({
             fastEnabled={fastEnabled}
             onOpenEffort={() => setEffortOpen(true)}
             onFocusChange={setComposerFocused}
-            checkout={
-              runtime !== null && chat !== undefined
-                ? {
-                    runtime,
-                    chat,
-                    host,
-                    phase,
-                    repoPath: space?.path,
-                    spaces,
-                    projectLabel:
-                      space?.name ??
-                      space?.path.split(/[\\/]/).filter(Boolean).pop() ??
-                      t('checkout.noProject'),
-                    worktreeLabel: chat.branch ?? t('checkout.worktree'),
-                  }
-                : undefined
-            }
             dictation={dictation}
             onSend={doSend}
             onSteer={doSteer}
@@ -887,6 +974,7 @@ export function SessionScreen({
           phase={phase}
           onClose={() => setPickerOpen(false)}
           formSheet={windowWidth >= 700}
+          lockHarness
         />
       ) : null}
 
@@ -983,6 +1071,7 @@ const styles = StyleSheet.create({
   },
   listContent: { paddingBottom: 4 },
   empty: { fontSize: 15, textAlign: 'center', padding: 32 },
+  composeEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     position: 'absolute',
     top: 0,

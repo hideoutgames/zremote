@@ -5,7 +5,10 @@ import {
 } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import BootSplash from 'react-native-bootsplash';
+import { installJsFatalGuard } from './src/zeron/native/jsFatalGuard';
 import { ZeronApp } from './src/app/ZeronApp';
+
+installJsFatalGuard();
 
 export default function App() {
   // HideOnDraw used to live only on SessionScreen, so a cold start that

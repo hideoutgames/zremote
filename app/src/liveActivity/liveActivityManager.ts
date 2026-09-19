@@ -5,14 +5,15 @@
 // unit-testable. Runtime wiring lives in `bindLiveActivities.ts`.
 //
 // Policy (docs/NATIVE_MODULES.md):
-//  - start when a session enters `working`/`awaitingInput` (dedupe by chatId)
+//  - start when a session enters `working`/`awaitingInput`/`planReady`
+//    (dedupe by chatId)
 //  - `working` updates throttled to one per 5s; awaitingInput/errored/
-//    completed are immediate
+//    planReady/completed are immediate
 //  - completed → end after(now+30min); errored → end default; user archive →
 //    'immediate'
 //  - staleDate on updates: now+120s (mirrors the edge's stale-date)
-//  - if the OS refuses a start (limit/disabled), we fall back to ONE
-//    aggregate activity bound to the currently-selected session
+//  - if the OS refuses a start (limit), leftovers pack into ONE overflow
+//    activity whose expanded view lists those agents
 
 import type {
   SessionActivityPhase,
@@ -22,6 +23,13 @@ import type {
 export const WORKING_UPDATE_MIN_MS = 5_000;
 export const STALE_AFTER_MS = 120_000;
 export const COMPLETED_DISMISS_MS = 30 * 60_000;
+export const OVERFLOW_CHAT_ID = '__overflow__';
+
+const START_PHASES: ReadonlySet<SessionActivityPhase> = new Set([
+  'working',
+  'awaitingInput',
+  'planReady',
+]);
 
 export type ActivityAction =
   | { kind: 'start'; props: SessionActivityProps }
@@ -42,7 +50,7 @@ export const planActivity = (
   now: number,
 ): ActivityAction => {
   if (prev === undefined) {
-    if (next.phase === 'working' || next.phase === 'awaitingInput') {
+    if (START_PHASES.has(next.phase)) {
       return { kind: 'start', props: next };
     }
     return { kind: 'none' };
@@ -51,7 +59,6 @@ export const planActivity = (
     return { kind: 'end', outcome: next.phase };
   }
   if (prev.phase === next.phase && next.phase === 'working') {
-    // throttle routine working updates
     if (now - prev.lastUpdateAt < WORKING_UPDATE_MIN_MS) {
       return { kind: 'none' };
     }
@@ -90,7 +97,7 @@ export type LiveActivityCallbacks = {
   onPushToken(chatId: string, token: string): void;
   /** Unregister when the activity ends. */
   onUnregister(chatId: string): void;
-  /** Currently-selected chat for the aggregate fallback. */
+  /** Currently-selected chat (unused for overflow packing). */
   selectedChatId(): string | undefined;
 };
 
@@ -100,14 +107,19 @@ export class LiveActivityManager {
   private states = new Map<string, ActivityState>();
   private handles = new Map<string, LiveActivityHandle>();
   private tokenSubs = new Map<string, { remove(): void }>();
-  private aggregate: LiveActivityHandle | undefined;
-  private aggregateFor: string | undefined;
+  private overflowHandle: LiveActivityHandle | undefined;
+  private overflowItems = new Map<string, SessionActivityProps>();
 
   constructor(
     private driver: LiveActivityDriver,
     private cb: LiveActivityCallbacks,
     private now: () => number = () => Date.now(),
   ) {}
+
+  /** Chat ids currently packed into the overflow activity. */
+  overflowChatIds(): string[] {
+    return [...this.overflowItems.keys()];
+  }
 
   /** Feed the latest props for a session; call with `null` on archive. */
   apply(chatId: string, next: SessionActivityProps | null): void {
@@ -122,12 +134,15 @@ export class LiveActivityManager {
         this.start(chatId, action.props);
         break;
       case 'update': {
-        const h =
-          this.handles.get(chatId) ??
-          (this.aggregateFor === chatId ? this.aggregate : undefined);
-        h?.update(action.props, new Date(this.now() + STALE_AFTER_MS)).catch(
-          () => {},
-        );
+        const h = this.handles.get(chatId);
+        if (h !== undefined) {
+          h.update(action.props, new Date(this.now() + STALE_AFTER_MS)).catch(
+            () => {},
+          );
+        } else if (this.overflowItems.has(chatId)) {
+          this.overflowItems.set(chatId, action.props);
+          this.syncOverflow();
+        }
         this.states.set(chatId, {
           phase: next.phase,
           lastUpdateAt: this.now(),
@@ -151,33 +166,11 @@ export class LiveActivityManager {
         new Date(this.now() + STALE_AFTER_MS),
       );
     } catch {
-      // OS refused (limit/disabled): fall back to the single aggregate
-      // activity for the selected session.
-      if (this.cb.selectedChatId() === chatId && this.aggregate !== undefined) {
-        this.aggregateFor = chatId;
-        this.aggregate
-          .update(props, new Date(this.now() + STALE_AFTER_MS))
-          .catch(() => {});
-        this.states.set(chatId, {
-          phase: props.phase,
-          lastUpdateAt: this.now(),
-        });
-        return;
-      }
-      if (this.aggregate === undefined && this.cb.selectedChatId() === chatId) {
-        try {
-          this.aggregate = this.driver.start(props, activityUrl(chatId));
-          this.aggregateFor = chatId;
-          this.states.set(chatId, {
-            phase: props.phase,
-            lastUpdateAt: this.now(),
-          });
-        } catch {
-          /* Live Activities unavailable entirely */
-        }
-      }
+      this.packOverflow(chatId, props);
       return;
     }
+    this.overflowItems.delete(chatId);
+    this.syncOverflow();
     this.handles.set(chatId, handle);
     this.tokenSubs.set(
       chatId,
@@ -191,13 +184,71 @@ export class LiveActivityManager {
     });
   }
 
+  private packOverflow(chatId: string, props: SessionActivityProps): void {
+    this.overflowItems.set(chatId, props);
+    this.states.set(chatId, {
+      phase: props.phase,
+      lastUpdateAt: this.now(),
+    });
+    if (this.overflowHandle === undefined) {
+      try {
+        this.overflowHandle = this.driver.start(
+          this.buildOverflowProps(),
+          undefined,
+          new Date(this.now() + STALE_AFTER_MS),
+        );
+      } catch {
+        /* Live Activities unavailable entirely */
+      }
+      return;
+    }
+    this.syncOverflow();
+  }
+
+  private buildOverflowProps(): SessionActivityProps {
+    const items = [...this.overflowItems.values()];
+    const n = items.length;
+    return {
+      chatId: OVERFLOW_CHAT_ID,
+      title: n === 1 ? items[0]?.title ?? 'Agents' : `${n} agents`,
+      overflowTitles: items.map(i => i.title),
+      phase: items.some(i => i.phase === 'awaitingInput')
+        ? 'awaitingInput'
+        : items.some(i => i.phase === 'planReady')
+        ? 'planReady'
+        : 'working',
+      phaseLabel: n === 1 ? items[0]?.phaseLabel ?? 'working' : `${n} running`,
+      startedAt: items[0]?.startedAt ?? this.now() / 1000,
+      showContext: true,
+      accentColor: '#FFFFFF',
+      glyph: 'rectangle.stack',
+    };
+  }
+
+  private syncOverflow(): void {
+    if (this.overflowItems.size === 0) {
+      if (this.overflowHandle !== undefined) {
+        this.overflowHandle.end('immediate').catch(() => {});
+        this.overflowHandle = undefined;
+      }
+      return;
+    }
+    this.overflowHandle
+      ?.update(this.buildOverflowProps(), new Date(this.now() + STALE_AFTER_MS))
+      .catch(() => {});
+  }
+
   private end(
     chatId: string,
     outcome: 'completed' | 'errored' | 'immediate',
   ): void {
-    const handle =
-      this.handles.get(chatId) ??
-      (this.aggregateFor === chatId ? this.aggregate : undefined);
+    if (this.overflowItems.has(chatId)) {
+      this.overflowItems.delete(chatId);
+      this.states.delete(chatId);
+      this.syncOverflow();
+      return;
+    }
+    const handle = this.handles.get(chatId);
     if (handle === undefined) {
       this.states.delete(chatId);
       return;
@@ -212,10 +263,6 @@ export class LiveActivityManager {
     this.tokenSubs.get(chatId)?.remove();
     this.tokenSubs.delete(chatId);
     this.handles.delete(chatId);
-    if (this.aggregateFor === chatId) {
-      this.aggregate = undefined;
-      this.aggregateFor = undefined;
-    }
     this.states.delete(chatId);
     this.cb.onUnregister(chatId);
   }
@@ -237,5 +284,10 @@ export class LiveActivityManager {
     for (const chatId of [...this.states.keys()]) {
       this.end(chatId, 'immediate');
     }
+    if (this.overflowHandle !== undefined) {
+      this.overflowHandle.end('immediate').catch(() => {});
+      this.overflowHandle = undefined;
+    }
+    this.overflowItems.clear();
   }
 }

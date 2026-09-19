@@ -3,6 +3,7 @@ import {
   apnsConfigured,
   buildAlertPayload,
   buildLiveActivityPayload,
+  isQuestionAlert,
   isRunFinished,
   resetApnsJwtCache,
   sendAlertPush,
@@ -151,6 +152,15 @@ describe("isRunFinished", () => {
     expect(isRunFinished("awaitingInput", "working")).toBe(false);
     expect(isRunFinished(undefined, "idle")).toBe(false);
     expect(isRunFinished("idle", "idle")).toBe(false);
+  });
+});
+
+describe("isQuestionAlert", () => {
+  it("is true only for working → awaitingInput", () => {
+    expect(isQuestionAlert("working", "awaitingInput")).toBe(true);
+    expect(isQuestionAlert("idle", "awaitingInput")).toBe(false);
+    expect(isQuestionAlert("awaitingInput", "idle")).toBe(false);
+    expect(isQuestionAlert("working", "idle")).toBe(false);
   });
 });
 

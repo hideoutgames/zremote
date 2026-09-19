@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hideoutgames <154709155+hideoutgames@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 01:00:00 +0000
+Subject: [PATCH] edge: APNs alert banners when the agent asks a question
+
+Send kind=alert APNs on sessions.status working → awaitingInput (title =
+chat title, body = "The agent needs your input", chatId + deep link).
+Reuses the same alert token table as finish banners. No prompt text.
+---
+diff --git a/edge/src/live-activity.ts b/edge/src/live-activity.ts
+index 2222222..3333333 100644
+--- a/edge/src/live-activity.ts
++++ b/edge/src/live-activity.ts
+@@ -137,6 +137,12 @@ export const isRunFinished = (
+     (prevStatus === "working" || prevStatus === "awaitingInput")) ||
+   status === "errored";
+ 
++/** True when a run paused to ask the user a question. */
++export const isQuestionAlert = (
++  prevStatus: string | undefined,
++  status: string
++): boolean => prevStatus === "working" && status === "awaitingInput";
++
+ export type AlertPushProps = {
+   chatId: string;
+   title: string;
+   body: string;
+diff --git a/edge/src/registry-room.ts b/edge/src/registry-room.ts
+index 2222222..3333333 100644
+--- a/edge/src/registry-room.ts
++++ b/edge/src/registry-room.ts
+@@ -23,6 +23,7 @@ import { applyOp, validateOp, type Op, type Row } from "./registry-core";
+ import { AUTH_USER_HEADER, type Env } from "./env";
+ import {
+   apnsConfigured,
++  isQuestionAlert,
+   isRunFinished,
+   sendAlertPush,
+   sendLiveActivityPush,
+   type SessionPushProps
+ } from "./live-activity";
+@@ -578,13 +579,17 @@
+ 
+       // Alert banners (native device tokens). Independent of Live Activities
+       // so a backgrounded phone with no activity instance still gets a banner.
+-      if (finished) {
++      if (finished || isQuestionAlert(prevStatus, status)) {
+         const alertTokens = [
+           ...this.ctx.storage.sql.exec(
+             "SELECT token FROM live_activity_tokens WHERE kind = 'alert'"
+           )
+         ].map(r => r.token as string);
+-        const body = status === "errored" ? "Run failed" : "Run completed";
++        const body = isQuestionAlert(prevStatus, status)
++          ? "The agent needs your input"
++          : status === "errored"
++            ? "Run failed"
++            : "Run completed";
+         for (const token of alertTokens) {
+           const res = await sendAlertPush(
+             this.env,

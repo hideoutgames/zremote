@@ -1,4 +1,4 @@
-// AdaptiveShell floating sidebar: the uiPrefs toggle flips the persisted
+// AdaptiveShell in-flow sidebar: the uiPrefs toggle flips the persisted
 // pref and the glass panel's accessibilityState.expanded (regular width).
 
 import React from 'react';
@@ -32,7 +32,7 @@ const render = async () => {
 
 const panel = (root: TestRenderer.ReactTestInstance) =>
   root.findAll(
-    n => n.props.testID === 'floatingSidebar' && typeof n.type === 'string',
+    n => n.props.testID === 'threadsSidebar' && typeof n.type === 'string',
   );
 
 beforeEach(() => {
@@ -58,6 +58,12 @@ test('sidebar panel renders expanded; collapse flips pref + state', async () => 
   let found = panel(tree.root);
   expect(found).toHaveLength(1);
   expect(found[0].props.accessibilityState.expanded).toBe(true);
+  expect(found[0].props.pointerEvents).toBe('auto');
+  const style = Array.isArray(found[0].props.style)
+    ? found[0].props.style.flat()
+    : [found[0].props.style];
+  expect(style.some(s => s?.overflow === 'hidden')).toBe(true);
+  expect(style.some(s => s?.position === 'absolute')).toBe(false);
 
   act(() => setSidebarCollapsed(true));
   expect(uiPrefsStore.getState().sidebarCollapsed).toBe(true);
@@ -69,4 +75,7 @@ test('sidebar panel renders expanded; collapse flips pref + state', async () => 
   found = panel(tree.root);
   expect(found[0].props.accessibilityState.expanded).toBe(true);
   expect(found[0].props.pointerEvents).toBe('auto');
+  await act(async () => {
+    tree.unmount();
+  });
 });

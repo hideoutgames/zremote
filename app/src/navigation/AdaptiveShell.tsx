@@ -37,6 +37,7 @@ import { RootPager } from '../screens/RootPager';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SessionScreen } from '../screens/SessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { AppErrorBoundary } from '../app/AppErrorBoundary';
 import { useTheme } from '../theme';
 import { Icon } from '../components/Icon';
 import { layoutFor, type LayoutPrefs } from './layout';
@@ -46,6 +47,49 @@ import { t } from '../i18n/strings';
  *  (docs/NATIVE_MODULES.md). When true, swap the JS columns for
  *  `ZeronSplitView` from modules/zeron-split-view. */
 export const USE_NATIVE_SPLIT_VIEW = false;
+
+function InFlowSidebar({
+  visible,
+  width,
+  paddingTop,
+  paddingBottom,
+  children,
+}: {
+  visible: boolean;
+  width: number;
+  paddingTop: number;
+  paddingBottom: number;
+  children: React.ReactNode;
+}) {
+  'use no memo';
+  const reduceMotion = useReducedMotion();
+  const collapse = useSharedValue(visible ? 0 : 1);
+  useEffect(() => {
+    const target = visible ? 0 : 1;
+    collapse.value = reduceMotion
+      ? target
+      : withTiming(target, {
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+        });
+  }, [visible, reduceMotion, collapse]);
+  const anim = useAnimatedStyle(() => ({
+    width: (1 - collapse.value) * width,
+  }));
+  return (
+    <Animated.View
+      style={[styles.sidebarColumn, anim]}
+      pointerEvents={visible ? 'auto' : 'none'}
+      accessibilityState={{ expanded: visible }}
+      accessibilityLabel={t('sidebar.toggle')}
+      testID="threadsSidebar"
+    >
+      <View style={[styles.sidebarInner, { width, paddingTop, paddingBottom }]}>
+        {children}
+      </View>
+    </Animated.View>
+  );
+}
 
 export function AdaptiveShell({
   requestedChat,
@@ -58,11 +102,15 @@ export function AdaptiveShell({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [chatId, setChatId] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebarCollapsed = useSidebarCollapsed();
 
   useEffect(() => {
-    if (requestedChat !== null) setChatId(requestedChat);
+    if (requestedChat !== null) {
+      setComposing(false);
+      setChatId(requestedChat);
+    }
   }, [requestedChat]);
 
   const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen: false };
@@ -78,25 +126,14 @@ export function AdaptiveShell({
     [sidebarCollapsed],
   );
   const openSettings = useCallback(() => setSettingsOpen(true), []);
-
-  // Floating sidebar slide: collapse.value 0 = visible, 1 = offscreen left.
-  const reduceMotion = useReducedMotion();
-  const collapse = useSharedValue(layout.sidebarVisible ? 0 : 1);
-  useEffect(() => {
-    const target = layout.sidebarVisible ? 0 : 1;
-    collapse.value = reduceMotion
-      ? target
-      : withTiming(target, {
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-        });
-  }, [layout.sidebarVisible, reduceMotion, collapse]);
-
-  const sidebarWidth = layout.sidebarWidth;
-  const sidebarAnim = useAnimatedStyle(() => ({
-    transform: [{ translateX: collapse.value * -(sidebarWidth + 12) }],
-    opacity: 1 - collapse.value,
-  }));
+  const openSession = useCallback((id: string) => {
+    setComposing(false);
+    setChatId(id);
+  }, []);
+  const enterCompose = useCallback(() => {
+    setChatId(null);
+    setComposing(true);
+  }, []);
 
   if (layout.mode === 'compact') {
     return (
@@ -109,16 +146,43 @@ export function AdaptiveShell({
 
   return (
     <View style={[styles.row, { backgroundColor: theme.background }]}>
-      {/* Detail + inspector render edge-to-edge; the floating sidebar is an
-          absolute glass panel over them (iPadOS 26 idiom). */}
-      <View style={styles.detail}>
-        {chatId !== null ? (
-          <SessionScreen
-            chatId={chatId}
-            onBack={toggleSidebar}
-            leadingIcon="sidebar.left"
-            contentMaxWidth={layout.measureCap}
+      <InFlowSidebar
+        visible={layout.sidebarVisible}
+        width={layout.sidebarWidth}
+        paddingTop={insets.top + 8}
+        paddingBottom={insets.bottom + 8}
+      >
+        <Glass style={styles.sidebarGlass}>
+          <HomeScreen
+            variant="sidebar"
+            onOpenSession={openSession}
+            onOpenSettings={openSettings}
+            onCompose={enterCompose}
           />
+        </Glass>
+      </InFlowSidebar>
+
+      <View style={styles.detail}>
+        {composing ? (
+          <AppErrorBoundary resetKey="compose">
+            <SessionScreen
+              onBack={toggleSidebar}
+              onCreated={openSession}
+              leadingIcon="sidebar.left"
+              contentMaxWidth={layout.measureCap}
+              composerMaxWidth={layout.composerMaxWidth}
+            />
+          </AppErrorBoundary>
+        ) : chatId !== null ? (
+          <AppErrorBoundary resetKey={chatId}>
+            <SessionScreen
+              chatId={chatId}
+              onBack={toggleSidebar}
+              leadingIcon="sidebar.left"
+              contentMaxWidth={layout.measureCap}
+              composerMaxWidth={layout.composerMaxWidth}
+            />
+          </AppErrorBoundary>
         ) : (
           <View style={styles.emptyDetail}>
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
@@ -127,32 +191,6 @@ export function AdaptiveShell({
           </View>
         )}
       </View>
-
-      {/* Floating glass sidebar — always mounted so collapse can animate;
-          pointerEvents none while offscreen. */}
-      <Animated.View
-        style={[
-          styles.sidebarPanel,
-          {
-            top: insets.top + 8,
-            bottom: insets.bottom + 8,
-            width: layout.sidebarWidth,
-          },
-          sidebarAnim,
-        ]}
-        pointerEvents={layout.sidebarVisible ? 'auto' : 'none'}
-        accessibilityState={{ expanded: layout.sidebarVisible }}
-        accessibilityLabel={t('sidebar.toggle')}
-        testID="floatingSidebar"
-      >
-        <Glass style={styles.sidebarGlass}>
-          <HomeScreen
-            variant="sidebar"
-            onOpenSession={setChatId}
-            onOpenSettings={openSettings}
-          />
-        </Glass>
-      </Animated.View>
 
       {/* Settings as a native sheet (regular width → formSheet). */}
       <Modal
@@ -195,9 +233,13 @@ export function InspectorToggle({
 
 const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row' },
-  sidebarPanel: {
-    position: 'absolute',
-    left: 12,
+  sidebarColumn: {
+    overflow: 'hidden',
+  },
+  sidebarInner: {
+    flex: 1,
+    paddingLeft: 12,
+    paddingRight: 8,
   },
   sidebarGlass: {
     flex: 1,

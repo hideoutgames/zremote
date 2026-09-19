@@ -4,14 +4,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
+import {
   Easing,
-  useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import { Icon } from './Icon';
+import { VoicePillShell } from './VoicePillShell';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import {
@@ -20,7 +20,6 @@ import {
   simulatedVoiceLevels,
   VOICE_PILL_BAR_COUNT,
   VOICE_PILL_OPEN_MS,
-  VOICE_PILL_OPEN_WIDTH,
   VOICE_PILL_SIZE,
 } from './voicePillMath';
 
@@ -110,12 +109,6 @@ export function VoicePill({
     }),
   ).current;
 
-  const pillStyle = useAnimatedStyle(() => ({
-    width:
-      VOICE_PILL_SIZE + (VOICE_PILL_OPEN_WIDTH - VOICE_PILL_SIZE) * open.value,
-    transform: [{ translateX: slide.value }],
-  }));
-
   const fill = active ? theme.text : theme.inputBackground;
   const iconColor = !supported
     ? theme.sendInactive
@@ -149,13 +142,14 @@ export function VoicePill({
       }
       style={styles.hit}
     >
-      <Animated.View
-        {...(active ? pan.panHandlers : {})}
+      <VoicePillShell
+        open={open}
+        slide={slide}
+        panHandlers={active ? pan.panHandlers : undefined}
         style={[
           styles.pill,
           { backgroundColor: fill },
           supported ? undefined : styles.pillDim,
-          pillStyle,
         ]}
       >
         {active ? (
@@ -189,7 +183,7 @@ export function VoicePill({
             color={iconColor}
           />
         </View>
-      </Animated.View>
+      </VoicePillShell>
     </Pressable>
   );
 }

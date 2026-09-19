@@ -34,6 +34,9 @@ export interface DraftState {
 
 export const draftStore = createStore<DraftState>(() => ({ byChat: {} }));
 
+/** Draft key for the home/detail compose composer (no chat yet). */
+export const COMPOSE_DRAFT_ID = '__compose__';
+
 const PERSIST_DEBOUNCE_MS = 300;
 
 interface DraftPersist {
@@ -154,6 +157,22 @@ export const clearDraft = (chatId: string): void => {
   });
   schedulePersist();
 };
+
+/** Move a draft (compose → new chat) without dropping attachments/text. */
+export const moveDraft = (fromId: string, toId: string): void => {
+  if (fromId === toId) return;
+  const cur = draftStore.getState().byChat[fromId];
+  draftStore.setState(s => {
+    const next = { ...s.byChat };
+    if (cur !== undefined) next[toId] = { ...cur, updatedAt: Date.now() };
+    delete next[fromId];
+    return { byChat: next };
+  });
+  schedulePersist();
+};
+
+export const draftFor = (chatId: string): Draft | undefined =>
+  draftStore.getState().byChat[chatId];
 
 /** A send the host rejected/expired: put the text back without clobbering
  * whatever the user has typed since (append with a blank line if needed). */

@@ -1,7 +1,9 @@
-// Home (left pager page): search, spaces filter, the sessions list driven by
-// workspaceStore, archived shelf, connection pill, New session + Settings.
+// Home (left pager page): search, spaces filter, the threads list driven by
+// workspaceStore, archived shelf, connection pill. Settings sits next to
+// the folder control; iPhone mounts the compose Composer here, iPad keeps
+// a New thread button that enters detail compose.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -27,9 +29,12 @@ import {
   useArchivedChats,
   useIndicator,
   useHostForChat,
-  useDeviceOnline,
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
+import {
+  isAgentRunning,
+  sortOverviewThreads,
+} from '../zeron/protocol/entities';
 import {
   sessionTitle,
   hostLabel,
@@ -43,26 +48,30 @@ import {
 } from '../zeron/runtime/workspaceActions';
 import { useRuntime } from '../app/runtimeContext';
 import type { Chat } from '../zeron/protocol/types';
-import type { ChatIndicator } from '../zeron/protocol/entities';
-import { Glass } from '../components/Glass';
+import { BrandMark } from '../components/BrandMark';
+import { svgForHarness } from '../components/harnessBrand';
+import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
-import { NewSessionSheet } from './NewSessionSheet';
-import { usePinnedChatIds } from '../zeron/state/uiPrefs';
+import { ComposeComposer } from '../components/ComposeComposer';
+import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
+import { useThreadPrDot } from '../zeron/state/changeRequestStore';
+import { setComposeDefaults } from '../zeron/state/uiPrefs';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 
-const indicatorColor = (theme: Theme, i: ChatIndicator): string | null => {
-  switch (i) {
-    case 'awaitingInput':
-      return theme.indicatorAwaitingInput;
-    case 'errored':
-      return theme.indicatorErrored;
-    case 'working':
-      return theme.indicatorWorking;
-    case 'completed':
-      return theme.indicatorCompleted;
-    default:
-      return null;
+const INACTIVE_OPACITY = 0.55;
+
+const prDotColor = (
+  theme: Theme,
+  tone: 'draft' | 'open' | 'merged',
+): string => {
+  switch (tone) {
+    case 'draft':
+      return theme.prDraft;
+    case 'open':
+      return theme.prOpen;
+    case 'merged':
+      return theme.prMerged;
   }
 };
 
@@ -89,11 +98,12 @@ const ChatRow = React.memo(function ({
   const runtime = useRuntime();
   const indicator = useIndicator(chat.id);
   const host = useHostForChat(chat.id);
-  const online = useDeviceOnline(chat.deviceId);
   const unseen = chatUnseen(chat);
-  const dot = indicatorColor(theme, indicator);
+  const prTone = useThreadPrDot(chat.id);
+  const live = isAgentRunning(indicator);
   const [hovered, setHovered] = useState(false);
   const at = chat.lastMessageAt ?? chat.createdAt;
+  const mark = svgForHarness(chat.config?.harness);
 
   const onRename = useCallback(() => {
     Alert.prompt(
@@ -125,6 +135,9 @@ const ChatRow = React.memo(function ({
     ]);
   }, [runtime, chat.id]);
 
+  const project = checkoutLabel(chat);
+  const hostName = hostLabel(chat, host === undefined ? [] : [host]);
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
@@ -137,39 +150,49 @@ const ChatRow = React.memo(function ({
           onHoverIn={() => setHovered(true)}
           onHoverOut={() => setHovered(false)}
           accessibilityRole="button"
-          accessibilityLabel={[
-            sessionTitle(chat),
-            indicator,
-            hostLabel(chat, host === undefined ? [] : [host]),
-          ]
+          accessibilityLabel={[sessionTitle(chat), project, hostName]
             .filter(Boolean)
             .join(', ')}
         >
-          {dot !== null ? (
-            <View style={[styles.dot, { backgroundColor: dot }]} />
-          ) : (
-            <View style={styles.dotPlaceholder} />
-          )}
-          <View style={styles.rowText}>
-            <Text
+          {prTone !== null ? (
+            <View
               style={[
-                styles.title,
-                { color: theme.text },
-                unseen ? styles.unseen : undefined,
+                styles.dot,
+                { backgroundColor: prDotColor(theme, prTone) },
               ]}
-              numberOfLines={1}
-            >
-              {sessionTitle(chat)}
-            </Text>
+              testID={`pr-dot-${chat.id}-${prTone}`}
+            />
+          ) : (
+            <View
+              style={styles.dotPlaceholder}
+              testID={`pr-dot-${chat.id}-none`}
+            />
+          )}
+          <View
+            style={[
+              styles.rowText,
+              live ? undefined : { opacity: INACTIVE_OPACITY },
+            ]}
+            testID={`thread-body-${chat.id}`}
+          >
+            <View style={styles.titleRow}>
+              {mark !== undefined ? <BrandMark svg={mark} size={16} /> : null}
+              <Text
+                style={[
+                  styles.title,
+                  { color: theme.text },
+                  unseen ? styles.unseen : undefined,
+                ]}
+                numberOfLines={1}
+              >
+                {sessionTitle(chat)}
+              </Text>
+            </View>
             <Text
               style={[styles.subtitle, { color: theme.textSecondary }]}
               numberOfLines={1}
             >
-              {[
-                hostLabel(chat, host === undefined ? [] : [host]),
-                checkoutLabel(chat),
-                relativeTime(at, Date.now()),
-              ]
+              {[project, hostName, relativeTime(at, Date.now())]
                 .filter(Boolean)
                 .join(' · ')}
             </Text>
@@ -184,16 +207,6 @@ const ChatRow = React.memo(function ({
               </Text>
             ) : null}
           </View>
-          <View
-            style={[
-              styles.onlineDot,
-              {
-                backgroundColor: online
-                  ? theme.indicatorCompleted
-                  : theme.border,
-              },
-            ]}
-          />
         </Pressable>
       </ContextMenu.Trigger>
       <ContextMenu.Content>
@@ -216,20 +229,21 @@ const ChatRow = React.memo(function ({
 export function HomeScreen({
   onOpenSession,
   onOpenSettings,
+  onCompose,
   variant = 'screen',
 }: {
   onOpenSession: (chatId: string) => void;
   onOpenSettings: () => void;
-  /** 'sidebar' renders inside the floating glass panel — its own controls
-   * switch from glass to subtle fills (no glass-on-glass). */
+  /** iPad sidebar: enter compose in the detail column. */
+  onCompose?: (opts?: { spaceId?: string }) => void;
+  /** 'sidebar' renders inside the glass panel — its own New/Settings
+   * controls switch from glass to subtle fills (no extra glass-on-glass). */
   variant?: 'screen' | 'sidebar';
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  // Inside the floating sidebar the safe area is handled by the panel.
+  // Inside the glass sidebar the safe area is handled by the panel.
   const barInset = variant === 'sidebar' ? 0 : undefined;
-  // Sidebar variant: controls use subtle fills, never a second glass layer.
-  // (A render helper, not a component — a JSX-typed const would remount.)
   const control = (style: StyleProp<ViewStyle>, children: React.ReactNode) =>
     variant === 'sidebar' ? (
       <View style={[style, { backgroundColor: theme.inputBackground }]}>
@@ -243,14 +257,18 @@ export function HomeScreen({
   const [query, setQuery] = useState('');
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const [bottomH, setBottomH] = useState(0);
+  const [composerH, setComposerH] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
 
-  // Pull-to-refresh kicks the registry + open session rooms (same path the
-  // foreground handler uses — appRuntime.onForeground L270).
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     runtime?.onForeground();
@@ -262,8 +280,8 @@ export function HomeScreen({
   const spaces = useStore(workspaceStore, s => s.spaces);
   const devices = useStore(workspaceStore, s => s.devices);
   const connection = useStore(workspaceStore, s => s.connection);
+  const sessions = useStore(workspaceStore, s => s.sessions);
 
-  const pinnedIds = usePinnedChatIds();
   const chats = useMemo(() => {
     const scoped =
       spaceFilter === undefined
@@ -278,13 +296,10 @@ export function HomeScreen({
               .toLowerCase()
               .includes(q),
           );
-    const pinned = new Set(pinnedIds);
-    return [...filtered].sort((a, b) => {
-      const ap = pinned.has(a.id) ? 0 : 1;
-      const bp = pinned.has(b.id) ? 0 : 1;
-      return ap - bp;
-    });
-  }, [overview, spaceFilter, query, pinnedIds]);
+    return sortOverviewThreads(filtered, sessions, now);
+  }, [overview, spaceFilter, query, sessions, now]);
+
+  useOverviewChangeRequestWatches(runtime, chats);
 
   const spaceName = useCallback(
     (id: string) => spaces.find(s => s.id === id)?.name ?? id,
@@ -298,8 +313,33 @@ export function HomeScreen({
     [onOpenSession],
   );
 
+  const folderLabel =
+    spaceFilter === undefined ? t('home.allSpaces') : spaceName(spaceFilter);
+
+  const enterCompose = useCallback(
+    (spaceId?: string) => {
+      if (spaceId !== undefined) {
+        const space = spaces.find(s => s.id === spaceId);
+        if (space !== undefined)
+          setComposeDefaults({
+            deviceId: space.deviceId,
+            spaceId: space.id,
+          });
+      }
+      onCompose?.({ spaceId });
+    },
+    [spaces, onCompose],
+  );
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.container,
+        variant === 'sidebar'
+          ? undefined
+          : { backgroundColor: theme.background },
+      ]}
+    >
       <LegendList
         data={chats}
         keyExtractor={item => item.id}
@@ -348,28 +388,31 @@ export function HomeScreen({
           styles.listContent,
           {
             paddingTop: headerH !== 0 ? headerH : insets.top + 64,
-            paddingBottom: bottomH !== 0 ? bottomH + 12 : insets.bottom + 76,
+            paddingBottom:
+              variant === 'sidebar'
+                ? bottomH !== 0
+                  ? bottomH + 12
+                  : insets.bottom + 76
+                : composerH !== 0
+                ? composerH + 12
+                : insets.bottom + 140,
           },
         ]}
         scrollIndicatorInsets={{
           top: headerH,
-          bottom: bottomH,
+          bottom: variant === 'sidebar' ? bottomH : composerH,
         }}
         showsVerticalScrollIndicator={false}
         renderItem={renderRow}
       />
 
-      {/* Floating top bar: search + space filter + connection pill, glass
-          over the sessions list which scrolls underneath. */}
       <View
         style={[styles.topBar, { paddingTop: (barInset ?? insets.top) + 8 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
-        <View style={styles.topRow}>
-          <View
-            style={[styles.search, { backgroundColor: theme.inputBackground }]}
-          >
+        <GlassContainer spacing={8} style={styles.topRow}>
+          <Glass interactive style={styles.search}>
             <Icon
               name="magnifyingglass"
               size={18}
@@ -383,27 +426,22 @@ export function HomeScreen({
               onChangeText={setQuery}
               autoCapitalize="none"
             />
-          </View>
+          </Glass>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
-              {control(
-                styles.filterPill,
-                <>
-                  <Text
-                    style={[styles.filterText, { color: theme.text }]}
-                    numberOfLines={1}
-                  >
-                    {spaceFilter === undefined
-                      ? t('home.allSpaces')
-                      : spaceName(spaceFilter)}
-                  </Text>
-                  <Icon
-                    name="chevron.down"
-                    size={12}
-                    color={theme.textSecondary}
-                  />
-                </>,
-              )}
+              <Glass
+                interactive
+                style={styles.circle}
+                accessibilityRole="button"
+                accessibilityLabel={folderLabel}
+                testID="spaceFilter"
+              >
+                <Icon
+                  name={spaceFilter === undefined ? 'folder' : 'folder.fill'}
+                  size={18}
+                  color={theme.text}
+                />
+              </Glass>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content>
               <DropdownMenu.Item
@@ -417,7 +455,7 @@ export function HomeScreen({
               {spaceFilter !== undefined ? (
                 <DropdownMenu.Item
                   key="newHere"
-                  onSelect={() => setSheetOpen(true)}
+                  onSelect={() => enterCompose(spaceFilter)}
                 >
                   <DropdownMenu.ItemTitle>
                     {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
@@ -447,7 +485,18 @@ export function HomeScreen({
               })}
             </DropdownMenu.Content>
           </DropdownMenu.Root>
-        </View>
+          <Pressable
+            onPress={onOpenSettings}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.title')}
+            testID="home-settings"
+          >
+            <Glass interactive style={styles.circle}>
+              <Icon name="gearshape" size={20} color={theme.text} />
+            </Glass>
+          </Pressable>
+        </GlassContainer>
 
         {connection !== 'connected' ? (
           <View
@@ -462,47 +511,43 @@ export function HomeScreen({
         ) : null}
       </View>
 
-      <View
-        style={[
-          styles.bottomBar,
-          { paddingBottom: (barInset ?? insets.bottom) + 8 },
-        ]}
-        onLayout={e => setBottomH(e.nativeEvent.layout.height)}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          style={styles.newChatWrap}
-          onPress={() => setSheetOpen(true)}
-          hitSlop={8}
+      {variant === 'sidebar' ? (
+        <View
+          style={[
+            styles.bottomBar,
+            { paddingBottom: (barInset ?? insets.bottom) + 8 },
+          ]}
+          onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+          pointerEvents="box-none"
         >
-          {control(
-            styles.newChat,
-            <>
-              <Icon name="plus" size={16} color={theme.text} />
-              <Text style={[styles.newChatText, { color: theme.text }]}>
-                {t('home.newSession')}
-              </Text>
-            </>,
-          )}
-        </Pressable>
-        <Pressable onPress={onOpenSettings} hitSlop={8}>
-          {control(
-            styles.circle,
-            <Icon name="gearshape" size={20} color={theme.text} />,
-          )}
-        </Pressable>
-      </View>
-
-      {sheetOpen ? (
-        <NewSessionSheet
-          initialSpaceId={spaceFilter}
-          onClose={() => setSheetOpen(false)}
-          onCreated={id => {
-            setSheetOpen(false);
-            onOpenSession(id);
-          }}
-        />
-      ) : null}
+          <Pressable
+            style={styles.newChatWrap}
+            onPress={() => enterCompose()}
+            hitSlop={8}
+            testID="home-new-thread"
+            accessibilityRole="button"
+            accessibilityLabel={t('home.newThread')}
+          >
+            {control(
+              styles.newChat,
+              <>
+                <Icon name="plus" size={16} color={theme.text} />
+                <Text style={[styles.newChatText, { color: theme.text }]}>
+                  {t('home.newThread')}
+                </Text>
+              </>,
+            )}
+          </Pressable>
+        </View>
+      ) : (
+        <View
+          style={styles.homeComposer}
+          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
+          pointerEvents="box-none"
+        >
+          <ComposeComposer sticky onCreated={onOpenSession} />
+        </View>
+      )}
     </View>
   );
 }
@@ -527,19 +572,9 @@ const styles = StyleSheet.create({
     height: CIRCLE,
     borderRadius: CIRCLE / 2,
     paddingHorizontal: 16,
+    overflow: 'hidden',
   },
   searchInput: { flex: 1, fontSize: 17, padding: 0 },
-  filterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: CIRCLE,
-    paddingHorizontal: 14,
-    borderRadius: CIRCLE / 2,
-    overflow: 'hidden',
-    maxWidth: 160,
-  },
-  filterText: { fontSize: 14, fontWeight: '500' },
   pill: {
     alignSelf: 'center',
     borderRadius: 12,
@@ -569,11 +604,15 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotPlaceholder: { width: 8, height: 8 },
   rowText: { flex: 1, gap: 3 },
-  title: { fontSize: 18, fontWeight: '500' },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  title: { flex: 1, fontSize: 18, fontWeight: '500' },
   unseen: { fontWeight: '700' },
   subtitle: { fontSize: 14 },
   preview: { fontSize: 13 },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
   archivedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -611,5 +650,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  homeComposer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
 });
