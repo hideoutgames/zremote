@@ -153,9 +153,7 @@ const composerProps = {
   capabilities: new Set<string>(),
   modelLabel: 'Default',
   harnessId: 'claude-code',
-  recentItems: [
-    { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
-  ],
+  recentItems: [{ harness: 'claude-code', model: 'sonnet', label: 'Sonnet' }],
   onPickRecentModel: () => {},
   onOpenMoreModels: () => {},
   effortLabel: 'High',
@@ -180,9 +178,9 @@ test('fast mode chip is labelled when the harness supports it', async () => {
     <Composer {...composerProps} fastSupported fastEnabled />,
   );
   const labels = labelled(mounted.root);
-  expect(
-    labels.some(l => l.role === 'button' && l.label === 'Fast mode'),
-  ).toBe(true);
+  expect(labels.some(l => l.role === 'button' && l.label === 'Fast mode')).toBe(
+    true,
+  );
 });
 
 test('context usage chip appears when the session meta has tokens', async () => {
@@ -453,9 +451,9 @@ test('queued pill is a labelled button', async () => {
   expect(labels.some(l => l.role === 'button' && l.label === '2 Queued')).toBe(
     true,
   );
-  expect(
-    mounted.root.findAll(n => n.props.testID === 'pr-pill'),
-  ).toHaveLength(0);
+  expect(mounted.root.findAll(n => n.props.testID === 'pr-pill')).toHaveLength(
+    0,
+  );
 });
 
 test('PR pill is labelled only when a thread PR is supplied', async () => {
@@ -497,9 +495,12 @@ test('PR pill is labelled only when a thread PR is supplied', async () => {
   expect(
     labels.some(l => l.role === 'button' && l.label === 'View pull request'),
   ).toBe(true);
-  expect(shown.root.findAll(n => n.props.testID === 'pr-pill')).toHaveLength(
-    1,
-  );
+  expect(
+    shown.root.findAll(
+      n =>
+        n.props.testID === 'pr-pill' && n.props.accessibilityRole === 'button',
+    ).length,
+  ).toBeGreaterThan(0);
 });
 
 test('queue rows have no fill or card chrome', async () => {

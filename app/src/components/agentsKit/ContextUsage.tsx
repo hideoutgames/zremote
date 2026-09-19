@@ -24,6 +24,31 @@ import {
 const CHIP_RING = 16;
 const SHEET_RING = 120;
 
+const makeRingPaths = (
+  inset: number,
+  ovalSize: number,
+  ratio: number,
+): {
+  track: ReturnType<typeof Skia.Path.Make>;
+  sweep: ReturnType<typeof Skia.Path.Make> | null;
+} | null => {
+  try {
+    const oval = Skia.XYWHRect(inset, inset, ovalSize, ovalSize);
+    const track = Skia.Path.Make();
+    if (track == null) return null;
+    track.addOval(oval);
+    const clamped = Math.max(0, Math.min(1, ratio));
+    if (clamped <= 0) return { track, sweep: null };
+    const sweep = Skia.Path.Make();
+    if (sweep == null) return { track, sweep: null };
+    sweep.addArc(oval, -90, clamped * 360);
+    return { track, sweep };
+  } catch {
+    // Jest/web Skia has no PathBuilder; device builds draw the arc.
+    return null;
+  }
+};
+
 function ContextUsageRing({
   size,
   ratio,
@@ -36,35 +61,40 @@ function ContextUsageRing({
   const stroke = Math.max(2, (size * 2) / 24);
   const inset = stroke / 2;
   const ovalSize = size - stroke;
-  const track = useMemo(() => {
-    const p = Skia.Path.Make();
-    p.addOval(Skia.XYWHRect(inset, inset, ovalSize, ovalSize));
-    return p;
-  }, [inset, ovalSize]);
-  const sweep = useMemo(() => {
-    const clamped = Math.max(0, Math.min(1, ratio));
-    if (clamped <= 0) return null;
-    const p = Skia.Path.Make();
-    p.addArc(
-      Skia.XYWHRect(inset, inset, ovalSize, ovalSize),
-      -90,
-      clamped * 360,
+  const paths = useMemo(
+    () => makeRingPaths(inset, ovalSize, ratio),
+    [inset, ovalSize, ratio],
+  );
+
+  if (paths === null) {
+    return (
+      <View
+        style={[
+          styles.fallbackRing,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth: stroke,
+            borderColor: color,
+          },
+        ]}
+      />
     );
-    return p;
-  }, [inset, ovalSize, ratio]);
+  }
 
   return (
     <Canvas style={{ width: size, height: size }} pointerEvents="none">
       <Path
-        path={track}
+        path={paths.track}
         color={color}
         style="stroke"
         strokeWidth={stroke}
         opacity={0.2}
       />
-      {sweep !== null ? (
+      {paths.sweep !== null ? (
         <Path
-          path={sweep}
+          path={paths.sweep}
           color={color}
           style="stroke"
           strokeWidth={stroke}
@@ -161,6 +191,7 @@ export const ContextUsageChip = React.memo(function ({
 });
 
 const styles = StyleSheet.create({
+  fallbackRing: { opacity: 0.35 },
   chipHit: {
     flexDirection: 'row',
     alignItems: 'center',

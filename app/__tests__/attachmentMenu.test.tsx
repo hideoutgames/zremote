@@ -24,7 +24,7 @@ test('plan row is a checkbox that can disable an already-on plan', async () => {
   const box = mounted.root.findByProps({ testID: 'DropdownCheckbox' });
   expect(box.props.value).toBe(true);
   await act(async () => {
-    box.props.onValueChange(false);
+    box.props.onValueChange('off');
   });
   expect(onToggle).toHaveBeenCalledWith(false);
 });

@@ -54,9 +54,7 @@ export function AttachmentMenu({
             key="plan"
             value={planEnabled}
             onValueChange={next => {
-              const enabled =
-                typeof next === 'string' ? next === 'on' : next === true;
-              onTogglePlan(enabled);
+              onTogglePlan(next === 'on');
             }}
           >
             <DropdownMenu.ItemTitle>

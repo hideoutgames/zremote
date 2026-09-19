@@ -590,10 +590,7 @@ function ActiveSessionScreen({
     changeRequestStore,
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
-  const checkoutDiff = useStore(
-    changeRequestStore,
-    s => s.diffByChat[chatId],
-  );
+  const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
   const prBadge = useMemo(
     () => composerPrBadge(entries, checkoutSummary, checkoutDiff),
     [entries, checkoutSummary, checkoutDiff],

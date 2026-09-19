@@ -19,10 +19,7 @@ export const resolveContextUsage = (
   return { tokens: usage.tokens, window: usage.window };
 };
 
-export const contextUsageRatio = (
-  tokens: number,
-  windowSize: number,
-): number =>
+export const contextUsageRatio = (tokens: number, windowSize: number): number =>
   windowSize <= 0 ? 0 : Math.max(0, Math.min(1, tokens / windowSize));
 
 export const formatCompactTokens = (n: number): string =>

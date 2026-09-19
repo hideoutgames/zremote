@@ -70,9 +70,7 @@ test('empty thread has no PRs', () => {
 
 test('composerPrBadge hides closed-only and placeholder CRs', () => {
   expect(composerPrBadge([entry('no links here')])).toBeUndefined();
-  expect(
-    composerPrBadge([], summary({ state: 'closed' })),
-  ).toBeUndefined();
+  expect(composerPrBadge([], summary({ state: 'closed' }))).toBeUndefined();
   expect(
     composerPrBadge([], summary({ number: 0, url: '', state: 'open' })),
   ).toBeUndefined();
