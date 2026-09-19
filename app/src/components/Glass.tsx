@@ -20,12 +20,15 @@ type GlassProps = ViewProps & {
   // Base tint of the glass; lifts it off pure black when there is little
   // content behind it to frost.
   tintColor?: ColorValue;
+  // Animate materialize/dematerialize of the glass effect (iOS 26+).
+  animated?: boolean;
 };
 
 // Real liquid glass on iOS 26+, a plain rounded surface everywhere else.
 export function Glass({
   interactive,
   tintColor,
+  animated,
   style,
   children,
   ...rest
@@ -48,6 +51,7 @@ export function Glass({
       <LiquidGlassView
         interactive={interactive}
         effect="regular"
+        animated={animated}
         colorScheme={theme.scheme}
         tintColor={tintColor}
         style={style}

@@ -37,11 +37,13 @@ import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 import {
   setForceRelayMode,
+  setHapticsEnabled,
   setLiveActivitiesEnabled,
   setLiveActivityShowHost,
   setNotificationsEnabled,
   useDictationLocale,
   useForceRelayMode,
+  useHapticsEnabled,
   useLiveActivitiesEnabled,
   useLiveActivityShowHost,
   useNotificationsEnabled,
@@ -347,6 +349,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
   const notificationsEnabled = useNotificationsEnabled();
+  const hapticsEnabled = useHapticsEnabled();
   const forceRelayMode = useForceRelayMode();
   const dictationLocale = useDictationLocale();
   const [dictationModelState, setDictationModelState] = useState<
@@ -574,6 +577,29 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
               <Switch
                 value={notificationsEnabled}
                 onValueChange={setNotificationsEnabled}
+              />
+            </View>
+
+            <Text style={[styles.section, { color: theme.textSecondary }]}>
+              {t('settings.haptics')}
+            </Text>
+            <View
+              style={[
+                styles.deviceRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.cardText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  {t('settings.hapticsEnabled')}
+                </Text>
+              </View>
+              <Switch
+                value={hapticsEnabled}
+                onValueChange={setHapticsEnabled}
               />
             </View>
 

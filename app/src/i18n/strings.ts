@@ -230,6 +230,8 @@ const en = {
   'settings.notifications': 'Notifications',
   'settings.notificationsEnabled':
     'Notify when a run finishes or the agent needs input',
+  'settings.haptics': 'Haptics',
+  'settings.hapticsEnabled': 'Haptic feedback',
   'notify.runCompleted': 'Run completed',
   'notify.runFailed': 'Run failed',
   'notify.needsInput': 'The agent needs your input',
