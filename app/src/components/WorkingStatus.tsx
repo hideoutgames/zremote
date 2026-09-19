@@ -1,4 +1,4 @@
-// Port of official iOS Loaders.swift WorkingSpinner + SessionView status strip.
+// Port of official iOS Loaders.swift WorkingSpinner + SessionView status.
 // RN Animated / interval only — no Reanimated worklets (SessionScreen forbids them).
 /* eslint-disable react-native/no-inline-styles -- cell size/opacity are per-frame */
 
@@ -70,14 +70,13 @@ export function WorkingSpinner({ cellSize = 2.5 }: { cellSize?: number }) {
   );
 }
 
-export function WorkingWaitLabel({
+/** Trailing transcript row while the agent is working (flavour + elapsed). */
+export function WorkingStatusRow({
   chatId,
   startedAt,
-  fallback,
 }: {
-  chatId?: string;
+  chatId: string;
   startedAt: number;
-  fallback: string;
 }) {
   const theme = useTheme();
   const [now, setNow] = useState(() => Date.now());
@@ -86,61 +85,26 @@ export function WorkingWaitLabel({
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
-  const label =
-    chatId !== undefined
-      ? `${flavourWord(flavourSeed(chatId), elapsed)}…`
-      : fallback;
-  return (
-    <View style={styles.waitRow} testID="working-wait">
-      <WorkingSpinner />
-      <Text
-        style={[styles.waitLabel, { color: theme.textSecondary }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-/** Reserved 24pt strip above the composer (SessionView.statusStrip). */
-export function WorkingStatusStrip({
-  chatId,
-  startedAt,
-  working,
-}: {
-  chatId: string;
-  startedAt: number;
-  working: boolean;
-}) {
-  const theme = useTheme();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!working || IN_TEST) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [working]);
   const elapsedSecs = Math.max(0, Math.floor((now - startedAt) / 1000));
   return (
-    <View style={styles.strip} testID="working-status-strip">
-      {working ? (
-        <>
-          <WorkingSpinner />
-          <Text
-            style={[styles.flavour, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {`${flavourWord(flavourSeed(chatId), elapsedSecs)}…`}
-          </Text>
-          <Text
-            style={[styles.elapsed, { color: theme.textSecondary }]}
-            testID="working-status-elapsed"
-          >
-            {formatWorkingElapsed(startedAt, now)}
-          </Text>
-        </>
-      ) : null}
+    <View
+      style={styles.statusRow}
+      testID="working-status-strip"
+      accessibilityLiveRegion="polite"
+    >
+      <WorkingSpinner />
+      <Text
+        style={[styles.flavour, { color: theme.textSecondary }]}
+        numberOfLines={1}
+      >
+        {`${flavourWord(flavourSeed(chatId), elapsedSecs)}…`}
+      </Text>
+      <Text
+        style={[styles.elapsed, { color: theme.textSecondary }]}
+        testID="working-status-elapsed"
+      >
+        {formatWorkingElapsed(startedAt, now)}
+      </Text>
     </View>
   );
 }
@@ -149,15 +113,13 @@ const styles = StyleSheet.create({
   grid: { gap: 2, justifyContent: 'center' },
   row: { flexDirection: 'row' },
   cell: {},
-  waitRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  waitLabel: { fontSize: 16, flexShrink: 1 },
-  strip: {
-    height: 24,
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 26,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
-  flavour: { fontSize: 12, flexShrink: 1 },
-  elapsed: { fontSize: 11, fontVariant: ['tabular-nums'] },
+  flavour: { fontSize: 16, flexShrink: 1 },
+  elapsed: { fontSize: 13, fontVariant: ['tabular-nums'] },
 });

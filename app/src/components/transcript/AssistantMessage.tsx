@@ -26,7 +26,6 @@ import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
 import { messageCopyContent } from './MessageCopyMenu';
 import { mendMarkdown } from './mendMarkdown';
-import { WorkingWaitLabel } from '../WorkingStatus';
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
@@ -65,21 +64,6 @@ const groupParts = (parts: MessagePart[]): Item[] => {
   }
   flush();
   return items;
-};
-
-const phaseLabel = (phase: string): string => {
-  const key = `session.${phase}` as const;
-  switch (phase) {
-    case 'working':
-    case 'queuedLocally':
-    case 'synchronized':
-    case 'stale':
-    case 'errored':
-    case 'awaitingInput':
-      return t(key as Parameters<typeof t>[0]);
-    default:
-      return t('session.working');
-  }
 };
 
 const reasoningTitle = (text: string): string => {
@@ -190,18 +174,14 @@ const PartView = ({
 
 export const AssistantMessage = React.memo(function ({
   entry,
-  phase,
   onOpenReasoning,
   onFetchOutput,
   onOpenPlan,
   onOpenFileDiff,
-  chatId,
 }: {
   entry: MessageEntry;
-  phase: string;
   onOpenReasoning: (text: string) => void;
   onFetchOutput?: (partId: string) => void;
-  chatId?: string;
   onOpenPlan?: (name: string, markdown: string) => void;
   onOpenFileDiff?: (file: TurnChange) => void;
 }) {
@@ -216,13 +196,6 @@ export const AssistantMessage = React.memo(function ({
   const lastTextId = [...entry.parts]
     .reverse()
     .find(p => p.kind === 'text')?.id;
-  const hasVisible = items.some(item =>
-    item.kind === 'tools'
-      ? item.parts.length > 0
-      : item.part.kind !== 'text' ||
-        (item.part.kind === 'text' && item.part.text !== ''),
-  );
-  const waiting = streaming && !hasVisible;
 
   const fullText = entry.parts
     .filter(p => p.kind === 'text')
@@ -232,34 +205,24 @@ export const AssistantMessage = React.memo(function ({
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <View style={styles.row}>
-          {waiting ? (
-            <View style={styles.statusRow} accessibilityLiveRegion="polite">
-              <WorkingWaitLabel
-                chatId={chatId}
-                startedAt={entry.createdAt}
-                fallback={phaseLabel(phase)}
+          {items.map((item, i) =>
+            item.kind === 'tools' ? (
+              <ToolActivity
+                key={`tools-${i}`}
+                parts={item.parts}
+                onFetchOutput={onFetchOutput}
+                autoOpen={streaming && i === items.length - 1}
               />
-            </View>
-          ) : (
-            items.map((item, i) =>
-              item.kind === 'tools' ? (
-                <ToolActivity
-                  key={`tools-${i}`}
-                  parts={item.parts}
-                  onFetchOutput={onFetchOutput}
-                  autoOpen={streaming && i === items.length - 1}
-                />
-              ) : (
-                <PartView
-                  key={item.part.id}
-                  part={item.part}
-                  streaming={streaming}
-                  isLastText={item.part.id === lastTextId}
-                  onOpenReasoning={onOpenReasoning}
-                  onFetchOutput={onFetchOutput}
-                />
-              ),
-            )
+            ) : (
+              <PartView
+                key={item.part.id}
+                part={item.part}
+                streaming={streaming}
+                isLastText={item.part.id === lastTextId}
+                onOpenReasoning={onOpenReasoning}
+                onFetchOutput={onFetchOutput}
+              />
+            ),
           )}
           {entry.status === 'aborted' ? (
             <Text style={[styles.error, { color: theme.danger }]}>
@@ -284,7 +247,6 @@ export const AssistantMessage = React.memo(function ({
 
 const styles = StyleSheet.create({
   row: { paddingHorizontal: 16, paddingVertical: 4 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   traceRow: {
     flexDirection: 'row',
     alignItems: 'center',

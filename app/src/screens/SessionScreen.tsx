@@ -122,7 +122,6 @@ import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
-import { WorkingStatusStrip } from '../components/WorkingStatus';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { useKeyboardDismissPan } from '../navigation/keyboardDismissGesture';
@@ -374,15 +373,13 @@ function ActiveSessionScreen({
       ) : (
         <AssistantMessage
           entry={item}
-          phase={phase}
           onOpenReasoning={openReasoning}
           onFetchOutput={onFetchOutput}
-          chatId={chatId}
           onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
           onOpenFileDiff={file => setFileDiff(file)}
         />
       ),
-    [phase, openReasoning, onFetchOutput, chatId, onUserMessageEntered],
+    [openReasoning, onFetchOutput, chatId, onUserMessageEntered],
   );
 
   const doSend = useCallback(
@@ -662,6 +659,13 @@ function ActiveSessionScreen({
         insetsBottom={insets.bottom}
         onComposerHeight={setComposerHeight}
         onShowScrollDown={setShowScrollDown}
+        working={
+          phase === 'working' ||
+          phase === 'queuedLocally' ||
+          phase === 'synchronized'
+        }
+        chatId={chatId}
+        startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
       />
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
@@ -896,7 +900,7 @@ function ActiveSessionScreen({
         {showScrollDown ? (
           <ScrollToBottomButton
             onPress={() =>
-              transcriptRef.current?.scrollMessageToEnd({
+              transcriptRef.current?.followEnd({
                 animated: true,
                 closeKeyboard: false,
               })
@@ -915,11 +919,6 @@ function ActiveSessionScreen({
               : undefined
           }
         >
-          <WorkingStatusStrip
-            chatId={chatId}
-            startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
-            working={phase === 'working'}
-          />
           <ComposerChromeRow
             queueCount={session.queue.length}
             onOpenQueue={() => setQueueOpen(true)}

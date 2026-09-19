@@ -3,7 +3,7 @@
 
 import React, { useRef } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text, View, type LayoutChangeEvent } from 'react-native';
+import { FlatList, Text, View, type LayoutChangeEvent } from 'react-native';
 import {
   SessionTranscriptList,
   type SessionTranscriptListHandle,
@@ -13,6 +13,7 @@ import {
   setComposerExtraHeightLive,
   uiPrefsStore,
 } from '../src/zeron/state/uiPrefs';
+import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 
 const keyboardMock = jest.requireMock('@legendapp/list/keyboard') as {
   __scrollMessageToEnd: jest.Mock;
@@ -20,6 +21,8 @@ const keyboardMock = jest.requireMock('@legendapp/list/keyboard') as {
 };
 const scrollMessageToEnd = keyboardMock.__scrollMessageToEnd;
 const reportComposerInset = keyboardMock.__onComposerLayout;
+
+const FOLLOW = { on: { dataChange: true, itemLayout: true } };
 
 const entry = (id: string): MessageEntry => ({
   id,
@@ -42,12 +45,20 @@ function lastReportedHeight(): number {
   return last?.nativeEvent.layout.height ?? -1;
 }
 
+function listProps(tree: TestRenderer.ReactTestRenderer) {
+  return tree.root.findByType(FlatList).props;
+}
+
 function Harness({
   entries,
   openKey,
+  working = false,
+  startedAt = 1,
 }: {
   entries: MessageEntry[];
   openKey: string;
+  working?: boolean;
+  startedAt?: number;
 }) {
   const composerRef = useRef<View>(null);
   return (
@@ -62,6 +73,9 @@ function Harness({
       insetsBottom={34}
       onComposerHeight={() => {}}
       onShowScrollDown={() => {}}
+      working={working}
+      chatId="c1"
+      startedAt={startedAt}
     />
   );
 }
@@ -84,6 +98,7 @@ test('scrolls to the bottom once when entries are present on mount', async () =>
     animated: false,
     closeKeyboard: false,
   });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
   await act(async () => {
     tree!.unmount();
   });
@@ -132,6 +147,166 @@ test('scrolls again when openKey changes', async () => {
   });
 });
 
+test('appends a working status row only while working', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip'),
+  ).toHaveLength(0);
+
+  await act(async () => {
+    tree!.update(
+      <Harness
+        entries={[entry('m1')]}
+        openKey="c1:1"
+        working
+        startedAt={Date.now()}
+      />,
+    );
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip'),
+  ).toHaveLength(1);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-spinner').length,
+  ).toBeGreaterThan(0);
+  const flavour = `${flavourWord(flavourSeed('c1'), 0)}…`;
+  const labels = tree!.root.findAllByType(Text).flatMap(n => {
+    const c = n.props.children;
+    return Array.isArray(c) ? c : [c];
+  });
+  expect(labels).toContain(flavour);
+  expect(labels).toContain('m1');
+  const ids = listProps(tree!).data.map(
+    (row: { kind: string; entry?: MessageEntry }) =>
+      row.kind === 'working' ? 'working' : row.entry?.id,
+  );
+  expect(ids[ids.length - 1]).toBe('working');
+
+  await act(async () => {
+    tree!.update(<Harness entries={[entry('m1')]} openKey="c1:1" />);
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip'),
+  ).toHaveLength(0);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('scroll-up clears follow and returning to the end restores it', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+
+  await act(async () => {
+    listProps(tree!).onScrollBeginDrag();
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
+
+  await act(async () => {
+    listProps(tree!).onEndVisible(true);
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('noteSent on an overflowed list keeps follow on', async () => {
+  const listRef = React.createRef<SessionTranscriptListHandle>();
+  const composerRef = React.createRef<View>();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <SessionTranscriptList
+        ref={listRef}
+        openKey="c1:1"
+        entries={[entry('m1'), entry('m2')]}
+        renderEntry={({ item }: { item: MessageEntry }) => (
+          <Text>{item.id}</Text>
+        )}
+        composerRef={composerRef}
+        windowWidth={390}
+        windowHeight={844}
+        insetsTop={47}
+        insetsBottom={34}
+        onComposerHeight={() => {}}
+        onShowScrollDown={() => {}}
+        chatId="c1"
+      />,
+    );
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+
+  await act(async () => {
+    listRef.current!.noteSent(2);
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('followEnd re-enables stick-to-bottom after a scroll-up', async () => {
+  const listRef = React.createRef<SessionTranscriptListHandle>();
+  const composerRef = React.createRef<View>();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <SessionTranscriptList
+        ref={listRef}
+        openKey="c1:1"
+        entries={[entry('m1')]}
+        renderEntry={({ item }: { item: MessageEntry }) => (
+          <Text>{item.id}</Text>
+        )}
+        composerRef={composerRef}
+        windowWidth={390}
+        windowHeight={844}
+        insetsTop={47}
+        insetsBottom={34}
+        onComposerHeight={() => {}}
+        onShowScrollDown={() => {}}
+        chatId="c1"
+      />,
+    );
+  });
+  scrollMessageToEnd.mockClear();
+
+  await act(async () => {
+    listProps(tree!).onScrollBeginDrag();
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
+
+  await act(async () => {
+    await listRef.current!.followEnd({
+      animated: true,
+      closeKeyboard: false,
+    });
+  });
+  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(scrollMessageToEnd).toHaveBeenCalledWith({
+    animated: true,
+    closeKeyboard: false,
+  });
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
 test('live extra height adds 1:1 to the transcript inset', async () => {
   const listRef = React.createRef<SessionTranscriptListHandle>();
   const composerRef = React.createRef<View>();
@@ -153,6 +328,7 @@ test('live extra height adds 1:1 to the transcript inset', async () => {
         insetsBottom={34}
         onComposerHeight={h => heights.push(h)}
         onShowScrollDown={() => {}}
+        chatId="c1"
       />,
     );
   });
