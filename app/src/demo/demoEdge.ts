@@ -623,27 +623,35 @@ export class DemoEdge {
           truncated: false,
           stale: false,
         });
-      case METHODS.WATCH_CHECKOUT_CHANGE_REQUEST:
+      case METHODS.WATCH_CHECKOUT_CHANGE_REQUEST: {
+        const branch = typeof p.branch === 'string' ? p.branch : 'main';
+        // Only the working demo thread (branch demo/replay) has a PR; other
+        // chats that share a cwd must not inherit a phantom change request.
+        const changeRequest =
+          branch === 'demo/replay'
+            ? {
+                provider: 'github',
+                number: 42,
+                title: 'Composer chrome overhaul',
+                url: 'https://github.com/example/zremote/pull/42',
+                state: 'open' as const,
+                draft: true,
+                baseRef: 'main',
+                headRef: 'feature/composer',
+                body: '## Summary\n\nDemo pull request for the composer chrome.',
+              }
+            : null;
         streamItem(end, {
           checkoutId: 'demo-checkout',
           deviceId: HOST_LIVE,
           cwd: demoPaths.zremote,
-          branch: typeof p.branch === 'string' ? p.branch : 'main',
-          changeRequest: {
-            provider: 'github',
-            number: 42,
-            title: 'Composer chrome overhaul',
-            url: 'https://github.com/example/zremote/pull/42',
-            state: 'open',
-            draft: true,
-            baseRef: 'main',
-            headRef: 'feature/composer',
-            body: '## Summary\n\nDemo pull request for the composer chrome.',
-          },
+          branch,
+          changeRequest,
           updatedAt: '2026-09-19T10:00:00Z',
         });
         streams.set(id, () => {});
         return;
+      }
 
       // ── Git history ──
       case METHODS.LIST_GIT_HISTORY:

@@ -49,7 +49,7 @@ Needs a Mac build, a device, or a host in the right state:
 - Composer/attachment UI surfaces, Border Beam, effort-slider haptics,
   shimmer — device rendering.
 - Transcript rendering, theme, reduced-motion/transparency runtime,
-  ContextUsageBar — device rendering.
+  Context usage chip — device rendering.
 - Terminal on-device rendering/input (font metrics are measured constants).
 - Checkout selector UI + `SwitchRef`/`CreateWorktree` round-trip.
 - Files/Changes/History RPC round-trips on a live checkout.

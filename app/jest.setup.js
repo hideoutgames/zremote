@@ -111,12 +111,17 @@ jest.mock('@lodev09/react-native-true-sheet', () => ({
   dismissSheet: jest.fn(),
 }));
 
-const menuComponent = (name: string) => (props: { children?: unknown }) =>
-  require('react').createElement(
+const menuComponent = (name: string) => (props: {
+  children?: unknown;
+  [key: string]: unknown;
+}) => {
+  const { children, ...rest } = props;
+  return require('react').createElement(
     require('react-native').View,
-    { testID: name },
-    props.children,
+    { testID: name, ...rest },
+    children,
   );
+};
 const menuText = (props: object) =>
   require('react').createElement(require('react-native').Text, props);
 

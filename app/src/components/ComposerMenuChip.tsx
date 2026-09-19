@@ -1,5 +1,6 @@
-// Borderless composer picker trigger: label + trailing chevron. Used by the
-// model, effort, and checkout controls in place of the old filled pills.
+// Borderless composer picker trigger: optional label + trailing chevron.
+// Used by the model, effort, checkout, and Fast controls in place of the
+// old filled pills.
 
 import React, { type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -12,7 +13,7 @@ export function ComposerMenuChip({
   leading,
   limitWidth = true,
 }: {
-  label: string;
+  label?: string;
   color: string;
   chevronColor: string;
   leading?: ReactNode;
@@ -22,16 +23,18 @@ export function ComposerMenuChip({
   return (
     <View style={styles.chip}>
       {leading}
-      <Text
-        style={[
-          styles.text,
-          { color },
-          limitWidth ? styles.limited : undefined,
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+      {label !== undefined && label !== '' ? (
+        <Text
+          style={[
+            styles.text,
+            { color },
+            limitWidth ? styles.limited : undefined,
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      ) : null}
       <Icon name="chevron.down" size={10} color={chevronColor} />
     </View>
   );

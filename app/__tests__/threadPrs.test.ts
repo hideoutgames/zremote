@@ -1,5 +1,6 @@
 import {
   collectThreadPrs,
+  composerPrBadge,
   extractPrsFromText,
   badgeFromSummary,
 } from '../src/components/threadPrs';
@@ -65,4 +66,36 @@ test('closed checkout PRs still appear in history', () => {
 
 test('empty thread has no PRs', () => {
   expect(collectThreadPrs([entry('no links here')])).toEqual([]);
+});
+
+test('composerPrBadge hides closed-only and placeholder CRs', () => {
+  expect(composerPrBadge([entry('no links here')])).toBeUndefined();
+  expect(
+    composerPrBadge([], summary({ state: 'closed' })),
+  ).toBeUndefined();
+  expect(
+    composerPrBadge([], summary({ number: 0, url: '', state: 'open' })),
+  ).toBeUndefined();
+});
+
+test('composerPrBadge shows draft, open, merged, and transcript PRs', () => {
+  expect(composerPrBadge([], summary({ draft: true }))?.tone).toBe('draft');
+  expect(composerPrBadge([], summary({ state: 'open' }))?.number).toBe(7);
+  expect(composerPrBadge([], summary({ state: 'merged' }))?.tone).toBe(
+    'merged',
+  );
+  const fromText = composerPrBadge([
+    entry('Opened https://github.com/acme/app/pull/9'),
+  ]);
+  expect(fromText?.number).toBe(9);
+  expect(fromText?.url).toBe('https://github.com/acme/app/pull/9');
+});
+
+test('composerPrBadge prefers a live checkout PR over transcript URLs', () => {
+  const badge = composerPrBadge(
+    [entry('Also https://github.com/acme/app/pull/3')],
+    summary({ state: 'merged' }),
+  );
+  expect(badge?.number).toBe(7);
+  expect(badge?.tone).toBe('merged');
 });
