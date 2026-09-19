@@ -34,6 +34,7 @@ import { FadeBlur } from './FadeBlur';
 import { Icon } from './Icon';
 import { ModelMenuButton } from './ModelMenuButton';
 import { PlanBadge } from './PlanBadge';
+import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
 import { useAttachments } from '../hooks/useAttachments';
@@ -97,7 +98,8 @@ export interface ComposerProps {
   effortSupported: boolean;
   fastSupported: boolean;
   fastEnabled: boolean;
-  onOpenEffort: () => void;
+  effortOpen?: boolean;
+  onOpenEffort: (origin?: EffortOrigin) => void;
   onToggleFast: (on: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
@@ -138,6 +140,7 @@ export const Composer = React.memo(function ({
   effortSupported,
   fastSupported,
   fastEnabled,
+  effortOpen = false,
   onOpenEffort,
   onToggleFast,
   onFocusChange,
@@ -170,6 +173,17 @@ export const Composer = React.memo(function ({
   );
   const setDragExtraRef = useRef(setDragExtra);
   setDragExtraRef.current = setDragExtra;
+  const effortChipRef = useRef<View>(null);
+  const openEffort = useCallback(() => {
+    const node = effortChipRef.current;
+    if (node !== null && typeof node.measureInWindow === 'function') {
+      node.measureInWindow((x, y, width, height) => {
+        onOpenEffort({ x, y, width, height });
+      });
+      return;
+    }
+    onOpenEffort();
+  }, [onOpenEffort]);
   const grabberPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -603,26 +617,26 @@ export const Composer = React.memo(function ({
                 />
                 {effortSupported ? (
                   <Pressable
-                    style={[
-                      styles.effortChip,
-                      { backgroundColor: theme.inputBackground },
-                    ]}
-                    onPress={onOpenEffort}
+                    ref={effortChipRef}
+                    style={effortOpen ? styles.effortChipHidden : undefined}
+                    onPress={openEffort}
                     hitSlop={4}
                     accessibilityRole="button"
                     accessibilityLabel={effortLabel}
                   >
-                    <Icon
-                      name="slider.horizontal.3"
-                      size={14}
-                      color={theme.text}
-                    />
-                    <Text
-                      style={[styles.effortText, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {effortLabel}
-                    </Text>
+                    <Glass interactive style={styles.effortChip}>
+                      <Icon
+                        name="slider.horizontal.3"
+                        size={14}
+                        color={theme.text}
+                      />
+                      <Text
+                        style={[styles.effortText, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {effortLabel}
+                      </Text>
+                    </Glass>
                   </Pressable>
                 ) : null}
                 {fastSupported ? (
@@ -934,6 +948,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     gap: 6,
   },
+  effortChipHidden: { opacity: 0 },
   effortText: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 12, textAlign: 'center' },
 });

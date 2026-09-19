@@ -11,8 +11,8 @@ import React, {
 } from 'react';
 import {
   Alert,
+  Keyboard,
   type LayoutChangeEvent,
-  Pressable,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -21,7 +21,7 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { Composer } from './Composer';
-import { EffortOverlay } from './EffortOverlay';
+import { EffortOverlay, type EffortOrigin } from './EffortOverlay';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import {
   fastOffChoice,
@@ -81,7 +81,7 @@ export function ComposeComposer({
   onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const runtime = useRuntime();
   const devices = useStore(workspaceStore, s => s.devices);
   const spaces = useStore(workspaceStore, s => s.spaces);
@@ -107,6 +107,9 @@ export function ComposeComposer({
   const [branch, setBranch] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
   const composerRef = useRef<View>(null);
@@ -427,7 +430,12 @@ export function ComposeComposer({
         effortSupported={effortLevels.length > 0}
         fastSupported={fastOption !== undefined}
         fastEnabled={fastEnabled}
-        onOpenEffort={() => setEffortOpen(true)}
+        effortOpen={effortOpen}
+        onOpenEffort={origin => {
+          Keyboard.dismiss();
+          setEffortOrigin(origin);
+          setEffortOpen(true);
+        }}
         onToggleFast={on => {
           if (fastOption === undefined) return;
           setModelOptions({
@@ -464,54 +472,44 @@ export function ComposeComposer({
     </View>
   );
 
-  const stack = (
-    <View style={styles.stack} pointerEvents="box-none">
-      {effortOpen ? (
-        <Pressable
-          style={[styles.effortDismiss, { height: windowHeight }]}
-          onPress={() => setEffortOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.done')}
-        />
-      ) : null}
-      {effortOpen ? (
-        <View style={styles.effortLayer}>
-          <EffortOverlay
-            levels={effortLevels}
-            value={reasoning}
-            onChange={level => {
-              setReasoning(level);
-              persist({ reasoning: level });
-            }}
-          />
-        </View>
-      ) : null}
-      <View style={styles.composerLayer}>{composer}</View>
-    </View>
-  );
+  const overlay = effortOpen ? (
+    <EffortOverlay
+      levels={effortLevels}
+      value={reasoning}
+      origin={effortOrigin}
+      onChange={level => {
+        setReasoning(level);
+        persist({ reasoning: level });
+      }}
+      onDismiss={() => {
+        setEffortOpen(false);
+        setEffortOrigin(undefined);
+      }}
+    />
+  ) : null;
 
-  if (!sticky) return stack;
+  if (!sticky) {
+    return (
+      <>
+        {overlay}
+        {composer}
+      </>
+    );
+  }
   return (
-    <KeyboardStickyView
-      offset={{ opened: insets.bottom }}
-      style={styles.sticky}
-    >
-      {stack}
-    </KeyboardStickyView>
+    <>
+      {overlay}
+      <KeyboardStickyView
+        offset={{ opened: insets.bottom }}
+        style={styles.sticky}
+      >
+        {composer}
+      </KeyboardStickyView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   sticky: { width: '100%' },
-  stack: { width: '100%' },
   measureCap: { width: '100%', alignSelf: 'center' },
-  effortDismiss: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1,
-  },
-  effortLayer: { zIndex: 2, width: '100%' },
-  composerLayer: { zIndex: 2, width: '100%' },
 });

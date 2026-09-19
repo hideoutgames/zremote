@@ -1,6 +1,6 @@
-// Masked BlurView that fades to transparency at the top. Used behind the
-// composer and the effort slider so frost is a subtle wash, not a slab.
-// Skia is intentionally avoided here (Release worklet crashes).
+// Masked BlurView that fades to transparency. Used behind the composer
+// (fade up) and the centered effort slider (fade both edges). Skia is
+// intentionally avoided here (Release worklet crashes).
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -17,9 +17,11 @@ import { useTheme } from '../theme';
 export function FadeBlur({
   intensity,
   style,
+  fade = 'up',
 }: {
   intensity: number;
   style?: StyleProp<ViewStyle>;
+  fade?: 'up' | 'vertical';
 }) {
   const theme = useTheme();
   const [reduceTransparency, setReduceTransparency] = useState(false);
@@ -38,14 +40,20 @@ export function FadeBlur({
     theme.scheme === 'dark'
       ? 'systemThinMaterialDark'
       : 'systemThinMaterialLight';
+  const colors =
+    fade === 'vertical'
+      ? (['transparent', 'black', 'transparent'] as const)
+      : (['transparent', 'black'] as const);
+  const locations =
+    fade === 'vertical' ? ([0, 0.5, 1] as const) : ([0, 1] as const);
   return (
     <MaskedView
       pointerEvents="none"
       style={style}
       maskElement={
         <LinearGradient
-          colors={['transparent', 'black']}
-          locations={[0, 1]}
+          colors={colors}
+          locations={locations}
           style={StyleSheet.absoluteFill}
         />
       }

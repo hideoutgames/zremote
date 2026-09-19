@@ -82,7 +82,7 @@ import { Glass } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
-import { EffortOverlay } from '../components/EffortOverlay';
+import { EffortOverlay, type EffortOrigin } from '../components/EffortOverlay';
 import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
@@ -473,6 +473,9 @@ function ActiveSessionScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -832,116 +835,116 @@ function ActiveSessionScreen({
         ) : null}
       </KeyboardStickyView>
 
-      {effortOpen ? (
-        <Pressable
-          style={styles.effortDismiss}
-          onPress={() => setEffortOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.done')}
-        />
-      ) : null}
-
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        <View onLayout={onComposerLayout}>
-          {effortOpen ? (
-            <EffortOverlay
-              levels={effortLevels}
-              value={chat?.config?.reasoning}
-              onChange={level => {
-                if (runtime === null || chat === undefined) return;
-                setChatConfig(runtime, chat.id, {
-                  harness: chat.config?.harness ?? '',
-                  model: chat.config?.model,
-                  modelOptions: chat.config?.modelOptions ?? {},
-                  reasoning: level,
-                  sandbox: chat.config?.sandbox,
-                });
-              }}
-            />
-          ) : null}
-          <View
-            style={
-              composerMaxWidth !== undefined
-                ? [styles.measureCap, { maxWidth: composerMaxWidth }]
-                : undefined
-            }
-          >
-            <ComposerChromeRow
-              queueCount={session.queue.length}
-              onOpenQueue={() => setQueueOpen(true)}
-              pr={prBadge}
-              onOpenPr={() => {
-                if (prBadge !== undefined) setPrSheet(prBadge);
-              }}
-            />
-            <Composer
-              chatId={chatId}
-              phase={phase}
-              roomState={session.room}
-              harness={harness}
-              capabilities={capabilities}
-              modelLabel={modelLabel}
-              harnessId={chat?.config?.harness}
-              recentItems={recentItems}
-              onPickRecentModel={(h, m) => {
-                if (runtime === null || chat === undefined) return;
-                if (
-                  chat.config?.harness !== undefined &&
-                  chat.config.harness !== '' &&
-                  h !== chat.config.harness
-                )
-                  return;
-                setChatConfig(runtime, chat.id, {
-                  harness: h,
-                  model: m,
-                  modelOptions: chat.config?.modelOptions ?? {},
-                  reasoning: chat.config?.reasoning,
-                  sandbox: chat.config?.sandbox,
-                });
-                rememberModelPick({ harness: h, model: m });
-              }}
-              onOpenMoreModels={() => setPickerOpen(true)}
-              effortLabel={effortLabel}
-              effortSupported={effortLevels.length > 0}
-              fastSupported={fastOption !== undefined}
-              fastEnabled={fastEnabled}
-              onOpenEffort={() => setEffortOpen(true)}
-              onToggleFast={on => {
-                if (
-                  runtime === null ||
-                  chat === undefined ||
-                  fastOption === undefined
-                )
-                  return;
-                setChatConfig(runtime, chat.id, {
-                  harness: chat.config?.harness ?? '',
-                  model: chat.config?.model,
-                  reasoning: chat.config?.reasoning,
-                  sandbox: chat.config?.sandbox,
-                  modelOptions: {
-                    ...(chat.config?.modelOptions ?? {}),
-                    [fastOption.id]: on
-                      ? fastOnChoice(fastOption)
-                      : fastOffChoice(fastOption),
-                  },
-                });
-              }}
-              onFocusChange={setComposerFocused}
-              dictation={dictation}
-              onSend={doSend}
-              onSteer={doSteer}
-              onQueue={doQueue}
-              onStop={doStop}
-              onCancel={doCancel}
-              onSendAttachments={doSendAttachments}
-              onRespondInput={doRespond}
-              onSendBlocked={onSendBlocked}
-              composerRef={composerRef}
-              onLayout={() => {}}
-            />
-          </View>
+        <View
+          style={
+            composerMaxWidth !== undefined
+              ? [styles.measureCap, { maxWidth: composerMaxWidth }]
+              : undefined
+          }
+        >
+          <ComposerChromeRow
+            queueCount={session.queue.length}
+            onOpenQueue={() => setQueueOpen(true)}
+            pr={prBadge}
+            onOpenPr={() => {
+              if (prBadge !== undefined) setPrSheet(prBadge);
+            }}
+          />
+          <Composer
+            chatId={chatId}
+            phase={phase}
+            roomState={session.room}
+            harness={harness}
+            capabilities={capabilities}
+            modelLabel={modelLabel}
+            harnessId={chat?.config?.harness}
+            recentItems={recentItems}
+            onPickRecentModel={(h, m) => {
+              if (runtime === null || chat === undefined) return;
+              if (
+                chat.config?.harness !== undefined &&
+                chat.config.harness !== '' &&
+                h !== chat.config.harness
+              )
+                return;
+              setChatConfig(runtime, chat.id, {
+                harness: h,
+                model: m,
+                modelOptions: chat.config?.modelOptions ?? {},
+                reasoning: chat.config?.reasoning,
+                sandbox: chat.config?.sandbox,
+              });
+              rememberModelPick({ harness: h, model: m });
+            }}
+            onOpenMoreModels={() => setPickerOpen(true)}
+            effortLabel={effortLabel}
+            effortSupported={effortLevels.length > 0}
+            fastSupported={fastOption !== undefined}
+            fastEnabled={fastEnabled}
+            effortOpen={effortOpen}
+            onOpenEffort={origin => {
+              Keyboard.dismiss();
+              setEffortOrigin(origin);
+              setEffortOpen(true);
+            }}
+            onToggleFast={on => {
+              if (
+                runtime === null ||
+                chat === undefined ||
+                fastOption === undefined
+              )
+                return;
+              setChatConfig(runtime, chat.id, {
+                harness: chat.config?.harness ?? '',
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                sandbox: chat.config?.sandbox,
+                modelOptions: {
+                  ...(chat.config?.modelOptions ?? {}),
+                  [fastOption.id]: on
+                    ? fastOnChoice(fastOption)
+                    : fastOffChoice(fastOption),
+                },
+              });
+            }}
+            onFocusChange={setComposerFocused}
+            dictation={dictation}
+            onSend={doSend}
+            onSteer={doSteer}
+            onQueue={doQueue}
+            onStop={doStop}
+            onCancel={doCancel}
+            onSendAttachments={doSendAttachments}
+            onRespondInput={doRespond}
+            onSendBlocked={onSendBlocked}
+            composerRef={composerRef}
+            onLayout={onComposerLayout}
+          />
         </View>
       </KeyboardStickyView>
+
+      {effortOpen ? (
+        <EffortOverlay
+          levels={effortLevels}
+          value={chat?.config?.reasoning}
+          origin={effortOrigin}
+          onChange={level => {
+            if (runtime === null || chat === undefined) return;
+            setChatConfig(runtime, chat.id, {
+              harness: chat.config?.harness ?? '',
+              model: chat.config?.model,
+              modelOptions: chat.config?.modelOptions ?? {},
+              reasoning: level,
+              sandbox: chat.config?.sandbox,
+            });
+          }}
+          onDismiss={() => {
+            setEffortOpen(false);
+            setEffortOrigin(undefined);
+          }}
+        />
+      ) : null}
 
       {queueOpen ? (
         <GlassSheet
@@ -1071,10 +1074,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   fill: { flex: 1 },
   composer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3 },
-  effortDismiss: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 2,
-  },
   scrollDown: {
     position: 'absolute',
     left: 0,
