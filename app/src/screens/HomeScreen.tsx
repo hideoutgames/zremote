@@ -51,9 +51,12 @@ import {
 } from '../zeron/runtime/workspaceActions';
 import { useRuntime } from '../app/runtimeContext';
 import type { Chat } from '../zeron/protocol/types';
+import { BrandMark } from '../components/BrandMark';
 import { HarnessMark } from '../components/HarnessMark';
 import { Glass, GlassContainer, GlassControl } from '../components/Glass';
 import { Icon } from '../components/Icon';
+import { svgForPullRequest } from '../components/harnessBrand';
+import { prToneColor } from '../components/prChrome';
 import { ShimmerText } from '../components/ShimmerText';
 import { formatWorkingElapsed } from '../zeron/state/workingElapsed';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
@@ -114,8 +117,6 @@ const ThreadStatus = ({
   const label = statusCopy(line);
   const live = line.kind === 'working' || line.kind === 'awaitingInput';
   const [width, setWidth] = useState(160);
-  const showCounts =
-    line.kind === 'pr' && (line.additions > 0 || line.deletions > 0);
   if (live) {
     return (
       <View
@@ -138,16 +139,39 @@ const ThreadStatus = ({
       </View>
     );
   }
-  if (!showCounts || line.kind !== 'pr') {
+  if (line.kind === 'pr') {
+    const prColor = prToneColor(theme, {
+      tone: line.tone,
+      state: line.tone === 'merged' ? 'merged' : 'open',
+    });
+    const showCounts = line.additions > 0 || line.deletions > 0;
     return (
-      <Text
-        style={[styles.subtitle, { color: theme.textSecondary }]}
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.6}
-        testID={`thread-status-${chatId}`}
-      >
-        {label}
-      </Text>
+      <View style={styles.prStatus} testID={`thread-status-${chatId}`}>
+        <BrandMark svg={svgForPullRequest(prColor)} size={14} />
+        <Text
+          style={[
+            styles.subtitle,
+            styles.prStatusText,
+            { color: theme.textSecondary },
+          ]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.6}
+        >
+          {label}
+          {showCounts ? ' · ' : null}
+          {showCounts && line.additions > 0 ? (
+            <Text
+              style={{ color: theme.diffAddText }}
+            >{`+${line.additions}`}</Text>
+          ) : null}
+          {showCounts && line.additions > 0 && line.deletions > 0 ? ' ' : null}
+          {showCounts && line.deletions > 0 ? (
+            <Text
+              style={{ color: theme.diffDelText }}
+            >{`-${line.deletions}`}</Text>
+          ) : null}
+        </Text>
+      </View>
     );
   }
   return (
@@ -158,16 +182,6 @@ const ThreadStatus = ({
       testID={`thread-status-${chatId}`}
     >
       {label}
-      {' · '}
-      {line.additions > 0 ? (
-        <Text style={{ color: theme.diffAddText }}>{`+${line.additions}`}</Text>
-      ) : null}
-      {line.additions > 0 && line.deletions > 0 ? ' ' : null}
-      {line.deletions > 0 ? (
-        <Text
-          style={{ color: theme.diffDelText }}
-        >{`\u2212${line.deletions}`}</Text>
-      ) : null}
     </Text>
   );
 };
@@ -813,6 +827,12 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 17, fontWeight: '400' },
   unseen: { fontWeight: '500' },
   subtitle: { fontSize: 15 },
+  prStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  prStatusText: { flex: 1 },
   elapsed: {
     fontSize: 13,
     fontWeight: '500',
