@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Keyboard,
   type LayoutChangeEvent,
   PanResponder,
   Pressable,
@@ -25,9 +26,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
-import { NitroImage } from 'react-native-nitro-image';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
+import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
+import { ImagePreviewModal } from './ImagePreviewModal';
+import { TextFileSheet } from './TextFileSheet';
 import { CheckoutChips, type CheckoutChipsProps } from './CheckoutSelector';
 import { Glass } from './Glass';
 import { FadeBlur } from './FadeBlur';
@@ -38,6 +41,7 @@ import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
 import { useAttachments } from '../hooks/useAttachments';
+import { isImageMime } from '../zeron/attachments/validate';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import {
@@ -45,6 +49,7 @@ import {
   removeAttachment,
   setDraftText,
   useDraft,
+  type StagedAttachment,
 } from '../zeron/state/draftStore';
 import {
   openInputRequest,
@@ -119,8 +124,8 @@ export interface ComposerProps {
   /** The send was refused (e.g. attachments while live without queue
    * support) — the parent surfaces it; nothing is silently dropped. */
   onSendBlocked: () => void;
-  composerRef: React.RefObject<View | null>;
-  onLayout: (event: LayoutChangeEvent) => void;
+  composerRef?: React.RefObject<View | null>;
+  onLayout?: (event: LayoutChangeEvent) => void;
 }
 
 export const Composer = React.memo(function ({
@@ -214,6 +219,7 @@ export const Composer = React.memo(function ({
   const planMode = usePlanMode(chatId);
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
+  const [preview, setPreview] = useState<StagedAttachment | null>(null);
   const session = useSessionState(chatId);
   const prefersSteer = useLiveActionPrefersSteer();
 
@@ -376,10 +382,9 @@ export const Composer = React.memo(function ({
     chatId,
   ]);
 
-  const [stripContentHeight, setStripContentHeight] = useState(0);
   // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
   const reduceMotion = useReducedMotion();
-  const stripH = hasAttachments ? stripContentHeight : 0;
+  const stripH = hasAttachments ? ATTACHMENT_TILE + 8 : 0;
   const stripO = hasAttachments ? 1 : 0;
   const stripDur = reduceMotion ? 0 : THUMBS_ANIM_MS;
 
@@ -433,81 +438,14 @@ export const Composer = React.memo(function ({
             pointerEvents={hasAttachments ? 'auto' : 'none'}
             style={styles.stripClip}
           >
-            <View
-              style={styles.strip}
-              onLayout={event => {
-                const next = Math.ceil(event.nativeEvent.layout.height);
-                setStripContentHeight(cur =>
-                  Math.abs(cur - next) <= 1 ? cur : next,
-                );
+            <AttachmentStrip
+              attachments={draft.attachments}
+              onOpen={a => {
+                Keyboard.dismiss();
+                setPreview(a);
               }}
-            >
-              {draft.attachments.map(a =>
-                a.kind === 'image' ? (
-                  <View key={a.id} style={styles.thumbWrap}>
-                    <NitroImage
-                      image={{ filePath: a.localUri }}
-                      style={styles.thumb}
-                    />
-                    {a.uploadState === 'uploading' ? (
-                      <ActivityIndicator
-                        style={styles.thumbProgress}
-                        size="small"
-                      />
-                    ) : null}
-                    <Pressable
-                      style={styles.thumbRemove}
-                      hitSlop={8}
-                      accessibilityLabel={t(
-                        'composer.removeAttachment',
-                      ).replace('{name}', a.name)}
-                      onPress={() => removeAttachment(chatId, a.id)}
-                    >
-                      <View style={styles.thumbRemoveBadge}>
-                        <Icon name="xmark" size={11} color="#FFFFFF" />
-                      </View>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <View
-                    key={a.id}
-                    style={[styles.fileChip, { borderColor: theme.border }]}
-                  >
-                    <Icon name="doc" size={14} color={theme.textSecondary} />
-                    <Text
-                      style={[styles.fileChipText, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {a.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.fileChipSize,
-                        { color: theme.textSecondary },
-                      ]}
-                    >
-                      {formatBytes(a.size)}
-                    </Text>
-                    {a.uploadState === 'uploading' ? (
-                      <ActivityIndicator size="small" />
-                    ) : null}
-                    <Pressable
-                      hitSlop={8}
-                      accessibilityLabel={t(
-                        'composer.removeAttachment',
-                      ).replace('{name}', a.name)}
-                      onPress={() => removeAttachment(chatId, a.id)}
-                    >
-                      <Icon
-                        name="xmark.circle.fill"
-                        size={16}
-                        color={theme.textSecondary}
-                      />
-                    </Pressable>
-                  </View>
-                ),
-              )}
-            </View>
+              onRemove={id => removeAttachment(chatId, id)}
+            />
           </AttachmentStripAnim>
 
           {/* QuestionPanel renders above the lower tier inside the same
@@ -791,15 +729,24 @@ export const Composer = React.memo(function ({
           {t('session.workingHint')}
         </Text>
       ) : null}
+
+      {preview !== null && isImageMime(preview.mimeType) ? (
+        <ImagePreviewModal
+          uri={preview.localUri}
+          name={preview.name}
+          onDismiss={() => setPreview(null)}
+        />
+      ) : null}
+      {preview !== null && !isImageMime(preview.mimeType) ? (
+        <TextFileSheet
+          title={preview.name}
+          uri={preview.localUri}
+          onDismiss={() => setPreview(null)}
+        />
+      ) : null}
     </View>
   );
 });
-
-const formatBytes = (n: number): string => {
-  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
-  return `${n} B`;
-};
 
 const CIRCLE = 32;
 
@@ -877,41 +824,6 @@ const styles = StyleSheet.create({
   },
   inputDimmed: { opacity: 0.45 },
   stripClip: { overflow: 'hidden' },
-  strip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  thumbWrap: { width: 96, height: 96, borderRadius: 14, overflow: 'hidden' },
-  thumb: { width: 96, height: 96, borderRadius: 12 },
-  thumbProgress: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 38,
-  },
-  thumbRemove: { position: 'absolute', top: 6, right: 6 },
-  thumbRemoveBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fileChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    maxWidth: '100%',
-  },
-  fileChipText: { fontSize: 13, maxWidth: 140 },
-  fileChipSize: { fontSize: 11 },
   livePill: {
     borderWidth: 1,
     borderRadius: 14,

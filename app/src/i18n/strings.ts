@@ -264,6 +264,8 @@ const en = {
   'composer.dictate': 'Dictate',
   'composer.dictationUnavailable': 'Dictation unavailable on this build',
   'composer.removeAttachment': 'Remove {name}',
+  'composer.previewAttachment': 'Preview {name}',
+  'composer.textPreviewFailed': 'Couldn\u2019t read this file as text.',
   'composer.plan': 'Plan',
   'composer.plan.off': 'Turn off Plan mode',
   'composer.plan.on': 'Plan mode',

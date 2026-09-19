@@ -42,7 +42,6 @@ import {
   setPlanMode,
   toggleChatPinned,
   useChatPinned,
-  useComposerExtraHeight,
   useRecentModels,
 } from '../zeron/state/uiPrefs';
 import {
@@ -326,24 +325,18 @@ function ActiveSessionScreen({
   const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
     useKeyboardChatComposerInset(listRef, composerRef);
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
-  const extraHeight = useComposerExtraHeight();
 
+  // Chat transcript stays above the full sticky stack (queue/PR chrome +
+  // composer), including grabber extra height and the attachment strip.
+  // That takes priority over overlaying a resized composer on the last
+  // messages. Home/threads composer layout is unchanged (paddingBottom).
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const height = event.nativeEvent.layout.height;
       setComposerHeight(height);
-      reportComposerInset({
-        ...event,
-        nativeEvent: {
-          ...event.nativeEvent,
-          layout: {
-            ...event.nativeEvent.layout,
-            height: Math.max(0, height - extraHeight),
-          },
-        },
-      });
+      reportComposerInset(event);
     },
-    [reportComposerInset, extraHeight],
+    [reportComposerInset],
   );
 
   const doSend = useCallback(
@@ -837,6 +830,8 @@ function ActiveSessionScreen({
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
         <View
+          ref={composerRef}
+          onLayout={onComposerLayout}
           style={
             composerMaxWidth !== undefined
               ? [styles.measureCap, { maxWidth: composerMaxWidth }]
@@ -918,8 +913,6 @@ function ActiveSessionScreen({
             onSendAttachments={doSendAttachments}
             onRespondInput={doRespond}
             onSendBlocked={onSendBlocked}
-            composerRef={composerRef}
-            onLayout={onComposerLayout}
           />
         </View>
       </KeyboardStickyView>
