@@ -1,9 +1,11 @@
 // AdaptiveShell in-flow sidebar: the uiPrefs toggle flips the persisted
 // pref and the column's accessibilityState.expanded (regular width).
+// Regular width also launches into the new-thread composer unless a
+// requestedChat is already set.
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Modal } from 'react-native';
+import { Modal, Text } from 'react-native';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import {
   AppServicesContext,
@@ -19,17 +21,24 @@ const services: AppServices = {
   signOut: async () => {},
 };
 
-const render = async () => {
+const render = async (requestedChat: string | null = null) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
       <AppServicesContext.Provider value={services}>
-        <AdaptiveShell requestedChat={null} />
+        <AdaptiveShell requestedChat={requestedChat} />
       </AppServicesContext.Provider>,
     );
   });
   return tree!;
 };
+
+const texts = (root: TestRenderer.ReactTestInstance): string[] =>
+  root.findAllByType(Text).flatMap(n => {
+    const c = n.props.children;
+    if (typeof c === 'string') return [c];
+    return Array.isArray(c) ? c.filter(x => typeof x === 'string') : [];
+  });
 
 const panel = (root: TestRenderer.ReactTestInstance) =>
   root.findAll(
@@ -87,6 +96,52 @@ test('regular-width Settings Modal allows swipe / outside dismiss', async () => 
   expect(modal.props.presentationStyle).toBe('formSheet');
   expect(modal.props.allowSwipeDismissal).toBe(true);
   expect(typeof modal.props.onRequestClose).toBe('function');
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('regular width launches into the new-thread composer', async () => {
+  const tree = await render(null);
+  expect(
+    tree.root.findAll(n => n.props.testID === 'compose-composer').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree.root.findAll(n => n.props.testID === 'session-title-pill').length,
+  ).toBe(0);
+  expect(texts(tree.root)).not.toContain(
+    'Nothing here yet — send a message to start.',
+  );
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('regular width with requestedChat opens that session, not compose', async () => {
+  workspaceStore.setState({
+    devices: [],
+    spaces: [],
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'h1',
+        archived: false,
+        createdAt: 1,
+        title: 'Live thread',
+      },
+    ],
+    sessions: {},
+    presence: {},
+    connection: 'connected',
+    lastSyncAt: undefined,
+  });
+  const tree = await render('c1');
+  expect(
+    tree.root.findAll(n => n.props.testID === 'compose-composer').length,
+  ).toBe(0);
+  expect(
+    tree.root.findAll(n => n.props.testID === 'session-title-pill').length,
+  ).toBeGreaterThan(0);
   await act(async () => {
     tree.unmount();
   });

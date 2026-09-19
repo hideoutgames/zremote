@@ -99,9 +99,11 @@ export function AdaptiveShell({
 }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const [chatId, setChatId] = useState<string | null>(null);
+  // Regular width launches into the new-thread composer. A deep-link or
+  // push `requestedChat` opens that session instead (no empty-detail flash).
+  const [chatId, setChatId] = useState<string | null>(requestedChat);
   const [openGeneration, setOpenGeneration] = useState(0);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState(requestedChat === null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebarCollapsed = useSidebarCollapsed();
 
