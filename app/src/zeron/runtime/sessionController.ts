@@ -115,6 +115,9 @@ export class SessionController {
   private room: ChatRoomClient | undefined;
   private cursor = 0;
   private started = false;
+  /** In-flight or completed `start()` — overlapping callers await this
+   * instead of returning while load/subscribe is still pending. */
+  private startWork: Promise<void> | undefined;
   private refCount = 0;
   private unsub: (() => void) | undefined;
   private persistTimer: unknown;
@@ -167,30 +170,43 @@ export class SessionController {
 
   /** Loads persisted state, wires the local-update→enqueue subscription,
    * pushes the full log on first contact, then (roomGen permitting) starts
-   * the room. Mirrors SessionStore.start ordering. */
+   * the room. Mirrors SessionStore.start ordering. Overlapping calls share
+   * one promise so compose send can wait for subscribe before `sendRun`. */
   async start(): Promise<void> {
+    if (this.startWork !== undefined) return this.startWork;
+    this.startWork = this.runStart();
+    return this.startWork;
+  }
+
+  private async runStart(): Promise<void> {
     if (this.started) return;
     this.started = true;
-    if (this.relay !== undefined) {
-      this.relay.start();
-      return;
-    }
-    const { docDisk, orgId, userId } = this.deps;
-    const saved = await docDisk
-      .loadChat2(orgId, userId, this.chatId)
-      .catch(() => undefined);
-    if (saved !== undefined) {
-      try {
-        this.port.import(base64ToBytes(saved.snapshot));
-        this.cursor = saved.cursor;
-      } catch {
-        this.cursor = 0;
+    try {
+      if (this.relay !== undefined) {
+        this.relay.start();
+        return;
       }
+      const { docDisk, orgId, userId } = this.deps;
+      const saved = await docDisk
+        .loadChat2(orgId, userId, this.chatId)
+        .catch(() => undefined);
+      if (saved !== undefined) {
+        try {
+          this.port.import(base64ToBytes(saved.snapshot));
+          this.cursor = saved.cursor;
+        } catch {
+          this.cursor = 0;
+        }
+      }
+      this.unsub = this.port.subscribeLocalUpdates(bytes =>
+        this.room?.enqueue(bytes),
+      );
+      this.connectIfReady();
+    } catch (e) {
+      this.started = false;
+      this.startWork = undefined;
+      throw e;
     }
-    this.unsub = this.port.subscribeLocalUpdates(bytes =>
-      this.room?.enqueue(bytes),
-    );
-    this.connectIfReady();
   }
 
   /** SessionStore.connectIfReady: rooms only exist at generation ≥ 2. */
@@ -363,6 +379,7 @@ export class SessionController {
   }
 
   stop(): void {
+    this.startWork = undefined;
     if (this.relay !== undefined) {
       this.relay.stop();
       this.started = false;
@@ -499,13 +516,16 @@ export class SessionController {
   ): string {
     if (this.relay !== undefined) {
       // Host mints the row id; WatchQueue lands it in store.queue.
-      this.relay.queueMessage(text, opts).catch(e => {
-        getSessionStore(this.chatId).setState({
-          queueActionError: `Couldn't queue the message: ${e}`,
-        });
-      });
+      this.enqueueQueued(text, opts).catch(() => {});
       return '';
     }
+    return this.enqueueLocal(text, opts);
+  }
+
+  private enqueueLocal(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): string {
     const id = this.doc.enqueueMessage({
       text,
       deviceId: this.deps.deviceId,
@@ -516,6 +536,24 @@ export class SessionController {
     this.project();
     this.nudge();
     return id;
+  }
+
+  /** Awaitable queue write — doc mode is sync; relay waits for the RPC. */
+  private async enqueueQueued(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): Promise<string> {
+    if (this.relay !== undefined) {
+      try {
+        return await this.relay.queueMessage(text, opts);
+      } catch (e) {
+        getSessionStore(this.chatId).setState({
+          queueActionError: `Couldn't queue the message: ${e}`,
+        });
+        throw e;
+      }
+    }
+    return this.enqueueLocal(text, opts);
   }
 
   /** moveQueued: a pure local movable-list write in doc mode; a
@@ -603,8 +641,11 @@ export class SessionController {
       worktree?: WorktreeSpec;
       phase: RunPhase;
       autoApprove?: boolean;
+      /** Draft key for upload-progress patches (compose uses `__compose__`). */
+      draftChatId?: string;
     } = { phase: 'idle' },
   ): Promise<SendPlan> {
+    const draftId = opts.draftChatId ?? this.chatId;
     const plan = sendPlan(
       opts.phase,
       this.deps.hostCapabilities?.() ?? new Set(),
@@ -644,7 +685,9 @@ export class SessionController {
       // `attachments` at dispatch (doc_host.rs queued_message_prompt —
       // `message-queue-clean-attachment-text-v1` even strips a client-
       // expanded trailer), so `text` stays the raw user text.
-      this.queueMessage(text, { attachments: pendingRefsFor(transfers) });
+      await this.enqueueQueued(text, {
+        attachments: pendingRefsFor(transfers),
+      });
       this.spawnEscort(transfers);
       return 'queue';
     }
@@ -654,22 +697,22 @@ export class SessionController {
     const relay = this.hostRelay();
     const paths: string[] = [];
     for (const a of staged) {
-      updateAttachment(this.chatId, a.id, { uploadState: 'uploading' });
+      updateAttachment(draftId, a.id, { uploadState: 'uploading' });
       try {
         const path = await uploadAttachmentChunked(relay, a.name, a.id, {
           readBase64: () => readBase64(a.localUri),
           clock: this.deps.clock,
           isAborted: () => this.abortedUploads.has(a.id),
-          onProgress: p => updateAttachment(this.chatId, a.id, { progress: p }),
+          onProgress: p => updateAttachment(draftId, a.id, { progress: p }),
         });
-        updateAttachment(this.chatId, a.id, {
+        updateAttachment(draftId, a.id, {
           uploadState: 'uploaded',
           progress: 1,
           remoteRef: path,
         });
         paths.push(path);
       } catch (e) {
-        updateAttachment(this.chatId, a.id, { uploadState: 'failed' });
+        updateAttachment(draftId, a.id, { uploadState: 'failed' });
         throw e;
       }
     }

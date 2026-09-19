@@ -4,15 +4,59 @@ import {
   moveDraft,
   resetDrafts,
   setDraftText,
+  stageAttachments,
 } from '../src/zeron/state/draftStore';
 import { createThreadFromCompose } from '../src/zeron/runtime/createThreadFromCompose';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import type { AppRuntime } from '../src/zeron/runtime/appRuntime';
 
+const mockRuntime = (
+  over: {
+    sendRun?: jest.Mock;
+    sendWithAttachments?: jest.Mock;
+    start?: jest.Mock;
+  } = {},
+) => {
+  const writes: {
+    kind: string;
+    id: string;
+    set?: Record<string, unknown>;
+  }[] = [];
+  const sendRun = over.sendRun ?? jest.fn();
+  const sendWithAttachments =
+    over.sendWithAttachments ?? jest.fn(async () => 'legacy');
+  const start = over.start ?? jest.fn(async () => {});
+  const runtime = {
+    registryDoc: {
+      write: (
+        kind: string,
+        id: string,
+        _op?: string,
+        set?: Record<string, unknown>,
+      ) => writes.push({ kind, id, set }),
+    },
+    registry: { flushPending: () => {} },
+    openSession: () => ({
+      retain() {
+        return this;
+      },
+      release() {},
+      start,
+      sendRun,
+      sendWithAttachments,
+    }),
+  } as unknown as AppRuntime;
+  return { runtime, writes, sendRun, sendWithAttachments, start };
+};
+
 beforeEach(() => {
   resetDrafts();
-  uiPrefsStore.setState({ composeDefaults: undefined, recentModels: [] });
+  uiPrefsStore.setState({
+    composeDefaults: undefined,
+    recentModels: [],
+    modelSettingsByKey: {},
+  });
   workspaceStore.setState({
     devices: [],
     spaces: [
@@ -33,31 +77,16 @@ beforeEach(() => {
 });
 
 test('createThreadFromCompose writes the chat, moves the draft, and sendRun', async () => {
-  const writes: {
-    kind: string;
-    id: string;
-    set?: Record<string, unknown>;
-  }[] = [];
-  const sendRun = jest.fn();
-  const runtime = {
-    registryDoc: {
-      write: (
-        kind: string,
-        id: string,
-        _op?: string,
-        set?: Record<string, unknown>,
-      ) => writes.push({ kind, id, set }),
-    },
-    registry: { flushPending: () => {} },
-    openSession: () => ({
-      retain() {
-        return this;
-      },
-      release() {},
-      sendRun,
-      sendWithAttachments: async () => 'legacy',
+  let started = false;
+  const { runtime, writes, sendRun, start } = mockRuntime({
+    start: jest.fn(async () => {
+      await Promise.resolve();
+      started = true;
     }),
-  } as unknown as AppRuntime;
+    sendRun: jest.fn(() => {
+      expect(started).toBe(true);
+    }),
+  });
 
   setDraftText(COMPOSE_DRAFT_ID, 'hello from compose');
   expect(draftStore.getState().byChat[COMPOSE_DRAFT_ID]?.text).toBe(
@@ -77,6 +106,7 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
   });
 
   expect(chatId).toBeTruthy();
+  expect(start).toHaveBeenCalled();
   expect(writes.some(w => w.kind === 'chats' && w.id === chatId)).toBe(true);
   expect(
     writes.some(
@@ -92,6 +122,7 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
         model: 'sonnet',
         reasoning: 'high',
         sandbox: 'danger-full-access',
+        modelOptions: {},
       }),
       cwd: '/repo',
     }),
@@ -106,20 +137,140 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
   });
 });
 
-test('createThreadFromCompose projectless when space is omitted', async () => {
-  const sendRun = jest.fn();
-  const runtime = {
-    registryDoc: { write: () => {} },
-    registry: { flushPending: () => {} },
-    openSession: () => ({
-      retain() {
-        return this;
-      },
-      release() {},
-      sendRun,
-      sendWithAttachments: async () => 'legacy',
+test('createThreadFromCompose puts Fast modelOptions on the chat and first run', async () => {
+  const { runtime, writes, sendRun } = mockRuntime();
+  const chatId = await createThreadFromCompose(runtime, {
+    text: 'go fast',
+    settings: {
+      deviceId: 'host1',
+      spaceId: 's1',
+      harness: 'claude-code',
+      model: 'sonnet',
+      reasoning: 'high',
+      modelOptions: { fast: 'on' },
+    },
+  });
+  const created = writes.find(w => w.kind === 'chats' && w.id === chatId);
+  expect(created?.set?.config).toEqual(
+    expect.objectContaining({
+      modelOptions: { fast: 'on' },
     }),
-  } as unknown as AppRuntime;
+  );
+  expect(sendRun).toHaveBeenCalledWith(
+    'go fast',
+    expect.objectContaining({
+      config: expect.objectContaining({
+        modelOptions: { fast: 'on' },
+      }),
+    }),
+    {},
+  );
+});
+
+test('createThreadFromCompose sendRun carries a new worktree', async () => {
+  const { runtime, sendRun } = mockRuntime();
+  const worktree = { repoPath: '/repo', base: 'main' };
+  await createThreadFromCompose(runtime, {
+    text: 'in a worktree',
+    settings: {
+      deviceId: 'host1',
+      spaceId: 's1',
+      harness: 'claude-code',
+      model: 'sonnet',
+    },
+    worktree,
+  });
+  expect(sendRun).toHaveBeenCalledWith(
+    'in a worktree',
+    expect.objectContaining({
+      cwd: '/repo',
+    }),
+    { worktree },
+  );
+});
+
+test('createThreadFromCompose sendWithAttachments keeps staged files and settings', async () => {
+  const attachments = stageAttachments(COMPOSE_DRAFT_ID, [
+    {
+      kind: 'image',
+      name: 'shot.png',
+      mimeType: 'image/png',
+      size: 12,
+      localUri: 'file:///shot.png',
+    },
+  ]);
+  const sendWithAttachments = jest.fn(async () => 'legacy' as const);
+  const sendRun = jest.fn();
+  const { runtime } = mockRuntime({ sendRun, sendWithAttachments });
+  const worktree = { repoPath: '/repo', base: 'feat' };
+  await createThreadFromCompose(runtime, {
+    text: 'see pic',
+    settings: {
+      deviceId: 'host1',
+      spaceId: 's1',
+      harness: 'claude-code',
+      model: 'sonnet',
+      reasoning: 'high',
+      modelOptions: { fast: 'on' },
+    },
+    worktree,
+    attachments,
+  });
+  expect(sendRun).not.toHaveBeenCalled();
+  expect(sendWithAttachments).toHaveBeenCalledWith(
+    'see pic',
+    expect.objectContaining({
+      config: expect.objectContaining({
+        harness: 'claude-code',
+        model: 'sonnet',
+        reasoning: 'high',
+        modelOptions: { fast: 'on' },
+      }),
+      cwd: '/repo',
+    }),
+    attachments,
+    expect.objectContaining({
+      worktree,
+      phase: 'idle',
+      draftChatId: COMPOSE_DRAFT_ID,
+    }),
+  );
+  expect(draftStore.getState().byChat[COMPOSE_DRAFT_ID]).toBeUndefined();
+});
+
+test('createThreadFromCompose keeps the compose draft when sendWithAttachments throws', async () => {
+  setDraftText(COMPOSE_DRAFT_ID, 'keep me');
+  const attachments = stageAttachments(COMPOSE_DRAFT_ID, [
+    {
+      kind: 'file',
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      size: 4,
+      localUri: 'file:///notes.txt',
+    },
+  ]);
+  const { runtime } = mockRuntime({
+    sendWithAttachments: jest.fn(async () => {
+      throw new Error('upload failed');
+    }),
+  });
+  await expect(
+    createThreadFromCompose(runtime, {
+      text: 'keep me',
+      settings: {
+        deviceId: 'host1',
+        spaceId: 's1',
+        harness: 'claude-code',
+        model: 'sonnet',
+      },
+      attachments,
+    }),
+  ).rejects.toThrow(/upload failed/);
+  expect(draftStore.getState().byChat[COMPOSE_DRAFT_ID]?.text).toBe('keep me');
+});
+
+test('createThreadFromCompose projectless when space is omitted', async () => {
+  const { runtime, sendRun } = mockRuntime();
   await createThreadFromCompose(runtime, {
     text: 'hi',
     settings: { deviceId: 'host1', harness: 'codex', model: 'gpt-5' },
@@ -128,18 +279,7 @@ test('createThreadFromCompose projectless when space is omitted', async () => {
 });
 
 test('createThreadFromCompose keeps the compose draft when host is missing', async () => {
-  const runtime = {
-    registryDoc: { write: () => {} },
-    registry: { flushPending: () => {} },
-    openSession: () => ({
-      retain() {
-        return this;
-      },
-      release() {},
-      sendRun: () => {},
-      sendWithAttachments: async () => 'legacy',
-    }),
-  } as unknown as AppRuntime;
+  const { runtime } = mockRuntime();
   setDraftText(COMPOSE_DRAFT_ID, 'do not lose this');
   await expect(
     createThreadFromCompose(runtime, {

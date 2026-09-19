@@ -143,6 +143,12 @@ export function ComposeComposer({
     if (saved.harness !== '') setHarness(saved.harness);
     if (saved.model !== '') setModel(saved.model);
     setReasoning(saved.reasoning);
+    setModelOptions(
+      saved.modelOptions ??
+        (saved.harness !== '' && saved.model !== ''
+          ? modelSettingsFor(saved.harness, saved.model)?.modelOptions ?? {}
+          : {}),
+    );
   }, [saved]);
 
   useEffect(() => {
@@ -157,10 +163,11 @@ export function ComposeComposer({
         harness,
         model,
         reasoning,
+        modelOptions,
         ...patch,
       });
     },
-    [deviceId, spaceId, harness, model, reasoning],
+    [deviceId, spaceId, harness, model, reasoning, modelOptions],
   );
 
   const host: DeviceRow | undefined = devices.find(d => d.id === deviceId);
@@ -286,6 +293,7 @@ export function ComposeComposer({
     harness,
     model,
     reasoning,
+    modelOptions,
   });
 
   const submit = useCallback(
@@ -321,6 +329,7 @@ export function ComposeComposer({
       spaceId,
       model,
       reasoning,
+      modelOptions,
       draft,
       branch,
       onCreated,
@@ -352,6 +361,7 @@ export function ComposeComposer({
         harness: next.harness,
         model: next.model ?? '',
         reasoning: next.reasoning,
+        modelOptions: next.modelOptions ?? {},
       });
     },
     [persist],
@@ -453,7 +463,12 @@ export function ComposeComposer({
           setModel(m);
           setReasoning(stored?.reasoning);
           setModelOptions(stored?.modelOptions ?? {});
-          persist({ harness: h, model: m, reasoning: stored?.reasoning });
+          persist({
+            harness: h,
+            model: m,
+            reasoning: stored?.reasoning,
+            modelOptions: stored?.modelOptions ?? {},
+          });
         }}
         onOpenMoreModels={() => setPickerOpen(true)}
         effortLabel={effortLabel}
@@ -489,6 +504,7 @@ export function ComposeComposer({
             [fastOption.id]: choice,
           };
           setModelOptions(next);
+          persist({ modelOptions: next });
           if (harness !== '' && model !== '')
             rememberModelSettings(harness, model, { modelOptions: next });
         }}

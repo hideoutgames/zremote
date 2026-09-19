@@ -59,6 +59,8 @@ export interface ComposeDefaults {
   harness: string;
   model: string;
   reasoning?: string;
+  /** Fast / other per-model options from the compose chips. */
+  modelOptions?: Record<string, unknown>;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({

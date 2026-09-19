@@ -301,4 +301,46 @@ describe('SessionController', () => {
     expect(x.hub.sockets).toHaveLength(0);
     x.c.stop();
   });
+
+  it('overlapping start() waits for subscribe; sendRun after that is pushed', async () => {
+    const x = makeController();
+    let release!: () => void;
+    const gate = new Promise<void>(r => {
+      release = r;
+    });
+    const orig = x.disk.loadChat2.bind(x.disk);
+    jest
+      .spyOn(x.disk, 'loadChat2')
+      .mockImplementation(async (org, user, id) => {
+        await gate;
+        return orig(org, user, id);
+      });
+
+    const first = x.c.start();
+    let secondSettled = false;
+    const second = x.c.start().then(() => {
+      secondSettled = true;
+    });
+    await flush();
+    expect(secondSettled).toBe(false);
+    expect(x.hub.sockets).toHaveLength(0);
+
+    release();
+    await first;
+    await second;
+    expect(secondSettled).toBe(true);
+
+    await flush();
+    const ws = x.hub.latest;
+    ws.open();
+    ws.receive(emptyState());
+    await flush();
+    ws.receive(encodeFrame(FRAME.rowsDone, { headSeq: 0 }));
+    await flush();
+
+    const cmdId = x.c.sendRun('hello', { cwd: '/x' });
+    expect(cmdId).toBeTruthy();
+    expect(lastPushBatchId(ws)).toBeTruthy();
+    x.c.stop();
+  });
 });

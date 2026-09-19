@@ -1,5 +1,5 @@
-// Compose send: create the chat from persisted compose defaults, move the
-// `__compose__` draft onto the new id, then send the first run.
+// Compose send: create the chat from persisted compose defaults, wait for
+// the session to subscribe, then send the first run with the live draft.
 
 import {
   FULL_ACCESS_SANDBOX,
@@ -17,6 +17,7 @@ import {
 import {
   rememberComposeDefaults,
   rememberModelPick,
+  rememberModelSettings,
   type ComposeDefaults,
 } from '../state/uiPrefs';
 import { workspaceStore } from '../state/workspaceStore';
@@ -52,7 +53,7 @@ export const createThreadFromCompose = async (
     model: settings.model === '' ? undefined : settings.model,
     reasoning: settings.reasoning,
     sandbox: FULL_ACCESS_SANDBOX,
-    modelOptions: {},
+    modelOptions: settings.modelOptions ?? {},
   };
   const chatId =
     space !== undefined
@@ -65,16 +66,31 @@ export const createThreadFromCompose = async (
         })
       : createProjectlessChat(runtime, settings.deviceId, config);
   rememberComposeDefaults(settings);
-  if (settings.harness !== '' && settings.model !== '')
+  if (settings.harness !== '' && settings.model !== '') {
     rememberModelPick({ harness: settings.harness, model: settings.model });
+    rememberModelSettings(settings.harness, settings.model, {
+      ...(settings.reasoning !== undefined
+        ? { reasoning: settings.reasoning }
+        : {}),
+      ...(settings.modelOptions !== undefined
+        ? { modelOptions: settings.modelOptions }
+        : {}),
+    });
+  }
   const controller = runtime.openSession(chatId);
+  await controller.start();
   if (attachments.length > 0) {
-    await controller.sendWithAttachments(
+    const plan = await controller.sendWithAttachments(
       text,
       { config, cwd: space?.path },
       attachments,
-      { worktree, phase: 'idle' },
+      {
+        worktree,
+        phase: 'idle',
+        draftChatId: COMPOSE_DRAFT_ID,
+      },
     );
+    if (plan === 'blocked') throw new Error('compose: attachments blocked');
   } else {
     controller.sendRun(
       text,
