@@ -64,6 +64,7 @@ const en = {
     "This host can't create isolated worktrees — update Zeron on the host.",
   'newSession.create': 'Create',
   'newSession.pickHost': 'Pick a host first',
+  'newSession.desktop': 'Desktop',
 
   // Session
   'session.rename': 'Rename session',
@@ -322,6 +323,9 @@ const en = {
   // Checkout selector
   'checkout.label': 'Checkout',
   'checkout.project': 'Project',
+  'checkout.desktop': 'Desktop',
+  'checkout.branch': 'Branch',
+  'checkout.pickProject': 'Pick a project first',
   'checkout.repo': 'Repo',
   'checkout.origin': 'Origin',
   'checkout.machine': 'Machine',

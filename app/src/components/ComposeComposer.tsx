@@ -1,6 +1,7 @@
-// Compose-mode wiring around the shared Composer: repo / origin / machine
-// sit between the grabber and the input, the model picker is unlocked,
-// drafts live at `__compose__`, and send creates the thread then runs.
+// Compose-mode wiring around the shared Composer: Desktop / Project /
+// checkout-mode / Branch sit between the grabber and the input, the model
+// picker is unlocked, drafts live at `__compose__`, and send creates the
+// thread then runs.
 
 import React, {
   useCallback,
@@ -12,6 +13,7 @@ import React, {
 import {
   Alert,
   type LayoutChangeEvent,
+  Modal,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -20,6 +22,7 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { Composer } from './Composer';
+import { DEFAULT_COMPOSE_BRANCH } from './CheckoutSelector';
 import { EffortOverlay } from './EffortOverlay';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import {
@@ -291,6 +294,8 @@ export function ComposeComposer({
         text,
         settings: settings(),
         worktree: draft.pendingWorktree,
+        branch:
+          space !== undefined ? branch ?? DEFAULT_COMPOSE_BRANCH : undefined,
         attachments: withAttachments ? draft.attachments : undefined,
       });
       onCreated(chatId);
@@ -306,6 +311,7 @@ export function ComposeComposer({
       reasoning,
       sandbox,
       draft,
+      branch,
       onCreated,
     ],
   );
@@ -343,6 +349,10 @@ export function ComposeComposer({
     [persist],
   );
 
+  const onResolvedBranch = useCallback((name: string) => {
+    setBranch(prev => prev ?? name);
+  }, []);
+
   const checkout =
     runtime !== null
       ? {
@@ -355,12 +365,14 @@ export function ComposeComposer({
             space?.name ??
             space?.path.split(/[\\/]/).filter(Boolean).pop() ??
             t('checkout.noProject'),
-          worktreeLabel:
-            draft.pendingWorktree?.base ??
-            composeChat.branch ??
-            t('checkout.worktree'),
-          machineLabel: host?.name ?? t('newSession.host'),
+          checkoutModeLabel:
+            draft.pendingWorktree !== undefined
+              ? t('newSession.checkout.newWorktree')
+              : t('newSession.checkout.current'),
+          branchLabel: branch ?? DEFAULT_COMPOSE_BRANCH,
+          machineLabel: host?.name ?? t('newSession.desktop'),
           hosts: devices,
+          newWorktree: draft.pendingWorktree !== undefined,
           onSelectHost: (device: DeviceRow) => {
             setDeviceId(device.id);
             if (space !== undefined && space.deviceId !== device.id)
@@ -375,6 +387,7 @@ export function ComposeComposer({
           },
           onSelectSpace: (next: Space | undefined) => {
             setSpaceId(next?.id);
+            setBranch(undefined);
             if (next !== undefined && next.deviceId !== deviceId)
               setDeviceId(next.deviceId);
             persist({
@@ -384,6 +397,14 @@ export function ComposeComposer({
           },
           onSelectRef: (ref: RepoRef) => {
             setBranch(ref.name);
+            if (draft.pendingWorktree !== undefined && space !== undefined) {
+              setDraftPendingWorktree(COMPOSE_DRAFT_ID, {
+                repoPath: space.path,
+                base: ref.name,
+              });
+            }
+          },
+          onSelectCurrentCheckout: () => {
             setDraftPendingWorktree(COMPOSE_DRAFT_ID, undefined);
           },
           onSelectNewWorktree: (base: string) => {
@@ -393,6 +414,7 @@ export function ComposeComposer({
               base,
             });
           },
+          onResolvedBranch,
         }
       : undefined;
 
@@ -439,28 +461,6 @@ export function ComposeComposer({
         composerRef={composerRef}
         onLayout={onLayout ?? (() => {})}
       />
-      {effortOpen ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={reasoning}
-          onChange={level => {
-            setReasoning(level);
-            persist({ reasoning: level });
-          }}
-          showFast={fastOption !== undefined}
-          fastEnabled={fastEnabled}
-          onToggleFast={on => {
-            if (fastOption === undefined) return;
-            setModelOptions({
-              ...modelOptions,
-              [fastOption.id]: on
-                ? fastOnChoice(fastOption)
-                : fastOffChoice(fastOption),
-            });
-          }}
-          onDismiss={() => setEffortOpen(false)}
-        />
-      ) : null}
       {pickerOpen && runtime !== null ? (
         <ModelPickerSheet
           runtime={runtime}
@@ -475,14 +475,54 @@ export function ComposeComposer({
     </View>
   );
 
-  if (!sticky) return inner;
-  return (
-    <KeyboardStickyView
-      offset={{ opened: insets.bottom }}
-      style={styles.sticky}
+  const overlay = (
+    <Modal
+      visible={effortOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setEffortOpen(false)}
     >
-      {inner}
-    </KeyboardStickyView>
+      <EffortOverlay
+        levels={effortLevels}
+        value={reasoning}
+        onChange={level => {
+          setReasoning(level);
+          persist({ reasoning: level });
+        }}
+        showFast={fastOption !== undefined}
+        fastEnabled={fastEnabled}
+        onToggleFast={on => {
+          if (fastOption === undefined) return;
+          setModelOptions({
+            ...modelOptions,
+            [fastOption.id]: on
+              ? fastOnChoice(fastOption)
+              : fastOffChoice(fastOption),
+          });
+        }}
+        onDismiss={() => setEffortOpen(false)}
+      />
+    </Modal>
+  );
+
+  if (!sticky) {
+    return (
+      <>
+        {inner}
+        {overlay}
+      </>
+    );
+  }
+  return (
+    <>
+      <KeyboardStickyView
+        offset={{ opened: insets.bottom }}
+        style={styles.sticky}
+      >
+        {inner}
+      </KeyboardStickyView>
+      {overlay}
+    </>
   );
 }
 

@@ -124,12 +124,13 @@ test('composer: input labelled, send/stop/mic/model buttons have roles', async (
       n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
     ),
   ).toHaveLength(0);
-  expect(labels.some(l => l.label === 'Repo')).toBe(false);
-  expect(labels.some(l => l.label === 'Origin')).toBe(false);
-  expect(labels.some(l => l.label === 'Machine')).toBe(false);
+  expect(labels.some(l => l.label === 'Desktop')).toBe(false);
+  expect(labels.some(l => l.label === 'Project')).toBe(false);
+  expect(labels.some(l => l.label === 'Checkout')).toBe(false);
+  expect(labels.some(l => l.label === 'Branch')).toBe(false);
 });
 
-test('compose composer: repo, origin, and machine sit above the input', async () => {
+test('compose composer: desktop, project, checkout, and branch sit above the input', async () => {
   const mounted = await render(
     <Composer
       chatId="__compose__"
@@ -166,8 +167,10 @@ test('compose composer: repo, origin, and machine sit above the input', async ()
         },
         spaces: [],
         projectLabel: 'harbor-notes',
-        worktreeLabel: 'main',
+        checkoutModeLabel: 'Current checkout',
+        branchLabel: 'main',
         machineLabel: 'Studio MacBook Pro',
+        newWorktree: false,
         hosts: [
           {
             id: 'h1',
@@ -192,13 +195,16 @@ test('compose composer: repo, origin, and machine sit above the input', async ()
     />,
   );
   const labels = labelled(mounted.root);
-  expect(labels.some(l => l.role === 'button' && l.label === 'Repo')).toBe(
+  expect(labels.some(l => l.role === 'button' && l.label === 'Desktop')).toBe(
     true,
   );
-  expect(labels.some(l => l.role === 'button' && l.label === 'Origin')).toBe(
+  expect(labels.some(l => l.role === 'button' && l.label === 'Project')).toBe(
     true,
   );
-  expect(labels.some(l => l.role === 'button' && l.label === 'Machine')).toBe(
+  expect(labels.some(l => l.role === 'button' && l.label === 'Checkout')).toBe(
+    true,
+  );
+  expect(labels.some(l => l.role === 'button' && l.label === 'Branch')).toBe(
     true,
   );
   expect(labels.some(l => l.label === 'Default')).toBe(true);
