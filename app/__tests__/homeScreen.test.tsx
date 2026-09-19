@@ -1,5 +1,5 @@
-// HomeScreen rows: large title, status subtitle, pinned section, unseen bold —
-// driven entirely by a seeded workspaceStore.
+// HomeScreen rows: compact Threads title, status subtitle, pinned section,
+// unseen medium weight — driven entirely by a seeded workspaceStore.
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
@@ -152,6 +152,26 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   expect(found).toContain('Threads');
   expect(found).toContain('Fix the flaky test');
   expect(found).toContain('Write docs');
+  const homeTitle = mounted.root.findAll(
+    n => n.props.testID === 'home-title',
+  )[0];
+  expect(homeTitle).toBeDefined();
+  const homeTitleStyle = Array.isArray(homeTitle.props.style)
+    ? homeTitle.props.style.flat()
+    : [homeTitle.props.style];
+  expect(homeTitleStyle.some(s => s?.fontWeight === '500')).toBe(true);
+  expect(homeTitleStyle.some(s => s?.fontSize === 20)).toBe(true);
+  const seenTitle = mounted.root
+    .findAllByType(Text)
+    .find(n => n.props.children === 'Fix the flaky test');
+  expect(seenTitle).toBeDefined();
+  const seenStyle = Array.isArray(seenTitle!.props.style)
+    ? seenTitle!.props.style.flat()
+    : [seenTitle!.props.style];
+  expect(seenStyle.some(s => s?.fontWeight === '400')).toBe(true);
+  expect(
+    seenStyle.some(s => s?.fontWeight === '600' || s?.fontWeight === '700'),
+  ).toBe(false);
   const row = bodyText(mounted.root, 'c1');
   expect(row).toContain('Fix the flaky test');
   expect(row).not.toContain('zremote @ main');
@@ -185,9 +205,24 @@ test('archived chats stay off the overview; connection pill shows offline', asyn
   // present, the row is hidden until expanded.
   expect(found).not.toContain('Old chat');
   expect(found).toContain('Offline');
+  const archivedHeader = mounted.root.findAll(
+    n => n.props.testID === 'home-archived-header',
+  )[0];
+  expect(archivedHeader).toBeDefined();
+  const headerStyle = Array.isArray(archivedHeader.props.style)
+    ? archivedHeader.props.style.flat()
+    : [archivedHeader.props.style];
+  expect(headerStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  const archivedLabel = archivedHeader.findAllByType(Text)[0];
+  const labelStyle = Array.isArray(archivedLabel.props.style)
+    ? archivedLabel.props.style.flat()
+    : [archivedLabel.props.style];
+  expect(labelStyle.some(s => s?.paddingTop === 16)).toBe(false);
+  expect(labelStyle.some(s => s?.paddingHorizontal === 20)).toBe(false);
+  expect(labelStyle.some(s => s?.lineHeight === 20)).toBe(true);
 });
 
-test('unseen chat renders bold (higher fontWeight)', async () => {
+test('unseen chat renders medium weight (higher than regular titles)', async () => {
   workspaceStore.setState({
     chats: [
       chat({
@@ -207,7 +242,10 @@ test('unseen chat renders bold (higher fontWeight)', async () => {
   const style = Array.isArray(titleNode!.props.style)
     ? titleNode!.props.style.flat()
     : [titleNode!.props.style];
-  expect(style.some(s => s?.fontWeight === '700')).toBe(true);
+  expect(style.some(s => s?.fontWeight === '500')).toBe(true);
+  expect(
+    style.some(s => s?.fontWeight === '700' || s?.fontWeight === '600'),
+  ).toBe(false);
 });
 
 test('PR status follows checkout change-request state', async () => {
@@ -334,6 +372,14 @@ test('pinned chats render under a Pinned header first', async () => {
   expect(pinnedIdx).toBeGreaterThan(-1);
   expect(pinnedTitle).toBeGreaterThan(pinnedIdx);
   expect(recentTitle).toBeGreaterThan(pinnedTitle);
+  const pinnedSection = mounted.root.findAll(
+    n => n.props.testID === 'home-pinned-section',
+  )[0];
+  expect(pinnedSection).toBeDefined();
+  const pinnedStyle = Array.isArray(pinnedSection.props.style)
+    ? pinnedSection.props.style.flat()
+    : [pinnedSection.props.style];
+  expect(pinnedStyle.some(s => s?.paddingBottom === 12)).toBe(true);
 });
 
 test('pinned chats sit in a Pinned section in prefs order', async () => {
