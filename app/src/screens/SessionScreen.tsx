@@ -1204,7 +1204,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   composeDismiss: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
   composeCenter: {
