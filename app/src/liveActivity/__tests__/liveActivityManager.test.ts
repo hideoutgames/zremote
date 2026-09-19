@@ -127,7 +127,10 @@ test('OS refusal packs leftovers into one overflow list', () => {
   mgr.apply('c2', props('working', 'c2'));
   expect(mgr.overflowChatIds().sort()).toEqual(['c1', 'c2']);
   expect(driver.started).toHaveLength(1);
-  expect(driver.startedProps[0].overflowTitles).toEqual(['Session', 'Session']);
+  expect(driver.started[0].updates.at(-1)?.overflowTitles).toEqual([
+    'Session',
+    'Session',
+  ]);
   mgr.apply('c1', props('completed', 'c1'));
   expect(mgr.overflowChatIds()).toEqual(['c2']);
 });

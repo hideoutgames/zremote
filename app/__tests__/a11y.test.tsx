@@ -29,7 +29,6 @@ const services: AppServices = {
 };
 
 const render = async (element: React.ReactElement) => {
-  let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
       <AppServicesContext.Provider value={services}>
@@ -39,6 +38,8 @@ const render = async (element: React.ReactElement) => {
   });
   return tree!;
 };
+
+let tree: TestRenderer.ReactTestRenderer | undefined;
 
 const labelled = (root: TestRenderer.ReactTestInstance) =>
   root
@@ -66,6 +67,13 @@ beforeEach(() => {
     connection: 'connected',
     lastSyncAt: undefined,
   });
+});
+
+afterEach(() => {
+  act(() => {
+    tree?.unmount();
+  });
+  tree = undefined;
 });
 
 test('composer: input labelled, send/stop/mic/model buttons have roles', async () => {

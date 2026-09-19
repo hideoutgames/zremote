@@ -86,7 +86,7 @@ test('planAwaitingReview: idle + last assistant plan + no later user', () => {
           role: 'user',
           createdAt: 2,
           deviceId: 'p',
-          parts: [{ kind: 'text', text: 'go' }],
+          parts: [{ kind: 'text', id: 'p1', text: 'go' }],
         },
       ],
       'idle',

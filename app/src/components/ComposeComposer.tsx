@@ -312,7 +312,7 @@ export function ComposeComposer({
 
   const onSend = useCallback(
     (text: string) => {
-      void submit(text, false);
+      submit(text, false).catch(() => {});
     },
     [submit],
   );
