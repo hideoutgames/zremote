@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  type LayoutChangeEvent,
   Pressable,
   StyleSheet,
   Text,
@@ -125,8 +126,22 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const runtime = useRuntime();
   const chat = useChat(chatId);
   const { width, height } = useWindowDimensions();
-  const cols = Math.max(20, Math.floor((width - 16) / CHAR_W));
-  const rows = Math.max(6, Math.floor((height - 220) / CHAR_H));
+  const [viewport, setViewport] = useState(() => ({
+    cols: Math.max(20, Math.floor((width - 16) / CHAR_W)),
+    rows: Math.max(6, Math.floor((height - 220) / CHAR_H)),
+  }));
+  const cols = viewport.cols;
+  const rows = viewport.rows;
+  const onScreenLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    const next = {
+      cols: Math.max(20, Math.floor(w / CHAR_W)),
+      rows: Math.max(6, Math.floor(h / CHAR_H)),
+    };
+    setViewport(prev =>
+      prev.cols === next.cols && prev.rows === next.rows ? prev : next,
+    );
+  }, []);
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [active, setActive] = useState(0);
@@ -317,6 +332,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
       {/* Screen — monospace rows of styled runs; tap focuses the hidden input */}
       <Pressable
         style={styles.screen}
+        onLayout={onScreenLayout}
         onPress={() => inputRef.current?.focus()}
         accessibilityLabel={t('terminal.screen')}
       >

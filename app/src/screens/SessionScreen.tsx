@@ -91,6 +91,8 @@ import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { PrSheet } from '../components/PrSheet';
+import type { PrBadgeModel } from '../components/prBadge';
+import { SessionSheet } from '../components/SessionSheet';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -109,11 +111,9 @@ import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import { ChangesScreen } from './ChangesScreen';
 import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
-import { PreviewsScreen } from './PreviewsScreen';
 import { createLog } from '../zeron/log';
 
 const log = createLog();
@@ -377,7 +377,7 @@ export function SessionScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
-  const [prOpen, setPrOpen] = useState(false);
+  const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
@@ -386,8 +386,8 @@ export function SessionScreen({
     markdown: string;
   } | null>(null);
   const [fileDiff, setFileDiff] = useState<FileDiffRequest | null>(null);
-  const [toolOverlay, setToolOverlay] = useState<
-    'changes' | 'files' | 'terminal' | 'history' | 'previews' | null
+  const [toolSheet, setToolSheet] = useState<
+    'files' | 'terminal' | 'history' | null
   >(null);
 
   // Announce run-phase transitions for VoiceOver (working → awaiting
@@ -652,16 +652,16 @@ export function SessionScreen({
                 </DropdownMenu.ItemTitle>
               </DropdownMenu.Item>
               <DropdownMenu.Item
-                key="changes"
-                onSelect={() => setToolOverlay('changes')}
+                key="history"
+                onSelect={() => setToolSheet('history')}
               >
                 <DropdownMenu.ItemTitle>
-                  {t('session.changes')}
+                  {t('session.history')}
                 </DropdownMenu.ItemTitle>
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 key="files"
-                onSelect={() => setToolOverlay('files')}
+                onSelect={() => setToolSheet('files')}
               >
                 <DropdownMenu.ItemTitle>
                   {t('session.files')}
@@ -669,26 +669,10 @@ export function SessionScreen({
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 key="terminal"
-                onSelect={() => setToolOverlay('terminal')}
+                onSelect={() => setToolSheet('terminal')}
               >
                 <DropdownMenu.ItemTitle>
                   {t('session.terminal')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="history"
-                onSelect={() => setToolOverlay('history')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.history')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="previews"
-                onSelect={() => setToolOverlay('previews')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.previews')}
                 </DropdownMenu.ItemTitle>
               </DropdownMenu.Item>
               <DropdownMenu.Item key="copy" onSelect={onCopyId}>
@@ -765,7 +749,9 @@ export function SessionScreen({
             queueCount={session.queue.length}
             onOpenQueue={() => setQueueOpen(true)}
             pr={prBadge}
-            onOpenPr={() => setPrOpen(true)}
+            onOpenPr={() => {
+              if (prBadge !== undefined) setPrSheet(prBadge);
+            }}
           />
           <Composer
             chatId={chatId}
@@ -895,11 +881,11 @@ export function SessionScreen({
         />
       ) : null}
 
-      {prOpen && prBadge !== undefined ? (
+      {prSheet !== null ? (
         <PrSheet
           chatId={chatId}
-          badge={prBadge}
-          onDismiss={() => setPrOpen(false)}
+          badge={prSheet}
+          onDismiss={() => setPrSheet(null)}
         />
       ) : null}
 
@@ -963,64 +949,32 @@ export function SessionScreen({
         </Suspense>
       ) : null}
 
-      {toolOverlay !== null ? (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: theme.background },
-          ]}
+      {toolSheet === 'history' ? (
+        <SessionSheet
+          title={t('session.history')}
+          fill
+          onDismiss={() => setToolSheet(null)}
         >
-          <View
-            style={[
-              styles.overlayBar,
-              { paddingTop: insets.top + 6, borderBottomColor: theme.border },
-            ]}
-          >
-            <Pressable
-              onPress={() => setToolOverlay(null)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('session.back')}
-              style={styles.headerBtn}
-            >
-              <View
-                style={[
-                  styles.circle,
-                  { backgroundColor: theme.cardBackground },
-                ]}
-              >
-                <Icon name="chevron.left" size={18} color={theme.text} />
-              </View>
-            </Pressable>
-            <Text style={[styles.title, { color: theme.text }]}>
-              {toolOverlay === 'changes'
-                ? t('session.changes')
-                : toolOverlay === 'files'
-                ? t('session.files')
-                : toolOverlay === 'terminal'
-                ? t('session.terminal')
-                : toolOverlay === 'history'
-                ? t('session.history')
-                : t('session.previews')}
-            </Text>
-          </View>
-          <View style={styles.fill}>
-            {toolOverlay === 'changes' ? (
-              <ChangesScreen
-                chatId={chatId}
-                onOpenHistory={() => setToolOverlay('history')}
-              />
-            ) : toolOverlay === 'files' ? (
-              <FilesScreen chatId={chatId} />
-            ) : toolOverlay === 'terminal' ? (
-              <TerminalScreen chatId={chatId} />
-            ) : toolOverlay === 'history' ? (
-              <HistoryScreen chatId={chatId} />
-            ) : (
-              <PreviewsScreen chatId={chatId} />
-            )}
-          </View>
-        </View>
+          <HistoryScreen chatId={chatId} onOpenPr={setPrSheet} />
+        </SessionSheet>
+      ) : null}
+      {toolSheet === 'files' ? (
+        <SessionSheet
+          title={t('session.files')}
+          fill
+          onDismiss={() => setToolSheet(null)}
+        >
+          <FilesScreen chatId={chatId} />
+        </SessionSheet>
+      ) : null}
+      {toolSheet === 'terminal' ? (
+        <SessionSheet
+          title={t('session.terminal')}
+          fill
+          onDismiss={() => setToolSheet(null)}
+        >
+          <TerminalScreen chatId={chatId} />
+        </SessionSheet>
       ) : null}
     </View>
   );
@@ -1060,14 +1014,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     maxWidth: '100%',
     overflow: 'hidden',
-  },
-  overlayBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   circle: {
     width: 40,

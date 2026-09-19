@@ -10,6 +10,7 @@ import {
   StyleSheet,
   View,
   type ColorValue,
+  type DimensionValue,
 } from 'react-native';
 
 export interface TrueSheetProps {
@@ -31,13 +32,25 @@ export interface TrueSheetRef {
 
 export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
   (
-    { onDidDismiss, grabber, backgroundColor, maxContentHeight, children },
+    {
+      onDidDismiss,
+      grabber,
+      backgroundColor,
+      maxContentHeight,
+      detents,
+      initialDetentIndex,
+      children,
+    },
     ref,
   ) => {
     useImperativeHandle(ref, () => ({
       present: async () => {},
       dismiss: async () => onDidDismiss?.(),
     }));
+    const detent = detents?.[initialDetentIndex ?? 0];
+    const fraction: DimensionValue | undefined =
+      typeof detent === 'number' ? `${Math.round(detent * 100)}%` : undefined;
+    const maxHeight: DimensionValue = fraction ?? maxContentHeight ?? '85%';
     return (
       <Modal
         visible
@@ -56,7 +69,8 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
             styles.sheet,
             {
               backgroundColor: backgroundColor ?? '#1c1c1e',
-              maxHeight: maxContentHeight ?? '85%',
+              height: fraction,
+              maxHeight,
             },
           ]}
         >

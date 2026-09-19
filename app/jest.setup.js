@@ -82,10 +82,16 @@ jest.mock('react-native-enriched-markdown', () => ({
 }));
 
 jest.mock('@lodev09/react-native-true-sheet', () => ({
-  TrueSheet: ({ children }: { children?: unknown }) =>
+  TrueSheet: ({
+    children,
+    ...props
+  }: {
+    children?: unknown,
+    detents?: unknown,
+  }) =>
     require('react').createElement(
       require('react-native').View,
-      null,
+      { testID: 'TrueSheet', ...props },
       children,
     ),
   dismissSheet: jest.fn(),

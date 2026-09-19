@@ -85,9 +85,11 @@ window width to a plan:
 
 - **< 700pt** → `compact`: the original `RootPager` (Home ↔ Session).
 - **≥ 700pt** → `regular`: Sidebar (`HomeScreen` at 300–360pt) + Detail
-  (`SessionScreen`). The iPad right inspector column is gone — Changes /
-  Files / Terminal / History open from the session overflow menu as
-  full-screen overlays (same path as iPhone).
+  (`SessionScreen`). The iPad right inspector column is gone — History /
+  Files / Terminal open from the session overflow menu as 75% `TrueSheet`s
+  (`SessionSheet`, same chrome as View details / Sub-agents: grabber, no
+  close button, first detent 0.75). Changes and Previews are not in the
+  menu; checkout diffs live in the PR modal.
   Transcript and composer are capped at ~720pt and centered.
 
 Selection (`chatId`), sidebar collapse, and drafts persist
@@ -95,8 +97,8 @@ across size-class changes because they live in the shell or the stores, not
 in the column tree. `SessionScreen` stays mounted while columns toggle; the
 compact pager's `Freeze` only applies when the session page is not visible.
 
-On iPhone the session overflow menu opens Changes / Files as overlays; the
-Terminal row is visible but disabled.
+On iPhone and iPad the session overflow menu opens View details, Sub-agents,
+History, Files, and Terminal as `SessionSheet`s.
 
 Compact `RootPager` has `scrollEnabled={false}` — opening a session is tap
 only. Back to threads is a leading-edge pan (~24pt, iOS interactive-pop
@@ -119,9 +121,9 @@ A started session is bound to `chat.config.harness`. The composer recent
 menu and More sheet list that provider's models only; New Session is where
 the provider is picked.
 
-## Workspace tools (Changes / Files)
+## Workspace tools (Files / Terminal / History)
 
-Both are thin screens over host-relayed RPCs — nothing runs on the phone.
+These are thin screens over host-relayed RPCs — nothing runs on the phone.
 
 - **Changes** (`screens/ChangesScreen.tsx`, `components/agentsKit/FileDiff.tsx`,
   `zeron/diff/`): `WatchCheckoutDiffs` stream (Vec<CheckoutDiff>) filtered to
@@ -162,18 +164,14 @@ Both are thin screens over host-relayed RPCs — nothing runs on the phone.
   Input is a hidden TextInput plus a key bar (Esc, Ctrl, arrows, Tab, Ctrl-C)
   mapping to byte sequences. Tabs allow multiple shells per session; exited
   shells show "exited (code)" with the TTL note.
-- **History** (`screens/HistoryScreen.tsx`, `zeron/history/history.ts`):
-  `ListGitHistory {cwd, cursor, limit}` paged rows (subject, author,
-  relative date, short sha), debounced `SearchGitHistory`, optional
-  `ResolveGitAvatars` (initials fallback), `FetchAll {repoPath}` header
-  action. Entry: the Changes header button and the session overflow.
-- **Previews** (`screens/PreviewsScreen.tsx`): `WatchPreviews {chatId}`
-  stream → `PreviewSnapshot {services, proxyPort}` (proto preview.rs L34-56);
-  each service's URL is `http://{hostname}:{proxyPort}` (preview.rs L28-32)
-  and opens in an in-app SFSafariViewController. The edge `/preview/{org}/ws`
-  route is the device-registration channel gated on the edge JWT
-  (edge/src/preview-route.ts) — preview content URLs are plain HTTP on the
-  host proxy, so no bearer is needed to view them.
+- **History** (`screens/HistoryScreen.tsx`, `components/threadPrs.ts`):
+  pull requests in this thread. The checkout's current change request
+  (`WatchCheckoutChangeRequest`) plus `github.com/.../pull/N` URLs in
+  transcript text. Tapping a row opens `PrSheet` (checkout diffs). Git
+  history RPCs (`ListGitHistory` etc.) remain in `zeron/history/history.ts`
+  but are not shown in this UI.
+- **Previews** (`screens/PreviewsScreen.tsx`): still implemented
+  (`WatchPreviews {chatId}`) but unwired from the session overflow.
 - **Agent accounts** (`screens/AgentAccountsScreen.tsx`,
   `zeron/accounts/accounts.ts`, under Settings → device): per-device
   `ListAgentAccounts` provider cards (active, plan label, usage meters at
