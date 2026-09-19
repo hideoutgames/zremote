@@ -133,6 +133,38 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
     asChild?: boolean;
   }) => {
     const { open } = useContext(Ctx);
+    const child =
+      React.Children.count(children) === 1
+        ? React.Children.only(children)
+        : undefined;
+    if (React.isValidElement(child)) {
+      const props = child.props as {
+        onPress?: (event: unknown) => void;
+        onLongPress?: (event: unknown) => void;
+      };
+      if (props.onPress !== undefined || props.onLongPress !== undefined) {
+        return React.cloneElement(
+          child as React.ReactElement<{
+            onPress?: (event: unknown) => void;
+            onLongPress?: (event: unknown) => void;
+          }>,
+          {
+            onPress: longPress
+              ? props.onPress
+              : (event: unknown) => {
+                  props.onPress?.(event);
+                  open();
+                },
+            onLongPress: longPress
+              ? (event: unknown) => {
+                  props.onLongPress?.(event);
+                  open();
+                }
+              : props.onLongPress,
+          },
+        );
+      }
+    }
     return (
       <Pressable
         onPress={longPress ? undefined : open}

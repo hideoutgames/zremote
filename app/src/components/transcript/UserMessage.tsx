@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import * as ContextMenu from 'zeego/context-menu';
+import * as ContextMenu from '../menus/context-menu';
 import Animated, {
   Easing,
   SlideInDown,

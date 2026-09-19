@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { Glass } from './Glass';
+import { MenuDismissShield } from './menus/MenuDismissShield';
 import { Icon } from './Icon';
 import { useTheme } from '../theme';
 
@@ -53,6 +54,7 @@ export function GlassSheet({
           <View style={styles.closeButton} />
         </View>
         {children}
+        <MenuDismissShield />
       </Glass>
     </TrueSheet>
   );

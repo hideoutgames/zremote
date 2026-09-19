@@ -2,7 +2,7 @@
 
 import React from 'react';
 import * as Clipboard from 'expo-clipboard';
-import * as ContextMenu from 'zeego/context-menu';
+import * as ContextMenu from '../menus/context-menu';
 import { t } from '../../i18n/strings';
 
 export function MessageCopyMenu({ text }: { text: string }) {
