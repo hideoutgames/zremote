@@ -127,8 +127,7 @@ export function EffortOverlay({
     [anchor, windowWidth, windowHeight],
   );
   const wash = useMemo(() => effortWashRect(dest), [dest]);
-  const skipMorph =
-    embedded || reduceMotion === true || origin === undefined;
+  const skipMorph = embedded || reduceMotion === true || origin === undefined;
   const start = skipMorph ? dest : origin;
   const left = useRef(new Animated.Value(start.x)).current;
   const top = useRef(new Animated.Value(start.y)).current;
@@ -396,7 +395,7 @@ export function EffortOverlay({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   embeddedRoot: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,

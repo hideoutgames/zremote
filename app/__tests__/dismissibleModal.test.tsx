@@ -189,6 +189,7 @@ test('formSheet model picker effort overlay stays inside the sheet Modal', async
       phase="idle"
       formSheet
       onClose={() => {}}
+      onApplyConfig={() => {}}
     />,
   );
   expect(tree.root.findAllByType(Modal)).toHaveLength(1);
