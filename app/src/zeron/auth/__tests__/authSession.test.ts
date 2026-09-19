@@ -13,6 +13,7 @@ import {
   generateVerifier,
   parseCallbackUrl,
   parsePastedCode,
+  MOBILE_SIGN_IN_STATE_PREFIX,
 } from '../authKit';
 import { MemorySecureStore } from '../secureStore';
 import { FakeClock } from '../../transport/clock';
@@ -141,6 +142,13 @@ describe('authKit', () => {
     expect(parsePastedCode('onlystate.')).toBeUndefined();
   });
 
+  test('parsePastedCode keeps the zr1. mobile prefix on state', () => {
+    expect(parsePastedCode('zr1.abc.thecode')).toEqual({
+      state: 'zr1.abc',
+      code: 'thecode',
+    });
+  });
+
   test('RFC 7636 appendix B PKCE vector', async () => {
     const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
     const sha256 = async (b: Uint8Array) =>
@@ -173,6 +181,7 @@ describe('AuthSession sign-in', () => {
       pkce: false,
     });
     expect(url).toContain('provider=authkit&state=');
+    expect(state.startsWith(MOBILE_SIGN_IN_STATE_PREFIX)).toBe(true);
     const next = await session.completeSignIn({ code: 'thecode', state });
     expect(next).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
     expect(calls.find(c => c.url.endsWith('/auth/exchange'))?.body).toEqual({

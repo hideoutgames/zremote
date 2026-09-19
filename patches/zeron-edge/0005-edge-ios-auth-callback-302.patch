@@ -1,0 +1,207 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hideoutgames <154709155+hideoutgames@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 16:00:00 +0000
+Subject: [PATCH] edge: 302 iOS AuthKit callback to zeron://
+
+GET /auth/cli/callback 302-hops iPhone/iPad user-agents and zr1.-prefixed
+states to zeron://auth/callback?code&state so ASWebAuthenticationSession
+can complete. The hop page no longer shows a paste code. Desktop zeron
+login is unchanged.
+---
+ edge/src/auth-routes.ts       | 30 ++++---
+ edge/src/edge-patches.test.ts | 92 +++++++++++-----------
+ 2 files changed, 66 insertions(+), 56 deletions(-)
+
+diff --git a/edge/src/auth-routes.ts b/edge/src/auth-routes.ts
+index dfdcd9d..7b83816 100644
+--- a/edge/src/auth-routes.ts
++++ b/edge/src/auth-routes.ts
+@@ -164,14 +164,20 @@ const html = (body: string, status = 200): Response =>
+ /**
+  * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
+  * WorkOS redirect URI; it does NOT exchange the code. Desktop CLI (`zeron
+- * login`) still renders `state.code`. iPhone/iPad user agents are hopped to
++ * login`) still renders `state.code`. iPhone/iPad user agents, and pending
++ * states the iOS app prefixes with `zr1.`, are 302-hopped to
+  * `zeron://auth/callback?code&state` so ASWebAuthenticationSession can finish
+  * without showing a paste page.
+  */
++export const MOBILE_SIGN_IN_STATE_PREFIX = "zr1.";
++
+ export const isIosMobileUa = (ua: string): boolean =>
+   /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+ 
+-const iosReturnPage = (appUrl: string, paste: string): string => {
++export const shouldHopToApp = (ua: string, state: string): boolean =>
++  isIosMobileUa(ua) || state.startsWith(MOBILE_SIGN_IN_STATE_PREFIX);
++
++const iosReturnPage = (appUrl: string): string => {
+   const safe = escapeHtml(appUrl);
+   return `<!doctype html>
+ <html lang="en">
+@@ -179,19 +185,26 @@ const iosReturnPage = (appUrl: string, paste: string): string => {
+ <meta charset="utf-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1" />
+ <meta name="robots" content="noindex" />
+-<meta http-equiv="refresh" content="0;url=${safe}" />
+ <title>Zeron — sign in</title>
+-<script>location.replace(${JSON.stringify(appUrl)});</script>
+ </head>
+ <body><main>
+ <h1>Returning to ZRemote</h1>
+ <p><a href="${safe}">Open ZRemote</a></p>
+-<p>If nothing happens, this code still works on the device that started sign-in:</p>
+-<code id="paste">${paste}</code>
+ </main></body>
+ </html>`;
+ };
+ 
++const hopToApp = (code: string, state: string): Response => {
++  const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
++  return new Response(iosReturnPage(app), {
++    status: 302,
++    headers: {
++      location: app,
++      "content-type": "text/html; charset=utf-8"
++    }
++  });
++};
++
+ const cliCallback = (url: URL, request: Request): Response => {
+   const code = url.searchParams.get("code");
+   const state = url.searchParams.get("state");
+@@ -207,10 +220,7 @@ const cliCallback = (url: URL, request: Request): Response => {
+   }
+   const paste = `${escapeHtml(state)}.${escapeHtml(code)}`;
+   const ua = request.headers.get("user-agent") ?? "";
+-  if (isIosMobileUa(ua)) {
+-    const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+-    return html(iosReturnPage(app, paste));
+-  }
++  if (shouldHopToApp(ua, state)) return hopToApp(code, state);
+   return html(
+     cliPage(
+       `<h1>Almost there</h1>
+diff --git a/edge/src/edge-patches.test.ts b/edge/src/edge-patches.test.ts
+index 1568263..c05a673 100644
+--- a/edge/src/edge-patches.test.ts
++++ b/edge/src/edge-patches.test.ts
+@@ -1,7 +1,7 @@
+ import { describe, expect, it, vi, afterEach } from "vitest";
+ import { appleAssociation } from "./apple-association";
+ import { exchange } from "./workos";
+-import { handleAuthRoute, isIosMobileUa } from "./auth-routes";
++import { handleAuthRoute, isIosMobileUa, shouldHopToApp } from "./auth-routes";
+ import type { Env } from "./env";
+ 
+ describe("apple-app-site-association", () => {
+@@ -70,62 +70,62 @@ describe("workos exchange PKCE", () => {
+ });
+ 
+ describe("cli callback iOS hop", () => {
++  const callback = async (state: string, ua: string) => {
++    const request = new Request(
++      `https://edge.test/auth/cli/callback?code=abc&state=${encodeURIComponent(state)}`,
++      { headers: { "user-agent": ua } }
++    );
++    return handleAuthRoute(request, {} as Env, new URL(request.url));
++  };
++
++  const iphoneUa =
++    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15";
++  const ipadMobileUa =
++    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
++  const desktopUa =
++    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
++
+   it("treats iPhone and iPadOS user agents as mobile", () => {
+-    expect(
+-      isIosMobileUa(
+-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
+-      )
+-    ).toBe(true);
+-    expect(
+-      isIosMobileUa(
+-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+-      )
+-    ).toBe(true);
+-    expect(
+-      isIosMobileUa(
+-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+-      )
+-    ).toBe(false);
++    expect(isIosMobileUa(iphoneUa)).toBe(true);
++    expect(isIosMobileUa(ipadMobileUa)).toBe(true);
++    expect(isIosMobileUa(desktopUa)).toBe(false);
+   });
+ 
+-  it("redirects iOS user agents to zeron://auth/callback", async () => {
+-    const request = new Request(
+-      "https://edge.test/auth/cli/callback?code=abc&state=xyz",
+-      {
+-        headers: {
+-          "user-agent":
+-            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
+-        }
+-      }
+-    );
+-    const res = await handleAuthRoute(
+-      request,
+-      {} as Env,
+-      new URL(request.url)
++  it("hops iOS user agents and zr1. states", () => {
++    expect(shouldHopToApp(iphoneUa, "xyz")).toBe(true);
++    expect(shouldHopToApp(desktopUa, "zr1.abc")).toBe(true);
++    expect(shouldHopToApp(desktopUa, "xyz")).toBe(false);
++  });
++
++  it("302-redirects iOS user agents to zeron://auth/callback", async () => {
++    const res = await callback("xyz", iphoneUa);
++    expect(res?.status).toBe(302);
++    expect(res?.headers.get("location")).toBe(
++      "zeron://auth/callback?code=abc&state=xyz"
+     );
+-    expect(res?.status).toBe(200);
+     const body = await res!.text();
+     expect(body).toContain("zeron://auth/callback?code=abc&state=xyz");
+-    expect(body).toContain("location.replace");
++    expect(body).toContain("Open ZRemote");
++    expect(body).not.toContain("Paste this code");
++    expect(body).not.toContain('id="paste"');
+   });
+ 
+-  it("keeps the paste-code page for desktop user agents", async () => {
+-    const request = new Request(
+-      "https://edge.test/auth/cli/callback?code=abc&state=xyz",
+-      {
+-        headers: {
+-          "user-agent":
+-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0"
+-        }
+-      }
+-    );
+-    const res = await handleAuthRoute(
+-      request,
+-      {} as Env,
+-      new URL(request.url)
++  it("302-redirects zr1. state even on a desktop user agent", async () => {
++    const res = await callback("zr1.abc", desktopUa);
++    expect(res?.status).toBe(302);
++    expect(res?.headers.get("location")).toBe(
++      "zeron://auth/callback?code=abc&state=zr1.abc"
+     );
+     const body = await res!.text();
++    expect(body).not.toContain("Paste this code");
++  });
++
++  it("keeps the paste-code page for desktop user agents", async () => {
++    const res = await callback("xyz", desktopUa);
++    expect(res?.status).toBe(200);
++    const body = await res!.text();
+     expect(body).toContain("Paste this code into the terminal");
+     expect(body).not.toContain("location.replace");
++    expect(res?.headers.get("location")).toBeNull();
+   });
+ });
+-- 
+2.43.0

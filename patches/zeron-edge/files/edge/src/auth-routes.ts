@@ -164,14 +164,20 @@ const html = (body: string, status = 200): Response =>
 /**
  * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
  * WorkOS redirect URI; it does NOT exchange the code. Desktop CLI (`zeron
- * login`) still renders `state.code`. iPhone/iPad user agents are hopped to
+ * login`) still renders `state.code`. iPhone/iPad user agents, and pending
+ * states the iOS app prefixes with `zr1.`, are 302-hopped to
  * `zeron://auth/callback?code&state` so ASWebAuthenticationSession can finish
  * without showing a paste page.
  */
+export const MOBILE_SIGN_IN_STATE_PREFIX = "zr1.";
+
 export const isIosMobileUa = (ua: string): boolean =>
   /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
 
-const iosReturnPage = (appUrl: string, paste: string): string => {
+export const shouldHopToApp = (ua: string, state: string): boolean =>
+  isIosMobileUa(ua) || state.startsWith(MOBILE_SIGN_IN_STATE_PREFIX);
+
+const iosReturnPage = (appUrl: string): string => {
   const safe = escapeHtml(appUrl);
   return `<!doctype html>
 <html lang="en">
@@ -179,17 +185,24 @@ const iosReturnPage = (appUrl: string, paste: string): string => {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<meta http-equiv="refresh" content="0;url=${safe}" />
 <title>Zeron — sign in</title>
-<script>location.replace(${JSON.stringify(appUrl)});</script>
 </head>
 <body><main>
 <h1>Returning to ZRemote</h1>
 <p><a href="${safe}">Open ZRemote</a></p>
-<p>If nothing happens, this code still works on the device that started sign-in:</p>
-<code id="paste">${paste}</code>
 </main></body>
 </html>`;
+};
+
+const hopToApp = (code: string, state: string): Response => {
+  const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+  return new Response(iosReturnPage(app), {
+    status: 302,
+    headers: {
+      location: app,
+      "content-type": "text/html; charset=utf-8"
+    }
+  });
 };
 
 const cliCallback = (url: URL, request: Request): Response => {
@@ -207,10 +220,7 @@ const cliCallback = (url: URL, request: Request): Response => {
   }
   const paste = `${escapeHtml(state)}.${escapeHtml(code)}`;
   const ua = request.headers.get("user-agent") ?? "";
-  if (isIosMobileUa(ua)) {
-    const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
-    return html(iosReturnPage(app, paste));
-  }
+  if (shouldHopToApp(ua, state)) return hopToApp(code, state);
   return html(
     cliPage(
       `<h1>Almost there</h1>
