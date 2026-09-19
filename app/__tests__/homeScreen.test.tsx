@@ -182,6 +182,9 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
     n => n.props.testID === 'spaceFilter',
   )[0];
   expect(trigger).toBeDefined();
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'top-chrome-fade').length,
+  ).toBe(1);
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
   const search = searchInput(mounted.root);
   expect(search).toBeDefined();

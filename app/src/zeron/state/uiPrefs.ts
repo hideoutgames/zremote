@@ -6,6 +6,15 @@ import { createStore, useStore } from 'zustand';
 import type { DocDisk } from '../native/docDisk';
 import { rememberRecentModel, type RecentModel } from './recentModels';
 import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
+import {
+  copyBackgroundFile,
+  getBackgroundFs,
+  retireManagedBackground,
+  type BackgroundInstallResult,
+  type BackgroundSource,
+  type NewThreadBackgroundEffect,
+  type NewThreadComposerBackground,
+} from './newThreadBackground';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
@@ -37,6 +46,10 @@ export interface UiPrefs {
   composeDefaults?: ComposeDefaults;
   /** Last-used effort / Fast per catalog model (`harness:modelId`). */
   modelSettingsByKey: Record<string, ModelSettings>;
+  /** Device-local artwork behind the empty new-thread composer. */
+  newThreadComposerBackground?: NewThreadComposerBackground;
+  /** Non-destructive treatment composited over the artwork. */
+  newThreadBackgroundEffect: NewThreadBackgroundEffect;
 }
 
 export interface ComposeDefaults {
@@ -61,6 +74,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   recentModels: [],
   pinnedChatIds: [],
   modelSettingsByKey: {},
+  newThreadBackgroundEffect: 'none',
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -90,11 +104,14 @@ export const unbindUiPrefs = (): void => {
 };
 
 const save = (): void => {
-  persist?.disk
-    .saveUiPrefs(persist.orgId, persist.userId, {
-      ...uiPrefsStore.getState(),
-    })
-    .catch(() => {});
+  saveAsync().catch(() => {});
+};
+
+const saveAsync = (): Promise<void> => {
+  if (persist === undefined) return Promise.resolve();
+  return persist.disk.saveUiPrefs(persist.orgId, persist.userId, {
+    ...uiPrefsStore.getState(),
+  });
 };
 
 export const setLiveActionPrefersSteer = (v: boolean): void => {
@@ -264,3 +281,53 @@ export const modelSettingsFor = (
 
 export const useModelSettingsMap = (): Record<string, ModelSettings> =>
   useStore(uiPrefsStore, s => s.modelSettingsByKey);
+
+export const useNewThreadComposerBackground = ():
+  | NewThreadComposerBackground
+  | undefined => useStore(uiPrefsStore, s => s.newThreadComposerBackground);
+
+export const useNewThreadBackgroundEffect = (): NewThreadBackgroundEffect =>
+  useStore(uiPrefsStore, s => s.newThreadBackgroundEffect);
+
+export const setNewThreadBackgroundEffect = (
+  v: NewThreadBackgroundEffect,
+): void => {
+  uiPrefsStore.setState({ newThreadBackgroundEffect: v });
+  save();
+};
+
+export const installNewThreadComposerBackground = async (
+  input: BackgroundSource,
+): Promise<BackgroundInstallResult> => {
+  const fs = getBackgroundFs();
+  if (fs === undefined) return { ok: false, reason: 'failed' };
+  const previous = uiPrefsStore.getState().newThreadComposerBackground;
+  const copied = await copyBackgroundFile(input, fs);
+  if (copied.ok === false) return copied;
+  uiPrefsStore.setState({
+    newThreadComposerBackground: copied.background,
+  });
+  try {
+    await saveAsync();
+  } catch {
+    uiPrefsStore.setState({
+      newThreadComposerBackground: previous,
+    });
+    await fs.deleteFile(copied.background.uri).catch(() => {});
+    return { ok: false, reason: 'failed' };
+  }
+  await retireManagedBackground(fs, previous, copied.background.uri);
+  return copied;
+};
+
+export const removeNewThreadComposerBackground = async (): Promise<void> => {
+  const previous = uiPrefsStore.getState().newThreadComposerBackground;
+  uiPrefsStore.setState({
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'none',
+  });
+  save();
+  const fs = getBackgroundFs();
+  if (fs === undefined) return;
+  await retireManagedBackground(fs, previous, '');
+};

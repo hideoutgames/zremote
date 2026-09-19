@@ -45,8 +45,8 @@ jest.mock('@callstack/liquid-glass', () => ({
 jest.mock('expo-blur', () => ({
   BlurView: require('react-native').View,
 }));
-jest.mock('expo-linear-gradient', () => ({
-  LinearGradient: require('react-native').View,
+jest.mock('expo-image', () => ({
+  Image: require('react-native').Image,
 }));
 jest.mock('@react-native-masked-view/masked-view', () => {
   const React = require('react');
@@ -261,17 +261,40 @@ jest.mock('expo-web-browser', () => ({
 }));
 jest.mock('expo-file-system', () => ({
   File: class {
-    constructor(uri) {
-      this.uri = uri;
+    constructor(uri, name) {
+      this.uri =
+        typeof uri === 'string'
+          ? name !== undefined
+            ? `${uri.replace(/\/$/, '')}/${name}`
+            : uri
+          : uri?.uri !== undefined && name !== undefined
+          ? `${String(uri.uri).replace(/\/$/, '')}/${name}`
+          : uri?.uri ?? uri;
     }
+    exists = false;
     base64() {
       return Promise.resolve('');
     }
     text() {
       return Promise.resolve('');
     }
+    copy() {}
+    delete() {}
+    create() {}
   },
-  Directory: class {},
+  Directory: class {
+    constructor(base, name) {
+      this.uri =
+        typeof base === 'string'
+          ? `${base.replace(/\/$/, '')}/${name ?? ''}`
+          : `${String(base?.uri ?? 'file:///docs').replace(/\/$/, '')}/${
+              name ?? ''
+            }`;
+      this.exists = false;
+    }
+    create() {}
+    delete() {}
+  },
   Paths: { document: { uri: 'file:///docs' }, cache: { uri: 'file:///cache' } },
 }));
 jest.mock('expo-document-picker', () => ({

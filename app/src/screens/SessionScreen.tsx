@@ -128,6 +128,8 @@ import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { createLog } from '../zeron/log';
+import { NewThreadBackground } from '../components/NewThreadBackground';
+import { TopChromeFade } from '../components/TopChromeFade';
 
 const log = createLog();
 
@@ -199,14 +201,18 @@ function ComposeSessionScreen({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const [headerH, setHeaderH] = useState(0);
   const keyboardOffset = { opened: 0 };
   const dismissPan = useKeyboardDismissPan();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <NewThreadBackground />
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
+        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
+        <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
         <View style={styles.headerRow} pointerEvents="box-none">
           <View style={styles.headerCenter} pointerEvents="box-none">
             <View style={styles.titlePillWrap} pointerEvents="box-none">
@@ -624,6 +630,7 @@ function ActiveSessionScreen({
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
   const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
+  const [headerH, setHeaderH] = useState(0);
   const prBadge = useMemo(
     () => composerPrBadge(checkoutSummary, checkoutDiff),
     [checkoutSummary, checkoutDiff],
@@ -655,8 +662,10 @@ function ActiveSessionScreen({
           box-none: taps in the transparent gaps reach the transcript. */}
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
+        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
+        <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
         <View style={styles.headerRow} pointerEvents="box-none">
           <View style={styles.headerCenter} pointerEvents="box-none">
             <View style={styles.titlePillWrap} pointerEvents="box-none">

@@ -254,6 +254,37 @@ const en = {
   'settings.titleHarness': 'Harness',
   'settings.titleModel': 'Model',
   'settings.agentAccounts': 'Agent Accounts',
+  'settings.appearance': 'Appearance',
+  'settings.background': 'New thread composer background',
+  'settings.backgroundEmpty':
+    'Add an image behind the composer on empty new threads.',
+  'settings.backgroundFrostHint': 'Softened automatically on frosted themes.',
+  'settings.backgroundUnavailable': 'Image unavailable',
+  'settings.backgroundUnavailableHint': 'Choose a replacement or remove it.',
+  'settings.backgroundChoose': 'Choose image',
+  'settings.backgroundReplace': 'Replace image',
+  'settings.backgroundRemove': 'Remove',
+  'settings.backgroundEffect': 'Background effect',
+  'settings.backgroundEffect.none': 'None',
+  'settings.backgroundEffect.dither': 'Dither',
+  'settings.backgroundEffect.ascii': 'ASCII',
+  'settings.backgroundEffect.halftone': 'Halftone',
+  'settings.backgroundEffect.scanlines': 'Scanlines',
+  'settings.backgroundEffect.noneHint': 'Shows the original artwork.',
+  'settings.backgroundEffect.ditherHint':
+    'Rebuilds the artwork with a dithered color palette.',
+  'settings.backgroundEffect.asciiHint':
+    'Recreates the artwork with colored characters on black.',
+  'settings.backgroundEffect.halftoneHint':
+    'Recreates the artwork with colored print dots on black.',
+  'settings.backgroundEffect.scanlinesHint':
+    'Adds a pronounced horizontal display-line texture.',
+  'settings.backgroundErrorTitle': 'Couldn\u2019t use that image',
+  'settings.backgroundError.tooLarge': 'Images must be 24 MB or smaller.',
+  'settings.backgroundError.unsupported':
+    'This background image is unsupported or damaged. Choose a valid image such as PNG or JPEG.',
+  'settings.backgroundError.failed':
+    'Unable to save the image. Check folder permissions and try again.',
 
   // Composer attachment menu
   'composer.camera': 'Camera',

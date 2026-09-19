@@ -73,6 +73,7 @@ import {
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
+import { TopChromeFade } from '../components/TopChromeFade';
 
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
@@ -679,6 +680,8 @@ export function HomeScreen({
         renderItem={renderRow}
       />
 
+      <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 64} />
+
       <View
         style={[styles.topBar, { paddingTop: insets.top + 8 }]}
         onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
@@ -757,7 +760,7 @@ const CIRCLE = 44;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
