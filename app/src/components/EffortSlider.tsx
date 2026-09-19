@@ -4,15 +4,15 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View, type GestureResponderEvent } from 'react-native';
-import Animated, {
+import {
   Easing,
-  useAnimatedStyle,
   useSharedValue,
   withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
 import { selectionTick } from '../zeron/native/haptics';
 import { detentForValue } from './modelPicker';
+import { EffortTrackAnim } from './EffortTrackAnim';
 import {
   effortSliderMagnetRadius,
   effortSliderProgressHeight,
@@ -36,7 +36,6 @@ export interface EffortSliderProps {
 }
 
 export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
-  'use no memo';
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const trackWidth = useRef(0);
@@ -97,17 +96,6 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
   const progressInset = geo.thumbCenterStart - effortSliderProgressHeight / 2;
   const travel = geo.travelDistance;
 
-  const fillStyle = useAnimatedStyle(() => ({
-    width: effortSliderProgressHeight + travel * position.value,
-  }));
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: effortSliderThumbInset + travel * position.value,
-      },
-    ],
-  }));
-
   return (
     <View
       style={styles.track}
@@ -158,28 +146,12 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
           ]}
         />
       ))}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.progress,
-          {
-            backgroundColor: theme.text,
-            left: progressInset,
-            top: (effortSliderTrackHeight - effortSliderProgressHeight) / 2,
-          },
-          fillStyle,
-        ]}
-      />
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.thumb,
-          {
-            backgroundColor: theme.sendActive,
-            top: (effortSliderTrackHeight - effortSliderThumbSize) / 2,
-          },
-          thumbStyle,
-        ]}
+      <EffortTrackAnim
+        travel={travel}
+        position={position}
+        progressInset={progressInset}
+        fillColor={theme.text}
+        thumbColor={theme.sendActive}
       />
     </View>
   );
@@ -197,18 +169,5 @@ const styles = StyleSheet.create({
     height: effortSliderTickSize,
     borderRadius: effortSliderTickSize / 2,
     top: (effortSliderTrackHeight - effortSliderTickSize) / 2,
-  },
-  progress: {
-    position: 'absolute',
-    height: effortSliderProgressHeight,
-    borderRadius: effortSliderProgressHeight / 2,
-    overflow: 'hidden',
-  },
-  thumb: {
-    position: 'absolute',
-    width: effortSliderThumbSize,
-    height: effortSliderThumbSize,
-    borderRadius: effortSliderThumbSize / 2,
-    left: 0,
   },
 });

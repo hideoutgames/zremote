@@ -37,6 +37,7 @@ import { RootPager } from '../screens/RootPager';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SessionScreen } from '../screens/SessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { AppErrorBoundary } from '../app/AppErrorBoundary';
 import { useTheme } from '../theme';
 import { Icon } from '../components/Icon';
 import { layoutFor, type LayoutPrefs } from './layout';
@@ -163,21 +164,25 @@ export function AdaptiveShell({
 
       <View style={styles.detail}>
         {composing ? (
-          <SessionScreen
-            onBack={toggleSidebar}
-            onCreated={openSession}
-            leadingIcon="sidebar.left"
-            contentMaxWidth={layout.measureCap}
-            composerMaxWidth={layout.composerMaxWidth}
-          />
+          <AppErrorBoundary resetKey="compose">
+            <SessionScreen
+              onBack={toggleSidebar}
+              onCreated={openSession}
+              leadingIcon="sidebar.left"
+              contentMaxWidth={layout.measureCap}
+              composerMaxWidth={layout.composerMaxWidth}
+            />
+          </AppErrorBoundary>
         ) : chatId !== null ? (
-          <SessionScreen
-            chatId={chatId}
-            onBack={toggleSidebar}
-            leadingIcon="sidebar.left"
-            contentMaxWidth={layout.measureCap}
-            composerMaxWidth={layout.composerMaxWidth}
-          />
+          <AppErrorBoundary resetKey={chatId}>
+            <SessionScreen
+              chatId={chatId}
+              onBack={toggleSidebar}
+              leadingIcon="sidebar.left"
+              contentMaxWidth={layout.measureCap}
+              composerMaxWidth={layout.composerMaxWidth}
+            />
+          </AppErrorBoundary>
         ) : (
           <View style={styles.emptyDetail}>
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
