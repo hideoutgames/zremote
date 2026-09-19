@@ -23,11 +23,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  type SharedValue,
-} from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { type LegendListRef } from '@legendapp/list/react-native';
 import {
@@ -131,24 +126,19 @@ export function SessionScreen({
   onBack,
   leadingIcon,
   contentMaxWidth,
-  leadingInsetSV,
+  composerMaxWidth,
 }: {
   chatId: string;
   onBack: () => void;
   /** iPad split view: replaces the back chevron with a sidebar toggle. */
   leadingIcon?: string;
-  /** iPad: cap the transcript/composer measure (~720pt), centered. */
+  /** iPad: cap the transcript measure (~720pt), centered. */
   contentMaxWidth?: number;
-  /** iPad: animated leading inset under the floating sidebar — applied to
-   * the header and composer measure only; the transcript scrolls under. */
-  leadingInsetSV?: SharedValue<number>;
+  /** iPad: cap the composer stack at 50% of the window width. */
+  composerMaxWidth?: number;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const fallbackInset = useSharedValue(0);
-  const leadingPad = useAnimatedStyle(() => ({
-    paddingLeft: (leadingInsetSV ?? fallbackInset).value,
-  }));
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const auth = useAuthSession();
@@ -555,8 +545,8 @@ export function SessionScreen({
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + 6 }, leadingPad]}
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
       >
         <Pressable
@@ -683,7 +673,7 @@ export function SessionScreen({
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </View>
-      </Animated.View>
+      </View>
 
       {composerFocused ? (
         <Pressable
@@ -737,13 +727,12 @@ export function SessionScreen({
       </KeyboardStickyView>
 
       <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        <Animated.View
-          style={[
-            contentMaxWidth !== undefined
-              ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-              : undefined,
-            leadingPad,
-          ]}
+        <View
+          style={
+            composerMaxWidth !== undefined
+              ? [styles.measureCap, { maxWidth: composerMaxWidth }]
+              : undefined
+          }
         >
           <ComposerChromeRow
             queueCount={session.queue.length}
@@ -814,7 +803,7 @@ export function SessionScreen({
             composerRef={composerRef}
             onLayout={onComposerLayout}
           />
-        </Animated.View>
+        </View>
       </KeyboardStickyView>
 
       {queueOpen ? (

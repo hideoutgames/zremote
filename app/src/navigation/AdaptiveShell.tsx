@@ -23,7 +23,6 @@ import {
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withTiming,
@@ -80,7 +79,7 @@ export function AdaptiveShell({
   );
   const openSettings = useCallback(() => setSettingsOpen(true), []);
 
-  // Floating sidebar slide: collapse.value 0 = visible, 1 = offscreen left.
+  // In-flow sidebar: collapse.value 0 = open (full width), 1 = closed (0).
   const reduceMotion = useReducedMotion();
   const collapse = useSharedValue(layout.sidebarVisible ? 0 : 1);
   useEffect(() => {
@@ -94,15 +93,8 @@ export function AdaptiveShell({
   }, [layout.sidebarVisible, reduceMotion, collapse]);
 
   const sidebarAnim = useAnimatedStyle(() => ({
-    transform: [{ translateX: collapse.value * -(layout.sidebarWidth + 12) }],
-    opacity: 1 - collapse.value,
+    width: (1 - collapse.value) * layout.sidebarWidth,
   }));
-
-  /** Detail leading inset: header/composer pad out from under the floating
-   * sidebar; the transcript itself stays edge-to-edge underneath it. */
-  const leadingInset = useDerivedValue(
-    () => (1 - collapse.value) * (layout.sidebarWidth + 24),
-  );
 
   if (layout.mode === 'compact') {
     return (
@@ -115,8 +107,33 @@ export function AdaptiveShell({
 
   return (
     <View style={[styles.row, { backgroundColor: theme.background }]}>
-      {/* Detail + inspector render edge-to-edge; the floating sidebar is an
-          absolute glass panel over them (iPadOS 26 idiom). */}
+      <Animated.View
+        style={[styles.sidebarColumn, sidebarAnim]}
+        pointerEvents={layout.sidebarVisible ? 'auto' : 'none'}
+        accessibilityState={{ expanded: layout.sidebarVisible }}
+        accessibilityLabel={t('sidebar.toggle')}
+        testID="threadsSidebar"
+      >
+        <View
+          style={[
+            styles.sidebarInner,
+            {
+              width: layout.sidebarWidth,
+              paddingTop: insets.top + 8,
+              paddingBottom: insets.bottom + 8,
+            },
+          ]}
+        >
+          <Glass style={styles.sidebarGlass}>
+            <HomeScreen
+              variant="sidebar"
+              onOpenSession={setChatId}
+              onOpenSettings={openSettings}
+            />
+          </Glass>
+        </View>
+      </Animated.View>
+
       <View style={styles.detail}>
         {chatId !== null ? (
           <SessionScreen
@@ -124,7 +141,7 @@ export function AdaptiveShell({
             onBack={toggleSidebar}
             leadingIcon="sidebar.left"
             contentMaxWidth={layout.measureCap}
-            leadingInsetSV={leadingInset}
+            composerMaxWidth={layout.composerMaxWidth}
           />
         ) : (
           <View style={styles.emptyDetail}>
@@ -134,32 +151,6 @@ export function AdaptiveShell({
           </View>
         )}
       </View>
-
-      {/* Floating glass sidebar — always mounted so collapse can animate;
-          pointerEvents none while offscreen. */}
-      <Animated.View
-        style={[
-          styles.sidebarPanel,
-          {
-            top: insets.top + 8,
-            bottom: insets.bottom + 8,
-            width: layout.sidebarWidth,
-          },
-          sidebarAnim,
-        ]}
-        pointerEvents={layout.sidebarVisible ? 'auto' : 'none'}
-        accessibilityState={{ expanded: layout.sidebarVisible }}
-        accessibilityLabel={t('sidebar.toggle')}
-        testID="floatingSidebar"
-      >
-        <Glass style={styles.sidebarGlass}>
-          <HomeScreen
-            variant="sidebar"
-            onOpenSession={setChatId}
-            onOpenSettings={openSettings}
-          />
-        </Glass>
-      </Animated.View>
 
       {/* Settings as a native sheet (regular width → formSheet). */}
       <Modal
@@ -202,9 +193,13 @@ export function InspectorToggle({
 
 const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row' },
-  sidebarPanel: {
-    position: 'absolute',
-    left: 12,
+  sidebarColumn: {
+    overflow: 'hidden',
+  },
+  sidebarInner: {
+    flex: 1,
+    paddingLeft: 12,
+    paddingRight: 8,
   },
   sidebarGlass: {
     flex: 1,

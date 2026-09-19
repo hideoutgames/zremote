@@ -23,7 +23,7 @@ export interface UiPrefs {
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
    * Loro init fails, relay mode is selected regardless. */
   forceRelayMode: boolean;
-  /** iPad floating sidebar collapsed (AdaptiveShell, ≥700pt only). */
+  /** iPad threads sidebar collapsed (AdaptiveShell, ≥700pt only). */
   sidebarCollapsed: boolean;
   /** Per-chat composer Plan mode (prefixes the outgoing prompt). */
   planModeByChat: Record<string, boolean>;

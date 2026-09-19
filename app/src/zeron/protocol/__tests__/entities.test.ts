@@ -10,8 +10,10 @@ import {
   deviceVersionAtLeast,
   displayTitle,
   effectiveStatus,
+  isAgentRunning,
   SESSION_STALE_MS,
   sortActive,
+  sortOverviewThreads,
   spaceDisplayName,
   versionTriple,
 } from '../entities';
@@ -86,6 +88,49 @@ describe('sortActive', () => {
       'e',
       'a',
     ]);
+  });
+});
+
+describe('sortOverviewThreads', () => {
+  it('puts agent-running threads first, then recency within each group', () => {
+    const idleRecent = chat({ id: 'idle-new', lastMessageAt: 90 });
+    const idleOld = chat({ id: 'idle-old', lastMessageAt: 10 });
+    const workingOld = chat({ id: 'work-old', lastMessageAt: 20 });
+    const awaitingNew = chat({ id: 'wait-new', lastMessageAt: 50 });
+    const sessions = {
+      'work-old': session('working', 100_000),
+      'wait-new': session('awaitingInput', 100_000),
+      'idle-new': session('idle', 100_000),
+    };
+    expect(
+      sortOverviewThreads(
+        [idleRecent, idleOld, workingOld, awaitingNew],
+        sessions,
+        100_000,
+      ).map(x => x.id),
+    ).toEqual(['wait-new', 'work-old', 'idle-new', 'idle-old']);
+  });
+
+  it('treats stale working rows as inactive', () => {
+    const working = chat({ id: 'stale', lastMessageAt: 80 });
+    const idle = chat({ id: 'idle', lastMessageAt: 10 });
+    expect(
+      sortOverviewThreads(
+        [idle, working],
+        { stale: session('working', 0) },
+        SESSION_STALE_MS + 10,
+      ).map(x => x.id),
+    ).toEqual(['stale', 'idle']);
+  });
+});
+
+describe('isAgentRunning', () => {
+  it('is true for working and awaitingInput only', () => {
+    expect(isAgentRunning('working')).toBe(true);
+    expect(isAgentRunning('awaitingInput')).toBe(true);
+    expect(isAgentRunning('idle')).toBe(false);
+    expect(isAgentRunning('completed')).toBe(false);
+    expect(isAgentRunning('errored')).toBe(false);
   });
 });
 
