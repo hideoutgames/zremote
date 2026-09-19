@@ -27,6 +27,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { NitroImage } from 'react-native-nitro-image';
 import * as DropdownMenu from 'zeego/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
@@ -69,6 +70,7 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { VoicePill } from './VoicePill';
+import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
 // lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
@@ -167,6 +169,7 @@ export const Composer = React.memo(function ({
   );
   const setDragExtraRef = useRef(setDragExtra);
   setDragExtraRef.current = setDragExtra;
+  const focusedRef = useRef(false);
   const grabberPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -184,6 +187,13 @@ export const Composer = React.memo(function ({
         const next = Math.max(0, Math.min(max, extraStartRef.current - g.dy));
         setComposerExtraHeight(next);
         setDragExtraRef.current(null);
+        if (
+          focusedRef.current &&
+          extraStartRef.current === 0 &&
+          shouldDismissKeyboardOnSwipe(g.dx, g.dy, g.vy)
+        ) {
+          KeyboardController.dismiss();
+        }
       },
     }),
   ).current;
@@ -535,8 +545,14 @@ export const Composer = React.memo(function ({
             onSelectionChange={e =>
               (selRef.current = e.nativeEvent.selection.start)
             }
-            onFocus={() => onFocusChange?.(true)}
-            onBlur={() => onFocusChange?.(false)}
+            onFocus={() => {
+              focusedRef.current = true;
+              onFocusChange?.(true);
+            }}
+            onBlur={() => {
+              focusedRef.current = false;
+              onFocusChange?.(false);
+            }}
             placeholder={
               live === 'queue'
                 ? t('session.queuePlaceholder')
@@ -804,7 +820,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 8,
-    paddingBottom: 2,
+    paddingBottom: 8,
   },
   grabber: {
     width: 36,

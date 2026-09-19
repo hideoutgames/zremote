@@ -403,6 +403,7 @@ export function HomeScreen({
           bottom: variant === 'sidebar' ? bottomH : composerH,
         }}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="interactive"
         renderItem={renderRow}
       />
 

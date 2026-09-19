@@ -13,7 +13,6 @@ import React, {
 import {
   AccessibilityInfo,
   Alert,
-  Keyboard,
   type LayoutChangeEvent,
   Platform,
   Pressable,
@@ -23,7 +22,10 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import {
+  KeyboardController,
+  KeyboardStickyView,
+} from 'react-native-keyboard-controller';
 import { type LegendListRef } from '@legendapp/list/react-native';
 import {
   KeyboardAwareLegendList,
@@ -107,6 +109,7 @@ import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import { useKeyboardDismissPan } from '../navigation/keyboardDismissGesture';
 import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
@@ -180,6 +183,7 @@ function ComposeSessionScreen({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const keyboardOffset = { opened: insets.bottom };
+  const dismissPan = useKeyboardDismissPan();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View
@@ -215,7 +219,7 @@ function ComposeSessionScreen({
         </View>
         <View style={styles.headerRight} />
       </View>
-      <View style={styles.composeEmpty}>
+      <View style={styles.composeEmpty} {...dismissPan.panHandlers}>
         <Text style={[styles.empty, { color: theme.textSecondary }]}>
           {t('session.empty')}
         </Text>
@@ -475,6 +479,7 @@ function ActiveSessionScreen({
   const [effortOpen, setEffortOpen] = useState(false);
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const dismissPan = useKeyboardDismissPan();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
@@ -782,16 +787,23 @@ function ActiveSessionScreen({
       </View>
 
       {composerFocused ? (
-        <Pressable
+        <View
           style={[
             styles.focusDim,
             theme.scheme === 'dark'
               ? styles.focusDimDark
               : styles.focusDimLight,
           ]}
-          onPress={() => Keyboard.dismiss()}
+          accessible
           accessibilityRole="button"
           accessibilityLabel={t('composer.dismissKeyboard')}
+          accessibilityActions={[{ name: 'activate' }]}
+          onAccessibilityAction={event => {
+            if (event.nativeEvent.actionName === 'activate') {
+              KeyboardController.dismiss();
+            }
+          }}
+          {...dismissPan.panHandlers}
         />
       ) : null}
 
