@@ -3,15 +3,23 @@
 
 import React, { useRef } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text, View } from 'react-native';
-import { SessionTranscriptList } from '../src/components/SessionTranscriptList';
+import { Text, View, type LayoutChangeEvent } from 'react-native';
+import {
+  SessionTranscriptList,
+  type SessionTranscriptListHandle,
+} from '../src/components/SessionTranscriptList';
 import type { MessageEntry } from '../src/zeron/protocol/types';
+import {
+  setComposerExtraHeightLive,
+  uiPrefsStore,
+} from '../src/zeron/state/uiPrefs';
 
-const scrollMessageToEnd: jest.Mock = (
-  jest.requireMock('@legendapp/list/keyboard') as {
-    __scrollMessageToEnd: jest.Mock;
-  }
-).__scrollMessageToEnd;
+const keyboardMock = jest.requireMock('@legendapp/list/keyboard') as {
+  __scrollMessageToEnd: jest.Mock;
+  __onComposerLayout: jest.Mock;
+};
+const scrollMessageToEnd = keyboardMock.__scrollMessageToEnd;
+const reportComposerInset = keyboardMock.__onComposerLayout;
 
 const entry = (id: string): MessageEntry => ({
   id,
@@ -21,6 +29,18 @@ const entry = (id: string): MessageEntry => ({
   deviceId: 'd1',
   status: 'complete',
 });
+
+const layoutEvent = (height: number): LayoutChangeEvent =>
+  ({
+    nativeEvent: { layout: { x: 0, y: 0, width: 390, height } },
+  } as LayoutChangeEvent);
+
+function lastReportedHeight(): number {
+  const last = reportComposerInset.mock.calls.at(-1)?.[0] as
+    | LayoutChangeEvent
+    | undefined;
+  return last?.nativeEvent.layout.height ?? -1;
+}
 
 function Harness({
   entries,
@@ -48,6 +68,8 @@ function Harness({
 
 beforeEach(() => {
   scrollMessageToEnd.mockClear();
+  reportComposerInset.mockClear();
+  uiPrefsStore.setState({ composerExtraHeight: 0 });
 });
 
 test('scrolls to the bottom once when entries are present on mount', async () => {
@@ -104,6 +126,60 @@ test('scrolls again when openKey changes', async () => {
     tree!.update(<Harness entries={[entry('m1')]} openKey="c1:2" />);
   });
   expect(scrollMessageToEnd).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('live extra height adds 1:1 to the transcript inset', async () => {
+  const listRef = React.createRef<SessionTranscriptListHandle>();
+  const composerRef = React.createRef<View>();
+  const heights: number[] = [];
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <SessionTranscriptList
+        ref={listRef}
+        openKey="c1:1"
+        entries={[entry('m1')]}
+        renderEntry={({ item }: { item: MessageEntry }) => (
+          <Text>{item.id}</Text>
+        )}
+        composerRef={composerRef}
+        windowWidth={390}
+        windowHeight={844}
+        insetsTop={47}
+        insetsBottom={34}
+        onComposerHeight={h => heights.push(h)}
+        onShowScrollDown={() => {}}
+      />,
+    );
+  });
+
+  await act(async () => {
+    listRef.current!.onComposerLayout(layoutEvent(200));
+  });
+  expect(heights.at(-1)).toBe(200);
+  expect(lastReportedHeight()).toBe(200);
+
+  await act(async () => {
+    setComposerExtraHeightLive(40);
+  });
+  expect(heights.at(-1)).toBe(240);
+  expect(lastReportedHeight()).toBe(240);
+
+  await act(async () => {
+    listRef.current!.onComposerLayout(layoutEvent(200));
+  });
+  expect(heights.at(-1)).toBe(240);
+  expect(lastReportedHeight()).toBe(240);
+
+  await act(async () => {
+    listRef.current!.onComposerLayout(layoutEvent(292));
+  });
+  expect(heights.at(-1)).toBe(292);
+  expect(lastReportedHeight()).toBe(292);
 
   await act(async () => {
     tree!.unmount();
