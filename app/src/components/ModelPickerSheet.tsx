@@ -1,5 +1,5 @@
-// More-models sheet: search + models grouped by provider. Effort / Fast
-// live on the composer overlay. Sandbox and auto-approve stay here.
+// More-models sheet: search + models for the session's provider. Effort /
+// Fast live on the composer overlay. Sandbox and auto-approve stay here.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -40,7 +40,6 @@ export interface ModelPickerSheetProps {
   runtime: AppRuntime;
   chat: Chat;
   phase: RunPhase;
-  hasMessages: boolean;
   onClose: () => void;
   formSheet?: boolean;
 }
@@ -55,7 +54,6 @@ export function ModelPickerSheet({
   runtime,
   chat,
   phase,
-  hasMessages,
   onClose,
   formSheet,
 }: ModelPickerSheetProps) {
@@ -81,9 +79,11 @@ export function ModelPickerSheet({
     }
   }, [harnesses, runtime, deviceId, catalogTick]);
 
+  const locked = harnessId !== undefined && harnessId !== '';
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
     return harnesses
+      .filter(h => !locked || h.id === harnessId)
       .map(h => ({
         harness: h,
         models: modelsFor(deviceId, h.id).filter(m => {
@@ -97,7 +97,7 @@ export function ModelPickerSheet({
       }))
       .filter(g => g.models.length > 0 || q === '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [harnesses, deviceId, catalogTick, query]);
+  }, [harnesses, deviceId, catalogTick, query, locked, harnessId]);
 
   const currentModels = useMemo(
     () => (harnessId === undefined ? [] : modelsFor(deviceId, harnessId)),
@@ -144,7 +144,7 @@ export function ModelPickerSheet({
 
   const pickModel = useCallback(
     (harness: string, model: Model) => {
-      if (hasMessages && harness !== harnessId) return;
+      if (locked && harness !== harnessId) return;
       if (harness !== harnessId) {
         apply({
           harness,
@@ -155,7 +155,7 @@ export function ModelPickerSheet({
       }
       apply({ model: model.id });
     },
-    [apply, hasMessages, harnessId],
+    [apply, locked, harnessId],
   );
 
   const pickSandbox = useCallback(
@@ -242,11 +242,6 @@ export function ModelPickerSheet({
               {h.name}
             </Text>
           </View>
-          {hasMessages && h.id !== harnessId ? (
-            <Text style={[styles.note, { color: theme.textSecondary }]}>
-              {t('picker.harnessLocked')}
-            </Text>
-          ) : null}
           {models.map(m => (
             <Pressable
               key={m.id}
@@ -255,15 +250,12 @@ export function ModelPickerSheet({
                 { borderColor: theme.border },
                 m.id === config?.model &&
                   h.id === harnessId && { borderColor: theme.accent },
-                hasMessages && h.id !== harnessId && styles.rowDimmed,
               ]}
               onPress={() => pickModel(h.id, m)}
-              disabled={hasMessages && h.id !== harnessId}
               accessibilityRole="button"
               accessibilityLabel={m.label}
               accessibilityState={{
                 selected: m.id === config?.model && h.id === harnessId,
-                disabled: hasMessages && h.id !== harnessId,
               }}
             >
               <View style={styles.rowBody}>
@@ -409,7 +401,6 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  rowDimmed: { opacity: 0.4 },
   rowBody: { flex: 1, gap: 2 },
   rowText: { fontSize: 15, flex: 1 },
   rowSub: { fontSize: 12 },

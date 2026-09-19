@@ -153,6 +153,7 @@ export function CheckoutChips({
           {host !== undefined ? (
             <DropdownMenu.Item key="machine" disabled>
               <DropdownMenu.ItemTitle>{host.name}</DropdownMenu.ItemTitle>
+              <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
             </DropdownMenu.Item>
           ) : null}
           {hostSpaces.map(s => (
@@ -165,8 +166,10 @@ export function CheckoutChips({
             >
               <DropdownMenu.ItemTitle>
                 {s.name !== undefined && s.name !== '' ? s.name : s.path}
-                {s.id === chat.spaceId ? ` · ${t('checkout.currentHost')}` : ''}
               </DropdownMenu.ItemTitle>
+              {s.id === chat.spaceId ? (
+                <DropdownMenu.ItemIcon ios={{ name: 'checkmark' }} />
+              ) : null}
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>
@@ -222,13 +225,21 @@ export function CheckoutChips({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     height: 28,
-    maxWidth: 120,
+    maxWidth: 88,
+    minWidth: 0,
+    flexShrink: 1,
   },
   chipText: { fontSize: 12, flexShrink: 1 },
 });
