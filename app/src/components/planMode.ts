@@ -10,7 +10,8 @@ export const PLAN_PREFIX = '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING:';
 export const BUILD_PREFIX = '/build IMPLEMENT THE PLAN:';
 export const IMPLEMENT_PLAN_TEXT = 'Implement the plan.';
 
-const PLAN_PREFIX_RE = /^\/plan\s+PLEASE CREATE A PLAN BEFORE IMPLEMENTING:\s*/i;
+const PLAN_PREFIX_RE =
+  /^\/plan\s+PLEASE CREATE A PLAN BEFORE IMPLEMENTING:\s*/i;
 const BUILD_PREFIX_RE = /^\/build\s+IMPLEMENT THE PLAN:\s*/i;
 
 const applyPrefix = (prefix: string, re: RegExp, text: string): string => {
