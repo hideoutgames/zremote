@@ -1,7 +1,11 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Modal, Switch } from 'react-native';
-import { EffortOverlay, effortDestRect } from '../src/components/EffortOverlay';
+import {
+  EffortOverlay,
+  effortDestRect,
+  effortWashRect,
+} from '../src/components/EffortOverlay';
 import { effortSliderTrackHeight } from '../src/components/effortSliderMath';
 
 test('effort overlay is a centered Modal with a slider and no Fast switch', async () => {
@@ -36,7 +40,7 @@ test('effort overlay is a centered Modal with a slider and no Fast switch', asyn
   });
 });
 
-test('effort dest rect centers on the window, or on an iPad composer anchor', () => {
+test('effort dest rect stays at mid-screen height and centers on an iPad composer column', () => {
   const windowed = effortDestRect(1024, 768);
   expect(windowed.x + windowed.width / 2).toBe(512);
   expect(windowed.y + windowed.height / 2).toBe(384);
@@ -49,7 +53,26 @@ test('effort dest rect centers on the window, or on an iPad composer anchor', ()
     height: 180,
   });
   expect(anchored.x + anchored.width / 2).toBe(540);
-  expect(anchored.y + anchored.height / 2).toBe(590);
+  expect(anchored.y + anchored.height / 2).toBe(384);
+});
+
+test('effort wash extends around the label and slider, not just the text', () => {
+  const dest = effortDestRect(1024, 768, {
+    x: 340,
+    y: 500,
+    width: 400,
+    height: 180,
+  });
+  const wash = effortWashRect(dest);
+  expect(wash.width).toBeGreaterThan(dest.width);
+  expect(wash.height).toBeGreaterThan(dest.height + 36);
+  expect(wash.x).toBeLessThan(dest.x);
+  expect(wash.y).toBeLessThan(dest.y - 36);
+  expect(wash.x + wash.width).toBeGreaterThan(dest.x + dest.width);
+  expect(wash.y + wash.height).toBeGreaterThan(dest.y + dest.height);
+  // Inner 50% plateau (fade locations 0.25–0.75) covers the cluster.
+  expect(wash.x + wash.width * 0.25).toBeCloseTo(dest.x);
+  expect(wash.x + wash.width * 0.75).toBeCloseTo(dest.x + dest.width);
 });
 
 test('effort overlay accepts a composer anchor without crashing', async () => {

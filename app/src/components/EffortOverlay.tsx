@@ -1,8 +1,9 @@
-// Centered effort overlay: pane-scoped fade behind the level label +
+// Centered effort overlay: soft oval wash behind the level label + slider,
 // Liquid Glass pill. Mounted in a transparent Modal (not KeyboardStickyView).
-// Opens by morphing a glass pill from the composer chip's window rect to the
-// composer (or window) center via RN Animated (no Reanimated worklets).
-// Fast mode lives on the composer chip, not here.
+// Opens by morphing a glass pill from the composer chip's window rect to
+// mid-screen height, centered on the composer column on iPad (window center
+// on iPhone) via RN Animated (no Reanimated worklets). Fast mode lives on
+// the composer chip, not here.
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
@@ -35,6 +36,10 @@ const MORPH_MS = 280;
 const PILL_MAX_WIDTH = 360;
 const PILL_H_INSET = 28;
 const LABEL_OFFSET = 36;
+/** Horizontal pad so the wash fades outside the pill, not through it. */
+const WASH_PAD_X_RATIO = 0.5;
+/** Vertical pad around the label + slider cluster. */
+const WASH_PAD_Y_RATIO = 0.5;
 
 export const effortDestRect = (
   windowWidth: number,
@@ -54,9 +59,24 @@ export const effortDestRect = (
   const height = effortSliderTrackHeight;
   return {
     x: bounds.x + (bounds.width - width) / 2,
-    y: bounds.y + (bounds.height - height) / 2,
+    // Always mid-screen in Y. The iPad composer anchor only shifts X so
+    // the overlay stays on the composer column, not the sidebar.
+    y: (windowHeight - height) / 2,
     width,
     height,
+  };
+};
+
+/** Soft wash around the label + pill. Inner plateau matches the cluster. */
+export const effortWashRect = (dest: EffortOrigin): EffortOrigin => {
+  const clusterHeight = dest.height + LABEL_OFFSET;
+  const padX = dest.width * WASH_PAD_X_RATIO;
+  const padY = clusterHeight * WASH_PAD_Y_RATIO;
+  return {
+    x: dest.x - padX,
+    y: dest.y - LABEL_OFFSET - padY,
+    width: dest.width + padX * 2,
+    height: clusterHeight + padY * 2,
   };
 };
 
@@ -89,7 +109,7 @@ export function EffortOverlay({
   value: string | undefined;
   onChange: (level: string) => void;
   origin?: EffortOrigin;
-  /** When set (iPad), the pill centers on this composer/detail rect. */
+  /** When set (iPad), the pill centers on this composer column in X. */
   anchor?: EffortOrigin;
   onDismiss: () => void;
 }) {
@@ -100,6 +120,7 @@ export function EffortOverlay({
     () => effortDestRect(windowWidth, windowHeight, anchor),
     [anchor, windowWidth, windowHeight],
   );
+  const wash = useMemo(() => effortWashRect(dest), [dest]);
   const skipMorph = reduceMotion === true || origin === undefined;
   const start = skipMorph ? dest : origin;
   const left = useRef(new Animated.Value(start.x)).current;
@@ -245,16 +266,16 @@ export function EffortOverlay({
           style={[
             styles.band,
             {
-              left: dest.x,
-              width: dest.width,
-              top: dest.y - LABEL_OFFSET - 24,
-              height: dest.height + LABEL_OFFSET + 48,
+              left: wash.x,
+              width: wash.width,
+              top: wash.y,
+              height: wash.height,
               opacity: washOpacity,
             },
           ]}
         >
           <FadeBlur
-            fade="vertical"
+            fade="radial"
             intensity={40}
             style={StyleSheet.absoluteFill}
           />
