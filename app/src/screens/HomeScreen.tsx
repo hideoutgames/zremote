@@ -53,7 +53,10 @@ import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
-import { usePrBadge } from '../zeron/state/changeRequestStore';
+import {
+  changeRequestStore,
+  useThreadPrDot,
+} from '../zeron/state/changeRequestStore';
 import {
   setComposeDefaults,
   toggleChatPinned,
@@ -110,6 +113,18 @@ const ThreadStatus = ({
   const label = statusCopy(line);
   const showCounts =
     line.kind === 'pr' && (line.additions > 0 || line.deletions > 0);
+  if (!showCounts || line.kind !== 'pr') {
+    return (
+      <Text
+        style={[styles.subtitle, { color: theme.textSecondary }]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.6}
+        testID={`thread-status-${chatId}`}
+      >
+        {label}
+      </Text>
+    );
+  }
   return (
     <Text
       style={[styles.subtitle, { color: theme.textSecondary }]}
@@ -118,21 +133,15 @@ const ThreadStatus = ({
       testID={`thread-status-${chatId}`}
     >
       {label}
-      {showCounts && line.kind === 'pr' ? (
-        <>
-          {' · '}
-          {line.additions > 0 ? (
-            <Text
-              style={{ color: theme.diffAddText }}
-            >{`+${line.additions}`}</Text>
-          ) : null}
-          {line.additions > 0 && line.deletions > 0 ? ' ' : null}
-          {line.deletions > 0 ? (
-            <Text
-              style={{ color: theme.diffDelText }}
-            >{`\u2212${line.deletions}`}</Text>
-          ) : null}
-        </>
+      {' · '}
+      {line.additions > 0 ? (
+        <Text style={{ color: theme.diffAddText }}>{`+${line.additions}`}</Text>
+      ) : null}
+      {line.additions > 0 && line.deletions > 0 ? ' ' : null}
+      {line.deletions > 0 ? (
+        <Text
+          style={{ color: theme.diffDelText }}
+        >{`\u2212${line.deletions}`}</Text>
       ) : null}
     </Text>
   );
@@ -150,20 +159,24 @@ const ChatRow = React.memo(function ({
   const indicator = useIndicator(chat.id);
   const host = useHostForChat(chat.id);
   const unseen = chatUnseen(chat);
-  const pr = usePrBadge(chat.id);
+  const prTone = useThreadPrDot(chat.id);
+  const prAdds = useStore(
+    changeRequestStore,
+    s => s.diffByChat[chat.id]?.additions ?? 0,
+  );
+  const prDels = useStore(
+    changeRequestStore,
+    s => s.diffByChat[chat.id]?.deletions ?? 0,
+  );
   const pinned = useChatPinned(chat.id);
   const [hovered, setHovered] = useState(false);
   const at = chat.lastMessageAt ?? chat.createdAt;
   const mark = svgForHarness(chat.config?.harness);
   const line = threadStatusLine(
     indicator,
-    pr === undefined
+    prTone === null
       ? undefined
-      : {
-          tone: pr.tone,
-          additions: pr.additions,
-          deletions: pr.deletions,
-        },
+      : { tone: prTone, additions: prAdds, deletions: prDels },
     relativeTime(at, Date.now()),
   );
 

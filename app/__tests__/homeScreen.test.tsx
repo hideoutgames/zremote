@@ -60,14 +60,31 @@ const texts = (root: TestRenderer.ReactTestInstance): string[] =>
     return Array.isArray(c) ? c.flat() : [c];
   });
 
-const statusOf = (
-  root: TestRenderer.ReactTestInstance,
-  id: string,
-): unknown => {
+const flattenText = (c: unknown): string => {
+  if (c == null || typeof c === 'boolean') return '';
+  if (typeof c === 'string' || typeof c === 'number') return String(c);
+  if (Array.isArray(c)) return c.map(flattenText).join('');
+  if (typeof c === 'object' && c !== null && 'props' in c) {
+    return flattenText((c as { props: { children?: unknown } }).props.children);
+  }
+  return '';
+};
+
+const statusOf = (root: TestRenderer.ReactTestInstance, id: string): string => {
   const node = root.findAll(
     n => n.props.testID === `thread-status-${id}` && typeof n.type === 'string',
   )[0];
-  return node?.props.children;
+  return flattenText(node?.props.children);
+};
+
+const bodyText = (root: TestRenderer.ReactTestInstance, id: string): string => {
+  const body = root.findAll(
+    n => n.props.testID === `thread-body-${id}` && typeof n.type === 'string',
+  )[0];
+  return body
+    .findAllByType(Text)
+    .map(n => flattenText(n.props.children))
+    .join(' ');
 };
 
 jest.useFakeTimers();
@@ -124,14 +141,11 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   expect(found).toContain('Threads');
   expect(found).toContain('Fix the flaky test');
   expect(found).toContain('Write docs');
-  expect(
-    found.some(
-      s =>
-        typeof s === 'string' &&
-        (s.includes('zremote @ main') || s.includes('workstation')),
-    ),
-  ).toBe(false);
-  expect(found).not.toContain('should not render in the row');
+  const row = bodyText(mounted.root, 'c1');
+  expect(row).toContain('Fix the flaky test');
+  expect(row).not.toContain('zremote @ main');
+  expect(row).not.toContain('workstation');
+  expect(row).not.toContain('should not render in the row');
   expect(statusOf(mounted.root, 'c1')).toBe('1m');
   const trigger = mounted.root.findAll(
     n => n.props.testID === 'spaceFilter',
@@ -236,8 +250,7 @@ test('PR status follows checkout change-request state', async () => {
   );
   expect(statusOf(mounted.root, 'open')).toBe('Open');
   expect(statusOf(mounted.root, 'draft')).toBe('Draft');
-  const merged = statusOf(mounted.root, 'merged');
-  expect(Array.isArray(merged) ? merged[0] : merged).toBe('Merged');
+  expect(statusOf(mounted.root, 'merged')).toBe('Merged · +12 \u22123');
   expect(statusOf(mounted.root, 'none')).toBe('1m');
 });
 
