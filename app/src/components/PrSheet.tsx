@@ -298,9 +298,9 @@ function OverviewTab({
                 <Text
                   style={[
                     styles.mergeLabel,
-                    {
-                      color: theme.scheme === 'dark' ? '#000000' : '#FFFFFF',
-                    },
+                    theme.scheme === 'dark'
+                      ? styles.mergeOnDark
+                      : styles.mergeOnLight,
                   ]}
                 >
                   {mergeLabel}
@@ -428,6 +428,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   mergeLabel: { fontSize: 16, fontWeight: '600' },
+  mergeOnDark: { color: '#000000' },
+  mergeOnLight: { color: '#FFFFFF' },
   changed: { fontSize: 20, fontWeight: '600', marginTop: 4 },
   diffs: { flex: 1, minHeight: 180 },
 });
