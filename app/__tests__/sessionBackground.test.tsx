@@ -88,11 +88,17 @@ test('compose session stays sharp: chrome fade, no list or chat blur', async () 
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'chat-background-blur')).toBe(0);
   expect(count(mounted.root, 'session-background-blur')).toBe(0);
+  expect(count(mounted.root, 'composer-surround-blur')).toBe(0);
   expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
   const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
   const center = mounted.root.findByProps({ testID: 'compose-center' });
+  const dismiss = mounted.root.findByProps({ testID: 'compose-dismiss' });
   expect(fade.props.pointerEvents).toBe('none');
+  expect(center.props.pointerEvents).toBe('box-none');
+  expect(center.props.onStartShouldSetResponder).toBeUndefined();
+  expect(typeof dismiss.props.onStartShouldSetResponder).toBe('function');
   expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(fade));
+  expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(dismiss));
 });
 
 test('active session keeps the chrome fade and adds a column blur', async () => {

@@ -524,8 +524,14 @@ export const Composer = React.memo(function ({
           })
         }
       >
-        {regular ? null : (
-          <FadeBlur intensity={22} style={styles.surroundBlur} />
+        {regular || mode === 'compose' ? null : (
+          <View
+            testID="composer-surround-blur"
+            pointerEvents="none"
+            style={styles.surroundBlur}
+          >
+            <FadeBlur intensity={22} style={StyleSheet.absoluteFill} />
+          </View>
         )}
         <Glass style={styles.glass}>
           <View

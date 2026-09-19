@@ -223,10 +223,16 @@ function ComposeSessionScreen({
       ]}
     >
       <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
+      {/* Pan lives here, not on compose-center, so checkout chips can scroll. */}
+      <View
+        testID="compose-dismiss"
+        style={styles.composeDismiss}
+        {...dismissPan.panHandlers}
+      />
       <View
         testID="compose-center"
         style={[styles.composeCenter, { transform: [{ translateY: shift }] }]}
-        {...dismissPan.panHandlers}
+        pointerEvents="box-none"
       >
         <ComposeComposer
           autoFocus
@@ -1197,7 +1203,15 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
-  composeCenter: { flex: 1, justifyContent: 'center', zIndex: 2 },
+  composeDismiss: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
+  composeCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    zIndex: 2,
+  },
   header: {
     position: 'absolute',
     top: 0,

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { TextInput, StyleSheet } from 'react-native';
+import { Dimensions, TextInput, StyleSheet } from 'react-native';
 import { Composer } from '../src/components/Composer';
 import { ComposerChromeRow } from '../src/components/ComposerChromeRow';
 import { QuestionPanel } from '../src/components/agentsKit/QuestionPanel';
@@ -281,10 +281,41 @@ test('compose composer: desktop, project, checkout, and branch sit above the inp
   expect(labels.some(l => l.label === 'Default')).toBe(true);
   expect(labels.some(l => l.label === 'High')).toBe(true);
   expect(
-    mounted.root.findAll(
-      n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
-    ),
-  ).toHaveLength(1);
+    mounted.root.findAll(n => n.props.testID === 'composer-surround-blur'),
+  ).toHaveLength(0);
+  const checkout = mounted.root.findAll(
+    n => n.props.testID === 'compose-checkout' && typeof n.type === 'string',
+  );
+  expect(checkout).toHaveLength(1);
+  expect(checkout[0].props.keyboardShouldPersistTaps).toBe('handled');
+  expect(checkout[0].props.nestedScrollEnabled).toBe(true);
+});
+
+test('compact session composer keeps the surround blur; compose never does', async () => {
+  const spy = jest.spyOn(Dimensions, 'get').mockReturnValue({
+    width: 390,
+    height: 844,
+    scale: 3,
+    fontScale: 1,
+  });
+  try {
+    const session = await render(<Composer {...composerProps} />);
+    expect(
+      session.root.findAll(n => n.props.testID === 'composer-surround-blur'),
+    ).toHaveLength(1);
+    act(() => {
+      session.unmount();
+    });
+    tree = undefined;
+    const compose = await render(
+      <Composer {...composerProps} mode="compose" />,
+    );
+    expect(
+      compose.root.findAll(n => n.props.testID === 'composer-surround-blur'),
+    ).toHaveLength(0);
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 test('composer: Fast mode chip is a separate labelled button', async () => {
