@@ -679,6 +679,7 @@ function ActiveSessionScreen({
                   <DropdownMenu.ItemTitle>
                     {t('session.details')}
                   </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'info.circle' }} />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   key="subagents"
@@ -687,7 +688,9 @@ function ActiveSessionScreen({
                   <DropdownMenu.ItemTitle>
                     {t('session.subagents')}
                   </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'person.2' }} />
                 </DropdownMenu.Item>
+                <DropdownMenu.Separator />
                 <DropdownMenu.Item
                   key="history"
                   onSelect={() => setToolSheet('history')}
@@ -695,6 +698,9 @@ function ActiveSessionScreen({
                   <DropdownMenu.ItemTitle>
                     {t('session.history')}
                   </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon
+                    ios={{ name: 'arrow.triangle.branch' }}
+                  />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   key="files"
@@ -703,6 +709,7 @@ function ActiveSessionScreen({
                   <DropdownMenu.ItemTitle>
                     {t('session.files')}
                   </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'folder' }} />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   key="terminal"
@@ -711,11 +718,14 @@ function ActiveSessionScreen({
                   <DropdownMenu.ItemTitle>
                     {t('session.terminal')}
                   </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'terminal' }} />
                 </DropdownMenu.Item>
+                <DropdownMenu.Separator />
                 <DropdownMenu.Item key="copy" onSelect={onCopyId}>
                   <DropdownMenu.ItemTitle>
                     {t('session.copyId')}
                   </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
@@ -998,18 +1008,14 @@ function ActiveSessionScreen({
         </SessionSheet>
       ) : null}
       {toolSheet === 'files' ? (
-        <SessionSheet
-          title={t('session.files')}
-          fill
-          onDismiss={() => setToolSheet(null)}
-        >
+        <SessionSheet fill onDismiss={() => setToolSheet(null)}>
           <FilesScreen chatId={chatId} />
         </SessionSheet>
       ) : null}
       {toolSheet === 'terminal' ? (
         <SessionSheet
-          title={t('session.terminal')}
           fill
+          initialDetentIndex={1}
           onDismiss={() => setToolSheet(null)}
         >
           <TerminalScreen chatId={chatId} />

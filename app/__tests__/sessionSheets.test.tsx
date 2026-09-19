@@ -5,6 +5,10 @@ import { ThreadDetailsSheet } from '../src/components/ThreadDetailsSheet';
 import { SubagentsSheet } from '../src/components/SubagentsSheet';
 import { HistoryScreen } from '../src/screens/HistoryScreen';
 import { SessionScreen } from '../src/screens/SessionScreen';
+import { SessionSheet } from '../src/components/SessionSheet';
+import { FileDiff } from '../src/components/agentsKit/FileDiff';
+import { parseUnified } from '../src/zeron/diff/parseUnified';
+import { TerminalScreen } from '../src/screens/TerminalScreen';
 import {
   AppServicesContext,
   type AppServices,
@@ -152,7 +156,7 @@ test('history lists the checkout PR and opens it on press', async () => {
   const row = tree.root.findAll(
     n =>
       typeof n.props.onPress === 'function' &&
-      n.props.accessibilityLabel === '#9 Session sheets',
+      n.props.accessibilityLabel === '#9 Session sheets, Open',
   )[0];
   expect(row).toBeTruthy();
   act(() => row.props.onPress());
@@ -169,4 +173,52 @@ test('session overflow has History/Files/Terminal and not Changes/Previews', asy
   expect(labels).not.toContain('Changes');
   expect(labels).not.toContain('Previews');
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);
+});
+
+test('history empty copy is short', async () => {
+  const tree = await render(<HistoryScreen chatId="c1" />);
+  expect(texts(tree.root)).toContain('No Pull Requests');
+});
+
+test('session sheet uses a compact title and optional full detent', async () => {
+  const listed = await render(
+    <SessionSheet title="History" fill onDismiss={() => {}}>
+      <Text>body</Text>
+    </SessionSheet>,
+  );
+  expect(texts(listed.root)).toContain('History');
+  expect(byTestId(listed.root, 'TrueSheet')[0].props.initialDetentIndex).toBe(
+    0,
+  );
+
+  const term = await render(
+    <SessionSheet fill initialDetentIndex={1} onDismiss={() => {}}>
+      <Text>term</Text>
+    </SessionSheet>,
+  );
+  expect(byTestId(term.root, 'TrueSheet')[0].props.initialDetentIndex).toBe(1);
+  expect(texts(term.root)).not.toContain('Terminal');
+});
+
+test('FileDiff omits raw @@ hunk headers', async () => {
+  const patch = [
+    'diff --git a/f.ts b/f.ts',
+    '--- a/f.ts',
+    '+++ b/f.ts',
+    '@@ -1,2 +1,2 @@ fn main',
+    '-old',
+    '+new',
+  ].join('\n');
+  const [file] = parseUnified(patch);
+  const tree = await render(<FileDiff file={file} />);
+  const labels = texts(tree.root);
+  expect(labels.some(s => s.includes('@@'))).toBe(false);
+  expect(labels).toContain('fn main');
+  expect(labels).toContain('+');
+  expect(labels).toContain('new');
+});
+
+test('TerminalScreen has no TTL copy', async () => {
+  const tree = await render(<TerminalScreen chatId="c1" />);
+  expect(texts(tree.root).join(' ')).not.toContain('30 minutes');
 });

@@ -31,13 +31,8 @@ export function PrSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const toneColor = badge.tone === 'merged' ? theme.prMerged : theme.prOpen;
-  const md = [
-    `# ${badge.title}`,
-    '',
-    badge.body !== undefined && badge.body !== '' ? badge.body : '',
-  ]
-    .filter(line => line !== undefined)
-    .join('\n');
+  const body =
+    badge.body !== undefined && badge.body !== '' ? badge.body : undefined;
 
   return (
     <Modal
@@ -63,8 +58,8 @@ export function PrSheet({
               <Icon name="xmark" size={15} color={theme.text} />
             </Glass>
           </Pressable>
-          <Text style={[styles.title, { color: theme.text }]}>
-            {t('pr.title')}
+          <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
+            {badge.title !== '' ? badge.title : `#${badge.number}`}
           </Text>
           <View style={styles.close} />
         </View>
@@ -80,13 +75,15 @@ export function PrSheet({
           <Text style={[styles.refs, { color: theme.textSecondary }]}>
             {`${badge.baseRef} ← ${badge.headRef}`}
           </Text>
-          <EnrichedMarkdownText
-            markdown={md}
-            markdownStyle={
-              theme.scheme === 'dark' ? darkMarkdownStyle : lightMarkdownStyle
-            }
-            flavor="github"
-          />
+          {body !== undefined ? (
+            <EnrichedMarkdownText
+              markdown={body}
+              markdownStyle={
+                theme.scheme === 'dark' ? darkMarkdownStyle : lightMarkdownStyle
+              }
+              flavor="github"
+            />
+          ) : null}
         </ScrollView>
         <View style={styles.diffs}>
           <ChangesScreen chatId={chatId} embedded />
@@ -113,7 +110,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  title: { fontSize: 17, fontWeight: '600' },
+  title: { flex: 1, fontSize: 17, fontWeight: '600', textAlign: 'center' },
   meta: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
   state: { fontSize: 14, fontWeight: '600' },
   refs: { fontSize: 12 },
