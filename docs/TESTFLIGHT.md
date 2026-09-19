@@ -2,10 +2,11 @@
 
 Two workflows under `.github/workflows/`:
 
-- **`ios-compile.yml` — iOS Compile Check.** Runs on PRs and pushes to
-  `main` touching `app/**` or the iOS workflows. Unsigned Release build
-  (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
-  `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
+- **`ios-compile.yml` — iOS Compile Check.** Runs on pushes to `main`
+  touching `app/**` or the iOS workflows, and via **Actions → iOS Compile
+  Check → Run workflow**. Does **not** run on pull requests (saves macOS
+  runners). Unsigned Release build (`CODE_SIGNING_ALLOWED=NO`, placeholder
+  bundle id `dev.zremote.compilecheck`). Needs **no secrets**.
 - **`ios-testflight.yml` — iOS TestFlight.** Manual `workflow_dispatch`
   only (optional `notes`). Merges to `main` do **not** start it. Signed
   archive + upload to App Store Connect via the App Store Connect API key

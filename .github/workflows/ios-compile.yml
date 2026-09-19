@@ -3,16 +3,14 @@
 # CODE_SIGNING_ALLOWED=NO. Its purpose is to compile the in-repo native
 # modules (react-native-loro, zeron-dictation, expo-widgets target) on a
 # real Xcode 26 toolchain and surface Swift errors in build.log.
+# PRs skip this job to save macOS minutes; run it from Actions or after
+# merge to main.
 
 name: iOS Compile Check
 
 on:
   push:
     branches: [main]
-    paths:
-      - "app/**"
-      - ".github/workflows/ios-*.yml"
-  pull_request:
     paths:
       - "app/**"
       - ".github/workflows/ios-*.yml"
