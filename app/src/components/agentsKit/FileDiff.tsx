@@ -11,10 +11,14 @@ import type { ParsedFileDiff } from '../../zeron/diff/parseUnified';
 export function FileDiff({ file }: { file: ParsedFileDiff }) {
   const theme = useTheme();
   return (
-    <ScrollView horizontal style={styles.scroll}>
-      <View>
+    <ScrollView
+      horizontal
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+    >
+      <View style={styles.body}>
         {file.hunks.map((h, i) => (
-          <View key={i}>
+          <View key={i} style={styles.hunk}>
             <View
               style={[
                 styles.hunkRule,
@@ -92,27 +96,36 @@ export function FileDiff({ file }: { file: ParsedFileDiff }) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flexGrow: 0 },
+  scroll: { alignSelf: 'stretch', width: '100%' },
+  scrollContent: { width: '100%', minWidth: '100%', flexGrow: 1 },
+  body: { minWidth: '100%' },
+  hunk: { minWidth: '100%' },
   hunkRule: {
     borderTopWidth: StyleSheet.hairlineWidth,
     minHeight: 8,
     justifyContent: 'center',
+    minWidth: '100%',
   },
   hunkHeader: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 13,
     paddingVertical: 4,
     paddingHorizontal: 12,
   },
-  line: { flexDirection: 'row', alignItems: 'stretch', paddingRight: 8 },
+  line: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingRight: 8,
+    minWidth: '100%',
+  },
   rail: { width: 3 },
   gutter: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 13,
     width: 36,
     textAlign: 'right',
     paddingRight: 8,
     fontVariant: ['tabular-nums'],
   },
-  code: { fontFamily: 'monospace', fontSize: 12 },
+  code: { fontFamily: 'monospace', fontSize: 14, flexGrow: 1, flexShrink: 0 },
 });

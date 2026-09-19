@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Linking, Share, Text } from 'react-native';
+import { Share, Text } from 'react-native';
 import { PrSheet } from '../src/components/PrSheet';
 import {
   AppServicesContext,
@@ -104,7 +104,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('overview shows Open badge, checkout stats, title, tabs, and merge', async () => {
+test('overview shows Open badge, checkout stats, title, and tabs', async () => {
   const tree = await render(
     <PrSheet chatId="c1" badge={badge()} onDismiss={() => {}} />,
   );
@@ -118,13 +118,14 @@ test('overview shows Open badge, checkout stats, title, tabs, and merge', async 
   expect(labels).toContain('Overview');
   expect(labels).toContain('Discussion');
   expect(labels).toContain('Commits');
-  expect(labels).toContain('Squash & Merge');
+  expect(labels).toContain('Copy link');
+  expect(labels).toContain('Open in browser');
   expect(labels).toContain('What changed');
   expect(labels).toContain('main ← feat/composer');
   expect(tree.root.findByProps({ testID: 'pr-share' })).toBeTruthy();
 });
 
-test('drafts open GitHub instead of squash', async () => {
+test('drafts keep Zeron chrome without GitHub merge CTAs', async () => {
   const tree = await render(
     <PrSheet
       chatId="c1"
@@ -132,11 +133,14 @@ test('drafts open GitHub instead of squash', async () => {
       onDismiss={() => {}}
     />,
   );
-  expect(texts(tree.root)).toContain('Open on GitHub');
-  expect(texts(tree.root)).not.toContain('Squash & Merge');
+  const labels = texts(tree.root);
+  expect(labels).toContain('Copy link');
+  expect(labels).toContain('Open in browser');
+  expect(labels).not.toContain('Open on GitHub');
+  expect(labels).not.toContain('Squash & Merge');
 });
 
-test('merged PRs omit the merge button', async () => {
+test('merged PRs omit provider merge actions', async () => {
   const tree = await render(
     <PrSheet
       chatId="c1"
@@ -148,19 +152,15 @@ test('merged PRs omit the merge button', async () => {
   expect(texts(tree.root)).not.toContain('Squash & Merge');
 });
 
-test('squash merge opens the change-request URL', async () => {
-  const openURL = jest
-    .spyOn(Linking, 'openURL')
-    .mockResolvedValue(undefined as never);
+test('overview has no GitHub merge CTA', async () => {
   const tree = await render(
     <PrSheet chatId="c1" badge={badge()} onDismiss={() => {}} />,
   );
-  await act(async () => {
-    tree.root.findByProps({ testID: 'pr-squash-merge' }).props.onPress();
-  });
-  expect(openURL).toHaveBeenCalledWith(
-    'https://github.com/hideoutgames/zremote/pull/19',
-  );
+  expect(
+    tree.root.findAll(n => n.props.testID === 'pr-squash-merge'),
+  ).toHaveLength(0);
+  expect(texts(tree.root)).not.toContain('Squash & Merge');
+  expect(texts(tree.root)).not.toContain('Open on GitHub');
 });
 
 test('share uses the change-request URL', async () => {
@@ -174,7 +174,6 @@ test('share uses the change-request URL', async () => {
     tree.root.findByProps({ testID: 'pr-share' }).props.onPress();
   });
   expect(share).toHaveBeenCalledWith({
-    message: 'https://github.com/hideoutgames/zremote/pull/19',
     url: 'https://github.com/hideoutgames/zremote/pull/19',
   });
 });

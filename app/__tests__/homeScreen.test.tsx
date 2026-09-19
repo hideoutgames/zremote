@@ -286,6 +286,16 @@ test('working threads show Working; idle threads stay full color', async () => {
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   expect(statusOf(mounted.root, 'live')).toBe('Working');
+  const liveTitle = mounted.root
+    .findAllByType(Text)
+    .find(n => n.props.children === 'Live agent');
+  expect(liveTitle).toBeDefined();
+  const liveStyle = Array.isArray(liveTitle!.props.style)
+    ? liveTitle!.props.style.flat()
+    : [liveTitle!.props.style];
+  expect(
+    liveStyle.some(s => s?.color === '#0A84FF' || s?.color === '#007AFF'),
+  ).toBe(true);
   const body = mounted.root.findAll(
     n => n.props.testID === 'thread-body-idle' && typeof n.type === 'string',
   )[0];
@@ -422,4 +432,35 @@ test('sidebar New thread hides while search is focused', async () => {
   expect(
     mounted.root.findAll(n => n.props.testID === 'home-new-thread'),
   ).toHaveLength(0);
+});
+
+test('long-press keeps row chrome until the context menu closes', async () => {
+  workspaceStore.setState({
+    chats: [chat({ title: 'Fix the flaky test' })],
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  const root = mounted.root.findAll(n => n.props.testID === 'ContextRoot')[0];
+  expect(typeof root.props.onOpenChange).toBe('function');
+  await act(async () => {
+    root.props.onOpenChange(true);
+  });
+  const row = mounted.root.findAll(
+    n =>
+      typeof n.props.onPress === 'function' &&
+      typeof n.props.accessibilityLabel === 'string' &&
+      n.props.accessibilityLabel.includes('Fix the flaky test'),
+  )[0];
+  const openStyle = Array.isArray(row.props.style)
+    ? row.props.style.flat()
+    : [row.props.style];
+  expect(openStyle.some(s => s && s.shadowOpacity === 0.22)).toBe(true);
+  await act(async () => {
+    root.props.onOpenChange(false);
+  });
+  const closedStyle = Array.isArray(row.props.style)
+    ? row.props.style.flat()
+    : [row.props.style];
+  expect(closedStyle.some(s => s && s.shadowOpacity === 0.22)).toBe(false);
 });

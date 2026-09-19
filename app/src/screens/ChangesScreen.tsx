@@ -17,7 +17,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import * as DropdownMenu from '../components/menus/dropdown-menu';
+import * as ContextMenu from '../components/menus/context-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
@@ -204,8 +204,8 @@ export function ChangesScreen({
                 borderBottomWidth: StyleSheet.hairlineWidth,
               }}
             >
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger>
+              <ContextMenu.Root>
+                <ContextMenu.Trigger>
                   <Pressable
                     onPress={() => toggleFile(f.path)}
                     accessibilityRole="button"
@@ -250,18 +250,18 @@ export function ChangesScreen({
                       color={theme.textSecondary}
                     />
                   </Pressable>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content>
-                  <DropdownMenu.Item
+                </ContextMenu.Trigger>
+                <ContextMenu.Content>
+                  <ContextMenu.Item
                     key="copyPath"
                     onSelect={() => copy(t('changes.copyPath'), f.path)}
                   >
-                    <DropdownMenu.ItemTitle>
+                    <ContextMenu.ItemTitle>
                       {t('changes.copyPath')}
-                    </DropdownMenu.ItemTitle>
-                    <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
+                    </ContextMenu.ItemTitle>
+                    <ContextMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
                     key="copyPatch"
                     onSelect={() =>
                       copy(
@@ -270,13 +270,13 @@ export function ChangesScreen({
                       )
                     }
                   >
-                    <DropdownMenu.ItemTitle>
+                    <ContextMenu.ItemTitle>
                       {t('changes.copyPatch')}
-                    </DropdownMenu.ItemTitle>
-                    <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Root>
+                    </ContextMenu.ItemTitle>
+                    <ContextMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+                  </ContextMenu.Item>
+                </ContextMenu.Content>
+              </ContextMenu.Root>
               {expanded ? (
                 <View style={styles.diff}>
                   {loaded === 'loading' || loaded === undefined ? (

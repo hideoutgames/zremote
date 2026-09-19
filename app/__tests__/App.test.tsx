@@ -52,7 +52,7 @@ test('renders SignInScreen when signed out', async () => {
   });
 });
 
-test('Sign in shows paste-code fallback after the browser session', async () => {
+test('Sign in opens an auth session instead of a paste-code form', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(<App />);
@@ -60,10 +60,10 @@ test('Sign in shows paste-code fallback after the browser session', async () => 
   });
   await pressByText(tree!.root, 'Sign in');
   const texts = allText(tree!.root);
-  expect(texts).toContain('Paste the sign-in code');
+  expect(texts).not.toContain('Paste the sign-in code');
   expect(
     tree!.root.findAll(n => typeof n.props.onChangeText === 'function').length,
-  ).toBeGreaterThan(0);
+  ).toBe(0);
   await act(async () => {
     tree!.unmount();
   });

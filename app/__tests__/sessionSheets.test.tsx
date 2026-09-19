@@ -232,7 +232,20 @@ test('populated demo transcript does not abort into the error boundary', async (
 
 test('history empty copy is short', async () => {
   const tree = await render(<HistoryScreen chatId="c1" />);
-  expect(texts(tree.root)).toContain('No Pull Requests');
+  expect(texts(tree.root)).toContain('No change requests');
+});
+
+test('session sheet insets content below the overlay grabber', async () => {
+  const listed = await render(
+    <SessionSheet title="History" fill onDismiss={() => {}}>
+      <Text>body</Text>
+    </SessionSheet>,
+  );
+  const sheet = byTestId(listed.root, 'session-sheet')[0];
+  const style = Array.isArray(sheet.props.style)
+    ? sheet.props.style.flat()
+    : [sheet.props.style];
+  expect(style.some(s => s && s.paddingTop === 24)).toBe(true);
 });
 
 test('session sheet uses a compact title and optional full detent', async () => {

@@ -20,6 +20,7 @@ export interface TrueSheetProps {
   grabber?: boolean;
   backgroundColor?: ColorValue;
   maxContentHeight?: number;
+  onDetentChange?: (event: { nativeEvent: { index: number } }) => void;
   dismissible?: boolean;
   children?: React.ReactNode;
   style?: object;
@@ -51,6 +52,7 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
     const fraction: DimensionValue | undefined =
       typeof detent === 'number' ? `${Math.round(detent * 100)}%` : undefined;
     const maxHeight: DimensionValue = fraction ?? maxContentHeight ?? '85%';
+    const fill = fraction !== undefined;
     return (
       <Modal
         visible
@@ -72,10 +74,11 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
               height: fraction,
               maxHeight,
             },
+            fill ? styles.fill : undefined,
           ]}
         >
           {grabber ? <View style={styles.grabber} /> : null}
-          {children}
+          <View style={fill ? styles.fill : undefined}>{children}</View>
         </View>
       </Modal>
     );
@@ -91,6 +94,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingBottom: 12,
   },
+  fill: { flex: 1, minHeight: 0 },
   grabber: {
     alignSelf: 'center',
     width: 36,

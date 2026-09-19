@@ -1,14 +1,20 @@
 // Open or share a change-request URL. The phone has no merge/checks RPCs;
-// GitHub-only actions leave the app via the PR link the host already sent.
+// opening a URL leaves the app via the link the host already sent.
 
-import { Linking, Share } from 'react-native';
+import { Linking, Platform, Share } from 'react-native';
 
 export const openPrUrl = (url: string): void => {
   if (url === '') return;
   Linking.openURL(url).catch(() => {});
 };
 
+/** One payload field only — iOS Share with both `message` and `url` set
+ * offers the same link twice. */
 export const sharePrUrl = (url: string): void => {
   if (url === '') return;
-  Share.share({ message: url, url }).catch(() => {});
+  if (Platform.OS === 'ios') {
+    Share.share({ url }).catch(() => {});
+    return;
+  }
+  Share.share({ message: url }).catch(() => {});
 };

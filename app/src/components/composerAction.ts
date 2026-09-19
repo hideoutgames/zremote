@@ -37,18 +37,23 @@ export const harnessSteers = (
 /**
  * Steering is offered mid-turn only when the harness drives step-boundary
  * steers (supportsSteering && steeringMode === 'step-boundary'); otherwise a
- * live run disables send. While stopping, both sides are inert. While an own
- * run is queued-locally/synchronized (host not yet working) the right button
- * is Cancel → `cancelOwnCommand`.
+ * live run disables send. While a live run has queue support and a non-empty
+ * draft, the right button is Send (queues) instead of Stop. While stopping,
+ * both sides are inert. While an own run is queued-locally/synchronized
+ * (host not yet working) the right button is Cancel → `cancelOwnCommand`.
  */
 export const composerAction = (
   phase: RunPhase,
   harness: HarnessDescriptor | undefined,
   hasDraft: boolean,
+  canQueue = false,
 ): ComposerAction => {
   if (phase === 'stopping') return { primary: 'disabled', right: 'stopping' };
 
   if (LIVE_PHASES.has(phase)) {
+    if (canQueue && hasDraft) {
+      return { primary: 'disabled', right: 'send' };
+    }
     return {
       primary: harnessSteers(harness) && hasDraft ? 'steer' : 'disabled',
       right: 'stop',

@@ -19,7 +19,6 @@ import {
   View,
 } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { Composer } from './Composer';
 import { DEFAULT_COMPOSE_BRANCH } from './CheckoutSelector';
@@ -82,7 +81,6 @@ export function ComposeComposer({
   composerMaxWidth?: number;
   onLayout?: (event: LayoutChangeEvent) => void;
 }) {
-  const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const runtime = useRuntime();
   const devices = useStore(workspaceStore, s => s.devices);
@@ -542,7 +540,7 @@ export function ComposeComposer({
     <>
       {overlay}
       <KeyboardStickyView
-        offset={{ opened: insets.bottom }}
+        offset={{ opened: 0 }}
         style={styles.sticky}
       >
         {composer}

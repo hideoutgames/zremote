@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { appleAssociation } from "./apple-association";
 import { exchange } from "./workos";
+import { handleAuthRoute, isIosMobileUa } from "./auth-routes";
 import type { Env } from "./env";
 
 describe("apple-app-site-association", () => {
@@ -65,5 +66,66 @@ describe("workos exchange PKCE", () => {
       (fetchSpy.mock.calls[0][1] as RequestInit).body as string
     );
     expect("code_verifier" in body).toBe(false);
+  });
+});
+
+describe("cli callback iOS hop", () => {
+  it("treats iPhone and iPadOS user agents as mobile", () => {
+    expect(
+      isIosMobileUa(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
+      )
+    ).toBe(true);
+    expect(
+      isIosMobileUa(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+      )
+    ).toBe(true);
+    expect(
+      isIosMobileUa(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      )
+    ).toBe(false);
+  });
+
+  it("redirects iOS user agents to zeron://auth/callback", async () => {
+    const request = new Request(
+      "https://edge.test/auth/cli/callback?code=abc&state=xyz",
+      {
+        headers: {
+          "user-agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
+        }
+      }
+    );
+    const res = await handleAuthRoute(
+      request,
+      {} as Env,
+      new URL(request.url)
+    );
+    expect(res?.status).toBe(200);
+    const body = await res!.text();
+    expect(body).toContain("zeron://auth/callback?code=abc&state=xyz");
+    expect(body).toContain("location.replace");
+  });
+
+  it("keeps the paste-code page for desktop user agents", async () => {
+    const request = new Request(
+      "https://edge.test/auth/cli/callback?code=abc&state=xyz",
+      {
+        headers: {
+          "user-agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0"
+        }
+      }
+    );
+    const res = await handleAuthRoute(
+      request,
+      {} as Env,
+      new URL(request.url)
+    );
+    const body = await res!.text();
+    expect(body).toContain("Paste this code into the terminal");
+    expect(body).not.toContain("location.replace");
   });
 });

@@ -18,6 +18,11 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
+import {
+  KeyboardAvoidingView,
+  useKeyboardState,
+} from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
@@ -141,15 +146,18 @@ interface Tab {
 
 export function TerminalScreen({ chatId }: { chatId: string }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const runtime = useRuntime();
   const chat = useChat(chatId);
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
+  const keyboardVisible = useKeyboardState(s => s.isVisible);
   const [viewport, setViewport] = useState(() => ({
     cols: Math.max(20, Math.floor((width - 16) / CHAR_W)),
-    rows: Math.max(6, Math.floor((height - 220) / CHAR_H)),
+    rows: 24,
   }));
   const cols = viewport.cols;
   const rows = viewport.rows;
+  const focusedOnce = useRef(false);
   const onScreenLayout = useCallback((e: LayoutChangeEvent) => {
     const { width: w, height: h } = e.nativeEvent.layout;
     const next = {
@@ -159,6 +167,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     setViewport(prev =>
       prev.cols === next.cols && prev.rows === next.rows ? prev : next,
     );
+    if (!focusedOnce.current) {
+      focusedOnce.current = true;
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
   }, []);
 
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -300,7 +312,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     [],
   );
   return (
-    <View style={[styles.root, styles.termBg]}>
+    <KeyboardAvoidingView
+      style={[styles.root, styles.termBg]}
+      behavior="padding"
+    >
       <View style={styles.tabBar}>
         <ScrollView
           horizontal
@@ -414,11 +429,16 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         onKeyPress={onKeyPress}
         autoCapitalize="none"
         autoCorrect={false}
-        autoFocus
+        autoFocus={false}
         accessibilityLabel={t('terminal.input')}
       />
 
-      <Glass style={styles.keyBar}>
+      <Glass
+        style={[
+          styles.keyBar,
+          { marginBottom: (keyboardVisible ? 0 : insets.bottom) + 8 },
+        ]}
+      >
         {KEY_BAR.map(spec => {
           const selected = spec.key === 'ctrl' && ctrl;
           return (
@@ -456,7 +476,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           );
         })}
       </Glass>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

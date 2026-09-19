@@ -1,6 +1,6 @@
-// PR modal: GitHub Mobile layout filled from Zeron change-request,
-// checkout diffs, and checkout git history. Merge/share open the PR URL —
-// the phone has no checks or squash RPCs.
+// PR sheet filled from Zeron change-request, checkout diffs, and checkout
+// git history. Share / open-in-browser use the URL the host already sent —
+// the phone has no checks or merge RPCs.
 
 import React, { useMemo, useState } from 'react';
 import {
@@ -20,7 +20,7 @@ import { markdownStyleFor } from '../markdownStyle';
 import { ChangesScreen } from '../screens/ChangesScreen';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useCheckoutGitHistory } from '../hooks/useCheckoutGitHistory';
-import { Glass, GlassContainer } from './Glass';
+import { Glass, GlassControl } from './Glass';
 import { Icon } from './Icon';
 import { PrCommitTimeline } from './PrCommitTimeline';
 import {
@@ -98,67 +98,63 @@ export function PrSheet({
         ]}
       >
         <View style={styles.header}>
-          <Pressable
+          <GlassControl
             onPress={onDismiss}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={t('session.back')}
-            style={styles.headerBtn}
+            style={styles.circle}
           >
-            <Glass style={styles.circle}>
-              <Icon name="chevron.left" size={18} color={theme.text} />
-            </Glass>
-          </Pressable>
+            <Icon name="chevron.left" size={18} color={theme.text} />
+          </GlassControl>
           <View style={styles.headerSpacer} />
           {hasUrl ? (
-            <GlassContainer spacing={8} style={styles.headerRight}>
-              <Pressable
+            <View style={styles.headerRight}>
+              <GlassControl
                 onPress={() => sharePrUrl(model.url)}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={t('pr.shareA11y')}
                 testID="pr-share"
-                style={styles.headerBtn}
+                style={styles.circle}
               >
-                <Glass style={styles.circle}>
-                  <Icon name="link" size={16} color={theme.text} />
-                </Glass>
-              </Pressable>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('pr.moreA11y')}
-                    testID="pr-more"
-                    style={styles.headerBtn}
-                  >
-                    <Glass style={styles.circle}>
+                <Icon name="link" size={16} color={theme.text} />
+              </GlassControl>
+              <Glass interactive style={styles.circle}>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('pr.moreA11y')}
+                      testID="pr-more"
+                      style={styles.controlFill}
+                    >
                       <Icon name="ellipsis" size={16} color={theme.text} />
-                    </Glass>
-                  </Pressable>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content>
-                  <DropdownMenu.Item
-                    key="copy"
-                    onSelect={() => {
-                      Clipboard.setStringAsync(model.url).catch(() => {});
-                    }}
-                  >
-                    <DropdownMenu.ItemTitle>
-                      {t('pr.copyLink')}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    key="open"
-                    onSelect={() => openPrUrl(model.url)}
-                  >
-                    <DropdownMenu.ItemTitle>
-                      {t('pr.openInBrowser')}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Root>
-            </GlassContainer>
+                    </Pressable>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Content>
+                    <DropdownMenu.Item
+                      key="copy"
+                      onSelect={() => {
+                        Clipboard.setStringAsync(model.url).catch(() => {});
+                      }}
+                    >
+                      <DropdownMenu.ItemTitle>
+                        {t('pr.copyLink')}
+                      </DropdownMenu.ItemTitle>
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      key="open"
+                      onSelect={() => openPrUrl(model.url)}
+                    >
+                      <DropdownMenu.ItemTitle>
+                        {t('pr.openInBrowser')}
+                      </DropdownMenu.ItemTitle>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Root>
+              </Glass>
+            </View>
           ) : (
             <View style={styles.circle} />
           )}
@@ -231,12 +227,7 @@ export function PrSheet({
         </View>
 
         {tab === 'overview' ? (
-          <OverviewTab
-            chatId={chatId}
-            model={model}
-            refs={refs}
-            hasUrl={hasUrl}
-          />
+          <OverviewTab chatId={chatId} model={model} refs={refs} />
         ) : (
           <PrCommitTimeline
             commits={history.commits}
@@ -253,23 +244,18 @@ function OverviewTab({
   chatId,
   model,
   refs,
-  hasUrl,
 }: {
   chatId: string;
   model: PrBadgeModel;
   refs: string;
-  hasUrl: boolean;
 }) {
   const theme = useTheme();
   const body = model.body?.trim() ?? '';
-  const showMerge = hasUrl && model.state === 'open' && model.tone !== 'merged';
-  const mergeLabel =
-    model.tone === 'draft' ? t('pr.openOnGitHub') : t('pr.squashMerge');
 
   return (
     <View style={styles.fill}>
       <ScrollView contentContainerStyle={styles.overview}>
-        {refs !== '' || showMerge ? (
+        {refs !== '' ? (
           <View
             style={[
               styles.card,
@@ -279,34 +265,12 @@ function OverviewTab({
               },
             ]}
           >
-            {refs !== '' ? (
-              <Text
-                style={[styles.refs, { color: theme.text }]}
-                numberOfLines={2}
-              >
-                {refs}
-              </Text>
-            ) : null}
-            {showMerge ? (
-              <Pressable
-                onPress={() => openPrUrl(model.url)}
-                accessibilityRole="button"
-                accessibilityLabel={mergeLabel}
-                testID="pr-squash-merge"
-                style={[styles.merge, { backgroundColor: theme.prOpen }]}
-              >
-                <Text
-                  style={[
-                    styles.mergeLabel,
-                    theme.scheme === 'dark'
-                      ? styles.mergeOnDark
-                      : styles.mergeOnLight,
-                  ]}
-                >
-                  {mergeLabel}
-                </Text>
-              </Pressable>
-            ) : null}
+            <Text
+              style={[styles.refs, { color: theme.text }]}
+              numberOfLines={2}
+            >
+              {refs}
+            </Text>
           </View>
         ) : null}
         {body !== '' ? (
@@ -375,13 +339,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
   },
-  headerBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
   headerSpacer: { flex: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  controlFill: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   circle: {
     width: 40,
     height: 40,
@@ -420,16 +385,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   refs: { fontSize: 15, fontWeight: '600' },
-  merge: {
-    borderRadius: 10,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  mergeLabel: { fontSize: 16, fontWeight: '600' },
-  mergeOnDark: { color: '#000000' },
-  mergeOnLight: { color: '#FFFFFF' },
   changed: { fontSize: 20, fontWeight: '600', marginTop: 4 },
   diffs: { flex: 1, minHeight: 180 },
 });

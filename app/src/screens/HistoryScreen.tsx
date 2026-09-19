@@ -1,11 +1,9 @@
-// Thread History — pull requests in this session. The checkout's current
-// change request (WatchCheckoutChangeRequest) plus github.com/.../pull/N
-// URLs scraped from transcript text. Tapping a row opens PrSheet.
+// Thread History — change requests for this session from
+// WatchCheckoutChangeRequest. Tapping a row opens PrSheet.
 
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useStore } from 'zustand';
-import { useSessionState } from '../zeron/state/sessionStores';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { collectThreadPrs } from '../components/threadPrs';
 import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
@@ -22,16 +20,12 @@ export function HistoryScreen({
   onOpenPr?: (badge: PrBadgeModel) => void;
 }) {
   const theme = useTheme();
-  const entries = useSessionState(chatId).entries;
   const summary = useStore(
     changeRequestStore,
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
   const diff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
-  const prs = useMemo(
-    () => collectThreadPrs(entries, summary, diff),
-    [entries, summary, diff],
-  );
+  const prs = useMemo(() => collectThreadPrs(summary, diff), [summary, diff]);
 
   return (
     <View style={styles.root}>

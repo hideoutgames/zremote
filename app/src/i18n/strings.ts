@@ -6,13 +6,6 @@ const en = {
   'signIn.title': 'Sign in to ZRemote',
   'signIn.subtitle': 'Control your Zeron sessions from anywhere.',
   'signIn.button': 'Sign in',
-  'signIn.pasteFallback.title': 'Paste the sign-in code',
-  'signIn.pasteFallback.body':
-    'If the browser did not return here, copy the code shown after sign-in and paste it below.',
-  'signIn.pasteFallback.expoGo':
-    'Expo Go preview: universal links are unavailable — finish sign-in by pasting the code shown in the browser.',
-  'signIn.pasteFallback.placeholder': 'state.code',
-  'signIn.pasteFallback.continue': 'Continue',
   'signIn.advanced': 'Advanced',
   'signIn.edgeUrl': 'Edge URL',
   'signIn.error.generic': 'Sign-in failed. Try again.',
@@ -161,7 +154,7 @@ const en = {
   'history.search': 'Search commits…',
   'history.fetch': 'Fetch all',
   'history.copySha': 'Copy SHA',
-  'history.empty': 'No Pull Requests',
+  'history.empty': 'No change requests',
   'history.prRow': '#{number} {title}',
 
   // Accounts
@@ -359,8 +352,6 @@ const en = {
   'pr.commits': 'Commits',
   'pr.files': '{count} Files',
   'pr.statsA11y': '+{additions} −{deletions}, {files} files',
-  'pr.squashMerge': 'Squash & Merge',
-  'pr.openOnGitHub': 'Open on GitHub',
   'pr.openInBrowser': 'Open in browser',
   'pr.copyLink': 'Copy link',
   'pr.shareA11y': 'Share pull request',
