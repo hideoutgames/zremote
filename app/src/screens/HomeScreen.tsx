@@ -54,6 +54,7 @@ import type { Chat } from '../zeron/protocol/types';
 import { HarnessMark } from '../components/HarnessMark';
 import { Glass, GlassContainer } from '../components/Glass';
 import { Icon } from '../components/Icon';
+import { ShimmerText } from '../components/ShimmerText';
 import { ComposeComposer } from '../components/ComposeComposer';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
 import {
@@ -111,8 +112,32 @@ const ThreadStatus = ({
   chatId: string;
 }) => {
   const label = statusCopy(line);
+  const live = line.kind === 'working' || line.kind === 'awaitingInput';
+  const [width, setWidth] = useState(160);
   const showCounts =
     line.kind === 'pr' && (line.additions > 0 || line.deletions > 0);
+  if (live) {
+    return (
+      <View
+        testID={`thread-status-${chatId}`}
+        onLayout={e => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          if (w > 0) setWidth(w);
+        }}
+      >
+        <ShimmerText
+          text={label}
+          width={width}
+          fontSize={15}
+          fontWeight="500"
+          maxLines={1}
+          align="left"
+          baseColor={theme.textSecondary}
+          highlightColor={theme.text}
+        />
+      </View>
+    );
+  }
   if (!showCounts || line.kind !== 'pr') {
     return (
       <Text
@@ -170,6 +195,7 @@ const ChatRow = React.memo(function ({
   );
   const pinned = useChatPinned(chat.id);
   const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpen = useRef(false);
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -193,6 +219,7 @@ const ChatRow = React.memo(function ({
 
   const onMenuOpenChange = useCallback(
     (open: boolean) => {
+      setMenuOpen(open);
       if (open) {
         armSuppress();
         return;
@@ -247,6 +274,7 @@ const ChatRow = React.memo(function ({
 
   const project = checkoutLabel(chat);
   const hostName = hostLabel(chat, host === undefined ? [] : [host]);
+  const live = line.kind === 'working' || line.kind === 'awaitingInput';
 
   return (
     <ContextMenu.Root onOpenChange={onMenuOpenChange}>
@@ -255,7 +283,17 @@ const ChatRow = React.memo(function ({
           style={[
             styles.row,
             { borderBottomColor: theme.border },
-            hovered ? styles.rowHover : undefined,
+            hovered && !menuOpen ? styles.rowHover : undefined,
+            menuOpen
+              ? [
+                  styles.rowMenuOpen,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                    shadowColor: theme.scheme === 'dark' ? '#000' : '#111',
+                  },
+                ]
+              : undefined,
           ]}
           onPress={() => {
             if (suppressOpen.current) return;
@@ -280,7 +318,7 @@ const ChatRow = React.memo(function ({
               <Text
                 style={[
                   styles.title,
-                  { color: theme.text },
+                  { color: live ? theme.accent : theme.text },
                   unseen ? styles.unseen : undefined,
                 ]}
                 numberOfLines={1}
@@ -735,6 +773,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowHover: { opacity: 0.72 },
+  rowMenuOpen: {
+    borderRadius: 12,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   rowText: { flex: 1, gap: 4 },
   titleRow: {
     flexDirection: 'row',

@@ -117,17 +117,18 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
 `http://127.0.0.1:{port}/callback` and the hosted paste-code page
 `{edge}/auth/cli/callback`. The mobile flow:
 
-1. **Primary**: `ASWebAuthenticationSession` with an _https_ callback
-   (`{edge}/auth/cli/callback`, iOS 17.4+) plus PKCE. This reuses the
-   already-registered redirect URI; iOS intercepts the redirect and hands
-   `code`+`state` to the app. Requirement: the app declares
-   `applinks:<edge host>` in Associated Domains, `openAuthSessionAsync` is
-   called with `preferUniversalLinks: true` (the HTTPS `.https(host:path:)`
-   API — the default legacy scheme `"https"` fails to start), and the edge
-   serves `/.well-known/apple-app-site-association` when `IOS_APP_IDS` is
-   set (`patches/zeron-edge/0001`). `zeron://` Linking is a second return
-   path. There is no in-app paste-code UI; cancel/error shows a generic
-   message and the user taps Sign in again.
+1. **Primary**: `ASWebAuthenticationSession` with callback scheme
+   `zeron://auth/callback` plus PKCE. WorkOS still uses the already-
+   registered HTTPS redirect `{edge}/auth/cli/callback`. The edge hops
+   iPhone/iPad user-agents to `zeron://auth/callback?code&state`
+   (`patches/zeron-edge/0004`) so the session completes without a paste
+   page. `openAuthSessionAsync` uses `preferUniversalLinks: false` for
+   that custom scheme (true only if an HTTPS callback URL is passed —
+   the default legacy scheme `"https"` fails to start). `zeron://`
+   Linking is a second return path (Safari fallback). There is no in-app
+   paste-code UI; cancel/error shows a generic message and the user taps
+   Sign in again. Desktop CLI `zeron login` still sees the paste-code
+   page.
 2. `state` is minted per attempt, stored until consumed, and bound to the
    intercepted code (same CSRF discipline as the engine).
 3. **PKCE**: `PKCE_ENABLED` is on. `SignInScreen` injects `expo-crypto`

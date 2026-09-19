@@ -26,6 +26,7 @@ import { rnWsFactory } from '../zeron/transport/rnWs';
 import Constants from 'expo-constants';
 import { systemClock } from '../zeron/transport/clock';
 import { getInitialUrl, addUrlListener } from '../zeron/native/authBrowser';
+import * as WebBrowser from 'expo-web-browser';
 import { parseZeronLink } from '../zeron/protocol/edge';
 import { AppRuntime } from '../zeron/runtime/appRuntime';
 import { staticTokenSource } from '../zeron/transport/tokenSource';
@@ -79,6 +80,10 @@ export function ZeronApp() {
   }, [cfg.edgeUrl]);
 
   const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    WebBrowser.maybeCompleteAuthSession();
+  }, []);
 
   useEffect(() => {
     const unbind = bindAuthSession(auth);

@@ -180,7 +180,7 @@ function ComposeSessionScreen({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const keyboardOffset = { opened: insets.bottom };
+  const keyboardOffset = { opened: 0 };
   const dismissPan = useKeyboardDismissPan();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -194,6 +194,7 @@ function ComposeSessionScreen({
               <Text
                 style={[styles.title, { color: theme.text }]}
                 numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {t('home.newThread')}
               </Text>
@@ -591,10 +592,10 @@ function ActiveSessionScreen({
   );
   const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
   const prBadge = useMemo(
-    () => composerPrBadge(entries, checkoutSummary, checkoutDiff),
-    [entries, checkoutSummary, checkoutDiff],
+    () => composerPrBadge(checkoutSummary, checkoutDiff),
+    [checkoutSummary, checkoutDiff],
   );
-  const keyboardOffset = { opened: insets.bottom };
+  const keyboardOffset = { opened: 0 };
   const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
     .filter(Boolean)
     .join(' · ');
@@ -634,6 +635,7 @@ function ActiveSessionScreen({
                     <Text
                       style={[styles.title, { color: theme.text }]}
                       numberOfLines={1}
+                      ellipsizeMode="tail"
                     >
                       {sessionTitle(chat)}
                     </Text>
@@ -644,6 +646,7 @@ function ActiveSessionScreen({
                           { color: theme.textSecondary },
                         ]}
                         numberOfLines={1}
+                        ellipsizeMode="tail"
                       >
                         {subtitle}
                       </Text>
@@ -1108,7 +1111,8 @@ const styles = StyleSheet.create({
     right: 56,
     top: 0,
     bottom: 0,
-    alignItems: 'center',
+    minWidth: 0,
+    alignItems: 'stretch',
     justifyContent: 'center',
   },
   measureCap: { width: '100%', alignSelf: 'center' },
@@ -1122,14 +1126,20 @@ const styles = StyleSheet.create({
   },
   titlePill: {
     alignItems: 'center',
+    alignSelf: 'center',
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 4,
     maxWidth: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
   },
   titleHit: {
-    alignItems: 'center',
+    width: '100%',
     maxWidth: '100%',
+    minWidth: 0,
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   circle: {
     width: 44,
@@ -1144,8 +1154,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 17, fontWeight: '600' },
-  subtitle: { fontSize: 12 },
+  title: {
+    width: '100%',
+    minWidth: 0,
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  subtitle: {
+    width: '100%',
+    minWidth: 0,
+    fontSize: 12,
+    textAlign: 'center',
+  },
   failedBanner: {
     position: 'absolute',
     bottom: 120,

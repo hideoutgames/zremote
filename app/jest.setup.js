@@ -116,7 +116,7 @@ const menuComponent =
     const { children, ...rest } = props;
     return require('react').createElement(
       require('react-native').View,
-      { testID: name, ...rest },
+      { ...rest, testID: name },
       children,
     );
   };
@@ -255,6 +255,7 @@ jest.mock('expo-notifications', () => ({
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
+  maybeCompleteAuthSession: jest.fn(),
 }));
 jest.mock('expo-file-system', () => ({
   File: class {

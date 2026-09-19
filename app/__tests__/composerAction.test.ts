@@ -96,7 +96,28 @@ test('idle → live pill hidden', () => {
   expect(liveAction('idle', true, true, true)).toBe('hidden');
 });
 
-test('queueSupported reads the capability set', () => {
+test('working + queue + draft → right send', () => {
+  expect(composerAction('working', noSteer, true, true)).toEqual({
+    primary: 'disabled',
+    right: 'send',
+  });
+});
+
+test('working + queue + empty draft → stop', () => {
+  expect(composerAction('working', steers, false, true)).toEqual({
+    primary: 'disabled',
+    right: 'stop',
+  });
+});
+
+test('working + queue + draft + steerable → right send', () => {
+  expect(composerAction('working', steers, true, true)).toEqual({
+    primary: 'disabled',
+    right: 'send',
+  });
+});
+
+test('queueSupported', () => {
   expect(queueSupported(new Set(['message-queue-v1']))).toBe(true);
   expect(queueSupported(new Set())).toBe(false);
 });

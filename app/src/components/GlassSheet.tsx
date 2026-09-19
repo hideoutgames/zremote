@@ -1,10 +1,17 @@
 // Shared Liquid Glass sheet chrome used by Thought process and the queue
 // panel. TrueSheet hosts the sheet; Glass frosts the body.
 
-import React, { useRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState, type ReactNode } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { Glass } from './Glass';
 import { MenuDismissShield } from './menus/MenuDismissShield';
 import { Icon } from './Icon';
@@ -14,7 +21,7 @@ export function GlassSheet({
   title,
   onDismiss,
   children,
-  maxContentHeight = 620,
+  maxContentHeight,
 }: {
   title?: string;
   onDismiss: () => void;
@@ -23,7 +30,17 @@ export function GlassSheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState(s => s.height);
   const sheet = useRef<TrueSheet>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  const cap = Math.max(
+    240,
+    Math.round(
+      (maxContentHeight ?? windowHeight - insets.top) - (keyboardHeight || 0),
+    ),
+  );
 
   return (
     <TrueSheet
@@ -31,11 +48,18 @@ export function GlassSheet({
       detents={['auto', 1]}
       initialDetentIndex={0}
       onDidDismiss={onDismiss}
-      maxContentHeight={maxContentHeight}
+      onDetentChange={event => setExpanded(event.nativeEvent.index >= 1)}
+      maxContentHeight={cap}
       backgroundColor="transparent"
       grabber
     >
-      <Glass style={[styles.body, { paddingBottom: insets.bottom + 16 }]}>
+      <Glass
+        style={[
+          styles.body,
+          expanded ? styles.bodyExpanded : undefined,
+          { paddingBottom: insets.bottom + 16 },
+        ]}
+      >
         <View style={styles.header}>
           <Pressable
             onPress={() => sheet.current?.dismiss()}
@@ -54,7 +78,7 @@ export function GlassSheet({
           )}
           <View style={styles.closeButton} />
         </View>
-        {children}
+        <View style={expanded ? styles.bodyFill : undefined}>{children}</View>
         <MenuDismissShield />
       </Glass>
     </TrueSheet>
@@ -65,6 +89,8 @@ const CLOSE = 32;
 
 const styles = StyleSheet.create({
   body: { borderRadius: 20, overflow: 'hidden' },
+  bodyExpanded: { flex: 1, minHeight: '100%' },
+  bodyFill: { flex: 1, minHeight: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

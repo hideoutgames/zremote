@@ -3,7 +3,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassSheet } from './GlassSheet';
 import { readFileText } from '../zeron/native/fileText';
 import { t } from '../i18n/strings';
@@ -19,7 +18,6 @@ export function TextFileSheet({
   onDismiss: () => void;
 }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const [body, setBody] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -43,10 +41,7 @@ export function TextFileSheet({
     <GlassSheet title={title} onDismiss={onDismiss}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {body === undefined && error === undefined ? (
@@ -68,7 +63,7 @@ export function TextFileSheet({
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 20, maxHeight: 520 },
-  scrollContent: { paddingTop: 4 },
+  scroll: { flex: 1, paddingHorizontal: 20 },
+  scrollContent: { paddingTop: 4, paddingBottom: 24 },
   body: { fontSize: 13, lineHeight: 18, fontFamily: 'Menlo' },
 });

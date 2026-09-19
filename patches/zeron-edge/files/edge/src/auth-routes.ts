@@ -112,7 +112,7 @@ export const handleAuthRoute = async (
   }
 
   if (parts[1] === "cli" && parts[2] === "callback" && request.method === "GET") {
-    return cliCallback(url);
+    return cliCallback(url, request);
   }
 
   return undefined;
@@ -163,13 +163,36 @@ const html = (body: string, status = 200): Response =>
 
 /**
  * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
- * WorkOS redirect URI; it does NOT exchange the code — it renders `state.code`
- * for the user to paste into the device that started the flow (`zeron login`),
- * where the exchange runs so the tokens land on that machine. The state half
- * must match the pending sign-in there, so the paste is CSRF-checked at the
- * same point the loopback flow is.
+ * WorkOS redirect URI; it does NOT exchange the code. Desktop CLI (`zeron
+ * login`) still renders `state.code`. iPhone/iPad user agents are hopped to
+ * `zeron://auth/callback?code&state` so ASWebAuthenticationSession can finish
+ * without showing a paste page.
  */
-const cliCallback = (url: URL): Response => {
+export const isIosMobileUa = (ua: string): boolean =>
+  /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+
+const iosReturnPage = (appUrl: string, paste: string): string => {
+  const safe = escapeHtml(appUrl);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<meta http-equiv="refresh" content="0;url=${safe}" />
+<title>Zeron — sign in</title>
+<script>location.replace(${JSON.stringify(appUrl)});</script>
+</head>
+<body><main>
+<h1>Returning to ZRemote</h1>
+<p><a href="${safe}">Open ZRemote</a></p>
+<p>If nothing happens, this code still works on the device that started sign-in:</p>
+<code id="paste">${paste}</code>
+</main></body>
+</html>`;
+};
+
+const cliCallback = (url: URL, request: Request): Response => {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const denied = url.searchParams.get("error");
@@ -183,6 +206,11 @@ const cliCallback = (url: URL): Response => {
     );
   }
   const paste = `${escapeHtml(state)}.${escapeHtml(code)}`;
+  const ua = request.headers.get("user-agent") ?? "";
+  if (isIosMobileUa(ua)) {
+    const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+    return html(iosReturnPage(app, paste));
+  }
   return html(
     cliPage(
       `<h1>Almost there</h1>
@@ -193,3 +221,4 @@ const cliCallback = (url: URL): Response => {
     )
   );
 };
+

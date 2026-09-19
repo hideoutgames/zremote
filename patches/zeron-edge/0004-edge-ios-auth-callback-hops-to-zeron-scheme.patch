@@ -1,0 +1,166 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hideoutgames <154709155+hideoutgames@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 15:00:00 +0000
+Subject: [PATCH] edge: hop iOS AuthKit callback to zeron://
+
+iPhone/iPad user-agents on GET /auth/cli/callback are redirected to
+zeron://auth/callback?code&state so ASWebAuthenticationSession can
+complete without the CLI paste-code page. Desktop zeron login is
+unchanged.
+---
+ edge/src/auth-routes.ts        |  64 +++++++++++++++++++++++++------
+ edge/src/edge-patches.test.ts  |  63 +++++++++++++++++++++++++++++++
+ 2 files changed, 114 insertions(+), 13 deletions(-)
+
+diff --git a/edge/src/auth-routes.ts b/edge/src/auth-routes.ts
+index 2222222..4444444 100644
+--- a/edge/src/auth-routes.ts
++++ b/edge/src/auth-routes.ts
+@@ -111,8 +111,8 @@ export const handleAuthRoute = async (
+     }
+   }
+ 
+   if (parts[1] === "cli" && parts[2] === "callback" && request.method === "GET") {
+-    return cliCallback(url);
++    return cliCallback(url, request);
+   }
+ 
+   return undefined;
+ };
+@@ -161,15 +161,52 @@ const html = (body: string, status = 200): Response =>
+   new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
+ 
+ /**
+- * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
+- * WorkOS redirect URI; it does NOT exchange the code — it renders `state.code`
+- * for the user to paste into the device that started the flow (`zeron login`),
+- * where the exchange runs so the tokens land on that machine. The state half
+- * must match the pending sign-in there, so the paste is CSRF-checked at the
+- * same point the loopback flow is.
++ * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
++ * WorkOS redirect URI; it does NOT exchange the code. Desktop CLI (`zeron
++ * login`) still renders `state.code`. iPhone/iPad user agents are hopped to
++ * `zeron://auth/callback?code&state` so ASWebAuthenticationSession can finish
++ * without showing a paste page.
+  */
+-const cliCallback = (url: URL): Response => {
++export const isIosMobileUa = (ua: string): boolean =>
++  /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
++
++const iosReturnPage = (appUrl: string, paste: string): string => {
++  const safe = escapeHtml(appUrl);
++  return `<!doctype html>
++<html lang="en">
++<head>
++<meta charset="utf-8" />
++<meta name="viewport" content="width=device-width, initial-scale=1" />
++<meta name="robots" content="noindex" />
++<meta http-equiv="refresh" content="0;url=${safe}" />
++<title>Zeron — sign in</title>
++<script>location.replace(${JSON.stringify(appUrl)});</script>
++</head>
++<body><main>
++<h1>Returning to ZRemote</h1>
++<p><a href="${safe}">Open ZRemote</a></p>
++<p>If nothing happens, this code still works on the device that started sign-in:</p>
++<code id="paste">${paste}</code>
++</main></body>
++</html>`;
++};
++
++const cliCallback = (url: URL, request: Request): Response => {
+   const code = url.searchParams.get("code");
+   const state = url.searchParams.get("state");
+   const denied = url.searchParams.get("error");
+@@ -182,6 +219,12 @@ const cliCallback = (url: URL): Response => {
+       400
+     );
+   }
+   const paste = `${escapeHtml(state)}.${escapeHtml(code)}`;
++  const ua = request.headers.get("user-agent") ?? "";
++  if (isIosMobileUa(ua)) {
++    const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
++    return html(iosReturnPage(app, paste));
++  }
+   return html(
+     cliPage(
+       `<h1>Almost there</h1>
+diff --git a/edge/src/edge-patches.test.ts b/edge/src/edge-patches.test.ts
+index 2222222..4444444 100644
+--- a/edge/src/edge-patches.test.ts
++++ b/edge/src/edge-patches.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it, vi, afterEach } from "vitest";
+ import { appleAssociation } from "./apple-association";
+ import { exchange } from "./workos";
++import { handleAuthRoute, isIosMobileUa } from "./auth-routes";
+ import type { Env } from "./env";
+ 
+ describe("apple-app-site-association", () => {
+@@ -66,3 +67,65 @@ describe("workos exchange PKCE", () => {
+     expect("code_verifier" in body).toBe(false);
+   });
+ });
++
++describe("cli callback iOS hop", () => {
++  it("treats iPhone and iPadOS user agents as mobile", () => {
++    expect(
++      isIosMobileUa(
++        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
++      )
++    ).toBe(true);
++    expect(
++      isIosMobileUa(
++        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
++      )
++    ).toBe(true);
++    expect(
++      isIosMobileUa(
++        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
++      )
++    ).toBe(false);
++  });
++
++  it("redirects iOS user agents to zeron://auth/callback", async () => {
++    const request = new Request(
++      "https://edge.test/auth/cli/callback?code=abc&state=xyz",
++      {
++        headers: {
++          "user-agent":
++            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
++        }
++      }
++    );
++    const res = await handleAuthRoute(
++      request,
++      {} as Env,
++      new URL(request.url)
++    );
++    expect(res?.status).toBe(200);
++    const body = await res!.text();
++    expect(body).toContain("zeron://auth/callback?code=abc&state=xyz");
++    expect(body).toContain("location.replace");
++  });
++
++  it("keeps the paste-code page for desktop user agents", async () => {
++    const request = new Request(
++      "https://edge.test/auth/cli/callback?code=abc&state=xyz",
++      {
++        headers: {
++          "user-agent":
++            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0"
++        }
++      }
++    );
++    const res = await handleAuthRoute(
++      request,
++      {} as Env,
++      new URL(request.url)
++    );
++    const body = await res!.text();
++    expect(body).toContain("Paste this code into the terminal");
++    expect(body).not.toContain("location.replace");
++  });
++});
+-- 
+2.43.0

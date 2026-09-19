@@ -28,7 +28,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
-import { KeyboardController } from 'react-native-keyboard-controller';
+import {
+  KeyboardController,
+  useKeyboardState,
+} from 'react-native-keyboard-controller';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
@@ -46,7 +49,6 @@ import { ContextUsageChip } from './agentsKit/ContextUsage';
 import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
-import { VOICE_PILL_SIZE } from './voicePillMath';
 import { useAttachments } from '../hooks/useAttachments';
 import { isImageMime } from '../zeron/attachments/validate';
 import { useTheme } from '../theme';
@@ -77,7 +79,12 @@ import {
   setComposerExtraHeight,
 } from '../zeron/state/uiPrefs';
 import type { HarnessDescriptor, ModelOption } from '../zeron/protocol/types';
-import { composerAction, harnessSteers, liveAction } from './composerAction';
+import {
+  composerAction,
+  harnessSteers,
+  liveAction,
+  queueSupported,
+} from './composerAction';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
@@ -92,9 +99,6 @@ const COMPOSER_EXTRA_MAX = 280;
 const COMPOSER_EXTRA_WINDOW_FRAC = 0.4;
 const THUMBS_ANIM_MS = 220;
 const CHIP_FADE = 28;
-const SEND_TARGET = 44;
-const TRAILING_GAP = 4;
-const TRAILING_CLUSTER = VOICE_PILL_SIZE + TRAILING_GAP + SEND_TARGET;
 
 function ChipRowMask({ children }: { children: React.ReactNode }) {
   return (
@@ -109,7 +113,6 @@ function ChipRowMask({ children }: { children: React.ReactNode }) {
             end={{ x: 1, y: 0 }}
             style={styles.chipMaskFade}
           />
-          <View style={styles.chipMaskClear} />
         </View>
       }
     >
@@ -204,6 +207,7 @@ export const Composer = React.memo(function ({
   'use no memo';
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const regular = windowWidth >= REGULAR_MIN_WIDTH;
   const persistedExtra = useComposerExtraHeight();
@@ -275,10 +279,11 @@ export const Composer = React.memo(function ({
   const question = openInputRequest(session.entries);
   const hasAttachments = draft.attachments.length > 0;
   const hasText = draft.text.trim().length > 0;
-  const action = composerAction(phase, harness, hasText);
+  const canQueue = queueSupported(capabilities);
+  const action = composerAction(phase, harness, hasText, canQueue);
   const live = liveAction(
     phase,
-    capabilities.has('message-queue-v1'),
+    canQueue,
     harnessSteers(harness),
     prefersSteer,
   );
@@ -439,6 +444,9 @@ export const Composer = React.memo(function ({
 
   const right = action.right;
   const showLivePill = live !== 'hidden' && hasText;
+  const sendArmed =
+    right === 'send' &&
+    (action.primary === 'send' || live === 'queue' || live === 'steer');
 
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
@@ -448,7 +456,10 @@ export const Composer = React.memo(function ({
     <View
       ref={composerRef}
       onLayout={onLayout}
-      style={[styles.container, { paddingBottom: insets.bottom + 8 }]}
+      style={[
+        styles.container,
+        { paddingBottom: (keyboardVisible ? 0 : insets.bottom) + 8 },
+      ]}
     >
       <View
         style={styles.glassWrap}
@@ -595,10 +606,7 @@ export const Composer = React.memo(function ({
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={[
-                      styles.actionChips,
-                      { paddingRight: TRAILING_CLUSTER },
-                    ]}
+                    contentContainerStyle={styles.actionChips}
                     style={styles.actionChipsScroll}
                   >
                     {planMode ? (
@@ -638,65 +646,64 @@ export const Composer = React.memo(function ({
                     <ContextUsageChip usage={session.meta.contextUsage} />
                   </ScrollView>
                 </ChipRowMask>
-                <View style={styles.trailingOverlay} pointerEvents="box-none">
-                  <View style={styles.trailingCluster}>
-                    <VoicePill
-                      active={dictating}
-                      supported={dictationSupported}
-                      levelTick={voiceTick}
-                      onToggle={toggleDictation}
-                      onCancel={cancelDictation}
-                    />
-                    <Pressable
-                      onPress={
-                        right === 'stop'
-                          ? onStop
-                          : right === 'cancel'
-                          ? onCancel
-                          : right === 'send'
-                          ? submit
-                          : undefined
-                      }
-                      disabled={
+                <View style={styles.trailingCluster} collapsable={false}>
+                  <VoicePill
+                    active={dictating}
+                    supported={dictationSupported}
+                    levelTick={voiceTick}
+                    onToggle={toggleDictation}
+                    onCancel={cancelDictation}
+                  />
+                  <Pressable
+                    onPress={
+                      right === 'stop'
+                        ? onStop
+                        : right === 'cancel'
+                        ? onCancel
+                        : right === 'send'
+                        ? submit
+                        : undefined
+                    }
+                    disabled={
+                      right === 'stopping' || (right === 'send' && !sendArmed)
+                    }
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      right === 'stop'
+                        ? t('session.stop')
+                        : right === 'stopping'
+                        ? t('session.stopping')
+                        : right === 'cancel'
+                        ? t('session.cancel')
+                        : t('session.send')
+                    }
+                    accessibilityState={{
+                      disabled:
                         right === 'stopping' ||
-                        (right === 'send' && action.primary !== 'send')
-                      }
-                      hitSlop={6}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        right === 'stop'
-                          ? t('session.stop')
-                          : right === 'stopping'
-                          ? t('session.stopping')
-                          : right === 'cancel'
-                          ? t('session.cancel')
-                          : t('session.send')
-                      }
-                      accessibilityState={{
-                        disabled:
-                          right === 'stopping' ||
-                          (right === 'send' && action.primary !== 'send'),
-                        busy: right === 'stopping',
-                      }}
-                      style={styles.minTarget}
+                        (right === 'send' && !sendArmed),
+                      busy: right === 'stopping',
+                    }}
+                    style={styles.minTarget}
+                  >
+                    <View
+                      style={[
+                        styles.circle,
+                        {
+                          backgroundColor:
+                            right === 'send' && !sendArmed
+                              ? theme.sendInactive
+                              : theme.sendActive,
+                        },
+                      ]}
                     >
-                      <View
-                        style={[
-                          styles.circle,
-                          {
-                            backgroundColor:
-                              right === 'send' && action.primary !== 'send'
-                                ? theme.sendInactive
-                                : theme.sendActive,
-                          },
-                        ]}
-                      >
-                        {right === 'stopping' ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={theme.textSecondary}
-                          />
-                        ) : (
+                      {right === 'stopping' ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={theme.textSecondary}
+                        />
+                      ) : (
+                        <View style={styles.iconClip} collapsable={false}>
                           <Icon
                             name={
                               right === 'stop'
@@ -707,17 +714,17 @@ export const Composer = React.memo(function ({
                             }
                             size={right === 'send' ? 17 : 15}
                             color={
-                              right === 'send' && action.primary !== 'send'
+                              right === 'send' && !sendArmed
                                 ? '#FFFFFF'
                                 : theme.scheme === 'dark'
                                 ? '#000000'
                                 : '#FFFFFF'
                             }
                           />
-                        )}
-                      </View>
-                    </Pressable>
-                  </View>
+                        </View>
+                      )}
+                    </View>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -842,8 +849,8 @@ const styles = StyleSheet.create({
   chipsWrap: {
     flex: 1,
     minWidth: 0,
-    position: 'relative',
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   chipMask: {
     flex: 1,
@@ -851,20 +858,19 @@ const styles = StyleSheet.create({
   },
   chipMaskOpaque: { flex: 1, backgroundColor: 'black' },
   chipMaskFade: { width: CHIP_FADE, height: '100%' },
-  chipMaskClear: { width: TRAILING_CLUSTER },
-  trailingOverlay: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   trailingCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     flexShrink: 0,
+    height: 44,
+  },
+  iconClip: {
+    width: CIRCLE,
+    height: CIRCLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   actionChipsScroll: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   actionChips: {

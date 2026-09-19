@@ -110,6 +110,14 @@ Env/secrets: `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`,
 on the secrets being set — without them the producer is inert and the
 registry routes still answer.
 
+## 5. iOS AuthKit callback hop — `edge/src/auth-routes.ts`
+
+`GET /auth/cli/callback` still renders the paste-code page for desktop CLI
+(`zeron login`). iPhone/iPad (and iPadOS desktop-class) user-agents are
+immediately redirected to `zeron://auth/callback?code&state` so
+`ASWebAuthenticationSession` can complete without a paste UI. Patch
+`0004`. Desktop browsers are unchanged.
+
 ## Deploy
 
 ```sh
@@ -117,6 +125,7 @@ cd <edge checkout>
 git am <zremote>/patches/zeron-edge/0001-*.patch
 git am <zremote>/patches/zeron-edge/0002-*.patch
 git am <zremote>/patches/zeron-edge/0003-*.patch
+git am <zremote>/patches/zeron-edge/0004-*.patch
 wrangler secret put APNS_P8        # PKCS8 PEM
 wrangler secret put APNS_KEY_ID
 wrangler secret put APNS_TEAM_ID
@@ -126,8 +135,8 @@ npm run test:unit && wrangler deploy
 
 ## What works WITHOUT these patches
 
-- Sign-in cannot complete via the HTTPS/universal-link callback (PKCE
-  exchange + AASA live in `0001`). There is no in-app paste-code fallback.
+- Sign-in cannot complete via PKCE (`0001`) or the iOS `zeron://` hop
+  (`0004`). There is no in-app paste-code fallback.
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
 - Live Activities still render locally while the app is foregrounded; only
   APNs-driven updates/start are missing.

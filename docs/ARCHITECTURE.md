@@ -153,17 +153,18 @@ the thread Details sheet.
 
 `ZeronApp` waits for `AuthSession.restore()` (SecureStore) before showing
 `SignInScreen`, so a returning user never flashes signed-out. Sign-in uses
-PKCE (`PKCE_ENABLED`) and the HTTPS callback `https://{edge}/auth/cli/callback`
-(AASA + `associatedDomains`). `openAuthSession` sets `preferUniversalLinks`
-so iOS 17.4+ uses `ASWebAuthenticationSession`'s HTTPS callback API; the
-legacy `callbackURLScheme: "https"` path fails to start and shows the
-generic error immediately. PKCE SHA-256 is `expo-crypto`, injected at
-`beginSignIn`. `zeron://` Linking remains a second return path. There is
-no paste-code fallback; cancel/error shows the generic message and the
-user taps Sign in again. Expo Go cannot receive universal links —
-production sign-in is the HTTPS session on a dev/production build (demo
-stays under Advanced). Edge must serve AASA (`IOS_APP_IDS`) or the sheet
-opens and never returns — that is not the instant-on-tap failure.
+PKCE (`PKCE_ENABLED`). WorkOS still redirects to the registered HTTPS URI
+`https://{edge}/auth/cli/callback`. The app starts `ASWebAuthenticationSession`
+with callback `zeron://auth/callback` so the browser actually opens on iOS
+17.0+ (the HTTPS callbackURLScheme path fails to start). The edge hops
+iPhone/iPad user-agents from that HTTPS page to `zeron://auth/callback?code&state`
+(`patches/zeron-edge/0004`). PKCE SHA-256 is `expo-crypto`, injected at
+`beginSignIn`. `zeron://` Linking remains a second return path (Safari
+fallback when AuthSession cannot start). There is no paste-code UI; cancel
+shows the generic message and the user taps Sign in again. Desktop CLI
+`zeron login` still sees the paste-code page. Expo Go uses the same
+AuthSession + scheme hop. AASA (`IOS_APP_IDS`) remains useful for HTTPS
+universal links but is no longer required to start or complete mobile sign-in.
 
 ## Workspace tools (Files / Terminal / History)
 
@@ -209,14 +210,14 @@ These are thin screens over host-relayed RPCs — nothing runs on the phone.
   mapping to byte sequences. Tabs allow multiple shells per session; exited
   shells stay listed (dimmed, with `[exit N]`) until the host TTL expires.
 - **History** (`screens/HistoryScreen.tsx`, `components/threadPrs.ts`):
-  pull requests in this thread. The checkout's current change request
-  (`WatchCheckoutChangeRequest`) plus `github.com/.../pull/N` URLs in
-  transcript text. Tapping a row opens `PrSheet` — GitHub Mobile layout
-  (Open badge, checkout `+/-` and file count, Overview / Discussion /
-  Commits). Overview is the PR body plus checkout diffs (`ChangesScreen`);
-  Discussion and Commits show `ListGitHistory` for the session cwd.
-  Squash & Merge, share, and “Open in browser” open the change-request
-  URL (no in-app merge or CI — the host has no checks/merge RPCs).
+  change requests for this thread from `WatchCheckoutChangeRequest` only
+  (no provider URL scraping). Tapping a row opens `PrSheet` filled from
+  Zeron data (Open/Draft/Merged badge, checkout `+/-` and file count,
+  Overview / Discussion / Commits). Overview is the change-request body
+  plus checkout diffs (`ChangesScreen`); Discussion and Commits show
+  `ListGitHistory` for the session cwd. Share and “Open in browser” use
+  the host-provided URL (no in-app merge or CI — the host has no
+  checks/merge RPCs).
 - **Previews** (`screens/PreviewsScreen.tsx`): still implemented
   (`WatchPreviews {chatId}`) but unwired from the session overflow.
 - **Agent accounts** (`screens/AgentAccountsScreen.tsx`,

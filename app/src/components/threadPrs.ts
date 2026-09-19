@@ -1,19 +1,14 @@
-// Collect pull requests visible in a thread: the checkout's current change
-// request (WatchCheckoutChangeRequest) plus github.com/.../pull/N URLs in
-// transcript text. Host has no "list PRs for chat" RPC.
+// Collect change requests visible in a thread from the checkout stream
+// (WatchCheckoutChangeRequest). Host has no "list PRs for chat" RPC and we
+// do not scrape provider URLs out of transcript text.
 
-import type {
-  ChangeRequestSummary,
-  MessageEntry,
-} from '../zeron/protocol/types';
+import type { ChangeRequestSummary } from '../zeron/protocol/types';
 import {
   fileCountOf,
   prBadgeModel,
   type PrBadgeModel,
   type PrDiffCounts,
 } from './prBadge';
-
-const PR_URL = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/gi;
 
 export const badgeFromSummary = (
   summary: ChangeRequestSummary,
@@ -39,71 +34,24 @@ export const badgeFromSummary = (
   };
 };
 
-export const extractPrsFromText = (text: string): PrBadgeModel[] => {
-  const out: PrBadgeModel[] = [];
-  const re = new RegExp(PR_URL.source, 'gi');
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const owner = m[1];
-    const repo = m[2];
-    const number = Number(m[3]);
-    const url = `https://github.com/${owner}/${repo}/pull/${number}`;
-    out.push({
-      tone: 'open',
-      label: 'viewPr',
-      showCounts: false,
-      additions: 0,
-      deletions: 0,
-      fileCount: 0,
-      title: `${owner}/${repo}#${number}`,
-      state: 'open',
-      url,
-      number,
-      baseRef: '',
-      headRef: '',
-    });
-  }
-  return out;
-};
-
-const textOf = (entry: MessageEntry): string =>
-  entry.parts
-    .filter(
-      (p): p is { kind: 'text'; id: string; text: string } => p.kind === 'text',
-    )
-    .map(p => p.text)
-    .join('\n');
-
 export const collectThreadPrs = (
-  entries: MessageEntry[],
   checkout?: ChangeRequestSummary | null,
   diff?: PrDiffCounts,
 ): PrBadgeModel[] => {
-  const out: PrBadgeModel[] = [];
-  const seen = new Set<string>();
-  const push = (badge: PrBadgeModel) => {
-    const key = badge.url !== '' ? badge.url : String(badge.number);
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(badge);
-  };
-  if (checkout != null) push(badgeFromSummary(checkout, diff));
-  for (const entry of entries) {
-    for (const badge of extractPrsFromText(textOf(entry))) push(badge);
-  }
-  return out;
+  if (checkout == null) return [];
+  return [badgeFromSummary(checkout, diff)];
 };
 
 const hasPrIdentity = (badge: PrBadgeModel): boolean =>
   badge.url !== '' || badge.number > 0;
 
-/** Composer chrome pill: a real, non-closed PR in this thread (draft, open,
- * or merged). Closed-only checkout CRs and placeholder summaries stay hidden. */
+/** Composer chrome pill: a real, non-closed checkout CR (draft, open, or
+ * merged). Closed-only and placeholder summaries stay hidden. History still
+ * lists closed checkout CRs via `collectThreadPrs`. */
 export const composerPrBadge = (
-  entries: MessageEntry[],
   checkout?: ChangeRequestSummary | null,
   diff?: PrDiffCounts,
 ): PrBadgeModel | undefined =>
-  collectThreadPrs(entries, checkout, diff).find(
+  collectThreadPrs(checkout, diff).find(
     p => p.state !== 'closed' && hasPrIdentity(p),
   );
