@@ -238,8 +238,7 @@ const styles = StyleSheet.create({
   },
   sidebarInner: {
     flex: 1,
-    paddingLeft: 12,
-    paddingRight: 8,
+    paddingHorizontal: 12,
   },
   sidebarGlass: {
     flex: 1,

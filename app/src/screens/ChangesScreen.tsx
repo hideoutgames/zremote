@@ -17,7 +17,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
@@ -26,16 +26,31 @@ import type {
   CheckoutDiff,
   CheckoutFileDiffText,
 } from '../zeron/protocol/types';
-import {
-  diffForCheckout,
-  diffPaneReducer,
-  statusGlyph,
-} from '../zeron/diff/diffState';
+import { diffForCheckout, diffPaneReducer } from '../zeron/diff/diffState';
 import type { DiffPaneState } from '../zeron/diff/diffState';
 import { parseUnified, type ParsedFileDiff } from '../zeron/diff/parseUnified';
 import { FileDiff } from '../components/agentsKit/FileDiff';
+import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
+import type { SFSymbol } from 'sf-symbols-typescript';
+
+const leaf = (path: string): string =>
+  path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
+const parentPath = (path: string): string => {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts.slice(0, -1).join('/');
+};
+
+const statusIcon = (status: string): SFSymbol =>
+  status === 'added'
+    ? 'plus'
+    : status === 'deleted'
+    ? 'minus'
+    : status === 'renamed'
+    ? 'arrow.right'
+    : 'plus.forwardslash.minus';
 
 export function ChangesScreen({
   chatId,
@@ -146,10 +161,12 @@ export function ChangesScreen({
   if (state.kind === 'preparing') {
     body = (
       <Centered>
-        <ActivityIndicator />
-        <Text style={{ color: theme.textSecondary }}>
-          {t('changes.preparing')}
-        </Text>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel={t('changes.preparing')}
+        >
+          <ActivityIndicator />
+        </View>
       </Centered>
     );
   } else if (state.kind === 'clean') {
@@ -170,6 +187,15 @@ export function ChangesScreen({
         {state.diff.files.map(f => {
           const expanded = state.expanded.has(f.path);
           const loaded = fileText[f.path];
+          const parent = parentPath(f.path);
+          const subtitle =
+            f.oldPath !== undefined ? `${leaf(f.oldPath)} → ${parent}` : parent;
+          const iconColor =
+            f.status === 'added'
+              ? theme.diffAddText
+              : f.status === 'deleted'
+              ? theme.diffDelText
+              : theme.textSecondary;
           return (
             <View
               key={f.path}
@@ -187,26 +213,42 @@ export function ChangesScreen({
                     accessibilityState={{ expanded }}
                     style={styles.row}
                   >
-                    <Text
-                      style={[styles.glyph, { color: theme.textSecondary }]}
-                    >
-                      {statusGlyph(f)}
+                    <Icon
+                      name={statusIcon(f.status)}
+                      size={14}
+                      color={iconColor}
+                    />
+                    <View style={styles.names}>
+                      <Text
+                        style={[styles.path, { color: theme.text }]}
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={1.6}
+                      >
+                        {leaf(f.path)}
+                      </Text>
+                      {subtitle !== '' ? (
+                        <Text
+                          style={[
+                            styles.parent,
+                            { color: theme.textSecondary },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {subtitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={[styles.count, { color: theme.diffAddText }]}>
+                      {f.additions > 0 ? `+${f.additions}` : ''}
                     </Text>
-                    <Text
-                      style={[styles.path, { color: theme.text }]}
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={1.6}
-                    >
-                      {f.oldPath !== undefined
-                        ? `${f.oldPath} → ${f.path}`
-                        : f.path}
+                    <Text style={[styles.count, { color: theme.diffDelText }]}>
+                      {f.deletions > 0 ? `-${f.deletions}` : ''}
                     </Text>
-                    <Text style={{ color: theme.diffAddText }}>
-                      +{f.additions}
-                    </Text>
-                    <Text style={{ color: theme.diffDelText }}>
-                      -{f.deletions}
-                    </Text>
+                    <Icon
+                      name={expanded ? 'chevron.down' : 'chevron.right'}
+                      size={14}
+                      color={theme.textSecondary}
+                    />
                   </Pressable>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
@@ -217,6 +259,7 @@ export function ChangesScreen({
                     <DropdownMenu.ItemTitle>
                       {t('changes.copyPath')}
                     </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
                     key="copyPatch"
@@ -230,6 +273,7 @@ export function ChangesScreen({
                     <DropdownMenu.ItemTitle>
                       {t('changes.copyPatch')}
                     </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
@@ -243,7 +287,7 @@ export function ChangesScreen({
                     </Text>
                   ) : loaded.length === 0 ? (
                     <Text style={{ color: theme.textSecondary }}>
-                      {f.binary ? 'Binary file' : t('changes.clean')}
+                      {f.binary ? t('changes.binary') : t('changes.clean')}
                     </Text>
                   ) : (
                     loaded.map((pf, i) => <FileDiff key={i} file={pf} />)
@@ -319,9 +363,12 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 44,
     paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  glyph: { fontFamily: 'monospace', fontSize: 12, width: 14 },
-  path: { flex: 1, fontSize: 13 },
+  names: { flex: 1, gap: 1 },
+  path: { fontSize: 15 },
+  parent: { fontSize: 12 },
+  count: { fontSize: 13, fontVariant: ['tabular-nums'] },
   historyLink: { fontSize: 13 },
   historyBtn: {
     minHeight: 44,

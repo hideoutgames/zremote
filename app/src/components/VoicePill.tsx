@@ -133,7 +133,7 @@ export function VoicePill({
         if (supported) onToggle();
       }}
       disabled={!supported}
-      hitSlop={6}
+      hitSlop={{ top: 6, bottom: 6, right: 6, left: 0 }}
       accessibilityRole="button"
       accessibilityLabel={t('composer.dictate')}
       accessibilityState={{ disabled: !supported, busy: active }}
@@ -194,6 +194,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 0,
+    paddingLeft: 0,
   },
   pill: {
     height: VOICE_PILL_SIZE,

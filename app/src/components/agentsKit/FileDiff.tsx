@@ -15,50 +15,75 @@ export function FileDiff({ file }: { file: ParsedFileDiff }) {
       <View>
         {file.hunks.map((h, i) => (
           <View key={i}>
-            <Text
-              style={[styles.hunkHeader, { color: theme.textSecondary }]}
-              maxFontSizeMultiplier={1.6}
+            <View
+              style={[
+                styles.hunkRule,
+                {
+                  borderTopColor: theme.border,
+                  backgroundColor: theme.surface,
+                },
+              ]}
             >
-              {`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${
-                h.newLines
-              } @@${h.header === '' ? '' : ` ${h.header}`}`}
-            </Text>
-            {h.lines.map((l, j) => (
-              <View
-                key={j}
-                style={[
-                  styles.line,
-                  l.kind === 'add'
-                    ? { backgroundColor: theme.diffAddBackground }
-                    : l.kind === 'del'
-                    ? { backgroundColor: theme.diffDelBackground }
-                    : undefined,
-                ]}
-              >
-                <Text style={[styles.gutter, { color: theme.textSecondary }]}>
-                  {l.oldNo ?? ''}
-                </Text>
-                <Text style={[styles.gutter, { color: theme.textSecondary }]}>
-                  {l.newNo ?? ''}
-                </Text>
+              {h.header !== '' ? (
                 <Text
+                  style={[styles.hunkHeader, { color: theme.textSecondary }]}
+                  maxFontSizeMultiplier={1.6}
+                >
+                  {h.header}
+                </Text>
+              ) : null}
+            </View>
+            {h.lines.map((l, j) => {
+              const add = l.kind === 'add';
+              const del = l.kind === 'del';
+              return (
+                <View
+                  key={j}
                   style={[
-                    styles.code,
-                    {
-                      color:
-                        l.kind === 'add'
-                          ? theme.diffAddText
-                          : l.kind === 'del'
-                          ? theme.diffDelText
-                          : theme.text,
-                    },
+                    styles.line,
+                    add
+                      ? { backgroundColor: theme.diffAddBackground }
+                      : del
+                      ? { backgroundColor: theme.diffDelBackground }
+                      : undefined,
                   ]}
                 >
-                  {l.kind === 'add' ? '+' : l.kind === 'del' ? '-' : ' '}
-                  {l.text}
-                </Text>
-              </View>
-            ))}
+                  <View
+                    style={[
+                      styles.rail,
+                      {
+                        backgroundColor: add
+                          ? theme.diffAddText
+                          : del
+                          ? theme.diffDelText
+                          : 'transparent',
+                      },
+                    ]}
+                  />
+                  <Text style={[styles.gutter, { color: theme.textSecondary }]}>
+                    {l.oldNo ?? ''}
+                  </Text>
+                  <Text style={[styles.gutter, { color: theme.textSecondary }]}>
+                    {l.newNo ?? ''}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.code,
+                      {
+                        color: add
+                          ? theme.diffAddText
+                          : del
+                          ? theme.diffDelText
+                          : theme.text,
+                      },
+                    ]}
+                  >
+                    {add ? '+' : del ? '-' : ' '}
+                    {l.text}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         ))}
       </View>
@@ -68,19 +93,26 @@ export function FileDiff({ file }: { file: ParsedFileDiff }) {
 
 const styles = StyleSheet.create({
   scroll: { flexGrow: 0 },
+  hunkRule: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 8,
+    justifyContent: 'center',
+  },
   hunkHeader: {
     fontFamily: 'monospace',
     fontSize: 11,
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
-  line: { flexDirection: 'row', paddingHorizontal: 4 },
+  line: { flexDirection: 'row', alignItems: 'stretch', paddingRight: 8 },
+  rail: { width: 3 },
   gutter: {
     fontFamily: 'monospace',
     fontSize: 11,
-    width: 40,
+    width: 36,
     textAlign: 'right',
-    paddingRight: 6,
+    paddingRight: 8,
+    fontVariant: ['tabular-nums'],
   },
   code: { fontFamily: 'monospace', fontSize: 12 },
 });

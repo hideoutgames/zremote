@@ -41,6 +41,7 @@ import { SignInScreen } from '../screens/SignInScreen';
 import { OrgGateScreen } from '../screens/OrgGateScreen';
 import { AdaptiveShell } from '../navigation/AdaptiveShell';
 import { AppErrorBoundary } from './AppErrorBoundary';
+import { MenuDismissShield } from '../components/menus/MenuDismissShield';
 
 const log = createLog();
 
@@ -301,6 +302,7 @@ export function ZeronApp() {
           backgroundColor="transparent"
         />
         <AppErrorBoundary resetKey={status.state}>{body}</AppErrorBoundary>
+        <MenuDismissShield />
       </View>
     </AppServicesContext.Provider>
   );

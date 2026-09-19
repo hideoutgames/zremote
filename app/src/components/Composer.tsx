@@ -1,5 +1,5 @@
 // Session composer — one two-tier Liquid Glass container:
-//   grabber, then (compose only) repo / origin / machine,
+//   grabber, then (compose only) Desktop / Project / checkout-mode / Branch,
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
@@ -24,9 +24,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import { KeyboardController } from 'react-native-keyboard-controller';
+import * as DropdownMenu from './menus/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
 import { ImagePreviewModal } from './ImagePreviewModal';
@@ -36,10 +38,13 @@ import { Glass } from './Glass';
 import { FadeBlur } from './FadeBlur';
 import { Icon } from './Icon';
 import { ModelMenuButton } from './ModelMenuButton';
+import { FastMenuButton } from './FastMenuButton';
+import { ComposerMenuChip } from './ComposerMenuChip';
 import { PlanBadge } from './PlanBadge';
 import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
+import { VOICE_PILL_SIZE } from './voicePillMath';
 import { useAttachments } from '../hooks/useAttachments';
 import { isImageMime } from '../zeron/attachments/validate';
 import { useTheme } from '../theme';
@@ -74,6 +79,7 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import type { DictationPort } from '../zeron/native/dictation';
 import { QuestionPanel } from './agentsKit/QuestionPanel';
 import { VoicePill } from './VoicePill';
+import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
 // lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
@@ -82,6 +88,33 @@ const INPUT_MAX_HEIGHT_REGULAR = 214;
 const COMPOSER_EXTRA_MAX = 280;
 const COMPOSER_EXTRA_WINDOW_FRAC = 0.4;
 const THUMBS_ANIM_MS = 220;
+const CHIP_FADE = 28;
+const SEND_TARGET = 44;
+const TRAILING_GAP = 4;
+const TRAILING_RESERVE =
+  VOICE_PILL_SIZE + TRAILING_GAP + SEND_TARGET + CHIP_FADE;
+
+function ChipFade({
+  width,
+  height,
+  color,
+}: {
+  width: number;
+  height: number;
+  color: string;
+}) {
+  return (
+    <Canvas style={{ width, height }} pointerEvents="none">
+      <Rect x={0} y={0} width={width} height={height}>
+        <LinearGradient
+          start={vec(0, 0)}
+          end={vec(width, 0)}
+          colors={['transparent', color]}
+        />
+      </Rect>
+    </Canvas>
+  );
+}
 
 export interface ComposerProps {
   chatId: string;
@@ -178,6 +211,7 @@ export const Composer = React.memo(function ({
   );
   const setDragExtraRef = useRef(setDragExtra);
   setDragExtraRef.current = setDragExtra;
+  const focusedRef = useRef(false);
   const effortChipRef = useRef<View>(null);
   const openEffort = useCallback(() => {
     const node = effortChipRef.current;
@@ -206,6 +240,13 @@ export const Composer = React.memo(function ({
         const next = Math.max(0, Math.min(max, extraStartRef.current - g.dy));
         setComposerExtraHeight(next);
         setDragExtraRef.current(null);
+        if (
+          focusedRef.current &&
+          extraStartRef.current === 0 &&
+          shouldDismissKeyboardOnSwipe(g.dx, g.dy, g.vy)
+        ) {
+          KeyboardController.dismiss();
+        }
       },
     }),
   ).current;
@@ -466,8 +507,14 @@ export const Composer = React.memo(function ({
             onSelectionChange={e =>
               (selRef.current = e.nativeEvent.selection.start)
             }
-            onFocus={() => onFocusChange?.(true)}
-            onBlur={() => onFocusChange?.(false)}
+            onFocus={() => {
+              focusedRef.current = true;
+              onFocusChange?.(true);
+            }}
+            onBlur={() => {
+              focusedRef.current = false;
+              onFocusChange?.(false);
+            }}
             placeholder={
               live === 'queue'
                 ? t('session.queuePlaceholder')
@@ -537,174 +584,140 @@ export const Composer = React.memo(function ({
                 </DropdownMenu.Root>
               ) : null}
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.actionChips}
-                style={styles.actionChipsScroll}
-              >
-                {planMode ? (
-                  <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
-                ) : null}
-                <ModelMenuButton
-                  harnessId={harnessId}
-                  modelLabel={modelLabel}
-                  items={recentItems}
-                  onPick={onPickRecentModel}
-                  onMore={onOpenMoreModels}
-                />
-                {effortSupported ? (
-                  <Pressable
-                    ref={effortChipRef}
-                    style={effortOpen ? styles.effortChipHidden : undefined}
-                    onPress={openEffort}
-                    hitSlop={4}
-                    accessibilityRole="button"
-                    accessibilityLabel={effortLabel}
-                  >
-                    <Glass interactive style={styles.effortChip}>
-                      <Icon
-                        name="slider.horizontal.3"
-                        size={14}
-                        color={theme.text}
-                      />
-                      <Text
-                        style={[styles.effortText, { color: theme.text }]}
-                        numberOfLines={1}
-                      >
-                        {effortLabel}
-                      </Text>
-                    </Glass>
-                  </Pressable>
-                ) : null}
-                {fastSupported ? (
-                  <Pressable
-                    style={[
-                      styles.effortChip,
-                      {
-                        backgroundColor: fastEnabled
-                          ? theme.fastAccent
-                          : theme.inputBackground,
-                      },
-                    ]}
-                    onPress={() => onToggleFast(!fastEnabled)}
-                    hitSlop={4}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('picker.fastMode')}
-                    accessibilityState={{ selected: fastEnabled }}
-                  >
-                    <Icon
-                      name="bolt.fill"
-                      size={14}
-                      color={
-                        fastEnabled
-                          ? theme.scheme === 'dark'
-                            ? '#000000'
-                            : '#FFFFFF'
-                          : theme.text
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.effortText,
-                        {
-                          color: fastEnabled
-                            ? theme.scheme === 'dark'
-                              ? '#000000'
-                              : '#FFFFFF'
-                            : theme.text,
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {t('picker.fastMode')}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </ScrollView>
-            </View>
-
-            <View style={styles.spacer} />
-
-            <View style={styles.trailingCluster}>
-              <VoicePill
-                active={dictating}
-                supported={dictationSupported}
-                levelTick={voiceTick}
-                onToggle={toggleDictation}
-                onCancel={cancelDictation}
-              />
-
-              <Pressable
-                onPress={
-                  right === 'stop'
-                    ? onStop
-                    : right === 'cancel'
-                    ? onCancel
-                    : right === 'send'
-                    ? submit
-                    : undefined
-                }
-                disabled={
-                  right === 'stopping' ||
-                  (right === 'send' && action.primary !== 'send')
-                }
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  right === 'stop'
-                    ? t('session.stop')
-                    : right === 'stopping'
-                    ? t('session.stopping')
-                    : right === 'cancel'
-                    ? t('session.cancel')
-                    : t('session.send')
-                }
-                accessibilityState={{
-                  disabled:
-                    right === 'stopping' ||
-                    (right === 'send' && action.primary !== 'send'),
-                  busy: right === 'stopping',
-                }}
-                style={styles.minTarget}
-              >
-                <View
-                  style={[
-                    styles.circle,
-                    {
-                      backgroundColor:
-                        right === 'send' && action.primary !== 'send'
-                          ? theme.sendInactive
-                          : theme.sendActive,
-                    },
+              <View style={styles.chipsWrap}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[
+                    styles.actionChips,
+                    { paddingRight: TRAILING_RESERVE },
                   ]}
+                  style={styles.actionChipsScroll}
                 >
-                  {right === 'stopping' ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.textSecondary}
+                  {planMode ? (
+                    <PlanBadge onDismiss={() => setPlanMode(chatId, false)} />
+                  ) : null}
+                  <ModelMenuButton
+                    harnessId={harnessId}
+                    modelLabel={modelLabel}
+                    items={recentItems}
+                    onPick={onPickRecentModel}
+                    onMore={onOpenMoreModels}
+                  />
+                  {effortSupported ? (
+                    <Pressable
+                      ref={effortChipRef}
+                      style={effortOpen ? styles.effortChipHidden : undefined}
+                      onPress={openEffort}
+                      hitSlop={4}
+                      accessibilityRole="button"
+                      accessibilityLabel={effortLabel}
+                    >
+                      <ComposerMenuChip
+                        label={effortLabel}
+                        color={theme.text}
+                        chevronColor={theme.textSecondary}
+                      />
+                    </Pressable>
+                  ) : null}
+                  {fastSupported ? (
+                    <FastMenuButton
+                      enabled={fastEnabled}
+                      onToggle={onToggleFast}
                     />
-                  ) : (
-                    <Icon
-                      name={
+                  ) : null}
+                </ScrollView>
+                <View style={styles.trailingOverlay} pointerEvents="box-none">
+                  <ChipFade
+                    width={CHIP_FADE}
+                    height={44}
+                    color={
+                      theme.scheme === 'dark'
+                        ? 'rgba(28,28,30,0.88)'
+                        : 'rgba(255,255,255,0.88)'
+                    }
+                  />
+                  <View style={styles.trailingCluster}>
+                    <VoicePill
+                      active={dictating}
+                      supported={dictationSupported}
+                      levelTick={voiceTick}
+                      onToggle={toggleDictation}
+                      onCancel={cancelDictation}
+                    />
+                    <Pressable
+                      onPress={
                         right === 'stop'
-                          ? 'stop.fill'
+                          ? onStop
                           : right === 'cancel'
-                          ? 'xmark'
-                          : 'arrow.up'
+                          ? onCancel
+                          : right === 'send'
+                          ? submit
+                          : undefined
                       }
-                      size={right === 'send' ? 17 : 15}
-                      color={
-                        right === 'send' && action.primary !== 'send'
-                          ? '#FFFFFF'
-                          : theme.scheme === 'dark'
-                          ? '#000000'
-                          : '#FFFFFF'
+                      disabled={
+                        right === 'stopping' ||
+                        (right === 'send' && action.primary !== 'send')
                       }
-                    />
-                  )}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        right === 'stop'
+                          ? t('session.stop')
+                          : right === 'stopping'
+                          ? t('session.stopping')
+                          : right === 'cancel'
+                          ? t('session.cancel')
+                          : t('session.send')
+                      }
+                      accessibilityState={{
+                        disabled:
+                          right === 'stopping' ||
+                          (right === 'send' && action.primary !== 'send'),
+                        busy: right === 'stopping',
+                      }}
+                      style={styles.minTarget}
+                    >
+                      <View
+                        style={[
+                          styles.circle,
+                          {
+                            backgroundColor:
+                              right === 'send' && action.primary !== 'send'
+                                ? theme.sendInactive
+                                : theme.sendActive,
+                          },
+                        ]}
+                      >
+                        {right === 'stopping' ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={theme.textSecondary}
+                          />
+                        ) : (
+                          <Icon
+                            name={
+                              right === 'stop'
+                                ? 'stop.fill'
+                                : right === 'cancel'
+                                ? 'xmark'
+                                : 'arrow.up'
+                            }
+                            size={right === 'send' ? 17 : 15}
+                            color={
+                              right === 'send' && action.primary !== 'send'
+                                ? '#FFFFFF'
+                                : theme.scheme === 'dark'
+                                ? '#000000'
+                                : '#FFFFFF'
+                            }
+                          />
+                        )}
+                      </View>
+                    </Pressable>
+                  </View>
                 </View>
-              </Pressable>
+              </View>
             </View>
           </View>
         </Glass>
@@ -779,7 +792,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 8,
-    paddingBottom: 2,
+    paddingBottom: 8,
   },
   grabber: {
     width: 36,
@@ -832,35 +845,38 @@ const styles = StyleSheet.create({
   },
   livePillText: { fontSize: 12, fontWeight: '600' },
   leftCluster: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 1,
     minWidth: 0,
+  },
+  chipsWrap: {
+    flex: 1,
+    minWidth: 0,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  trailingOverlay: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   trailingCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
     flexShrink: 0,
   },
-  spacer: { flex: 1, minWidth: 8 },
   actionChipsScroll: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   actionChips: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingRight: 8,
-  },
-  effortChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 32,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    gap: 6,
   },
   effortChipHidden: { opacity: 0 },
-  effortText: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 12, textAlign: 'center' },
 });

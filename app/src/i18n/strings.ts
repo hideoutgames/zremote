@@ -65,6 +65,7 @@ const en = {
     "This host can't create isolated worktrees — update Zeron on the host.",
   'newSession.create': 'Create',
   'newSession.pickHost': 'Pick a host first',
+  'newSession.desktop': 'Desktop',
 
   // Session
   'session.rename': 'Rename session',
@@ -117,14 +118,15 @@ const en = {
 
   // Changes
   'changes.preparing': 'Waiting for the host diff…',
-  'changes.clean': 'Working tree is clean',
+  'changes.clean': 'No Changes',
   'changes.error': 'Diff failed',
   'changes.copyPath': 'Copy path',
   'changes.copyPatch': 'Copy patch',
-  'changes.truncated': 'Diff truncated by the host',
+  'changes.truncated': 'Truncated',
+  'changes.binary': 'Binary',
 
   // Files
-  'files.search': 'Search files…',
+  'files.search': 'Search',
   'files.showIgnored': 'Show ignored files',
   'files.hideIgnored': 'Hide ignored files',
   'files.trustBoundary':
@@ -150,6 +152,7 @@ const en = {
   'terminal.closeShell': 'Close shell',
   'terminal.screen': 'Terminal screen',
   'terminal.input': 'Terminal input',
+  'terminal.exit': '[exit {code}]',
   'terminal.exitedNote':
     'Exited shells stay listed for 30 minutes on the host.',
 
@@ -158,7 +161,7 @@ const en = {
   'history.search': 'Search commits…',
   'history.fetch': 'Fetch all',
   'history.copySha': 'Copy SHA',
-  'history.empty': 'No pull requests in this thread.',
+  'history.empty': 'No Pull Requests',
   'history.prRow': '#{number} {title}',
 
   // Accounts
@@ -287,7 +290,7 @@ const en = {
   'session.implementPlan': 'Implement Plan',
   'session.changesCount': 'Changes {count}',
   'session.planUntitled': 'Plan',
-  'session.diffUnavailable': 'Diff is not available for this file yet.',
+  'session.diffUnavailable': 'Unavailable',
 
   // Shared message queue
   'queue.title': 'Queue',
@@ -327,6 +330,9 @@ const en = {
   // Checkout selector
   'checkout.label': 'Checkout',
   'checkout.project': 'Project',
+  'checkout.desktop': 'Desktop',
+  'checkout.branch': 'Branch',
+  'checkout.pickProject': 'Pick a project first',
   'checkout.repo': 'Repo',
   'checkout.origin': 'Origin',
   'checkout.machine': 'Machine',

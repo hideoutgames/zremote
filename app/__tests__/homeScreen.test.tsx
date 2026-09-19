@@ -11,7 +11,7 @@ import {
   setChangeRequestForChat,
   setCheckoutDiffForChat,
 } from '../src/zeron/state/changeRequestStore';
-import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
+import { toggleChatPinned, uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import {
   AppServicesContext,
   type AppServices,
@@ -313,4 +313,80 @@ test('pinned chats render under a Pinned header first', async () => {
   expect(pinnedIdx).toBeGreaterThan(-1);
   expect(pinnedTitle).toBeGreaterThan(pinnedIdx);
   expect(recentTitle).toBeGreaterThan(pinnedTitle);
+});
+
+test('pinned chats sit in a Pinned section in prefs order', async () => {
+  workspaceStore.setState({
+    chats: [
+      chat({
+        id: 'older',
+        title: 'Older thread',
+        lastMessageAt: Date.now() - 10_000,
+      }),
+      chat({
+        id: 'newer',
+        title: 'Newer thread',
+        lastMessageAt: Date.now(),
+      }),
+    ],
+  });
+  await act(async () => {
+    toggleChatPinned('older');
+    toggleChatPinned('newer');
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  const found = texts(mounted.root);
+  expect(found).toContain('Pinned');
+  expect(found).toContain('Threads');
+  expect(found).toContain('Unpin');
+  const pinOlder = mounted.root.findAll(
+    n => n.props.testID === 'thread-pin-older' && typeof n.type === 'string',
+  );
+  const pinNewer = mounted.root.findAll(
+    n => n.props.testID === 'thread-pin-newer' && typeof n.type === 'string',
+  );
+  expect(pinOlder).toHaveLength(1);
+  expect(pinNewer).toHaveLength(1);
+  // Most recently pinned first (newer was pinned after older).
+  expect(found.indexOf('Newer thread')).toBeLessThan(
+    found.indexOf('Older thread'),
+  );
+});
+
+test('pinning every thread does not show the empty state', async () => {
+  workspaceStore.setState({
+    chats: [chat({ title: 'Only thread' })],
+  });
+  await act(async () => {
+    toggleChatPinned('c1');
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  const found = texts(mounted.root);
+  expect(found).toContain('Pinned');
+  expect(found).toContain('Only thread');
+  expect(found).not.toContain('No sessions yet');
+});
+
+test('search starts collapsed and expands to an input', async () => {
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  const searchBtn = mounted.root.findAll(
+    n =>
+      n.props.testID === 'home-search' && typeof n.props.onPress === 'function',
+  );
+  expect(searchBtn).toHaveLength(1);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'home-search-input'),
+  ).toHaveLength(0);
+  await act(async () => {
+    searchBtn[0].props.onPress();
+  });
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'home-search-input').length,
+  ).toBeGreaterThan(0);
 });
