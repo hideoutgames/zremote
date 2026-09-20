@@ -4,6 +4,7 @@
 import {
   usageLevel,
   formatReset,
+  forceUsageFor,
   USAGE_WARN_FRACTION,
   USAGE_CRITICAL_FRACTION,
 } from '../src/zeron/accounts/accounts';
@@ -39,5 +40,17 @@ describe('formatReset', () => {
   it('uses month+day beyond a week', () => {
     const out = formatReset('2026-02-01T12:00:00Z', now);
     expect(out).toMatch(/^resets \w{3} \d+$/);
+  });
+});
+
+describe('forceUsageFor', () => {
+  it('probes the provider on mount, retry, refresh, and post-login', () => {
+    expect(forceUsageFor('mount')).toBe(true);
+    expect(forceUsageFor('retry')).toBe(true);
+    expect(forceUsageFor('refresh')).toBe(true);
+    expect(forceUsageFor('postLogin')).toBe(true);
+  });
+  it('rides the cache after Switch/Forget', () => {
+    expect(forceUsageFor('postAction')).toBe(false);
   });
 });

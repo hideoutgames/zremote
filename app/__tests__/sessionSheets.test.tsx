@@ -3,6 +3,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import { ThreadDetailsSheet } from '../src/components/ThreadDetailsSheet';
+import { ThreadUsageSheet } from '../src/components/ThreadUsageSheet';
 import { SubagentsSheet } from '../src/components/SubagentsSheet';
 import { HistoryScreen } from '../src/screens/HistoryScreen';
 import { SessionScreen } from '../src/screens/SessionScreen';
@@ -33,7 +34,11 @@ import type { PrBadgeModel } from '../src/components/prBadge';
 import { BrandMark } from '../src/components/BrandMark';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { entryFrom } from '../src/zeron/doc/sessionDoc';
-import { CHAT_WORKING, demoTranscripts } from '../src/demo/fixtures';
+import {
+  CHAT_WORKING,
+  demoAccounts,
+  demoTranscripts,
+} from '../src/demo/fixtures';
 
 const services: AppServices = {
   auth: null as never,
@@ -143,11 +148,14 @@ beforeEach(() => {
 });
 
 const trees: TestRenderer.ReactTestRenderer[] = [];
-const render = async (element: React.ReactElement) => {
+const render = async (
+  element: React.ReactElement,
+  runtime: AppServices['runtime'] = null,
+) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <AppServicesContext.Provider value={services}>
+      <AppServicesContext.Provider value={{ ...services, runtime }}>
         {element}
       </AppServicesContext.Provider>,
     );
@@ -161,6 +169,30 @@ afterEach(() => {
     for (const tree of trees) tree.unmount();
     trees.length = 0;
   });
+});
+
+test('usage sheet has no x close button and lists host account meters', async () => {
+  const call = jest.fn(async () => demoAccounts());
+  const runtime = {
+    relayFor: (id: string) => {
+      expect(id).toBe('h1');
+      return { call };
+    },
+  } as never;
+  const tree = await render(
+    <ThreadUsageSheet deviceId="h1" onDismiss={() => {}} />,
+    runtime,
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(named(tree.root, 'xmark')).toHaveLength(0);
+  expect(byTestId(tree.root, 'session-sheet')).toHaveLength(1);
+  expect(byTestId(tree.root, 'TrueSheet')[0].props.detents).toEqual([0.75, 1]);
+  expect(texts(tree.root)).toContain('Usage');
+  expect(texts(tree.root)).toContain('Demo User');
+  expect(texts(tree.root)).toContain('18%');
+  expect(call).toHaveBeenCalledWith('ListAgentAccounts', { forceUsage: true });
 });
 
 test('view details has no x close button and uses the session sheet', async () => {
@@ -294,12 +326,14 @@ test('history lists the checkout PR and opens it on press', async () => {
   expect(opened[0].number).toBe(9);
 });
 
-test('session overflow has History/Files/Terminal and not Changes/Previews', async () => {
+test('session overflow has History/Files/Terminal/Usage and not Changes/Previews', async () => {
   const tree = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
   const labels = texts(tree.root);
   expect(labels).toContain('History');
   expect(labels).toContain('Files');
   expect(labels).toContain('Terminal');
+  expect(labels).toContain('Usage');
+  expect(labels).toContain('Copy ID');
   expect(labels).not.toContain('Changes');
   expect(labels).not.toContain('Previews');
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);

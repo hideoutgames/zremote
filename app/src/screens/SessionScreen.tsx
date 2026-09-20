@@ -115,6 +115,7 @@ import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
 import { applyBuildPrefix, IMPLEMENT_PLAN_TEXT } from '../components/planMode';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
+import { ThreadUsageSheet } from '../components/ThreadUsageSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
@@ -551,6 +552,7 @@ function ActiveSessionScreen({
   const keyboardHeight = useKeyboardState(s => s.height);
   const keyboardWasVisible = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
     name: string;
@@ -786,6 +788,12 @@ function ActiveSessionScreen({
                       : t('session.archive')}
                   </DropdownMenu.ItemTitle>
                 </DropdownMenu.Item>
+                <DropdownMenu.Item key="copy" onSelect={onCopyId}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.copyId')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+                </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
           </View>
@@ -833,6 +841,15 @@ function ActiveSessionScreen({
                     <DropdownMenu.ItemIcon ios={{ name: 'info.circle' }} />
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
+                    key="usage"
+                    onSelect={() => setUsageOpen(true)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.usage')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'chart.bar' }} />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
                     key="subagents"
                     onSelect={() => setSubagentsOpen(true)}
                   >
@@ -874,13 +891,6 @@ function ActiveSessionScreen({
                       {t('session.terminal')}
                     </DropdownMenu.ItemTitle>
                     <DropdownMenu.ItemIcon ios={{ name: 'terminal' }} />
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Separator />
-                  <DropdownMenu.Item key="copy" onSelect={onCopyId}>
-                    <DropdownMenu.ItemTitle>
-                      {t('session.copyId')}
-                    </DropdownMenu.ItemTitle>
-                    <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
@@ -1195,6 +1205,13 @@ function ActiveSessionScreen({
             setDetailsOpen(false);
             onRename();
           }}
+        />
+      ) : null}
+
+      {usageOpen && chat !== undefined ? (
+        <ThreadUsageSheet
+          deviceId={chat.deviceId}
+          onDismiss={() => setUsageOpen(false)}
         />
       ) : null}
 

@@ -1185,7 +1185,14 @@ export const demoAccounts = (): AgentAccountsSnapshot => ({
       email: 'demo@example.test',
       planLabel: 'Demo plan',
       active: true,
-      usageWindows: [{ label: 'Session', usedFraction: 0.18 }],
+      usageWindows: [
+        { label: 'Session', usedFraction: 0.18 },
+        {
+          label: 'Weekly',
+          usedFraction: 0.42,
+          resetsAt: '2026-01-15T18:30:00Z',
+        },
+      ],
       displayName: 'Demo User',
       authKind: 'oauth',
       switchable: true,

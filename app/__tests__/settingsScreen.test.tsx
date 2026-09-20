@@ -200,6 +200,10 @@ test('opening a desktop uses the device name as title and Settings as back', asy
   expect(text).toContain('Settings');
   expect(text).toContain('Name');
   expect(text).not.toContain('Desktops');
+  expect(text).not.toContain('Session Titles');
+  const parts = text.split(' | ');
+  expect(parts).not.toContain('Harness');
+  expect(parts).not.toContain('Model');
 });
 
 test('theme row defaults to System and choosing Dark updates the store', async () => {
