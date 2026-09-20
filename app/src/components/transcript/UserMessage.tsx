@@ -21,6 +21,8 @@ import { FrostedBubble } from './FrostedBubble';
 import { messageCopyContent } from './MessageCopyMenu';
 
 export const FOLD_CHARS = 1000;
+/** Extra end pad so glyph ink that overshoots advance width is not clipped. */
+export const USER_BUBBLE_TEXT_END_PAD = 3;
 
 const textOf = (entry: MessageEntry): string =>
   entry.parts
@@ -190,6 +192,11 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     gap: 6,
   },
-  text: { fontSize: 16, lineHeight: 21, flexShrink: 0 },
+  text: {
+    fontSize: 16,
+    lineHeight: 21,
+    flexShrink: 0,
+    paddingEnd: USER_BUBBLE_TEXT_END_PAD,
+  },
   fold: { fontSize: 13, fontWeight: '500', marginTop: 4 },
 });
