@@ -98,7 +98,7 @@ window width to a plan:
   (`SessionScreen`). The threads column fills the window height and
   **pushes** the session (full-width when collapsed); search, folder, and
   settings use the same Liquid Glass chrome as iPhone. The iPad right
-  inspector column is gone — History / Files / Terminal open from the
+  inspector column is gone — History / Files / Terminal / Usage open from the
   session overflow menu as 75% `TrueSheet`s (`SessionSheet`, same chrome as
   View details / Sub-agents: grabber, no close button, first detent 0.75).
   Changes and Previews are not in the menu; checkout diffs live in the PR
@@ -111,8 +111,9 @@ across size-class changes because they live in the shell or the stores, not
 in the column tree. `SessionScreen` stays mounted while columns toggle; the
 compact pager's `Freeze` only applies when the session page is not visible.
 
-On iPhone and iPad the session overflow menu opens View details, Sub-agents,
-History, Files, and Terminal as `SessionSheet`s.
+On iPhone and iPad the session overflow menu opens View details, Usage,
+Sub-agents, History, Files, and Terminal as `SessionSheet`s. Copy ID lives
+on the thread title menu.
 
 Compact `RootPager` has `scrollEnabled={false}` — opening a session is tap
 only. Back to threads is a leading-edge pan (~24pt, iOS interactive-pop
@@ -246,15 +247,18 @@ These are thin screens over host-relayed RPCs — nothing runs on the phone.
 - **Agent accounts** (`screens/AgentAccountsScreen.tsx`,
   `zeron/accounts/accounts.ts`, under Settings → device): per-device
   `ListAgentAccounts` provider cards (active, plan label, usage meters at
-  desktop thresholds — amber ≥80%, red ≥95%, compact reset time),
+  desktop thresholds — amber ≥80%, red ≥95%, compact reset time). The first
+  list and post-login refresh pass `forceUsage: true` so the host probes
+  provider meters (non-forced lists serve the 60s cache or empty windows).
   `ActivateAgentAccount`, confirm-gated `ForgetAgentAccount`, and the add
   flow (`StartAgentLogin` → paste-code `CompleteAgentLogin`, or browser-poll
   `PollAgentLogin` until done + `CancelAgentLogin`). All calls run on the
-  chosen host device; app WorkOS auth is never reused.
+  chosen host device; app WorkOS auth is never reused. Session overflow
+  **Usage** (`ThreadUsageSheet`) lists the same meters for accounts on that
+  thread's desktop that report `usageWindows`.
 - **Device settings** (`screens/SettingsScreen.tsx` device page): rename via
-  `Mutate {op:'renameDevice'}` (rpc.rs L895), `UpdateStatus` stream +
-  confirm-gated `ApplyUpdate` (rpc.rs L1625-1633), and per-device
-  `GetTitleSettings`/`SetTitleSettings` (registry.rs L110).
+  `Mutate {op:'renameDevice'}` (rpc.rs L895) and `UpdateStatus` stream +
+  confirm-gated `ApplyUpdate` (rpc.rs L1625-1633).
 - **Clipboard/share**: `expo-clipboard` everywhere copy existed before
   (session id, diff paths/patches, commit sha, preview URLs); assistant
   messages share via `Share.share`; transcript rows have a context menu

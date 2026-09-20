@@ -1,6 +1,6 @@
 // Assistant transcript row: every AI artifact for the turn lives inside one
-// bubble — text, reasoning, tools, todos, questions, plan, file changes, and
-// the live working strip.
+// bubble — text, reasoning, tools, todos, questions, plan, file changes, the
+// live working strip, and a Worked-for caption after the turn settles.
 
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,9 +22,13 @@ import { TaskRows } from '../agentsKit/TaskRows';
 import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
 import {
+  consumedPlanTextIds,
   detectPlanArtifact,
-  isPlanToolPart,
+  isHiddenPlanToolPart,
+  isPlanCardPart,
+  planCardAnchorId,
   stripPlanMarkers,
+  type PlanArtifact,
 } from './detectPlan';
 import { isSubagentSpawn, subagentView } from './detectSubagent';
 import { isCompleteAssistant, turnChanges } from './turnChanges';
@@ -50,15 +54,15 @@ const groupParts = (parts: MessagePart[]): Item[] => {
   const items: Item[] = [];
   let run: ToolPart[] = [];
   const flush = () => {
-    // Todos and subagent spawns render as their own blocks, in doc order.
-    // Remaining consecutive tools stay in one ToolActivity rail.
+    // Todos, subagent spawns, and plan cards render as their own blocks, in
+    // doc order. Remaining consecutive tools stay in one ToolActivity rail.
     let tools: ToolPart[] = [];
     const flushTools = () => {
       if (tools.length > 0) items.push({ kind: 'tools', parts: tools });
       tools = [];
     };
     for (const p of run) {
-      if (p.call.kind === 'todo' || isSubagentSpawn(p)) {
+      if (p.call.kind === 'todo' || isSubagentSpawn(p) || isPlanCardPart(p)) {
         flushTools();
         items.push({ kind: 'part', part: p });
       } else {
@@ -69,7 +73,7 @@ const groupParts = (parts: MessagePart[]): Item[] => {
     run = [];
   };
   for (const part of parts) {
-    if (part.kind === 'tool' && isPlanToolPart(part)) continue;
+    if (part.kind === 'tool' && isHiddenPlanToolPart(part)) continue;
     if (part.kind === 'tool') run.push(part);
     else {
       flush();
@@ -89,6 +93,16 @@ const reasoningTitle = (text: string): string => {
   return t('session.reasoning');
 };
 
+const PlanCardOpen = ({
+  plan,
+  onOpenPlan,
+}: {
+  plan: PlanArtifact;
+  onOpenPlan?: (name: string, markdown: string) => void;
+}) => (
+  <PlanCard plan={plan} onOpen={() => onOpenPlan?.(plan.name, plan.markdown)} />
+);
+
 const PartView = ({
   part,
   streaming,
@@ -96,6 +110,10 @@ const PartView = ({
   onOpenReasoning,
   onFetchBlob,
   answers,
+  plan,
+  planAnchorId,
+  consumedIds,
+  onOpenPlan,
 }: {
   part: MessagePart;
   streaming: boolean;
@@ -103,18 +121,30 @@ const PartView = ({
   onOpenReasoning: (text: string) => void;
   onFetchBlob?: FetchToolBlob;
   answers: readonly UserInputAnswer[];
+  plan: PlanArtifact | undefined;
+  planAnchorId: string | undefined;
+  consumedIds: ReadonlySet<string>;
+  onOpenPlan?: (name: string, markdown: string) => void;
 }) => {
   const theme = useTheme();
+  const card =
+    part.id === planAnchorId && plan !== undefined ? (
+      <PlanCardOpen plan={plan} onOpenPlan={onOpenPlan} />
+    ) : null;
   switch (part.kind) {
     case 'text': {
+      if (consumedIds.has(part.id)) return card;
       const visible = stripPlanMarkers(part.text);
-      if (visible === '') return null;
+      if (visible === '') return card;
       const source = streaming && isLastText ? mendMarkdown(visible) : visible;
       return (
-        <MarkdownWithCopy
-          markdown={source}
-          streaming={streaming && isLastText}
-        />
+        <>
+          <MarkdownWithCopy
+            markdown={source}
+            streaming={streaming && isLastText}
+          />
+          {card}
+        </>
       );
     }
     case 'reasoning':
@@ -155,6 +185,7 @@ const PartView = ({
         </View>
       );
     case 'tool':
+      if (isPlanCardPart(part)) return card;
       if (part.call.kind === 'todo')
         return (
           <TaskRows
@@ -168,7 +199,7 @@ const PartView = ({
           />
         );
       if (isSubagentSpawn(part))
-        return <SubAgentCard embedded view={subagentView(part)} />;
+        return <SubAgentCard view={subagentView(part)} />;
       return <ToolActivity parts={[part]} onFetchBlob={onFetchBlob} />;
     default:
       return null;
@@ -185,6 +216,7 @@ export const AssistantMessage = React.memo(function ({
   showWorking = false,
   workingChatId = '',
   workingStartedAt = 0,
+  workedFor,
 }: {
   entry: MessageEntry;
   onOpenReasoning: (text: string) => void;
@@ -195,11 +227,14 @@ export const AssistantMessage = React.memo(function ({
   showWorking?: boolean;
   workingChatId?: string;
   workingStartedAt?: number;
+  workedFor?: string;
 }) {
   const theme = useTheme();
   const streaming = entry.status === 'streaming';
   const items = useMemo(() => groupParts(entry.parts), [entry.parts]);
   const plan = useMemo(() => detectPlanArtifact(entry), [entry]);
+  const planAnchor = useMemo(() => planCardAnchorId(entry), [entry]);
+  const consumedIds = useMemo(() => consumedPlanTextIds(entry), [entry]);
   const files = useMemo(
     () => (isCompleteAssistant(entry) ? turnChanges(entry) : []),
     [entry],
@@ -243,6 +278,10 @@ export const AssistantMessage = React.memo(function ({
                       ? inputAnswers(commands, item.part.requestId)
                       : []
                   }
+                  plan={plan}
+                  planAnchorId={planAnchor}
+                  consumedIds={consumedIds}
+                  onOpenPlan={onOpenPlan}
                 />
               ),
             )}
@@ -250,13 +289,6 @@ export const AssistantMessage = React.memo(function ({
               <Text style={[styles.error, { color: theme.danger }]}>
                 {t('session.interrupted')}
               </Text>
-            ) : null}
-            {plan !== undefined ? (
-              <PlanCard
-                embedded
-                plan={plan}
-                onOpen={() => onOpenPlan?.(plan.name, plan.markdown)}
-              />
             ) : null}
             {files.length > 0 && onOpenFileDiff !== undefined ? (
               <TurnChangesCard files={files} onOpenFile={onOpenFileDiff} />
@@ -267,6 +299,13 @@ export const AssistantMessage = React.memo(function ({
                 chatId={workingChatId}
                 startedAt={workingStartedAt}
               />
+            ) : workedFor !== undefined ? (
+              <Text
+                testID="worked-for"
+                style={[styles.workedFor, { color: theme.textSecondary }]}
+              >
+                {t('session.workedFor').replace('{time}', workedFor)}
+              </Text>
             ) : null}
           </FrostedBubble>
         </View>
@@ -301,6 +340,7 @@ const styles = StyleSheet.create({
   },
   traceLabel: { flex: 1, fontSize: 16 },
   error: { fontSize: 13, marginTop: 4 },
+  workedFor: { fontSize: 13, fontVariant: ['tabular-nums'] },
   imageCard: {
     flexDirection: 'row',
     alignItems: 'center',

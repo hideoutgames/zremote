@@ -3,16 +3,14 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import { ThreadDetailsSheet } from '../src/components/ThreadDetailsSheet';
+import { ThreadUsageSheet } from '../src/components/ThreadUsageSheet';
 import { SubagentsSheet } from '../src/components/SubagentsSheet';
 import { HistoryScreen } from '../src/screens/HistoryScreen';
 import { SessionScreen } from '../src/screens/SessionScreen';
 import { SessionSheet } from '../src/components/SessionSheet';
 import { FileDiff } from '../src/components/agentsKit/FileDiff';
 import { parseUnified } from '../src/zeron/diff/parseUnified';
-import {
-  TerminalScreen,
-  KEY_BAR_KEYBOARD_LIFT,
-} from '../src/screens/TerminalScreen';
+import { TerminalScreen } from '../src/screens/TerminalScreen';
 import {
   AppServicesContext,
   type AppServices,
@@ -33,7 +31,11 @@ import type { PrBadgeModel } from '../src/components/prBadge';
 import { BrandMark } from '../src/components/BrandMark';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { entryFrom } from '../src/zeron/doc/sessionDoc';
-import { CHAT_WORKING, demoTranscripts } from '../src/demo/fixtures';
+import {
+  CHAT_WORKING,
+  demoAccounts,
+  demoTranscripts,
+} from '../src/demo/fixtures';
 
 const services: AppServices = {
   auth: null as never,
@@ -143,11 +145,14 @@ beforeEach(() => {
 });
 
 const trees: TestRenderer.ReactTestRenderer[] = [];
-const render = async (element: React.ReactElement) => {
+const render = async (
+  element: React.ReactElement,
+  runtime: AppServices['runtime'] = null,
+) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <AppServicesContext.Provider value={services}>
+      <AppServicesContext.Provider value={{ ...services, runtime }}>
         {element}
       </AppServicesContext.Provider>,
     );
@@ -161,6 +166,30 @@ afterEach(() => {
     for (const tree of trees) tree.unmount();
     trees.length = 0;
   });
+});
+
+test('usage sheet has no x close button and lists host account meters', async () => {
+  const call = jest.fn(async () => demoAccounts());
+  const runtime = {
+    relayFor: (id: string) => {
+      expect(id).toBe('h1');
+      return { call };
+    },
+  } as never;
+  const tree = await render(
+    <ThreadUsageSheet deviceId="h1" onDismiss={() => {}} />,
+    runtime,
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(named(tree.root, 'xmark')).toHaveLength(0);
+  expect(byTestId(tree.root, 'session-sheet')).toHaveLength(1);
+  expect(byTestId(tree.root, 'TrueSheet')[0].props.detents).toEqual([0.75, 1]);
+  expect(texts(tree.root)).toContain('Usage');
+  expect(texts(tree.root)).toContain('Demo User');
+  expect(texts(tree.root)).toContain('18%');
+  expect(call).toHaveBeenCalledWith('ListAgentAccounts', { forceUsage: true });
 });
 
 test('view details has no x close button and uses the session sheet', async () => {
@@ -294,12 +323,14 @@ test('history lists the checkout PR and opens it on press', async () => {
   expect(opened[0].number).toBe(9);
 });
 
-test('session overflow has History/Files/Terminal and not Changes/Previews', async () => {
+test('session overflow has History/Files/Terminal/Usage and not Changes/Previews', async () => {
   const tree = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
   const labels = texts(tree.root);
   expect(labels).toContain('History');
   expect(labels).toContain('Files');
   expect(labels).toContain('Terminal');
+  expect(labels).toContain('Usage');
+  expect(labels).toContain('Copy ID');
   expect(labels).not.toContain('Changes');
   expect(labels).not.toContain('Previews');
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);
@@ -350,6 +381,23 @@ test('session header is a plain title matching Threads, with no glass pill or su
   expect(triggerStyle.some(s => s?.borderRadius === 18)).toBe(false);
   expect(triggerStyle.some(s => s?.paddingHorizontal === 12)).toBe(false);
   expect(triggerStyle.some(s => s?.height === 44)).toBe(true);
+  expect(triggerStyle.some(s => s?.width === '100%')).toBe(false);
+  expect(triggerStyle.some(s => s?.maxWidth === '100%')).toBe(true);
+
+  const headerCenter = tree.root.findAll(n => {
+    const s = Array.isArray(n.props.style)
+      ? n.props.style.flat()
+      : [n.props.style];
+    return s.some(
+      x => x?.position === 'absolute' && x?.left === 56 && x?.right === 56,
+    );
+  })[0];
+  expect(headerCenter).toBeDefined();
+  const centerStyle = Array.isArray(headerCenter.props.style)
+    ? headerCenter.props.style.flat()
+    : [headerCenter.props.style];
+  expect(centerStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  expect(centerStyle.some(s => s?.alignItems === 'stretch')).toBe(false);
 });
 
 test('compose session is a blank chat with the composer', async () => {
@@ -503,20 +551,33 @@ const keyBarMargin = (root: TestRenderer.ReactTestInstance) =>
     root.findByProps({ testID: 'terminal-key-bar' }).props.style,
   ).marginBottom;
 
-test('TerminalScreen key bar sits 8pt above the sheet when the keyboard is down', async () => {
+test('TerminalScreen key bar sits 8pt above the sheet', async () => {
   const tree = await render(<TerminalScreen chatId="c1" />);
   expect(keyBarMargin(tree.root)).toBe(8);
 });
 
-test('TerminalScreen key bar lifts above the keyboard', async () => {
+test('session sheet shrinks maxContentHeight when the keyboard is visible', async () => {
+  const down = await render(
+    <SessionSheet fill onDismiss={() => {}}>
+      <Text>body</Text>
+    </SessionSheet>,
+  );
+  const downCap = byTestId(down.root, 'TrueSheet')[0].props.maxContentHeight;
+
   const mocked = useKeyboardState as jest.Mock;
   mocked.mockImplementation(
     (selector: (s: { isVisible: boolean; height: number }) => unknown) =>
       selector({ isVisible: true, height: 336 }),
   );
   try {
-    const tree = await render(<TerminalScreen chatId="c1" />);
-    expect(keyBarMargin(tree.root)).toBe(8 + KEY_BAR_KEYBOARD_LIFT);
+    const up = await render(
+      <SessionSheet fill onDismiss={() => {}}>
+        <Text>body</Text>
+      </SessionSheet>,
+    );
+    const upCap = byTestId(up.root, 'TrueSheet')[0].props.maxContentHeight;
+    expect(upCap).toBe(downCap - 336);
+    expect(upCap).toBeGreaterThanOrEqual(240);
   } finally {
     mocked.mockImplementation(
       (selector: (s: { isVisible: boolean; height: number }) => unknown) =>

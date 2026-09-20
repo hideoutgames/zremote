@@ -87,6 +87,7 @@ beforeEach(() => {
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',
     colorScheme: 'system',
+    sessionBackgroundBlur: false,
   });
 });
 
@@ -119,7 +120,7 @@ test('shows account email and Connected desktop — not edge URL, OS, or version
   expect(text).not.toContain('Build');
 });
 
-test('appearance group offers choose image and hides effects until set', async () => {
+test('appearance group offers a wallpaper slider and hides effects until set', async () => {
   uiPrefsStore.setState({
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',
@@ -129,15 +130,34 @@ test('appearance group offers choose image and hides effects until set', async (
   expect(text).toContain('Appearance');
   expect(text).toContain('Theme');
   expect(text).toContain('System');
-  expect(text).toContain('Background image');
+  expect(text).toContain('Background');
   expect(text).toContain(
     'Add an image behind threads, chats, and new threads.',
   );
-  expect(text).toContain('Choose image');
+  expect(text).not.toContain('Choose image');
+  expect(text).not.toContain('Replace image');
+  expect(text).toContain('Session Background Blur');
+  expect(text).toContain(
+    'Blurs the wallpaper in open sessions. New threads stay sharp.',
+  );
   expect(
     mounted.root.findAll(
       n =>
-        n.props.testID === 'settings-background-choose' &&
+        n.props.testID === 'settings-background-none' &&
+        typeof n.props.onPress === 'function',
+    ).length,
+  ).toBe(1);
+  expect(
+    mounted.root.findAll(
+      n =>
+        n.props.testID === 'settings-background-custom' &&
+        typeof n.props.onPress === 'function',
+    ).length,
+  ).toBe(1);
+  expect(
+    mounted.root.findAll(
+      n =>
+        n.props.testID === 'settings-background-preset-emma' &&
         typeof n.props.onPress === 'function',
     ).length,
   ).toBe(1);
@@ -150,9 +170,10 @@ test('appearance group offers choose image and hides effects until set', async (
   ).toBe(0);
 });
 
-test('installed background shows replace/remove and effect chips', async () => {
+test('custom wallpaper shows effects without the filename', async () => {
   uiPrefsStore.setState({
     newThreadComposerBackground: {
+      kind: 'custom',
       uri: 'file:///docs/new-thread-backgrounds/x.png',
       name: 'sunset.png',
     },
@@ -160,11 +181,14 @@ test('installed background shows replace/remove and effect chips', async () => {
   });
   const mounted = await render(<SettingsScreen onClose={() => {}} />);
   const text = allText(mounted.root);
-  expect(text).toContain('sunset.png');
-  expect(text).toContain('Replace image');
-  expect(text).toContain('Remove');
+  expect(text).not.toContain('sunset.png');
+  expect(text).not.toContain('Replace image');
   expect(text).toContain('Background effect');
   expect(text).toContain('Shows the original artwork.');
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-background-thumb')
+      .length,
+  ).toBeGreaterThan(0);
   expect(
     mounted.root.findAll(
       n =>
@@ -172,6 +196,38 @@ test('installed background shows replace/remove and effect chips', async () => {
         typeof n.props.onPress === 'function',
     ).length,
   ).toBe(1);
+  expect(
+    mounted.root.findAll(
+      n => n.props.testID === 'settings-background-effect-segments',
+    ).length,
+  ).toBeGreaterThan(0);
+});
+
+test('choosing a bundled preset selects it and reveals effects', async () => {
+  uiPrefsStore.setState({
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'none',
+  });
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const tile = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-background-preset-emma' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    tile.props.onPress();
+  });
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-background-effects')
+      .length,
+  ).toBeGreaterThan(0);
+  const text = allText(mounted.root);
+  expect(text).not.toContain('emma');
+  expect(text).not.toContain('unsplash');
 });
 
 test('stale presence shows Not connected', async () => {
@@ -200,6 +256,10 @@ test('opening a desktop uses the device name as title and Settings as back', asy
   expect(text).toContain('Settings');
   expect(text).toContain('Name');
   expect(text).not.toContain('Desktops');
+  expect(text).not.toContain('Session Titles');
+  const parts = text.split(' | ');
+  expect(parts).not.toContain('Harness');
+  expect(parts).not.toContain('Model');
 });
 
 test('theme row defaults to System and choosing Dark updates the store', async () => {
@@ -219,7 +279,7 @@ test('theme row defaults to System and choosing Dark updates the store', async (
   expect(page).toContain('System');
   expect(page).toContain('Dark');
   expect(page).toContain('Light');
-  expect(page).not.toContain('Background image');
+  expect(page).not.toContain('Background');
   const dark = mounted.root.findAll(
     n =>
       n.props.testID === 'settings-theme-dark' &&
@@ -229,6 +289,20 @@ test('theme row defaults to System and choosing Dark updates the store', async (
     dark.props.onPress();
   });
   expect(uiPrefsStore.getState().colorScheme).toBe('dark');
+});
+
+test('session background blur switch defaults off and turns on', async () => {
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const sw = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-session-background-blur' &&
+      typeof n.props.onValueChange === 'function',
+  )[0];
+  expect(sw.props.value).toBe(false);
+  await act(async () => {
+    sw.props.onValueChange(true);
+  });
+  expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(true);
 });
 
 test('enabling haptics plays a confirmation impact', async () => {

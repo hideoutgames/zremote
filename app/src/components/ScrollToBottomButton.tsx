@@ -1,19 +1,19 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { GlassControl } from './Glass';
 import { Icon } from './Icon';
 import { useChromeTheme } from '../chromeTheme';
 
-const SIZE = 38;
+export const SCROLL_TO_BOTTOM_SIZE = 38;
 
 // Floating glass chevron that scrolls the conversation to the very bottom.
 export function ScrollToBottomButton({ onPress }: { onPress: () => void }) {
   const theme = useChromeTheme();
   return (
     <Animated.View
-      entering={ZoomIn.duration(160)}
-      exiting={ZoomOut.duration(140)}
+      entering={FadeInUp.duration(160)}
+      exiting={FadeOutDown.duration(140)}
     >
       <GlassControl
         interactive
@@ -30,9 +30,9 @@ export function ScrollToBottomButton({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   circle: {
-    width: SIZE,
-    height: SIZE,
-    borderRadius: SIZE / 2,
+    width: SCROLL_TO_BOTTOM_SIZE,
+    height: SCROLL_TO_BOTTOM_SIZE,
+    borderRadius: SCROLL_TO_BOTTOM_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },

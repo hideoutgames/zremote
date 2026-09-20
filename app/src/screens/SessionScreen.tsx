@@ -53,6 +53,12 @@ import {
 } from '../zeron/state/uiPrefs';
 import { sessionTitle } from '../zeron/state/sessionTruth';
 import {
+  bindPendingWorkedDuration,
+  workedDurationStore,
+  type FrozenWorkedDuration,
+} from '../zeron/state/workedDuration';
+import { formatWorkedDurationRange } from '../zeron/state/workingElapsed';
+import {
   setChatArchived,
   setChatConfig,
   renameChat,
@@ -115,10 +121,14 @@ import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
 import { applyBuildPrefix, IMPLEMENT_PLAN_TEXT } from '../components/planMode';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
+import { ThreadUsageSheet } from '../components/ThreadUsageSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
-import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
+import {
+  ScrollToBottomButton,
+  SCROLL_TO_BOTTOM_SIZE,
+} from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
@@ -131,8 +141,22 @@ import { ComposerStickyBottom } from '../components/ComposerChromeAnim';
 import { ComposeKeyboardShift } from '../components/ComposeKeyboardShift';
 import { composerKeyboardStickyOffset } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
+import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 
 const log = createLog();
+
+const workedForCaption = (
+  item: MessageEntry,
+  hide: boolean,
+  byId: Record<string, FrozenWorkedDuration>,
+): string | undefined => {
+  if (hide) return undefined;
+  if (item.status !== 'complete' && item.status !== 'aborted') return undefined;
+  const frozen = byId[item.id];
+  return frozen === undefined
+    ? undefined
+    : formatWorkedDurationRange(frozen.startedAt, frozen.endedAt);
+};
 
 const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({
@@ -342,6 +366,11 @@ function ActiveSessionScreen({
     phase === 'queuedLocally' ||
     phase === 'synchronized';
   const lastEntryId = entries[entries.length - 1]?.id;
+  const workedByMessage = useStore(workedDurationStore, s => s.byMessageId);
+
+  useEffect(() => {
+    bindPendingWorkedDuration(chatId);
+  }, [chatId, entries]);
 
   // Local send/steer ids play SlideInDown once. Historical rows (thread
   // open, list recycle) must not — UserMessage entering is mount-time.
@@ -395,6 +424,11 @@ function ActiveSessionScreen({
           showWorking={agentWorking && item.id === lastEntryId}
           workingChatId={chatId}
           workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+          workedFor={workedForCaption(
+            item,
+            agentWorking && item.id === lastEntryId,
+            workedByMessage,
+          )}
         />
       ),
     [
@@ -407,6 +441,7 @@ function ActiveSessionScreen({
       lastEntryId,
       row?.startedAt,
       row?.updatedAt,
+      workedByMessage,
     ],
   );
 
@@ -546,6 +581,7 @@ function ActiveSessionScreen({
   const keyboardHeight = useKeyboardState(s => s.height);
   const keyboardWasVisible = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
     name: string;
@@ -716,6 +752,7 @@ function ActiveSessionScreen({
         { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
       ]}
     >
+      <ChatBackgroundBlur />
       <SessionTranscriptList
         key={openKey}
         ref={transcriptRef}
@@ -784,6 +821,12 @@ function ActiveSessionScreen({
                       : t('session.archive')}
                   </DropdownMenu.ItemTitle>
                 </DropdownMenu.Item>
+                <DropdownMenu.Item key="copy" onSelect={onCopyId}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.copyId')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+                </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
           </View>
@@ -831,6 +874,15 @@ function ActiveSessionScreen({
                     <DropdownMenu.ItemIcon ios={{ name: 'info.circle' }} />
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
+                    key="usage"
+                    onSelect={() => setUsageOpen(true)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.usage')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'chart.bar' }} />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
                     key="subagents"
                     onSelect={() => setSubagentsOpen(true)}
                   >
@@ -872,13 +924,6 @@ function ActiveSessionScreen({
                       {t('session.terminal')}
                     </DropdownMenu.ItemTitle>
                     <DropdownMenu.ItemIcon ios={{ name: 'terminal' }} />
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Separator />
-                  <DropdownMenu.Item key="copy" onSelect={onCopyId}>
-                    <DropdownMenu.ItemTitle>
-                      {t('session.copyId')}
-                    </DropdownMenu.ItemTitle>
-                    <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
@@ -952,16 +997,18 @@ function ActiveSessionScreen({
         pointerEvents="box-none"
       >
         <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
-          {showScrollDown ? (
-            <ScrollToBottomButton
-              onPress={() =>
-                transcriptRef.current?.followEnd({
-                  animated: true,
-                  closeKeyboard: false,
-                })
-              }
-            />
-          ) : null}
+          <View style={styles.scrollDownSlot} pointerEvents="box-none">
+            {showScrollDown ? (
+              <ScrollToBottomButton
+                onPress={() =>
+                  transcriptRef.current?.followEnd({
+                    animated: true,
+                    closeKeyboard: false,
+                  })
+                }
+              />
+            ) : null}
+          </View>
         </KeyboardStickyView>
       </ComposerStickyBottom>
 
@@ -1196,6 +1243,13 @@ function ActiveSessionScreen({
         />
       ) : null}
 
+      {usageOpen && chat !== undefined ? (
+        <ThreadUsageSheet
+          deviceId={chat.deviceId}
+          onDismiss={() => setUsageOpen(false)}
+        />
+      ) : null}
+
       {subagentsOpen ? (
         <SubagentsSheet
           entries={entries}
@@ -1282,6 +1336,12 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
+  scrollDownSlot: {
+    width: SCROLL_TO_BOTTOM_SIZE,
+    height: SCROLL_TO_BOTTOM_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   composeDismiss: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
@@ -1314,7 +1374,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     minWidth: 0,
-    alignItems: 'stretch',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   measureCap: { width: '100%' },
@@ -1328,7 +1388,6 @@ const styles = StyleSheet.create({
   },
   titleHit: {
     height: 44,
-    width: '100%',
     maxWidth: '100%',
     minWidth: 0,
     alignItems: 'center',

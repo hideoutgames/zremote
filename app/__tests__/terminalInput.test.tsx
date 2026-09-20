@@ -148,10 +148,14 @@ test('hidden terminal input stays focused after submit and can raise the keyboar
   expect(input.props.spellCheck).toBe(false);
   expect(input.props.autoComplete).toBe('off');
   expect(input.props.keyboardAppearance).toBe('dark');
+  expect(input.props.pointerEvents).toBe('none');
   const style = StyleSheet.flatten(input.props.style);
   expect(style.opacity).toBeGreaterThan(0);
-  expect(style.width).toBeGreaterThan(1);
-  expect(style.height).toBeGreaterThan(1);
+  expect(style.position).toBe('absolute');
+  expect(style.top).toBe(0);
+  expect(style.left).toBe(0);
+  expect(style.right).toBe(0);
+  expect(style.bottom).toBe(0);
 });
 
 test('screen layout, list touch, and key bar focus the hidden input', async () => {
@@ -190,6 +194,12 @@ test('screen layout, list touch, and key bar focus the hidden input', async () =
     esc.props.onPress();
   });
   expect(mockFocusInput).toHaveBeenCalled();
+
+  const keyBar = tree.root.findByProps({ testID: 'terminal-key-bar' });
+  const keyScroll = keyBar.findAll(
+    n => n.props.keyboardShouldPersistTaps !== undefined,
+  )[0];
+  expect(keyScroll.props.keyboardShouldPersistTaps).toBe('always');
 });
 
 test('typing and Enter send bytes to the active tab', async () => {
@@ -204,8 +214,9 @@ test('typing and Enter send bytes to the active tab', async () => {
   await act(async () => {
     input.props.onChangeText('hi');
     input.props.onKeyPress({ nativeEvent: { key: 'Enter' } });
+    input.props.onSubmitEditing();
   });
-  expect(received).toEqual([[104, 105], [0x0d]]);
+  expect(received).toEqual([[104, 105], [0x0d], [0x0d]]);
 });
 
 test('opening Terminal dismisses the composer keyboard', async () => {
@@ -223,4 +234,29 @@ test('opening Terminal dismisses the composer keyboard', async () => {
   expect(
     tree.root.findAll(n => n.props.testID === 'session-sheet').length,
   ).toBeGreaterThan(0);
+});
+
+test('key bar press-in inverts the button', async () => {
+  const tree = await render(<TerminalScreen chatId="c1" />);
+  const findEsc = () =>
+    tree.root.findAll(
+      n =>
+        n.props.accessibilityLabel === 'ESC' &&
+        typeof n.props.onPressIn === 'function',
+    )[0];
+  const esc = findEsc();
+  expect(esc.props.unstable_pressDelay).toBe(0);
+  expect(StyleSheet.flatten(esc.props.style).backgroundColor).toBe('#2A2A2A');
+  await act(async () => {
+    esc.props.onPressIn();
+  });
+  expect(StyleSheet.flatten(findEsc().props.style).backgroundColor).toBe(
+    '#EEEEEC',
+  );
+  await act(async () => {
+    findEsc().props.onPressOut();
+  });
+  expect(StyleSheet.flatten(findEsc().props.style).backgroundColor).toBe(
+    '#2A2A2A',
+  );
 });

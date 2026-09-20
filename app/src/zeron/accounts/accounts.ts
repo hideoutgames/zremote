@@ -25,6 +25,20 @@ export const usageLevel = (fraction: number): UsageLevel =>
     ? 'warn'
     : 'normal';
 
+/** Desktop `LoadTrigger` (accounts.rs). Mount/retry/refresh/post-login
+ * probe the provider; Switch/Forget ride the 60s cache. */
+export type AccountsLoadTrigger =
+  | 'mount'
+  | 'retry'
+  | 'refresh'
+  | 'postLogin'
+  | 'postAction';
+
+/** Desktop `force_usage_for`. The engine only hits the provider when
+ * forced; a non-forced list serves the 60s cache or empty windows. */
+export const forceUsageFor = (trigger: AccountsLoadTrigger): boolean =>
+  trigger !== 'postAction';
+
 /** Desktop's format_reset (accounts.rs L105): clock time <22h, weekday <7d,
  * else "Mon d". Caller prefixes "resets ". */
 export const formatReset = (

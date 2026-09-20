@@ -3,6 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { ScrollToBottomButton } from '../src/components/ScrollToBottomButton';
 import { darkTheme, lightTheme, useTheme } from '../src/theme';
 
@@ -32,6 +33,9 @@ const chevronTint = (tree: TestRenderer.ReactTestRenderer) =>
     resizeMode: 'scaleAspectFit',
   }).props.tintColor;
 
+const layoutAnimView = (tree: TestRenderer.ReactTestRenderer) =>
+  tree.root.findAll(n => n.props.entering != null)[0];
+
 afterEach(() => {
   mockedUseTheme.mockReset();
   mockedUseTheme.mockReturnValue(darkTheme);
@@ -50,6 +54,16 @@ test('uses dark-theme text for the chevron in dark mode', async () => {
   mockedUseTheme.mockReturnValue(darkTheme);
   const tree = await render();
   expect(chevronTint(tree)).toBe(darkTheme.text);
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('slides up from the composer and straight down on hide', async () => {
+  const tree = await render();
+  const animated = layoutAnimView(tree);
+  expect(animated.props.entering).toEqual(FadeInUp.duration(160));
+  expect(animated.props.exiting).toEqual(FadeOutDown.duration(140));
   await act(async () => {
     tree.unmount();
   });

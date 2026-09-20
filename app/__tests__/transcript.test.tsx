@@ -3,17 +3,22 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   UserMessage,
   USER_BUBBLE_MAX_WIDTH,
   USER_BUBBLE_TEXT_END_PAD,
 } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
-import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubble';
+import {
+  BUBBLE_BLUR_INTENSITY,
+  BUBBLE_SHADOW_ELEVATION,
+  BUBBLE_SHADOW_OPACITY,
+} from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
 import { PlanBadge } from '../src/components/PlanBadge';
+import { PlanCard } from '../src/components/transcript/PlanCard';
 import {
   applyPlanPrefix,
   PLAN_END_MARKER,
@@ -264,8 +269,18 @@ test('AssistantMessage shows a plan card and turn changes', async () => {
   });
   const texts = textOf(tree!.root);
   expect(texts).toContain('Resize composer');
+  expect(texts).toContain('Ready to review');
   expect(texts).toContain('Changes');
   expect(texts).toContain('Composer.tsx');
+  const testIds: string[] = [];
+  tree!.root.findAll(n => {
+    if (typeof n.props.testID === 'string') testIds.push(n.props.testID);
+    return false;
+  });
+  expect(testIds.indexOf('plan-card')).toBeGreaterThanOrEqual(0);
+  expect(testIds.indexOf('plan-card')).toBeLessThan(
+    testIds.indexOf('tool-group'),
+  );
 });
 
 test('AssistantMessage shows a Plan card for name-only createPlan', async () => {
@@ -293,7 +308,47 @@ test('AssistantMessage shows a Plan card for name-only createPlan', async () => 
   const texts = textOf(tree!.root);
   expect(texts).toContain('Plan');
   expect(texts.some(s => s === 'Tool' || s === 'createPlan')).toBe(false);
-  expect(tree!.root.findAllByType(PlanBadge).length).toBe(1);
+  expect(tree!.root.findAllByType(PlanBadge).length).toBe(0);
+  expect(tree!.root.findAllByType(PlanCard).length).toBe(1);
+});
+
+test('AssistantMessage hides following text that is the plan body', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 'p1',
+        call: { kind: 'unknown', name: 'createPlan' },
+        resolved: true,
+      },
+      {
+        kind: 'text',
+        id: 'txt',
+        text: '# Signing fix\n\nUse one cert.',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {}}
+        onOpenPlan={() => {}}
+      />,
+    );
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Signing fix');
+  expect(texts).toContain('Ready to review');
+  expect(
+    tree!.root.findAll(
+      n =>
+        typeof n.props.markdown === 'string' &&
+        n.props.markdown.includes('Use one cert.'),
+    ),
+  ).toHaveLength(0);
 });
 
 test('AssistantMessage strips marked plan text and shows a Plan card', async () => {
@@ -319,6 +374,7 @@ test('AssistantMessage strips marked plan text and shows a Plan card', async () 
   });
   const texts = textOf(tree!.root);
   expect(texts).toContain('Resize composer');
+  expect(texts).toContain('Ready to review');
   expect(
     tree!.root.findAll(
       n =>
@@ -329,6 +385,7 @@ test('AssistantMessage strips marked plan text and shows a Plan card', async () 
   expect(
     tree!.root.findByProps({ markdown: 'Here is the plan.' }),
   ).toBeTruthy();
+  expect(tree!.root.findAllByType(PlanCard).length).toBe(1);
 });
 
 test('AssistantMessage groups the tool parts into one rail', async () => {
@@ -572,6 +629,14 @@ const flatStyle = (style: unknown): Record<string, unknown>[] => {
   return [];
 };
 
+const shadowedHost = (
+  node: TestRenderer.ReactTestInstance,
+): TestRenderer.ReactTestInstance =>
+  node.findAll(n => {
+    const opacity = StyleSheet.flatten(n.props.style)?.shadowOpacity;
+    return typeof opacity === 'number';
+  })[0] ?? node;
+
 test('UserMessage shows the sent text inside a bubble sized to content', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -595,6 +660,15 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+  const bubbleFlat = StyleSheet.flatten(shadowedHost(bubble).props.style);
+  expect(bubbleFlat.overflow).not.toBe('hidden');
+  expect(bubbleFlat.shadowOpacity).toBe(BUBBLE_SHADOW_OPACITY);
+  expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
+  expect(
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'user-bubble-clip' }).props.style,
+    ).overflow,
+  ).toBe('hidden');
 });
 
 test('UserMessage keeps the full prompt in the bubble Text', async () => {
@@ -653,6 +727,15 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+  const bubbleFlat = StyleSheet.flatten(shadowedHost(bubble).props.style);
+  expect(bubbleFlat.overflow).not.toBe('hidden');
+  expect(bubbleFlat.shadowOpacity).toBe(BUBBLE_SHADOW_OPACITY);
+  expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
+  expect(
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'assistant-bubble-clip' }).props.style,
+    ).overflow,
+  ).toBe('hidden');
 });
 
 test('UserMessage never ellipsizes a short prompt', async () => {
@@ -687,6 +770,61 @@ test('UserMessage folds after 1000 characters', async () => {
     fold.props.onPress();
   });
   expect(textOf(tree!.root)).toContain(long);
+});
+
+test('AssistantMessage shows Worked for on a completed turn', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={assistantEntry}
+        onOpenReasoning={() => {}}
+        workedFor="14m 38s"
+      />,
+    );
+  });
+  expect(textOf(tree!.root)).toContain('Worked for 14m 38s');
+  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
+  expect(
+    bubble.findAll(n => n.props.testID === 'worked-for').length,
+  ).toBeGreaterThan(0);
+});
+
+test('AssistantMessage hides Worked for while the live strip is showing', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={assistantEntry}
+        onOpenReasoning={() => {}}
+        showWorking
+        workingChatId="c1"
+        workingStartedAt={Date.now()}
+        workedFor="14m 38s"
+      />,
+    );
+  });
+  expect(tree!.root.findAll(n => n.props.testID === 'worked-for').length).toBe(
+    0,
+  );
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
+  ).toBeGreaterThan(0);
+});
+
+test('AssistantMessage omits Worked for when no duration was frozen', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
+    );
+  });
+  expect(tree!.root.findAll(n => n.props.testID === 'worked-for').length).toBe(
+    0,
+  );
+  expect(textOf(tree!.root).some(s => String(s).includes('Worked for'))).toBe(
+    false,
+  );
 });
 
 test('AssistantMessage puts tools, changes, and working inside the bubble', async () => {
