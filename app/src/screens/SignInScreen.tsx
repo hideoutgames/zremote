@@ -179,10 +179,8 @@ export function SignInScreen() {
               accessibilityState={{ disabled: busy || !pasteReady }}
               style={[
                 styles.continue,
-                {
-                  backgroundColor: theme.accent,
-                  opacity: busy || !pasteReady ? 0.4 : 1,
-                },
+                { backgroundColor: theme.accent },
+                busy || !pasteReady ? styles.disabled : null,
               ]}
             >
               <Text style={styles.continueText}>
@@ -201,7 +199,8 @@ export function SignInScreen() {
           accessibilityState={{ disabled: busy }}
           style={[
             styles.primary,
-            { backgroundColor: theme.accent, opacity: busy ? 0.4 : 1 },
+            { backgroundColor: theme.accent },
+            busy ? styles.disabled : null,
           ]}
         >
           <Text style={styles.primaryText}>{t('signIn.button')}</Text>
@@ -261,4 +260,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   continueText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  disabled: { opacity: 0.4 },
 });
