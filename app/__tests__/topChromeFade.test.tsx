@@ -6,9 +6,16 @@ import {
   maskStopsFor,
   TOP_CHROME_BLUR_INTENSITY,
   TOP_CHROME_FADE_BAND,
-  THREADS_BOTTOM_FADE_BAND,
+  CHROME_FADE_WASH_DARK,
 } from '../src/components/TopChromeFade';
 import { FadeBlur } from '../src/components/FadeBlur';
+
+const flattenStyle = (style: unknown): Record<string, unknown>[] => {
+  const list = Array.isArray(style) ? style.flat() : [style];
+  return list.filter(
+    (s): s is Record<string, unknown> => s != null && typeof s === 'object',
+  );
+};
 
 test('TopChromeFade is non-interactive and sized to inset plus band', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
@@ -17,16 +24,14 @@ test('TopChromeFade is non-interactive and sized to inset plus band', async () =
   });
   const fade = tree!.root.findByProps({ testID: 'top-chrome-fade' });
   expect(fade.props.pointerEvents).toBe('none');
-  const style = Array.isArray(fade.props.style)
-    ? fade.props.style.flat()
-    : [fade.props.style];
-  expect(style.some(s => s?.height === 88 + 56)).toBe(true);
+  expect(flattenStyle(fade.props.style).some(s => s.height === 88 + 56)).toBe(
+    true,
+  );
   const blur = tree!.root.findAll(n => n.props.intensity != null)[0];
   expect(blur.props.intensity).toBe(TOP_CHROME_BLUR_INTENSITY);
-  const washes = tree!.root.findAll(
-    n => Array.isArray(n.props.colors) && n.props.colors.length === 4,
-  );
-  expect(washes).toHaveLength(0);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'chrome-fade-wash'),
+  ).toHaveLength(0);
   await act(async () => {
     tree?.unmount();
   });
@@ -53,17 +58,54 @@ test('ChromeFade bottom sizes the plateau to the composer inset', async () => {
     );
   });
   const fade = tree!.root.findByProps({ testID: 'bottom-chrome-fade' });
-  const style = Array.isArray(fade.props.style)
-    ? fade.props.style.flat()
-    : [fade.props.style];
-  expect(style.some(s => s?.height === 120 + TOP_CHROME_FADE_BAND)).toBe(true);
+  const style = flattenStyle(fade.props.style);
+  expect(style.some(s => s.height === 120 + TOP_CHROME_FADE_BAND)).toBe(true);
+  expect(style.some(s => s.bottom === 0)).toBe(true);
   await act(async () => {
     tree?.unmount();
   });
 });
 
-test('threads bottom fade band is shorter than the chat composer band', () => {
-  expect(THREADS_BOTTOM_FADE_BAND).toBeLessThan(TOP_CHROME_FADE_BAND);
+test('Home-style bottom fade is the 56pt band at the screen bottom', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <ChromeFade edge="bottom" inset={0} fadeBand={TOP_CHROME_FADE_BAND} />,
+    );
+  });
+  const fade = tree!.root.findByProps({ testID: 'bottom-chrome-fade' });
+  const style = flattenStyle(fade.props.style);
+  expect(style.some(s => s.height === TOP_CHROME_FADE_BAND)).toBe(true);
+  expect(style.some(s => s.bottom === 0)).toBe(true);
+  expect(style.some(s => typeof s.bottom === 'number' && s.bottom > 0)).toBe(
+    false,
+  );
+  await act(async () => {
+    tree?.unmount();
+  });
+});
+
+test('wash paints a black gradient over the fade', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <ChromeFade
+        edge="bottom"
+        inset={0}
+        fadeBand={TOP_CHROME_FADE_BAND}
+        wash={CHROME_FADE_WASH_DARK}
+        tint="systemThinMaterialDark"
+      />,
+    );
+  });
+  const wash = tree!.root.findByProps({ testID: 'chrome-fade-wash' });
+  expect(wash.props.colors).toContain(CHROME_FADE_WASH_DARK);
+  expect(wash.props.colors.every((c: string) => c !== '#FFFFFF')).toBe(true);
+  const blur = tree!.root.findAll(n => n.props.intensity != null)[0];
+  expect(blur.props.tint).toBe('systemThinMaterialDark');
+  await act(async () => {
+    tree?.unmount();
+  });
 });
 
 test('maskStopsFor hides the composer plateau and fades above it', () => {

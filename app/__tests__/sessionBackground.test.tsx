@@ -8,6 +8,7 @@ import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import { FadeBlur } from '../src/components/FadeBlur';
 import {
   COMPACT_WALLPAPER_BLUR,
+  COMPACT_THREADS_INTENSITY,
   REGULAR_CHAT_COLUMN_EDGE,
   REGULAR_THREADS_INTENSITY,
   chatBlurMaxWidth,
@@ -265,9 +266,11 @@ test('no artwork means no wallpaper or blur layers', async () => {
 
 test('compact wallpaper blur is full-bleed; iPad sidebar is unmasked', () => {
   expect(wallpaperBlurFor(390, 'threads')).toEqual({
-    intensity: COMPACT_WALLPAPER_BLUR,
+    intensity: COMPACT_THREADS_INTENSITY,
     fade: 'none',
   });
+  expect(COMPACT_THREADS_INTENSITY).toBe(120);
+  expect(REGULAR_THREADS_INTENSITY).toBe(90);
   expect(wallpaperBlurFor(390, 'chat', false)).toEqual({
     intensity: COMPACT_WALLPAPER_BLUR,
     fade: 'none',
@@ -289,6 +292,7 @@ test('home list uses full-bleed regular blur at the 750pt test window', async ()
   const blur = mounted.root.findAllByType(FadeBlur)[0];
   expect(blur.props.fade).toBe('none');
   expect(blur.props.tint).toBe('systemThinMaterialDark');
+  expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
   expect(count(mounted.root, 'session-background-dim')).toBeGreaterThan(0);
   expect(count(mounted.root, 'bottom-chrome-fade')).toBeGreaterThan(0);
 });

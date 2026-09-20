@@ -79,7 +79,7 @@ import {
   ChromeFade,
   ContentEdgeMask,
   TOP_CHROME_FADE_BAND,
-  THREADS_BOTTOM_FADE_BAND,
+  CHROME_FADE_WASH_DARK,
 } from '../components/TopChromeFade';
 import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
@@ -594,6 +594,8 @@ export function HomeScreen({
     ? bottomH + 12
     : insets.bottom + 76;
   const chromeH = headerH !== 0 ? headerH : insets.top + 64;
+  const fadeWash = wallpaper ? CHROME_FADE_WASH_DARK : undefined;
+  const fadeTint = wallpaper ? 'systemThinMaterialDark' : undefined;
 
   return (
     <View
@@ -605,14 +607,8 @@ export function HomeScreen({
       <ThreadsBackgroundBlur />
       <ContentEdgeMask
         topInset={chromeH}
-        bottomInset={
-          searching
-            ? 0
-            : bottomH !== 0
-            ? Math.max(0, bottomH - 8)
-            : insets.bottom + CIRCLE + 8
-        }
-        bottomBand={searching ? 0 : THREADS_BOTTOM_FADE_BAND}
+        bottomInset={0}
+        bottomBand={searching ? 0 : TOP_CHROME_FADE_BAND}
       >
         <LegendList
           style={styles.fillList}
@@ -721,18 +717,14 @@ export function HomeScreen({
         />
       </ContentEdgeMask>
 
-      <TopChromeFade inset={chromeH} />
+      <TopChromeFade inset={chromeH} wash={fadeWash} tint={fadeTint} />
       {searching ? null : (
         <ChromeFade
           edge="bottom"
           inset={0}
-          fadeBand={THREADS_BOTTOM_FADE_BAND}
-          style={{
-            bottom:
-              bottomH !== 0
-                ? Math.max(0, bottomH - 8)
-                : insets.bottom + CIRCLE + 8,
-          }}
+          fadeBand={TOP_CHROME_FADE_BAND}
+          wash={fadeWash}
+          tint={fadeTint}
         />
       )}
 

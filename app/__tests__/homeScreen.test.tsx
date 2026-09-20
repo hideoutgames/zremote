@@ -6,6 +6,10 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text } from 'react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { BrandMark } from '../src/components/BrandMark';
+import {
+  CHROME_FADE_WASH_DARK,
+  TOP_CHROME_FADE_BAND,
+} from '../src/components/TopChromeFade';
 import * as Theme from '../src/theme';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import {
@@ -97,6 +101,19 @@ const bodyText = (root: TestRenderer.ReactTestInstance, id: string): string => {
     .map(n => flattenText(n.props.children))
     .join(' ');
 };
+
+const flattenStyle = (style: unknown): Record<string, unknown>[] => {
+  const list = Array.isArray(style) ? style.flat() : [style];
+  return list.filter(
+    (s): s is Record<string, unknown> => s != null && typeof s === 'object',
+  );
+};
+
+const washesOf = (root: TestRenderer.ReactTestInstance) =>
+  root.findAll(n => n.props.testID === 'chrome-fade-wash');
+
+const bottomFadeOf = (root: TestRenderer.ReactTestInstance) =>
+  root.findAll(n => n.props.testID === 'bottom-chrome-fade')[0];
 
 jest.useFakeTimers();
 
@@ -681,9 +698,19 @@ test('threads title uses white type when wallpaper is set, even in light theme',
     expect(homeTitleStyle.some(s => s?.color === Theme.darkTheme.text)).toBe(
       true,
     );
+    const bottom = bottomFadeOf(mounted.root);
+    expect(bottom).toBeDefined();
+    const bottomStyle = flattenStyle(bottom.props.style);
+    expect(bottomStyle.some(s => s.height === TOP_CHROME_FADE_BAND)).toBe(true);
+    expect(bottomStyle.some(s => s.bottom === 0)).toBe(true);
     expect(
-      mounted.root.findAll(n => n.props.testID === 'bottom-chrome-fade').length,
-    ).toBeGreaterThan(0);
+      bottomStyle.some(s => typeof s.bottom === 'number' && s.bottom > 0),
+    ).toBe(false);
+    const washes = washesOf(mounted.root);
+    expect(washes.length).toBeGreaterThan(0);
+    expect(
+      washes.every(n => n.props.colors.includes(CHROME_FADE_WASH_DARK)),
+    ).toBe(true);
   } finally {
     await act(async () => {
       tree?.unmount();
@@ -692,4 +719,52 @@ test('threads title uses white type when wallpaper is set, even in light theme',
     themeSpy.mockRestore();
     uiPrefsStore.setState({ newThreadComposerBackground: undefined });
   }
+});
+
+test('wallpaper fade wash stays black in dark theme', async () => {
+  const themeSpy = jest
+    .spyOn(Theme, 'useTheme')
+    .mockReturnValue(Theme.darkTheme);
+  uiPrefsStore.setState({
+    newThreadComposerBackground: {
+      uri: 'file:///docs/new-thread-backgrounds/x.png',
+      name: 'sunset.png',
+    },
+  });
+  try {
+    const mounted = await render(
+      <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+    );
+    const washes = washesOf(mounted.root);
+    expect(washes.length).toBeGreaterThan(0);
+    expect(
+      washes.every(n => n.props.colors.includes(CHROME_FADE_WASH_DARK)),
+    ).toBe(true);
+    expect(
+      washes.some(n =>
+        n.props.colors.some(
+          (c: string) => c.includes('255,255,255') || c === '#FFFFFF',
+        ),
+      ),
+    ).toBe(false);
+  } finally {
+    await act(async () => {
+      tree?.unmount();
+    });
+    tree = undefined;
+    themeSpy.mockRestore();
+    uiPrefsStore.setState({ newThreadComposerBackground: undefined });
+  }
+});
+
+test('threads fades have no black wash without wallpaper', async () => {
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(washesOf(mounted.root)).toHaveLength(0);
+  const bottom = bottomFadeOf(mounted.root);
+  expect(bottom).toBeDefined();
+  const bottomStyle = flattenStyle(bottom.props.style);
+  expect(bottomStyle.some(s => s.height === TOP_CHROME_FADE_BAND)).toBe(true);
+  expect(bottomStyle.some(s => s.bottom === 0)).toBe(true);
 });
