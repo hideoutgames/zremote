@@ -136,6 +136,18 @@ export function railIndexAtY(
   return index;
 }
 
+/** Convert a window `pageY` into track-local Y. Unmeasured origin keeps
+ *  `pageY` as-is so tests can pass track-local coordinates. */
+export function railYFromPage(
+  pageY: number | undefined,
+  locationY: number,
+  originY: number | null,
+): number {
+  if (typeof pageY !== 'number') return locationY;
+  if (originY == null) return pageY;
+  return pageY - originY;
+}
+
 export function pickActiveRailId(opts: {
   itemIds: string[];
   offset: number;

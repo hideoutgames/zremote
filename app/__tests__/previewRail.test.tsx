@@ -41,7 +41,29 @@ const yForIndex = (index: number): number => {
   return stackTop() + index * itemSize + itemSize / 2;
 };
 
-const touch = (locationY: number) => ({ nativeEvent: { locationY } });
+const touch = (locationY: number, pageY = locationY) => ({
+  nativeEvent: { locationY, pageY },
+});
+
+const railProps = (
+  onItemSelect: (
+    item: RailItem,
+    opts?: { animated?: boolean },
+  ) => void = () => {},
+  extra: { dismissKey?: number } = {},
+) => (
+  <PreviewRail
+    items={items}
+    label="Message navigation"
+    activeId="u1"
+    onItemSelect={onItemSelect}
+    top={40}
+    bottom={80}
+    right={4}
+    railHeight={RAIL_HEIGHT}
+    dismissKey={extra.dismissKey}
+  />
+);
 
 const renderRail = async (
   onItemSelect: (
@@ -52,19 +74,7 @@ const renderRail = async (
 ) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
-    tree = TestRenderer.create(
-      <PreviewRail
-        items={items}
-        label="Message navigation"
-        activeId="u1"
-        onItemSelect={onItemSelect}
-        top={40}
-        bottom={80}
-        right={4}
-        railHeight={RAIL_HEIGHT}
-        dismissKey={extra.dismissKey}
-      />,
-    );
+    tree = TestRenderer.create(railProps(onItemSelect, extra));
   });
   return tree!;
 };
@@ -98,6 +108,22 @@ test('renders a tick per item', async () => {
   });
 });
 
+test('overlay passes touches through; only the track is hittable', async () => {
+  const tree = await renderRail();
+  expect(
+    tree.root.findByProps({ testID: 'preview-rail' }).props.pointerEvents,
+  ).toBe('none');
+  expect(
+    tree.root.findByProps({ testID: 'preview-rail-track' }).props.pointerEvents,
+  ).toBe('auto');
+  expect(
+    tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss'),
+  ).toHaveLength(0);
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
 test('pressing a tick selects it and shows the preview card', async () => {
   const onItemSelect = jest.fn();
   const tree = await renderRail(onItemSelect);
@@ -120,14 +146,18 @@ test('pressing a tick selects it and shows the preview card', async () => {
   expect(labels).toContain('What should the first release include?');
   expect(labels).toContain('Start with the smallest workflow.');
   expect(mocked.selectionAsync).not.toHaveBeenCalled();
+  expect(
+    tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss'),
+  ).toHaveLength(0);
 
   await act(async () => {
     tree.unmount();
   });
 });
 
-test('pressing outside clears the pinned preview', async () => {
-  const tree = await renderRail();
+test('dismissKey clears the pinned preview', async () => {
+  const onItemSelect = jest.fn();
+  const tree = await renderRail(onItemSelect);
   await act(async () => {
     tree.root
       .findAll(
@@ -142,13 +172,7 @@ test('pressing outside clears the pinned preview', async () => {
   ).toBeGreaterThan(0);
 
   await act(async () => {
-    tree.root
-      .findAll(
-        n =>
-          n.props.testID === 'preview-rail-dismiss' &&
-          typeof n.props.onPress === 'function',
-      )[0]
-      .props.onPress();
+    tree.update(railProps(onItemSelect, { dismissKey: 1 }));
   });
   expect(
     tree.root.findAll(n => n.props.testID === 'preview-rail-preview'),
@@ -171,15 +195,7 @@ test('a stationary tap on the rail selects without a haptic', async () => {
   expect(onItemSelect).toHaveBeenCalledWith(items[0], { animated: true });
   expect(mocked.selectionAsync).not.toHaveBeenCalled();
   expect(
-    tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss'),
-  ).toHaveLength(0);
-
-  await act(async () => {
-    track.props.onResponderRelease(touch(yForIndex(0)));
-  });
-  expect(mocked.selectionAsync).not.toHaveBeenCalled();
-  expect(
-    tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss').length,
+    tree.root.findAll(n => n.props.testID === 'preview-rail-preview').length,
   ).toBeGreaterThan(0);
 
   await act(async () => {
@@ -196,7 +212,7 @@ test('dragging across ticks selects the next item and ticks once', async () => {
     track.props.onResponderGrant(touch(yForIndex(0)));
     track.props.onResponderMove(touch(yForIndex(1)));
     track.props.onResponderMove(touch(yForIndex(1)));
-    track.props.onResponderRelease(touch(yForIndex(1)));
+    track.props.onResponderRelease?.(touch(yForIndex(1)));
   });
   expect(onItemSelect).toHaveBeenNthCalledWith(1, items[0], {
     animated: true,
@@ -206,6 +222,21 @@ test('dragging across ticks selects the next item and ticks once', async () => {
   });
   expect(onItemSelect).toHaveBeenCalledTimes(2);
   expect(mocked.selectionAsync).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('pageY maps to a tick when locationY is missing', async () => {
+  const onItemSelect = jest.fn();
+  const tree = await renderRail(onItemSelect);
+  const track = tree.root.findByProps({ testID: 'preview-rail-track' });
+
+  await act(async () => {
+    track.props.onResponderGrant({ nativeEvent: { pageY: yForIndex(1) } });
+  });
+  expect(onItemSelect).toHaveBeenCalledWith(items[1], { animated: true });
 
   await act(async () => {
     tree.unmount();

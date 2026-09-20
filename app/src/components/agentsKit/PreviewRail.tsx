@@ -23,6 +23,7 @@ import {
   RAIL_ITEM_SIZE,
   railIndexAtY,
   railItemSize,
+  railYFromPage,
   tickScale,
   type RailItem,
 } from './messagePreview';
@@ -39,6 +40,10 @@ const TICK_HEIGHT = StyleSheet.hairlineWidth < 1 ? 1 : StyleSheet.hairlineWidth;
 const PREVIEW_WIDTH = 256;
 const PREVIEW_HEIGHT = 80;
 const SPRING = { stiffness: 360, damping: 32, mass: 0.6 };
+
+function yFromEvent(e: GestureResponderEvent, originY: number | null): number {
+  return railYFromPage(e.nativeEvent.pageY, e.nativeEvent.locationY, originY);
+}
 
 function RailTick({
   scale,
@@ -96,7 +101,6 @@ export function PreviewRail({
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const [pinnedId, setPinnedId] = useState<string | null>(null);
-  const [scrubbing, setScrubbing] = useState(false);
   const lastIndexRef = useRef(-1);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -112,11 +116,20 @@ export function PreviewRail({
   stackTopRef.current = stackTop;
   const onItemSelectRef = useRef(onItemSelect);
   onItemSelectRef.current = onItemSelect;
+  const trackRef = useRef<View>(null);
+  const railPageYRef = useRef<number | null>(null);
 
   useEffect(() => {
     setPinnedId(null);
-    setScrubbing(false);
   }, [dismissKey]);
+
+  const syncRailOrigin = useCallback(() => {
+    trackRef.current?.measureInWindow?.((_x, y) => {
+      if (typeof y === 'number' && Number.isFinite(y)) {
+        railPageYRef.current = y;
+      }
+    });
+  }, []);
 
   const applyIndex = useCallback((index: number, kind: 'grant' | 'move') => {
     const next = itemsRef.current[index];
@@ -130,7 +143,7 @@ export function PreviewRail({
 
   const indexFromEvent = useCallback((e: GestureResponderEvent): number => {
     return railIndexAtY(
-      e.nativeEvent.locationY,
+      yFromEvent(e, railPageYRef.current),
       itemsRef.current.length,
       itemSizeRef.current,
       stackTopRef.current,
@@ -159,40 +172,28 @@ export function PreviewRail({
 
   return (
     <View
-      pointerEvents="box-none"
+      pointerEvents="none"
       style={styles.overlay}
       testID="preview-rail"
       accessibilityLabel={label}
     >
-      {pinnedId && !scrubbing ? (
-        <Pressable
-          testID="preview-rail-dismiss"
-          style={StyleSheet.absoluteFill}
-          onPress={() => setPinnedId(null)}
-          accessibilityRole="button"
-          accessibilityLabel={label}
-        />
-      ) : null}
       <View
+        ref={trackRef}
         testID="preview-rail-track"
+        pointerEvents="auto"
         style={[styles.rail, { top, bottom, right, width: trackWidth }]}
         accessibilityRole="adjustable"
         accessibilityLabel={label}
+        onLayout={syncRailOrigin}
         onStartShouldSetResponder={() => true}
         onMoveShouldSetResponder={() => true}
         onResponderTerminationRequest={() => false}
         onResponderGrant={e => {
-          setScrubbing(true);
+          syncRailOrigin();
           applyIndex(indexFromEvent(e), 'grant');
         }}
         onResponderMove={e => {
           applyIndex(indexFromEvent(e), 'move');
-        }}
-        onResponderRelease={() => {
-          setScrubbing(false);
-        }}
-        onResponderTerminate={() => {
-          setScrubbing(false);
         }}
       >
         <View

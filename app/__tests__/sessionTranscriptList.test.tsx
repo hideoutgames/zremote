@@ -769,6 +769,10 @@ test('a non-last rail tick jumps after follow-output is off', async () => {
   });
   expect(followingOn(tree!)).toBe(false);
   expect(followingAtJump).toBe(false);
+  expect(scrollToOffset).toHaveBeenCalledWith({
+    offset: 0,
+    animated: true,
+  });
   expect(scrollToIndex).toHaveBeenCalledWith({
     index: 0,
     animated: true,
@@ -796,17 +800,24 @@ test('dragging the rail scrubs without animation once follow is off', async () =
   });
   expect(followingOn(tree!)).toBe(false);
   scrollToIndex.mockClear();
+  scrollToOffset.mockClear();
 
   const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
   const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
   const itemSize = 14;
   const stackTop = (railHeight - itemSize * 4) / 2;
+  const yFor = (index: number) => stackTop + index * itemSize + itemSize / 2;
   const touch = (index: number) => ({
-    nativeEvent: { locationY: stackTop + index * itemSize + itemSize / 2 },
+    nativeEvent: { locationY: yFor(index), pageY: yFor(index) },
   });
+  const maxOffset = 2000 - 844;
 
   await act(async () => {
     track.props.onResponderGrant(touch(0));
+  });
+  expect(scrollToOffset).toHaveBeenCalledWith({
+    offset: 0,
+    animated: true,
   });
   expect(scrollToIndex).toHaveBeenCalledWith({
     index: 0,
@@ -814,6 +825,7 @@ test('dragging the rail scrubs without animation once follow is off', async () =
     viewPosition: 0.5,
   });
   scrollToIndex.mockClear();
+  scrollToOffset.mockClear();
 
   await act(async () => {
     track.props.onResponderMove(touch(1));
@@ -824,6 +836,10 @@ test('dragging the rail scrubs without animation once follow is off', async () =
     index: 2,
     animated: false,
     viewPosition: 0.5,
+  });
+  expect(scrollToOffset).toHaveBeenCalledWith({
+    offset: (2 / 3) * maxOffset,
+    animated: false,
   });
 
   await act(async () => {

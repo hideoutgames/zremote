@@ -10,6 +10,7 @@ import {
   pickActiveRailId,
   railIndexAtY,
   railItemSize,
+  railYFromPage,
   tickScale,
   truncateMessageText,
 } from '../src/components/agentsKit/messagePreview';
@@ -145,6 +146,12 @@ test('railIndexAtY maps Y onto a clamped tick index', () => {
   expect(railIndexAtY(34, 4, 14, 20)).toBe(1);
   expect(railIndexAtY(0, 0, 14, 0)).toBe(0);
   expect(railIndexAtY(10, 4, 0, 0)).toBe(0);
+});
+
+test('railYFromPage prefers window coordinates once the track is measured', () => {
+  expect(railYFromPage(undefined, 40, null)).toBe(40);
+  expect(railYFromPage(40, 99, null)).toBe(40);
+  expect(railYFromPage(160, 40, 120)).toBe(40);
 });
 
 test('tickScale is a four-step pyramid', () => {
