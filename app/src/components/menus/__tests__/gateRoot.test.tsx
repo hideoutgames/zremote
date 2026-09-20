@@ -26,69 +26,73 @@ function DummyRoot({
 const Gated = gateRoot(DummyRoot);
 
 describe('gateRoot', () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+
   beforeEach(() => {
     jest.useFakeTimers();
   });
 
   afterEach(() => {
-    resetMenuGate();
+    act(() => {
+      tree?.unmount();
+      tree = undefined;
+      resetMenuGate();
+    });
     jest.useRealTimers();
   });
 
   it('releases the menu gate when unmounted while open', async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(<Gated />);
     });
     await act(async () => {
-      tree.root.findByProps({ testID: 'open' }).props.onPress();
+      tree!.root.findByProps({ testID: 'open' }).props.onPress();
     });
     expect(menuOpenCount()).toBe(1);
 
     await act(async () => {
-      tree.unmount();
+      tree!.unmount();
+      tree = undefined;
     });
     expect(menuOpenCount()).toBe(0);
   });
 
   it('does not decrement twice when closed then unmounted', async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(<Gated />);
     });
     await act(async () => {
-      tree.root.findByProps({ testID: 'open' }).props.onPress();
-      tree.root.findByProps({ testID: 'close' }).props.onPress();
+      tree!.root.findByProps({ testID: 'open' }).props.onPress();
+      tree!.root.findByProps({ testID: 'close' }).props.onPress();
     });
     expect(menuOpenCount()).toBe(0);
 
     await act(async () => {
-      tree.unmount();
+      tree!.unmount();
+      tree = undefined;
     });
     expect(menuOpenCount()).toBe(0);
   });
 
   it('opens immediately on onOpenWillChange(true)', async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(<Gated />);
     });
     await act(async () => {
-      tree.root.findByProps({ testID: 'will-open' }).props.onPress();
+      tree!.root.findByProps({ testID: 'will-open' }).props.onPress();
     });
     expect(menuOpenCount()).toBe(1);
   });
 
   it('holds the gate open until MENU_DISMISS_HOLD_MS after will-close', async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(<Gated />);
     });
     await act(async () => {
-      tree.root.findByProps({ testID: 'will-open' }).props.onPress();
+      tree!.root.findByProps({ testID: 'will-open' }).props.onPress();
     });
     await act(async () => {
-      tree.root.findByProps({ testID: 'will-close' }).props.onPress();
+      tree!.root.findByProps({ testID: 'will-close' }).props.onPress();
     });
     expect(menuOpenCount()).toBe(1);
 
@@ -104,18 +108,17 @@ describe('gateRoot', () => {
   });
 
   it('closes immediately on onOpenChange(false) and cancels a pending hold', async () => {
-    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(<Gated />);
     });
     await act(async () => {
-      tree.root.findByProps({ testID: 'will-open' }).props.onPress();
-      tree.root.findByProps({ testID: 'will-close' }).props.onPress();
+      tree!.root.findByProps({ testID: 'will-open' }).props.onPress();
+      tree!.root.findByProps({ testID: 'will-close' }).props.onPress();
     });
     expect(menuOpenCount()).toBe(1);
 
     await act(async () => {
-      tree.root.findByProps({ testID: 'close' }).props.onPress();
+      tree!.root.findByProps({ testID: 'close' }).props.onPress();
     });
     expect(menuOpenCount()).toBe(0);
 
