@@ -48,6 +48,7 @@ import {
   toggleChatPinned,
   useChatPinned,
   useNewThreadComposerBackground,
+  usePinnedModels,
   useRecentModels,
 } from '../zeron/state/uiPrefs';
 import {
@@ -69,7 +70,7 @@ import {
   selectableHarnesses,
 } from '../zeron/state/catalogStore';
 import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
-import { recentMenuModels } from '../zeron/state/recentModels';
+import { composerMenuModels } from '../zeron/state/pinnedModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
 import {
   applyEffortLevel,
@@ -612,13 +613,24 @@ function ActiveSessionScreen({
     };
   }, []);
   const recents = useRecentModels();
+  const pinnedModels = usePinnedModels();
   const catalogTick = catalog?.loadedAt ?? 0;
   const catalogModels = useMemo(() => {
     if (hostDeviceId === undefined) return [];
-    const out: { harness: string; model: string; label: string }[] = [];
+    const out: {
+      harness: string;
+      model: string;
+      label: string;
+      harnessName: string;
+    }[] = [];
     for (const h of selectableHarnesses(hostDeviceId)) {
       for (const m of modelsFor(hostDeviceId, h.id)) {
-        out.push({ harness: h.id, model: m.id, label: m.label });
+        out.push({
+          harness: h.id,
+          model: m.id,
+          label: m.label,
+          harnessName: h.name,
+        });
       }
     }
     return out;
@@ -628,15 +640,15 @@ function ActiveSessionScreen({
   const currentModelId = chat?.config?.model;
   const recentItems = useMemo(
     () =>
-      recentMenuModels(
+      composerMenuModels(
+        pinnedModels,
         recents,
         catalogModels,
         currentHarness !== undefined && currentModelId !== undefined
           ? { harness: currentHarness, model: currentModelId }
           : undefined,
-        3,
       ),
-    [recents, catalogModels, currentHarness, currentModelId],
+    [pinnedModels, recents, catalogModels, currentHarness, currentModelId],
   );
   const currentModel =
     hostDeviceId === undefined || chat?.config?.harness === undefined

@@ -5,6 +5,7 @@
 import { createStore, useStore } from 'zustand';
 import type { DocDisk } from '../native/docDisk';
 import { rememberRecentModel, type RecentModel } from './recentModels';
+import { togglePinnedModelList } from './pinnedModels';
 import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
 import {
   backgroundFileExists,
@@ -48,6 +49,8 @@ export interface UiPrefs {
   recentModels: RecentModel[];
   /** Local-only pin-to-top (no registry pin field). */
   pinnedChatIds: string[];
+  /** Local-only pinned catalog models for the picker / composer menu. */
+  pinnedModels: RecentModel[];
   /** Last compose-composer settings (host/space/model). */
   composeDefaults?: ComposeDefaults;
   /** Last-used effort / Fast per catalog model (`harness:modelId`). */
@@ -83,6 +86,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   composerExtraHeight: 0,
   recentModels: [],
   pinnedChatIds: [],
+  pinnedModels: [],
   modelSettingsByKey: {},
   newThreadBackgroundEffect: 'none',
   colorScheme: 'system',
@@ -286,6 +290,16 @@ export const usePinnedChatIds = (): string[] =>
 
 export const useChatPinned = (chatId: string): boolean =>
   useStore(uiPrefsStore, s => s.pinnedChatIds.includes(chatId));
+
+export const togglePinnedModel = (pick: RecentModel): Promise<void> => {
+  uiPrefsStore.setState(s => ({
+    pinnedModels: togglePinnedModelList(s.pinnedModels, pick),
+  }));
+  return saveAsync();
+};
+
+export const usePinnedModels = (): RecentModel[] =>
+  useStore(uiPrefsStore, s => s.pinnedModels);
 
 export const setComposeDefaults = (patch: Partial<ComposeDefaults>): void => {
   uiPrefsStore.setState(s => {

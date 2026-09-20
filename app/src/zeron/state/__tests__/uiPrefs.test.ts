@@ -10,6 +10,7 @@ import {
   setNewThreadBackgroundEffect,
   bindUiPrefs,
   unbindUiPrefs,
+  togglePinnedModel,
 } from '../uiPrefs';
 import {
   bindBackgroundFs,
@@ -44,6 +45,7 @@ beforeEach(() => {
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',
     colorScheme: 'system',
+    pinnedModels: [],
   });
 });
 
@@ -189,4 +191,19 @@ test('bindUiPrefs ignores an invalid colorScheme', async () => {
   await disk.saveUiPrefs('org', 'user', { colorScheme: 'neon' });
   await bindUiPrefs(disk, 'org', 'user');
   expect(uiPrefsStore.getState().colorScheme).toBe('system');
+});
+
+test('togglePinnedModel persists and unpins', async () => {
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
+  expect(uiPrefsStore.getState().pinnedModels).toEqual([
+    { harness: 'claude-code', model: 'sonnet' },
+  ]);
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.pinnedModels).toEqual([
+    { harness: 'claude-code', model: 'sonnet' },
+  ]);
+  await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
+  expect(uiPrefsStore.getState().pinnedModels).toEqual([]);
 });

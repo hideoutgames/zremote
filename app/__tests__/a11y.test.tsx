@@ -27,6 +27,8 @@ import {
   type DeviceCatalog,
 } from '../src/zeron/state/catalogStore';
 import type { UserInputQuestion } from '../src/zeron/protocol/types';
+import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
+import { MAX_PINNED_MODELS } from '../src/zeron/state/pinnedModels';
 
 const services: AppServices = {
   auth: null as never,
@@ -58,6 +60,7 @@ const labelled = (root: TestRenderer.ReactTestInstance) =>
 
 beforeEach(() => {
   resetDrafts();
+  uiPrefsStore.setState({ pinnedModels: [] });
   workspaceStore.setState({
     devices: [
       {
@@ -172,6 +175,28 @@ const composerProps = {
   onRespondInput: () => {},
   onSendBlocked: () => {},
 };
+
+test('composer model menu shows provider subtitle on pinned items', async () => {
+  const mounted = await render(
+    <Composer
+      {...composerProps}
+      recentItems={[
+        {
+          harness: 'codex',
+          model: 'gpt',
+          label: 'GPT',
+          harnessName: 'Codex',
+        },
+      ]}
+    />,
+  );
+  expect(
+    mounted.root.findAll(n => n.props.children === 'GPT').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Codex').length,
+  ).toBeGreaterThan(0);
+});
 
 test('fast mode chip is labelled when the harness supports it', async () => {
   const mounted = await render(
@@ -502,6 +527,114 @@ test('model picker: search, provider groups, effort, and fast are labelled', asy
       n.props.accessibilityRole === 'button',
   )[0];
   expect(StyleSheet.flatten(effortChip.parent?.props.style).gap).toBe(20);
+  expect(mounted.root.findAll(n => n.props.children === 'Pinned')).toEqual([]);
+});
+
+const pickerCatalog = (): DeviceCatalog => ({
+  harnesses: [
+    {
+      id: 'claude-code',
+      name: 'Claude',
+      reasoningLevels: ['low', 'high'],
+    } as never,
+    { id: 'codex', name: 'Codex', reasoningLevels: [] } as never,
+  ],
+  modelsByHarness: {
+    'claude-code': [
+      {
+        id: 'sonnet',
+        label: 'Sonnet',
+        reasoningLevels: ['low', 'high'],
+        options: [],
+      },
+    ],
+    codex: [
+      {
+        id: 'gpt',
+        label: 'GPT',
+        reasoningLevels: [],
+        options: [],
+      },
+    ],
+  },
+  loading: false,
+  loadedAt: Date.now(),
+});
+
+const pickerChat = {
+  id: 'c1',
+  deviceId: 'h1',
+  archived: false,
+  createdAt: 0,
+  config: {
+    harness: 'claude-code',
+    model: 'sonnet',
+    reasoning: 'high',
+    modelOptions: {},
+  },
+};
+
+test('model picker: pinned category shows provider name', async () => {
+  catalogStore.setState({ byDevice: { h1: pickerCatalog() } });
+  uiPrefsStore.setState({
+    pinnedModels: [{ harness: 'codex', model: 'gpt' }],
+  });
+  const mounted = await render(
+    <ModelPickerSheet
+      runtime={{} as never}
+      chat={pickerChat}
+      phase="idle"
+      onClose={() => {}}
+      lockHarness={false}
+    />,
+  );
+  const headers = mounted.root.findAll(
+    n =>
+      n.props.accessibilityRole === 'header' &&
+      n.props.accessibilityLabel === 'Pinned',
+  );
+  expect(headers.length).toBeGreaterThan(0);
+  expect(headers[0].props.children).toBe('Pinned');
+  const labels = labelled(mounted.root);
+  expect(labels.some(l => l.label === 'GPT, Codex')).toBe(true);
+  expect(labels.some(l => l.label === 'GPT')).toBe(true);
+});
+
+test('model picker: pin is disabled at 10 with max subtitle', async () => {
+  catalogStore.setState({ byDevice: { h1: pickerCatalog() } });
+  uiPrefsStore.setState({
+    pinnedModels: [
+      { harness: 'claude-code', model: 'sonnet' },
+      ...Array.from({ length: MAX_PINNED_MODELS - 1 }, (_, i) => ({
+        harness: 'gone',
+        model: `m${i}`,
+      })),
+    ],
+  });
+  const mounted = await render(
+    <ModelPickerSheet
+      runtime={{} as never}
+      chat={pickerChat}
+      phase="idle"
+      onClose={() => {}}
+      lockHarness={false}
+    />,
+  );
+  const disabled = mounted.root.findAll(
+    n => n.props.testID === 'ContextItem' && n.props.disabled === true,
+  );
+  expect(disabled.length).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Max 10 Pinned models.')
+      .length,
+  ).toBeGreaterThan(0);
+  const unpin = mounted.root.findAll(
+    n =>
+      n.props.testID === 'ContextItem' &&
+      n.findAll(c => c.props.children === 'Unpin').length > 0,
+  );
+  expect(unpin.length).toBeGreaterThan(0);
+  expect(unpin.every(n => n.props.disabled !== true)).toBe(true);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {

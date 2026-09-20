@@ -59,7 +59,8 @@ const findContent = (nodes: ReactNode): React.ReactElement | undefined => {
 };
 
 /** Pull {title, onSelect, destructive} out of <Content><Item><ItemTitle>…
- * trees (Groups are flattened; Label becomes a disabled header row). */
+ * trees (Groups are flattened; Label becomes a disabled header row;
+ * disabled Items are omitted). */
 const collectItems = (children: ReactNode): ItemDef[] => {
   const content = findContent(children);
   if (content === undefined) return [];
@@ -72,6 +73,7 @@ const collectItems = (children: ReactNode): ItemDef[] => {
         children?: ReactNode;
       };
       if (name === 'GoMenuItem') {
+        if (props.disabled === true) continue;
         const titleEl = flatten(props.children).find(
           c => displayNameOf(c) === 'GoMenuItemTitle',
         );
