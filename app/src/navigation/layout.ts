@@ -30,6 +30,33 @@ export const SIDEBAR_FRACTION = 0.28;
 export const COMPOSER_MAX_WIDTH = 560;
 export const COMPOSER_H_GUTTER = 24;
 
+/** Equal side inset that centers a capped column in `containerWidth`. */
+export const columnSideGutter = (
+  containerWidth: number,
+  cap: number,
+): number => {
+  if (containerWidth <= 0 || cap <= 0) return 0;
+  return Math.max(0, (containerWidth - cap) / 2);
+};
+
+/** LegendList honors padding on `contentContainerStyle`; maxWidth does not
+ *  shrink virtualized rows. `railReserve` is extra right padding only when
+ *  the centered gutter is too small for the preview rail. */
+export const transcriptHorizontalPadding = (
+  listWidth: number,
+  contentMaxWidth: number | undefined,
+  railReserve: number,
+): { paddingLeft: number; paddingRight: number } => {
+  const gutter =
+    contentMaxWidth === undefined
+      ? 0
+      : columnSideGutter(listWidth, contentMaxWidth);
+  return {
+    paddingLeft: gutter,
+    paddingRight: Math.max(gutter, railReserve),
+  };
+};
+
 export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
   if (width < REGULAR_MIN_WIDTH) {
     return {
@@ -47,16 +74,14 @@ export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
     Math.max(SIDEBAR_MIN_WIDTH, Math.round(width * SIDEBAR_FRACTION)),
   );
   const detailWidth = width - (prefs.sidebarCollapsed ? 0 : sidebarWidth);
+  const detailInnerWidth = Math.max(0, detailWidth - COMPOSER_H_GUTTER * 2);
   return {
     mode: 'regular',
     sidebarVisible: !prefs.sidebarCollapsed,
     inspectorVisible: false,
     sidebarWidth,
     inspectorWidth,
-    measureCap: MEASURE_CAP,
-    composerMaxWidth: Math.min(
-      COMPOSER_MAX_WIDTH,
-      Math.max(0, detailWidth - COMPOSER_H_GUTTER * 2),
-    ),
+    measureCap: Math.min(MEASURE_CAP, detailInnerWidth),
+    composerMaxWidth: Math.min(COMPOSER_MAX_WIDTH, detailInnerWidth),
   };
 };

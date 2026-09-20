@@ -106,6 +106,7 @@ export function ChatBackgroundBlur({
             ? [styles.column, { maxWidth: blurWidth }]
             : StyleSheet.absoluteFill
         }
+        testID="chat-background-blur-column"
       >
         <FadeBlur
           fade={spec.fade}
@@ -122,11 +123,11 @@ const styles = StyleSheet.create({
   layer: {
     ...StyleSheet.absoluteFill,
     zIndex: 0,
+    alignItems: 'center',
   },
   column: {
     flex: 1,
     width: '100%',
-    alignSelf: 'center',
   },
   dim: {
     ...StyleSheet.absoluteFill,

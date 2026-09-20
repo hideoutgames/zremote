@@ -31,6 +31,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
+import { transcriptHorizontalPadding } from '../navigation/layout';
 import { useTheme } from '../theme';
 import { ContentEdgeMask, TOP_CHROME_FADE_BAND } from './TopChromeFade';
 import {
@@ -482,11 +483,14 @@ export const SessionTranscriptList = forwardRef<
           }}
           contentContainerStyle={[
             styles.listContent,
-            { paddingTop: insetsTop + 96 },
-            overflowing ? { paddingRight: RAIL_PADDING_RIGHT } : undefined,
-            contentMaxWidth !== undefined
-              ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-              : undefined,
+            {
+              paddingTop: insetsTop + 96,
+              ...transcriptHorizontalPadding(
+                listWidth,
+                contentMaxWidth,
+                overflowing ? RAIL_PADDING_RIGHT : 0,
+              ),
+            },
           ]}
           scrollIndicatorInsets={{ top: insetsTop + 96 }}
           showsVerticalScrollIndicator={!overflowing}
@@ -519,5 +523,4 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   listContent: { paddingBottom: 4 },
   empty: { fontSize: 15, textAlign: 'center', padding: 32 },
-  measureCap: { width: '100%', alignSelf: 'center' },
 });

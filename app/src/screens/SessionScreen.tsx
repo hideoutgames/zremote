@@ -167,7 +167,7 @@ export function SessionScreen({
   onCreated?: (chatId: string) => void;
   /** iPad split view: replaces the back chevron with a sidebar toggle. */
   leadingIcon?: string;
-  /** iPad: cap the transcript measure (~720pt), centered. */
+  /** iPad: cap the transcript measure (~720pt or detail − 48pt), centered. */
   contentMaxWidth?: number;
   /** iPad: cap the composer stack inside the detail column. */
   composerMaxWidth?: number;
@@ -969,15 +969,21 @@ function ActiveSessionScreen({
         ) : null}
       </KeyboardStickyView>
 
-      <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
+      <KeyboardStickyView
+        testID="session-composer"
+        offset={keyboardOffset}
+        style={styles.composer}
+      >
         <View
           ref={composerRef}
           onLayout={event => transcriptRef.current?.onComposerLayout(event)}
-          style={
+          testID="session-composer-column"
+          style={[
+            styles.measureCap,
             composerMaxWidth !== undefined
-              ? [styles.measureCap, { maxWidth: composerMaxWidth }]
-              : undefined
-          }
+              ? { maxWidth: composerMaxWidth }
+              : undefined,
+          ]}
         >
           <ComposerChromeRow
             queueCount={session.queue.length}
@@ -1256,7 +1262,14 @@ function ActiveSessionScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  composer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3 },
+  composer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 3,
+    alignItems: 'center',
+  },
   scrollDown: {
     position: 'absolute',
     left: 0,
@@ -1270,6 +1283,7 @@ const styles = StyleSheet.create({
   composeCenter: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 2,
   },
   header: {
@@ -1297,7 +1311,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     justifyContent: 'center',
   },
-  measureCap: { width: '100%', alignSelf: 'center' },
+  measureCap: { width: '100%' },
   headerRight: {
     minWidth: 44,
     minHeight: 44,
