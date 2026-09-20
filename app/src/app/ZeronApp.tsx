@@ -46,6 +46,7 @@ import { MenuDismissShield } from '../components/menus/MenuDismissShield';
 import { bindBackgroundFs } from '../zeron/state/newThreadBackground';
 import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
 import { bindRunFinishedHaptic } from '../notifications/runFinishedHaptic';
+import { bindWorkedDuration } from '../zeron/state/workedDuration';
 
 const log = createLog();
 
@@ -197,6 +198,12 @@ export function ZeronApp() {
   useEffect(() => {
     if (runtime === null) return;
     return bindRunFinishedHaptic();
+  }, [runtime]);
+
+  // Freeze working elapsed onto the last assistant bubble after a finish.
+  useEffect(() => {
+    if (runtime === null) return;
+    return bindWorkedDuration();
   }, [runtime]);
 
   useEffect(() => {

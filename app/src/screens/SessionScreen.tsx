@@ -53,6 +53,12 @@ import {
 } from '../zeron/state/uiPrefs';
 import { sessionTitle } from '../zeron/state/sessionTruth';
 import {
+  bindPendingWorkedDuration,
+  workedDurationStore,
+  type FrozenWorkedDuration,
+} from '../zeron/state/workedDuration';
+import { formatWorkedDurationRange } from '../zeron/state/workingElapsed';
+import {
   setChatArchived,
   setChatConfig,
   renameChat,
@@ -138,6 +144,19 @@ import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 
 const log = createLog();
+
+const workedForCaption = (
+  item: MessageEntry,
+  hide: boolean,
+  byId: Record<string, FrozenWorkedDuration>,
+): string | undefined => {
+  if (hide) return undefined;
+  if (item.status !== 'complete' && item.status !== 'aborted') return undefined;
+  const frozen = byId[item.id];
+  return frozen === undefined
+    ? undefined
+    : formatWorkedDurationRange(frozen.startedAt, frozen.endedAt);
+};
 
 const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({
@@ -347,6 +366,11 @@ function ActiveSessionScreen({
     phase === 'queuedLocally' ||
     phase === 'synchronized';
   const lastEntryId = entries[entries.length - 1]?.id;
+  const workedByMessage = useStore(workedDurationStore, s => s.byMessageId);
+
+  useEffect(() => {
+    bindPendingWorkedDuration(chatId);
+  }, [chatId, entries]);
 
   // Local send/steer ids play SlideInDown once. Historical rows (thread
   // open, list recycle) must not — UserMessage entering is mount-time.
@@ -400,6 +424,11 @@ function ActiveSessionScreen({
           showWorking={agentWorking && item.id === lastEntryId}
           workingChatId={chatId}
           workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+          workedFor={workedForCaption(
+            item,
+            agentWorking && item.id === lastEntryId,
+            workedByMessage,
+          )}
         />
       ),
     [
@@ -412,6 +441,7 @@ function ActiveSessionScreen({
       lastEntryId,
       row?.startedAt,
       row?.updatedAt,
+      workedByMessage,
     ],
   );
 
