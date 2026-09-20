@@ -165,6 +165,7 @@ jest.mock('zeego/context-menu', () => ({
   Auxiliary: () => null,
   Separator: () => null,
   Group: menuComponent('ContextGroup'),
+  Label: menuText,
 }));
 
 // @legendapp/list: render via FlatList (Home / Terminal).

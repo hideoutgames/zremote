@@ -16,7 +16,10 @@ import {
   BUBBLE_SHADOW_OPACITY,
 } from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
-import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
+import {
+  formatMessageSentAt,
+  messageCopyContent,
+} from '../src/components/transcript/MessageCopyMenu';
 import { PlanBadge } from '../src/components/PlanBadge';
 import { PlanCard } from '../src/components/transcript/PlanCard';
 import {
@@ -594,9 +597,44 @@ test('InputCard shows the question, the chosen labels, and Answered', async () =
   expect(question.props.numberOfLines).toBeUndefined();
 });
 
-test('messageCopyContent is a zeego Content element', () => {
-  const el = messageCopyContent('hello from the phone');
+test('messageCopyContent is a zeego Content element with a sent-at Label', () => {
+  const el = messageCopyContent('hello from the phone', userEntry.createdAt);
   expect(el.type).toBe(ContextMenu.Content);
+  const kids = React.Children.toArray(
+    (el.props as { children?: React.ReactNode }).children,
+  );
+  const label = kids.find(
+    k => React.isValidElement(k) && k.type === ContextMenu.Label,
+  ) as React.ReactElement<{ children?: React.ReactNode }>;
+  expect(label).toBeDefined();
+  expect(label.props.children).toBe(formatMessageSentAt(userEntry.createdAt));
+});
+
+test('messageCopyContent omits Label when createdAt is missing', () => {
+  const el = messageCopyContent('hello from the phone', 0);
+  const kids = React.Children.toArray(
+    (el.props as { children?: React.ReactNode }).children,
+  );
+  expect(
+    kids.some(k => React.isValidElement(k) && k.type === ContextMenu.Label),
+  ).toBe(false);
+});
+
+test('UserMessage and AssistantMessage put createdAt in the copy menu', async () => {
+  let userTree: TestRenderer.ReactTestRenderer | undefined;
+  let assistantTree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    userTree = TestRenderer.create(<UserMessage entry={userEntry} />);
+    assistantTree = TestRenderer.create(
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
+    );
+  });
+  expect(textOf(userTree!.root)).toContain(
+    formatMessageSentAt(userEntry.createdAt),
+  );
+  expect(textOf(assistantTree!.root)).toContain(
+    formatMessageSentAt(assistantEntry.createdAt),
+  );
 });
 
 const enteringViews = (root: TestRenderer.ReactTestInstance) =>
