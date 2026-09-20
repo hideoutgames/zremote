@@ -239,7 +239,6 @@ test('dragging inside a tick keeps scrubbing with progress', async () => {
   const itemSize = railItemSize(items.length, RAIL_HEIGHT);
   const y0 = stackTop() + itemSize * 0.2;
   const y1 = stackTop() + itemSize * 0.7;
-  const span = itemSize * items.length;
 
   await act(async () => {
     track.props.onResponderGrant(touch(y0));

@@ -29,6 +29,7 @@ import {
   COMPOSER_BOTTOM_FADE_BAND,
 } from '../src/components/TopChromeFade';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
+import { railProgressAtY } from '../src/components/agentsKit/messagePreview';
 
 const flashMock = jest.requireMock('@shopify/flash-list') as {
   __scrollToEnd: jest.Mock;
@@ -858,6 +859,9 @@ test('dragging the rail scrubs without animation once follow is off', async () =
   await act(async () => {
     track.props.onResponderMove(touch(1));
     track.props.onResponderMove(touch(2));
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => resolve());
+    });
   });
   expect(scrollToIndex).not.toHaveBeenCalled();
   expect(scrollToOffset).toHaveBeenCalledWith({
@@ -903,10 +907,13 @@ test('dragging inside a tick still scrolls proportionally', async () => {
 
   await act(async () => {
     track.props.onResponderMove(touchAt(y1));
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => resolve());
+    });
   });
   expect(scrollToIndex).not.toHaveBeenCalled();
   expect(scrollToOffset).toHaveBeenCalledWith({
-    offset: ((itemSize * 0.8) / (itemSize * 4)) * maxOffset,
+    offset: railProgressAtY(y1, 4, itemSize, stackTop) * maxOffset,
     animated: false,
   });
 
