@@ -1,5 +1,5 @@
-// Pinned local-model catalog. Production URLs/checksums stay unpinned
-// (`productionPinned: false`) until a Mac spike measures real artifacts.
+// Pinned local-model catalog. Artifacts are sha256-verified after download;
+// update `bytes` and `sha256` together when bumping a revision.
 
 import type { VoiceModelCatalogEntry } from './types';
 
@@ -17,12 +17,12 @@ export const VOICE_MODEL_CATALOG: readonly VoiceModelCatalogEntry[] = [
     revision: 'whisper.cpp-ggml-tiny',
     url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
     bytes: 77_691_713,
-    sha256: '',
+    sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21',
     license: 'MIT',
     runtime: 'whisper',
     requiredRuntimeVersion: '1',
     capabilities: { supportsCustomPrompt: false, autoLanguage: true },
-    productionPinned: false,
+    productionPinned: true,
   },
   {
     id: WHISPER_BASE_ID,
@@ -33,12 +33,12 @@ export const VOICE_MODEL_CATALOG: readonly VoiceModelCatalogEntry[] = [
     revision: 'whisper.cpp-ggml-base',
     url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
     bytes: 147_951_465,
-    sha256: '',
+    sha256: '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe',
     license: 'MIT',
     runtime: 'whisper',
     requiredRuntimeVersion: '1',
     capabilities: { supportsCustomPrompt: false, autoLanguage: true },
-    productionPinned: false,
+    productionPinned: true,
   },
   {
     id: CLEANUP_QWEN_ID,
@@ -47,13 +47,13 @@ export const VOICE_MODEL_CATALOG: readonly VoiceModelCatalogEntry[] = [
     description: 'Optional on-device cleanup for filler and self-corrections.',
     revision: 'qwen2.5-0.5b-instruct-q4_k_m',
     url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
-    bytes: 397_999_000,
-    sha256: '',
+    bytes: 491_400_032,
+    sha256: '74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db',
     license: 'Apache-2.0',
     runtime: 'llama',
     requiredRuntimeVersion: '1',
     capabilities: { supportsCustomPrompt: true, autoLanguage: false },
-    productionPinned: false,
+    productionPinned: true,
   },
 ];
 

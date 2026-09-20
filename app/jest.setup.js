@@ -314,10 +314,37 @@ jest.mock('expo-file-system', () => ({
   },
   Paths: { document: { uri: 'file:///docs' }, cache: { uri: 'file:///cache' } },
 }));
+jest.mock('expo-file-system/legacy', () => ({
+  createDownloadResumable: jest.fn(() => ({
+    downloadAsync: jest.fn(() => Promise.resolve({})),
+    resumeAsync: jest.fn(() => Promise.resolve({})),
+    pauseAsync: jest.fn(() => Promise.resolve({})),
+    savable: jest.fn(() => ({})),
+  })),
+}));
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(() => Promise.resolve({ canceled: true })),
 }));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve()),
+}));
+
+// Voice engines are native-only; the voice resolvers probe these lazily and
+// must never reach a real module under Jest.
+jest.mock('expo-audio', () => ({
+  AudioQuality: { MAX: 127 },
+  IOSOutputFormat: { LINEARPCM: 'lpcm' },
+  requestRecordingPermissionsAsync: jest.fn(() =>
+    Promise.resolve({ granted: false }),
+  ),
+  setAudioModeAsync: jest.fn(() => Promise.resolve()),
+  setIsAudioActiveAsync: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('expo-audio/build/AudioModule', () => ({
+  __esModule: true,
+  default: { AudioRecorder: jest.fn() },
+}));
+jest.mock('llama.rn', () => ({
+  initLlama: jest.fn(() => Promise.reject(new Error('jest'))),
 }));

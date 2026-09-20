@@ -19,7 +19,7 @@ import {
   formatCompactTokens,
   formatContextPercent,
   resolveContextUsage,
-} from './contextUsage';
+} from './contextUsageModel';
 
 const CHIP_RING = 16;
 const SHEET_RING = 120;

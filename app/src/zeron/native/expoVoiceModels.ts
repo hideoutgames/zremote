@@ -2,7 +2,8 @@
 // Weights stay out of account-scoped uiPrefs and CRDT state.
 
 import { Directory, File, Paths } from 'expo-file-system';
-import * as Crypto from 'expo-crypto';
+import * as LegacyFS from 'expo-file-system/legacy';
+import { sha256 } from 'js-sha256';
 import {
   VoiceModelManager,
   bindVoiceModelManager,
@@ -92,36 +93,83 @@ export const expoVoiceModelFs: VoiceModelFs = {
 
 export const expoVoiceHasher: VoiceHasher = {
   async sha256File(path) {
-    // expo-crypto hashes a whole ArrayBuffer. Production verify must hash
-    // natively in chunks — this path is unused until artifacts are pinned.
-    const bytes = await expoVoiceModelFs.readBytes(path);
-    if (bytes === undefined) throw new Error('missing model file');
-    const digest = await Crypto.digest(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      bytes as BufferSource,
-    );
-    return [...new Uint8Array(digest)]
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // Streamed SHA-256 — model files are hundreds of MB, so the file is
+    // never materialized as a single ArrayBuffer.
+    const file = toFile(path);
+    if (!file.exists) throw new Error('missing model file');
+    const hash = sha256.create();
+    const reader = file.stream().getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value !== undefined) hash.update(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return hash.hex();
   },
 };
+
+const resumeStatePath = (dest: string): string => `${dest}.resume`;
 
 export const expoVoiceDownloader: VoiceDownloader = {
   async download(url, dest, opts) {
     if (opts.signal.aborted) throw new Error('aborted');
-    const res = await fetch(url, { signal: opts.signal });
-    if (!res.ok) throw new Error(`download failed (${res.status})`);
-    const total = Number(res.headers.get('content-length') ?? 0);
-    const buf = new Uint8Array(await res.arrayBuffer());
+    // DownloadResumable streams to disk and can resume via persisted
+    // resumeData — no whole-file ArrayBuffer or Range-append needed.
+    let resumeData: string | undefined;
     if (opts.existingBytes > 0) {
-      await expoVoiceModelFs.appendBytes(dest, buf);
+      const saved = await expoVoiceModelFs.readText(resumeStatePath(dest));
+      if (saved !== undefined) {
+        try {
+          resumeData = (JSON.parse(saved) as { resumeData?: string })
+            .resumeData;
+        } catch {
+          resumeData = undefined;
+        }
+      }
+      if (resumeData === undefined) {
+        // Partial file without session state can't be resumed natively.
+        await expoVoiceModelFs.delete(dest);
+      }
     } else {
-      await expoVoiceModelFs.writeBytes(dest, buf);
+      await expoVoiceModelFs.delete(dest);
     }
-    opts.onProgress(
-      opts.existingBytes + buf.byteLength,
-      total || buf.byteLength,
+    const task = LegacyFS.createDownloadResumable(
+      url,
+      dest,
+      {},
+      p => {
+        opts.onProgress(p.totalBytesWritten, p.totalBytesExpectedToWrite);
+      },
+      resumeData,
     );
+    const onAbort = () => {
+      // Pause (not cancel) so the session yields resumable bytes; the
+      // rejection still propagates to the manager as an abort.
+      task
+        .pauseAsync()
+        .then(async state => {
+          if (state?.resumeData !== undefined) {
+            await expoVoiceModelFs.writeText(
+              resumeStatePath(dest),
+              JSON.stringify(state),
+            );
+          }
+        })
+        .catch(() => {});
+    };
+    opts.signal.addEventListener('abort', onAbort);
+    try {
+      await (resumeData !== undefined
+        ? task.resumeAsync()
+        : task.downloadAsync());
+      await expoVoiceModelFs.delete(resumeStatePath(dest));
+    } finally {
+      opts.signal.removeEventListener('abort', onAbort);
+    }
   },
 };
 

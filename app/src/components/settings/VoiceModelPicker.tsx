@@ -33,6 +33,86 @@ const errorCopy = (error?: string): string => {
   return t('settings.voiceNotDownloaded');
 };
 
+function RowActions({
+  model,
+  row,
+  selected,
+  onDelete,
+}: {
+  model: VoiceModelCatalogEntry;
+  row: VoiceModelRowState;
+  selected: string | null;
+  onDelete: (model: VoiceModelCatalogEntry) => void;
+}) {
+  const theme = useTheme();
+  const installed = row.state === 'installed';
+  const downloading = row.state === 'downloading' || row.state === 'verifying';
+  const canDownload = !installed && !downloading && model.productionPinned;
+
+  // One action per row-state.
+  const action:
+    | { label: string; color: string; onPress: () => void; testID: string }
+    | undefined =
+    row.state === 'failed'
+      ? {
+          label: t('settings.voiceRetry'),
+          color: theme.accent,
+          onPress: () => {
+            const manager = getVoiceModelManager();
+            if (manager === undefined) return;
+            manager.download(model.id).catch(() => {});
+          },
+          testID: `settings-model-download-${model.id}`,
+        }
+      : installed
+      ? {
+          label: t('settings.voiceDelete'),
+          color: theme.danger,
+          onPress: () => onDelete(model),
+          testID: `settings-model-delete-${model.id}`,
+        }
+      : downloading
+      ? {
+          label: t('common.cancel'),
+          color: theme.accent,
+          onPress: () => getVoiceModelManager()?.cancelDownload(model.id),
+          testID: `settings-model-cancel-${model.id}`,
+        }
+      : canDownload
+      ? {
+          label: t('settings.voiceDownload'),
+          color: theme.accent,
+          onPress: () => {
+            const manager = getVoiceModelManager();
+            if (manager === undefined) return;
+            manager.download(model.id).catch(() => {});
+          },
+          testID: `settings-model-download-${model.id}`,
+        }
+      : undefined;
+
+  return (
+    <View style={styles.actions}>
+      {action !== undefined ? (
+        <Pressable
+          onPress={action.onPress}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
+          testID={action.testID}
+        >
+          <Text style={[styles.action, { color: action.color }]}>
+            {action.label}
+          </Text>
+        </Pressable>
+      ) : null}
+      {installed && selected === model.id ? (
+        <Icon name="checkmark" size={16} color={theme.accent} />
+      ) : null}
+    </View>
+  );
+}
+
 const subtitleFor = (
   model: VoiceModelCatalogEntry,
   row: VoiceModelRowState,
@@ -64,12 +144,6 @@ export function VoiceModelPicker({
   const models =
     kind === 'transcription' ? transcriptionCatalog() : cleanupCatalog();
   const selected = kind === 'transcription' ? selectedVoice : selectedCleanup;
-
-  const startDownload = (id: string) => {
-    const manager = getVoiceModelManager();
-    if (manager === undefined) return;
-    manager.download(id).catch(() => {});
-  };
 
   const confirmDelete = useCallback(
     (model: VoiceModelCatalogEntry) => {
@@ -140,63 +214,13 @@ export function VoiceModelPicker({
             progress: 0,
           };
           const installed = row.state === 'installed';
-          const downloading =
-            row.state === 'downloading' || row.state === 'verifying';
-          const canDownload =
-            !installed && !downloading && model.productionPinned;
           const trailing = (
-            <View style={styles.actions}>
-              {canDownload || row.state === 'failed' ? (
-                <Pressable
-                  onPress={() => startDownload(model.id)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    row.state === 'failed'
-                      ? t('settings.voiceRetry')
-                      : t('settings.voiceDownload')
-                  }
-                  testID={`settings-model-download-${model.id}`}
-                >
-                  <Text style={[styles.action, { color: theme.accent }]}>
-                    {row.state === 'failed'
-                      ? t('settings.voiceRetry')
-                      : t('settings.voiceDownload')}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {downloading ? (
-                <Pressable
-                  onPress={() =>
-                    getVoiceModelManager()?.cancelDownload(model.id)
-                  }
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.cancel')}
-                  testID={`settings-model-cancel-${model.id}`}
-                >
-                  <Text style={[styles.action, { color: theme.accent }]}>
-                    {t('common.cancel')}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {installed ? (
-                <Pressable
-                  onPress={() => confirmDelete(model)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('settings.voiceDelete')}
-                  testID={`settings-model-delete-${model.id}`}
-                >
-                  <Text style={[styles.action, { color: theme.danger }]}>
-                    {t('settings.voiceDelete')}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {installed && selected === model.id ? (
-                <Icon name="checkmark" size={16} color={theme.accent} />
-              ) : null}
-            </View>
+            <RowActions
+              model={model}
+              row={row}
+              selected={selected}
+              onDelete={confirmDelete}
+            />
           );
           return (
             <SettingsRow

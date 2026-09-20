@@ -121,6 +121,11 @@ export class VoiceModelManager {
     const model = this.find(id);
     if (model === undefined) throw new Error('unknown model');
     if (this.jobs.has(id)) return;
+    if (
+      this.inventory.has(id) &&
+      (await this.deps.fs.exists(this.modelPath(id)))
+    )
+      return;
     if (!model.productionPinned || !shaOk(model.sha256)) {
       this.patch(id, {
         state: 'failed',
@@ -146,17 +151,20 @@ export class VoiceModelManager {
       const existing = (await this.deps.fs.exists(tmp))
         ? await this.deps.fs.size(tmp)
         : 0;
-      await this.deps.downloader.download(model.url, tmp, {
-        onProgress: (received, total) => {
-          const denom = total > 0 ? total : model.bytes;
-          this.patch(id, {
-            state: 'downloading',
-            progress: denom > 0 ? Math.min(1, received / denom) : 0,
-          });
-        },
-        signal: abort.signal,
-        existingBytes: existing,
-      });
+      // A fully-downloaded .part goes straight to verify — asking for
+      // `bytes=<size>-` returns 416 and would fail an otherwise valid resume.
+      if (existing < model.bytes)
+        await this.deps.downloader.download(model.url, tmp, {
+          onProgress: (received, total) => {
+            const denom = total > 0 ? total : model.bytes;
+            this.patch(id, {
+              state: 'downloading',
+              progress: denom > 0 ? Math.min(1, received / denom) : 0,
+            });
+          },
+          signal: abort.signal,
+          existingBytes: existing,
+        });
       this.patch(id, { state: 'verifying', progress: 1 });
       const digest = await this.deps.hasher.sha256File(tmp);
       if (digest.toLowerCase() !== model.sha256.toLowerCase()) {
@@ -290,6 +298,32 @@ export class VoiceModelManager {
           error: 'interrupted',
         });
       } else if (!this.inventory.has(model.id)) {
+        // The process can die between `move(tmp, dest)` and `saveInventory`;
+        // adopt the orphaned weight if it verifies, otherwise reclaim it.
+        const dest = this.modelPath(model.id);
+        if (await this.deps.fs.exists(dest)) {
+          let ok = false;
+          try {
+            ok =
+              (await this.deps.hasher.sha256File(dest)).toLowerCase() ===
+              model.sha256.toLowerCase();
+          } catch {
+            ok = false;
+          }
+          if (ok) {
+            this.inventory.set(model.id, {
+              id: model.id,
+              revision: model.revision,
+              bytes: model.bytes,
+              sha256: model.sha256,
+              installedAt: (this.deps.now ?? Date.now)(),
+            });
+            await this.saveInventory();
+            this.patch(model.id, { state: 'installed', progress: 1 });
+            continue;
+          }
+          await this.deps.fs.delete(dest);
+        }
         this.patch(model.id, { state: 'notDownloaded', progress: 0 });
       }
     }

@@ -24,6 +24,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(process.env.APPLE_TEAM_ID !== undefined
       ? { appleTeamId: process.env.APPLE_TEAM_ID }
       : {}),
+    // expo-widgets reads this (not Podfile.properties.json) for the
+    // widgets extension target; keep it in sync with build-properties.
+    deploymentTarget: '17.0',
     supportsTablet: true,
     requireFullScreen: false,
     associatedDomains: [`applinks:${edgeHost}`],

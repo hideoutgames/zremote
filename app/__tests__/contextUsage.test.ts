@@ -7,7 +7,7 @@ import {
   formatCompactTokens,
   formatContextPercent,
   resolveContextUsage,
-} from '../src/components/agentsKit/contextUsage';
+} from '../src/components/agentsKit/contextUsageModel';
 
 test('resolveContextUsage needs a window greater than zero', () => {
   expect(resolveContextUsage(undefined)).toBeUndefined();
