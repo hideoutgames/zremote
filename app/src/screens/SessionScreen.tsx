@@ -1026,7 +1026,7 @@ function ActiveSessionScreen({
               const picked = selectionForModel(
                 catalogModel,
                 siblings,
-                selectableHarnesses(chat.deviceId).find(row => row.id === h)
+                selectableHarnesses(chat.deviceId).find(hRow => hRow.id === h)
                   ?.reasoningLevels,
                 stored,
                 live,

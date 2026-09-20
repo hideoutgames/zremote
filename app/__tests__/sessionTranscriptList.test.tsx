@@ -798,7 +798,7 @@ test('dragging the rail scrubs without animation once follow is off', async () =
   scrollToIndex.mockClear();
 
   const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
-  const railHeight = 844 - (47 + 96);
+  const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
   const itemSize = 14;
   const stackTop = (railHeight - itemSize * 4) / 2;
   const touch = (index: number) => ({
