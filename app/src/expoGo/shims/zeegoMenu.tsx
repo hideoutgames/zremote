@@ -2,7 +2,7 @@
 // zeego (dropdown-menu / context-menu) needs @react-native-menu/menu, which
 // is NOT bundled in Expo Go. This ActionSheetIOS-based fallback implements
 // the subset the app uses: Root, Trigger, Content, Item, ItemTitle,
-// ItemIcon, Group, Separator, Label. Dropdown Trigger opens on press;
+// ItemIcon, ItemImage, Group, Separator, Label. Dropdown Trigger opens on press;
 // ContextMenu Trigger opens on long-press.
 
 import React, {
@@ -230,6 +230,8 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
 
   const ItemIcon = () => null;
   ItemIcon.displayName = 'GoMenuItemIcon';
+  const ItemImage = () => null;
+  ItemImage.displayName = 'GoMenuItemImage';
   const ItemSubtitle = () => null;
   ItemSubtitle.displayName = 'GoMenuItemSubtitle';
   const Group = ({ children }: { children?: ReactNode }) => <>{children}</>;
@@ -248,6 +250,7 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
     Item,
     ItemTitle,
     ItemIcon,
+    ItemImage,
     ItemSubtitle,
     Group,
     Separator,

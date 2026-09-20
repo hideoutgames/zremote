@@ -735,7 +735,7 @@ function ActiveSessionScreen({
       modelsFor(hostDeviceId, chat.config.harness).length === 0
     )
       loadModels(runtime, hostDeviceId, chat.config.harness).catch(() => {});
-  }, [runtime, hostDeviceId, chat?.config?.harness]);
+  }, [runtime, hostDeviceId, chat?.config?.harness, catalogTick]);
 
   useCheckoutWatches(
     runtime,
