@@ -131,7 +131,6 @@ import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { createLog } from '../zeron/log';
-import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 import { ComposerStickyBottom } from '../components/ComposerChromeAnim';
 import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
@@ -726,7 +725,6 @@ function ActiveSessionScreen({
         { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
       ]}
     >
-      <ChatBackgroundBlur contentMaxWidth={contentMaxWidth} />
       <SessionTranscriptList
         key={openKey}
         ref={transcriptRef}

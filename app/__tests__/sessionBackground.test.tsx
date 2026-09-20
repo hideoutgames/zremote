@@ -7,11 +7,8 @@ import { HomeScreen } from '../src/screens/HomeScreen';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import { FadeBlur } from '../src/components/FadeBlur';
 import {
-  COMPACT_WALLPAPER_BLUR,
   COMPACT_THREADS_INTENSITY,
-  REGULAR_CHAT_COLUMN_EDGE,
   REGULAR_THREADS_INTENSITY,
-  chatBlurMaxWidth,
   wallpaperBlurFor,
 } from '../src/components/SessionBackgroundBlur';
 import {
@@ -133,7 +130,7 @@ test('active session keeps a content mask and no top overlay fade', async () => 
   });
   const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
-  expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'chat-background-blur')).toBe(0);
   expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
   expect(count(mounted.root, 'top-chrome-fade')).toBe(0);
   expect(count(mounted.root, 'bottom-chrome-fade')).toBe(0);
@@ -226,33 +223,6 @@ test('iPad session composer parent centers a max-width column', async () => {
   expect(innerStyle.alignSelf).not.toBe('center');
 });
 
-test('chat blur column is parent-centered on iPad', async () => {
-  workspaceStore.setState({
-    chats: [
-      {
-        id: 'c1',
-        deviceId: 'host1',
-        archived: false,
-        createdAt: Date.now(),
-        title: 'Live thread',
-      },
-    ],
-  });
-  const mounted = await render(
-    <SessionScreen chatId="c1" onBack={() => {}} contentMaxWidth={720} />,
-  );
-  const blur = mounted.root.findByProps({ testID: 'chat-background-blur' });
-  const layerStyle = StyleSheet.flatten(blur.props.style);
-  expect(layerStyle.alignItems).toBe('center');
-  const column = mounted.root.findByProps({
-    testID: 'chat-background-blur-column',
-  });
-  const columnStyle = StyleSheet.flatten(column.props.style);
-  expect(columnStyle.width).toBe('100%');
-  expect(columnStyle.alignSelf).not.toBe('center');
-  expect(columnStyle.maxWidth).toBe(chatBlurMaxWidth(720));
-});
-
 test('no artwork means no wallpaper or blur layers', async () => {
   uiPrefsStore.setState({
     newThreadComposerBackground: undefined,
@@ -264,24 +234,16 @@ test('no artwork means no wallpaper or blur layers', async () => {
 });
 
 test('compact wallpaper blur is full-bleed; iPad sidebar is unmasked', () => {
-  expect(wallpaperBlurFor(390, 'threads')).toEqual({
+  expect(wallpaperBlurFor(390)).toEqual({
     intensity: COMPACT_THREADS_INTENSITY,
     fade: 'none',
   });
   expect(COMPACT_THREADS_INTENSITY).toBe(120);
   expect(REGULAR_THREADS_INTENSITY).toBe(90);
-  expect(wallpaperBlurFor(390, 'chat', false)).toEqual({
-    intensity: COMPACT_WALLPAPER_BLUR,
-    fade: 'none',
-  });
-  expect(wallpaperBlurFor(1024, 'threads')).toEqual({
+  expect(wallpaperBlurFor(1024)).toEqual({
     intensity: REGULAR_THREADS_INTENSITY,
     fade: 'none',
   });
-  expect(wallpaperBlurFor(1024, 'chat', true).fadeHold).toBe(
-    REGULAR_CHAT_COLUMN_EDGE,
-  );
-  expect(chatBlurMaxWidth(720)).toBeGreaterThan(720);
 });
 
 test('home list uses full-bleed regular blur at the 750pt test window', async () => {

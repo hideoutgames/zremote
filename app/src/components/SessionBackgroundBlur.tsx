@@ -1,8 +1,8 @@
-// Soft wallpaper blur behind the threads list and the existing-chat
-// content column. Compact (iPhone) is full-bleed so the image is frosted
-// everywhere except new-thread compose, which does not mount this.
-// Regular iPad sidebar is fully frosted (no edge fade) with a darken
-// overlay; chat uses a wide column so bubbles sit on blur, not sharp art.
+// Soft wallpaper blur behind the threads list. Compact (iPhone) is
+// full-bleed so the image is frosted on the list. Regular iPad sidebar
+// is fully frosted (no edge fade) with a darken overlay. Existing-chat
+// sessions keep the wallpaper sharp under bubbles; compose does not
+// mount this.
 
 import React from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -10,15 +10,9 @@ import { FadeBlur } from './FadeBlur';
 import { useNewThreadComposerBackground } from '../zeron/state/uiPrefs';
 import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 
-export const COMPACT_WALLPAPER_BLUR = 80;
 export const COMPACT_THREADS_INTENSITY = 120;
 export const REGULAR_THREADS_INTENSITY = 90;
-export const REGULAR_CHAT_INTENSITY = 36;
-export const REGULAR_CHAT_COLUMN_EDGE = 0.1;
-export const REGULAR_CHAT_VIGNETTE_EDGE = 0.08;
 export const SIDEBAR_DARKEN = 'rgba(0,0,0,0.35)';
-/** Extra width beyond the transcript measure cap so iPad blur covers bubbles. */
-export const CHAT_BLUR_EXTRA = 280;
 
 export type WallpaperBlurSpec = {
   intensity: number;
@@ -26,43 +20,24 @@ export type WallpaperBlurSpec = {
   fadeHold?: number;
 };
 
-export const wallpaperBlurFor = (
-  width: number,
-  kind: 'threads' | 'chat',
-  column = false,
-): WallpaperBlurSpec => {
+export const wallpaperBlurFor = (width: number): WallpaperBlurSpec => {
   if (width < REGULAR_MIN_WIDTH) {
     return {
-      intensity:
-        kind === 'threads' ? COMPACT_THREADS_INTENSITY : COMPACT_WALLPAPER_BLUR,
-      fade: 'none',
-    };
-  }
-  if (kind === 'threads') {
-    return {
-      intensity: REGULAR_THREADS_INTENSITY,
+      intensity: COMPACT_THREADS_INTENSITY,
       fade: 'none',
     };
   }
   return {
-    intensity: REGULAR_CHAT_INTENSITY,
-    fade: 'horizontal',
-    fadeHold: column ? REGULAR_CHAT_COLUMN_EDGE : REGULAR_CHAT_VIGNETTE_EDGE,
+    intensity: REGULAR_THREADS_INTENSITY,
+    fade: 'none',
   };
 };
-
-export const chatBlurMaxWidth = (
-  contentMaxWidth?: number,
-): number | undefined =>
-  contentMaxWidth === undefined
-    ? undefined
-    : contentMaxWidth + CHAT_BLUR_EXTRA * 2;
 
 export function ThreadsBackgroundBlur() {
   const background = useNewThreadComposerBackground();
   const { width } = useWindowDimensions();
   if (background === undefined) return null;
-  const spec = wallpaperBlurFor(width, 'threads');
+  const spec = wallpaperBlurFor(width);
   const dim = width >= REGULAR_MIN_WIDTH;
   return (
     <View
@@ -87,52 +62,11 @@ export function ThreadsBackgroundBlur() {
   );
 }
 
-export function ChatBackgroundBlur({
-  contentMaxWidth,
-}: {
-  contentMaxWidth?: number;
-}) {
-  const background = useNewThreadComposerBackground();
-  const { width } = useWindowDimensions();
-  if (background === undefined) return null;
-  const column = contentMaxWidth !== undefined;
-  const spec = wallpaperBlurFor(width, 'chat', column);
-  const blurWidth = chatBlurMaxWidth(contentMaxWidth);
-  const paddedColumn = column && spec.fade === 'horizontal';
-  return (
-    <View
-      pointerEvents="none"
-      testID="chat-background-blur"
-      style={styles.layer}
-    >
-      <View
-        style={
-          paddedColumn
-            ? [styles.column, { maxWidth: blurWidth }]
-            : StyleSheet.absoluteFill
-        }
-        testID="chat-background-blur-column"
-      >
-        <FadeBlur
-          fade={spec.fade}
-          fadeHold={spec.fadeHold}
-          intensity={spec.intensity}
-          style={StyleSheet.absoluteFill}
-        />
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   layer: {
     ...StyleSheet.absoluteFill,
     zIndex: 0,
     alignItems: 'center',
-  },
-  column: {
-    flex: 1,
-    width: '100%',
   },
   dim: {
     ...StyleSheet.absoluteFill,
