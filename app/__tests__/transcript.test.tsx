@@ -6,6 +6,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { Text, View } from 'react-native';
 import {
   UserMessage,
+  USER_BUBBLE_MAX_WIDTH,
   USER_BUBBLE_TEXT_END_PAD,
 } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
@@ -380,21 +381,56 @@ test('UserMessage plays send entering when animateEnter is set', async () => {
   expect(onEntered).toHaveBeenCalledWith(userEntry.id);
 });
 
+const flatStyle = (style: unknown): Record<string, unknown>[] => {
+  if (style == null) return [];
+  if (Array.isArray(style)) return style.flatMap(flatStyle);
+  if (typeof style === 'object') return [style as Record<string, unknown>];
+  return [];
+};
+
 test('UserMessage shows the sent text inside a bubble sized to content', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(<UserMessage entry={userEntry} />);
   });
   expect(textOf(tree!.root)).toContain('hello from the phone');
+  const row = tree!.root.findByProps({ testID: 'user-message' });
+  const cap = tree!.root.findByProps({ testID: 'user-bubble-cap' });
   const bubble = tree!.root.findByProps({ testID: 'user-bubble' });
-  const style = Array.isArray(bubble.props.style)
-    ? bubble.props.style.flat()
-    : [bubble.props.style];
-  expect(style.some(s => s?.maxWidth === '82%')).toBe(true);
-  expect(style.some(s => s?.width === '100%')).toBe(false);
+  expect(flatStyle(row.props.style).some(s => s.width === '100%')).toBe(true);
+  expect(row.findByProps({ testID: 'user-bubble-cap' })).toBeTruthy();
+  expect(
+    flatStyle(cap.props.style).some(s => s.maxWidth === USER_BUBBLE_MAX_WIDTH),
+  ).toBe(true);
+  expect(flatStyle(bubble.props.style).some(s => s.maxWidth === '82%')).toBe(
+    false,
+  );
+  expect(flatStyle(bubble.props.style).some(s => s.width === '100%')).toBe(
+    false,
+  );
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+});
+
+test('UserMessage keeps the full prompt in the bubble Text', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [{ kind: 'text', id: 't0', text: 'Test your skills' }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  const prompt = tree!.root.findAllByType(Text).find(n => {
+    const c = n.props.children;
+    return c === 'Test your skills';
+  });
+  expect(prompt).toBeDefined();
+  expect(prompt!.props.numberOfLines).toBeUndefined();
+  expect(flatStyle(prompt!.props.style).some(s => s.flexShrink === 0)).toBe(
+    false,
+  );
 });
 
 test('UserMessage text keeps trailing optical pad so glyphs are not clipped', async () => {
