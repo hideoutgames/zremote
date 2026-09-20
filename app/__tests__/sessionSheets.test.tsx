@@ -10,10 +10,7 @@ import { SessionScreen } from '../src/screens/SessionScreen';
 import { SessionSheet } from '../src/components/SessionSheet';
 import { FileDiff } from '../src/components/agentsKit/FileDiff';
 import { parseUnified } from '../src/zeron/diff/parseUnified';
-import {
-  TerminalScreen,
-  KEY_BAR_KEYBOARD_LIFT,
-} from '../src/screens/TerminalScreen';
+import { TerminalScreen } from '../src/screens/TerminalScreen';
 import {
   AppServicesContext,
   type AppServices,
@@ -537,20 +534,33 @@ const keyBarMargin = (root: TestRenderer.ReactTestInstance) =>
     root.findByProps({ testID: 'terminal-key-bar' }).props.style,
   ).marginBottom;
 
-test('TerminalScreen key bar sits 8pt above the sheet when the keyboard is down', async () => {
+test('TerminalScreen key bar sits 8pt above the sheet', async () => {
   const tree = await render(<TerminalScreen chatId="c1" />);
   expect(keyBarMargin(tree.root)).toBe(8);
 });
 
-test('TerminalScreen key bar lifts above the keyboard', async () => {
+test('session sheet shrinks maxContentHeight when the keyboard is visible', async () => {
+  const down = await render(
+    <SessionSheet fill onDismiss={() => {}}>
+      <Text>body</Text>
+    </SessionSheet>,
+  );
+  const downCap = byTestId(down.root, 'TrueSheet')[0].props.maxContentHeight;
+
   const mocked = useKeyboardState as jest.Mock;
   mocked.mockImplementation(
     (selector: (s: { isVisible: boolean; height: number }) => unknown) =>
       selector({ isVisible: true, height: 336 }),
   );
   try {
-    const tree = await render(<TerminalScreen chatId="c1" />);
-    expect(keyBarMargin(tree.root)).toBe(8 + KEY_BAR_KEYBOARD_LIFT);
+    const up = await render(
+      <SessionSheet fill onDismiss={() => {}}>
+        <Text>body</Text>
+      </SessionSheet>,
+    );
+    const upCap = byTestId(up.root, 'TrueSheet')[0].props.maxContentHeight;
+    expect(upCap).toBe(downCap - 336);
+    expect(upCap).toBeGreaterThanOrEqual(240);
   } finally {
     mocked.mockImplementation(
       (selector: (s: { isVisible: boolean; height: number }) => unknown) =>

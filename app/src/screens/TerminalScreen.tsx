@@ -18,10 +18,6 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
-import {
-  KeyboardStickyView,
-  useKeyboardState,
-} from 'react-native-keyboard-controller';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
@@ -130,9 +126,6 @@ const KEY_BYTES: Record<string, number[]> = {
   ctrlc: [0x03],
 };
 
-/** Extra bottom gap while the software keyboard is up so the key bar
- *  is not clipped into the keyboard (sheet safe-area often collapses). */
-export const KEY_BAR_KEYBOARD_LIFT = 12;
 const KEY_BAR_MARGIN_BOTTOM = 8;
 
 const KEY_BAR: {
@@ -156,7 +149,6 @@ const shellLabel = (path: string): string =>
 export function TerminalScreen({ chatId }: { chatId: string }) {
   const runtime = useRuntime();
   const chat = useChat(chatId);
-  const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width } = useWindowDimensions();
   const [viewport, setViewport] = useState(() => ({
     cols: Math.max(20, Math.floor((width - 16) / CHAR_W)),
@@ -187,6 +179,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [active, setActive] = useState(0);
   const [ctrl, setCtrl] = useState(false);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
   const [layoutReady, setLayoutReady] = useState(false);
   const tabsRef = useRef<TerminalTab[]>([]);
@@ -315,6 +308,8 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     [send],
   );
 
+  const onSubmitEditing = useCallback(() => send([0x0d]), [send]);
+
   const confirmClose = useCallback(() => {
     if (tab === undefined) return;
     Alert.alert(t('terminal.closeShell'), undefined, [
@@ -433,7 +428,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         </Pressable>
       </View>
 
-      {/* Screen — Menlo rows of styled runs; tap focuses the hidden input */}
+      {/* Screen — Menlo rows of styled runs; tap focuses the overlay input */}
       <View
         testID="terminal-screen"
         style={styles.screen}
@@ -474,55 +469,50 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
             ) : null
           }
         />
+        <TextInput
+          ref={inputRef}
+          testID="terminal-input"
+          style={styles.hiddenInput}
+          pointerEvents="none"
+          value=""
+          onChangeText={onKeyText}
+          onKeyPress={onKeyPress}
+          onSubmitEditing={onSubmitEditing}
+          onFocus={focus.onFocus}
+          onBlur={focus.onBlur}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus={false}
+          blurOnSubmit={false}
+          caretHidden
+          showSoftInputOnFocus
+          keyboardAppearance="dark"
+          accessibilityLabel={t('terminal.input')}
+        />
       </View>
 
       {tabs.length === 0 ? (
         <Text style={styles.empty}>{error ?? t('terminal.unavailable')}</Text>
       ) : null}
 
-      {/* Hidden input capturing keystrokes */}
-      <TextInput
-        ref={inputRef}
-        testID="terminal-input"
-        style={styles.hiddenInput}
-        value=""
-        onChangeText={onKeyText}
-        onKeyPress={onKeyPress}
-        onFocus={focus.onFocus}
-        onBlur={focus.onBlur}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="off"
-        spellCheck={false}
-        autoFocus={false}
-        blurOnSubmit={false}
-        caretHidden
-        showSoftInputOnFocus
-        keyboardAppearance="dark"
-        accessibilityLabel={t('terminal.input')}
-      />
-
-      <KeyboardStickyView
-        testID="terminal-key-bar"
-        offset={{ opened: 0 }}
-        style={[
-          styles.keyBarSticky,
-          keyboardVisible
-            ? { marginBottom: KEY_BAR_MARGIN_BOTTOM + KEY_BAR_KEYBOARD_LIFT }
-            : null,
-        ]}
-      >
+      <View testID="terminal-key-bar" style={styles.keyBarSticky}>
         <ScrollView
           horizontal
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.keyBar}
         >
           {KEY_BAR.map(spec => {
             const selected = spec.key === 'ctrl' && ctrl;
+            const on = selected || pressedKey === spec.key;
             return (
               <Pressable
                 key={spec.key}
+                onPressIn={() => setPressedKey(spec.key)}
+                onPressOut={() => setPressedKey(null)}
+                unstable_pressDelay={0}
                 onPress={() => {
                   if (spec.key === 'ctrl') setCtrl(v => !v);
                   else send([...(KEY_BYTES[spec.key] ?? [])]);
@@ -531,19 +521,15 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
                 accessibilityRole="button"
                 accessibilityLabel={spec.label}
                 accessibilityState={{ selected }}
-                style={[styles.keyBtn, selected ? styles.keyBtnOn : null]}
+                style={[styles.keyBtn, on ? styles.keyBtnOn : null]}
               >
                 {spec.icon !== undefined ? (
-                  <Icon
-                    name={spec.icon}
-                    size={14}
-                    color={selected ? '#000' : FG}
-                  />
+                  <Icon name={spec.icon} size={14} color={on ? '#000' : FG} />
                 ) : (
                   <Text
                     style={[
                       styles.keyLabel,
-                      selected ? styles.keyLabelOn : styles.keyLabelOff,
+                      on ? styles.keyLabelOn : styles.keyLabelOff,
                     ]}
                   >
                     {spec.label}
@@ -553,7 +539,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
             );
           })}
         </ScrollView>
-      </KeyboardStickyView>
+      </View>
     </View>
   );
 }
@@ -604,7 +590,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  screen: { flex: 1, paddingHorizontal: 8, paddingTop: 6 },
+  screen: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    position: 'relative',
+  },
   termRow: { flexDirection: 'row', height: CHAR_H },
   termRun: { fontFamily: TERM_FONT, fontSize: 13 },
   cursor: { backgroundColor: FG },
@@ -622,12 +613,8 @@ const styles = StyleSheet.create({
     color: TAB_FG,
   },
   hiddenInput: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
+    ...StyleSheet.absoluteFillObject,
     opacity: 0.01,
-    left: 0,
-    top: 0,
   },
   keyBarSticky: {
     backgroundColor: '#161616',
