@@ -22,6 +22,7 @@ import {
   setChangeRequestForChat,
 } from '../src/zeron/state/changeRequestStore';
 import type {
+  AgentAccountsSnapshot,
   Chat,
   DeviceRow,
   MessageEntry,
@@ -31,11 +32,58 @@ import type { PrBadgeModel } from '../src/components/prBadge';
 import { BrandMark } from '../src/components/BrandMark';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { entryFrom } from '../src/zeron/doc/sessionDoc';
-import {
-  CHAT_WORKING,
-  demoAccounts,
-  demoTranscripts,
-} from '../src/demo/fixtures';
+
+const sampleAccounts = (): AgentAccountsSnapshot => ({
+  accounts: [
+    {
+      id: 'acct-claude',
+      harness: 'claude',
+      email: 'demo@example.test',
+      planLabel: 'Demo plan',
+      active: true,
+      usageWindows: [
+        { label: 'Session', usedFraction: 0.18 },
+        {
+          label: 'Weekly',
+          usedFraction: 0.42,
+          resetsAt: '2026-01-15T18:30:00Z',
+        },
+      ],
+      displayName: 'Demo User',
+      authKind: 'oauth',
+      switchable: true,
+      savedAt: 1_760_000_000_000,
+    },
+  ],
+  warnings: [],
+});
+
+const CHAT_WORKING = 'c-working';
+
+const sampleTranscript: Record<string, unknown>[] = [
+  {
+    id: 'u1',
+    role: 'user',
+    parts: [{ kind: 'text', id: 'p1', text: 'Ship the composer chrome.' }],
+    createdAt: 1_800_000_000_000 - 12_000,
+    deviceId: 'phone',
+  },
+  {
+    id: 'a1',
+    role: 'assistant',
+    parts: [
+      { kind: 'reasoning', id: 'r1', reasoning: 'Check the badge snapshot.' },
+      {
+        kind: 'text',
+        id: 't1',
+        text: 'Working on the composer chrome overhaul.',
+      },
+    ],
+    createdAt: 1_800_000_000_000 - 11_000,
+    deviceId: 'h1',
+    status: 'streaming',
+  },
+];
 
 const services: AppServices = {
   auth: null as never,
@@ -169,7 +217,7 @@ afterEach(() => {
 });
 
 test('usage sheet has no x close button and lists host account meters', async () => {
-  const call = jest.fn(async () => demoAccounts());
+  const call = jest.fn(async () => sampleAccounts());
   const runtime = {
     relayFor: (id: string) => {
       expect(id).toBe('h1');
@@ -411,15 +459,14 @@ test('compose session is a blank chat with the composer', async () => {
   ).toBeGreaterThan(0);
 });
 
-test('populated demo transcript does not abort into the error boundary', async () => {
-  const raw = demoTranscripts(1_800_000_000_000)[CHAT_WORKING] ?? [];
-  const entries = raw
+test('populated transcript does not abort into the error boundary', async () => {
+  const entries = sampleTranscript
     .map(entryFrom)
     .filter((e): e is NonNullable<typeof e> => e !== undefined);
   act(() => {
     workspaceStore.setState(s => ({
       ...s,
-      chats: [{ ...chat, id: CHAT_WORKING, title: 'Ship demo mode' }],
+      chats: [{ ...chat, id: CHAT_WORKING, title: 'Composer chrome' }],
     }));
     getSessionStore(CHAT_WORKING).setState({
       entries,
@@ -432,7 +479,7 @@ test('populated demo transcript does not abort into the error boundary', async (
       room: 'caughtUp',
       queueActionsPending: new Set(),
     });
-    // Demo checkouts stream a draft PR. usePrBadge must not rebuild a new
+    // Checkouts stream a draft PR. usePrBadge must not rebuild a new
     // snapshot object each render (that loops and trips the error boundary).
     setChangeRequestForChat(CHAT_WORKING, {
       checkoutId: 'demo-checkout',
@@ -460,7 +507,7 @@ test('populated demo transcript does not abort into the error boundary', async (
   expect(
     tree.root.findAll(n => n.props.testID === 'app-error-fallback'),
   ).toHaveLength(0);
-  expect(texts(tree.root).join(' ')).toContain('demo mode');
+  expect(texts(tree.root).join(' ')).toContain('composer chrome');
 });
 
 test('history empty copy is short', async () => {

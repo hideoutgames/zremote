@@ -12,7 +12,32 @@ import {
 import { settingsCellBackground } from '../src/components/settings/SettingsList';
 import { darkTheme, lightTheme } from '../src/theme';
 import { METHODS } from '../src/zeron/protocol/rpc';
-import { demoAccounts } from '../src/demo/fixtures';
+import type { AgentAccountsSnapshot } from '../src/zeron/protocol/types';
+
+const sampleAccounts = (): AgentAccountsSnapshot => ({
+  accounts: [
+    {
+      id: 'acct-claude',
+      harness: 'claude',
+      email: 'demo@example.test',
+      planLabel: 'Demo plan',
+      active: true,
+      usageWindows: [
+        { label: 'Session', usedFraction: 0.18 },
+        {
+          label: 'Weekly',
+          usedFraction: 0.42,
+          resetsAt: '2026-01-15T18:30:00Z',
+        },
+      ],
+      displayName: 'Demo User',
+      authKind: 'oauth',
+      switchable: true,
+      savedAt: 1_760_000_000_000,
+    },
+  ],
+  warnings: [],
+});
 
 const flattenText = (c: unknown): string => {
   if (c == null || typeof c === 'boolean') return '';
@@ -82,7 +107,7 @@ test('mount lists accounts with forceUsage and renders meters', async () => {
     async (method: string, params: { forceUsage?: boolean }) => {
       expect(method).toBe(METHODS.LIST_AGENT_ACCOUNTS);
       expect(params.forceUsage).toBe(true);
-      return demoAccounts();
+      return sampleAccounts();
     },
   );
   const runtime = {

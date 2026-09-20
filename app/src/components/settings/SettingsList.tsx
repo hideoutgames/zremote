@@ -91,6 +91,7 @@ export function SettingsRow({
   accessibilityLabel,
   testID,
   titleNumberOfLines,
+  progress,
 }: {
   title: string;
   subtitle?: string;
@@ -104,6 +105,8 @@ export function SettingsRow({
   accessibilityLabel?: string;
   testID?: string;
   titleNumberOfLines?: number;
+  /** 0–1 determinate download progress. */
+  progress?: number;
 }) {
   const theme = useTheme();
   const label = accessibilityLabel ?? title;
@@ -113,7 +116,9 @@ export function SettingsRow({
       : LEADING_INSET;
   const rowStyle: StyleProp<ViewStyle> = [
     styles.row,
-    subtitle !== undefined ? styles.rowWithSubtitle : null,
+    subtitle !== undefined || progress !== undefined
+      ? styles.rowWithSubtitle
+      : null,
   ];
   const inner = (
     <>
@@ -137,6 +142,32 @@ export function SettingsRow({
           >
             {subtitle}
           </Text>
+        ) : null}
+        {progress !== undefined ? (
+          <View
+            style={[
+              styles.progressTrack,
+              { backgroundColor: separatorColor(theme) },
+            ]}
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: Math.round(Math.max(0, Math.min(1, progress)) * 100),
+            }}
+          >
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: theme.accent,
+                  width: `${Math.round(
+                    Math.max(0, Math.min(1, progress)) * 100,
+                  )}%`,
+                },
+              ]}
+            />
+          </View>
         ) : null}
       </View>
       {value !== undefined ? (
@@ -274,6 +305,16 @@ const styles = StyleSheet.create({
   title: { fontSize: 17 },
   subtitle: { fontSize: 15 },
   value: { fontSize: 17, flexShrink: 1, maxWidth: '50%' },
+  progressTrack: {
+    height: 3,
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    marginTop: 6,
+  },
+  progressFill: {
+    height: 3,
+    borderRadius: 1.5,
+  },
   input: {
     flex: 1,
     fontSize: 17,

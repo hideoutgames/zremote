@@ -50,6 +50,7 @@ import {
   useNewThreadComposerBackground,
   usePinnedModels,
   useRecentModels,
+  useVoiceInputMode,
 } from '../zeron/state/uiPrefs';
 import { sessionTitle } from '../zeron/state/sessionTruth';
 import {
@@ -109,6 +110,7 @@ import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { PrSheet } from '../components/PrSheet';
 import type { PrBadgeModel } from '../components/prBadge';
 import { SessionSheet } from '../components/SessionSheet';
+import { useLocalVoiceRuntime } from '../hooks/useLocalVoiceRuntime';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -629,7 +631,13 @@ function ActiveSessionScreen({
   }, [toolSheet]);
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
+  const voiceInputMode = useVoiceInputMode();
+  const voiceRuntime = useLocalVoiceRuntime(voiceInputMode === 'voiceModel');
   useEffect(() => {
+    if (voiceInputMode !== 'dictation') {
+      setDictation(dictationUnavailable);
+      return;
+    }
     let mounted = true;
     resolveDictationPort().then(port => {
       if (mounted) setDictation(port);
@@ -637,7 +645,7 @@ function ActiveSessionScreen({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [voiceInputMode]);
   const recents = useRecentModels();
   const pinnedModels = usePinnedModels();
   const catalogTick = catalog?.loadedAt ?? 0;
@@ -1134,6 +1142,7 @@ function ActiveSessionScreen({
             }}
             onFocusChange={setComposerFocused}
             dictation={dictation}
+            voiceRuntime={voiceRuntime}
             onSend={doSend}
             onSteer={doSteer}
             onQueue={doQueue}

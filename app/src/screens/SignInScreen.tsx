@@ -3,10 +3,17 @@
 // to that scheme. Authorize + exchange match the Zeron engine (no PKCE —
 // the edge holds the client secret). If the hop is missing or the sheet is
 // dismissed, paste the Copy-code page value (or the callback URL) to
-// complete. Demo remains under Advanced.
+// complete.
 
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -18,14 +25,14 @@ import { parseCallbackUrl } from '../zeron/auth/authKit';
 import { authFailureLog } from '../zeron/auth/authClient';
 import { randomBytes, sha256 } from '../zeron/native/expoCrypto';
 import { useAuthSession } from '../app/runtimeContext';
-import { GlassControl } from '../components/Glass';
-import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
-import { enterDemo } from '../demo/demoMode';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 
 const log = createLog();
+
+const MARK_WHITE: number = require('../../assets/brand/zremote-mark-white.png');
+const MARK_BLACK: number = require('../../assets/brand/zremote-mark-black.png');
 
 /** Match the engine / iOS AuthClient: no code_challenge. PKCE helpers stay
  *  in authKit for a later re-enable once edge patch 0001 is confirmed. */
@@ -43,7 +50,6 @@ export function SignInScreen() {
   const edgeUrl = appConfig().edgeUrl;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [advanced, setAdvanced] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
   const [paste, setPaste] = useState('');
 
@@ -109,6 +115,8 @@ export function SignInScreen() {
     }
   }, [auth, paste]);
 
+  const pasteReady = paste.trim() !== '';
+
   return (
     <KeyboardAwareScrollView
       style={[styles.scroll, { backgroundColor: theme.background }]}
@@ -124,101 +132,80 @@ export function SignInScreen() {
       bottomOffset={PASTE_KEYBOARD_BOTTOM_OFFSET}
       mode="layout"
     >
-      <Text style={[styles.title, { color: theme.text }]}>
-        {t('signIn.title')}
-      </Text>
-      <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-        {t('signIn.subtitle')}
-      </Text>
+      <View style={styles.hero}>
+        <Image
+          source={theme.scheme === 'dark' ? MARK_WHITE : MARK_BLACK}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityRole="image"
+          accessibilityLabel={t('signIn.logo')}
+        />
+      </View>
 
-      <GlassControl
-        interactive
-        onPress={signIn}
-        disabled={busy}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t('signIn.button')}
-        style={styles.primary}
-      >
-        <Text style={[styles.primaryText, { color: theme.sendActive }]}>
-          {t('signIn.button')}
-        </Text>
-      </GlassControl>
+      <View style={styles.bottom}>
+        {error !== null ? (
+          <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
+        ) : null}
 
-      {error !== null ? (
-        <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
-      ) : null}
+        {showPaste ? (
+          <View style={styles.pasteBox}>
+            <TextInput
+              value={paste}
+              onChangeText={setPaste}
+              placeholder={t('signIn.pasteFallback.placeholder')}
+              placeholderTextColor={theme.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              editable={!busy}
+              returnKeyType="go"
+              onSubmitEditing={completePaste}
+              style={[
+                styles.pasteInput,
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.inputBackground,
+                },
+              ]}
+              accessibilityLabel={t('signIn.pasteFallback.placeholder')}
+            />
+            <Pressable
+              onPress={completePaste}
+              disabled={busy || !pasteReady}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('signIn.pasteFallback.continue')}
+              accessibilityState={{ disabled: busy || !pasteReady }}
+              style={[
+                styles.continue,
+                { backgroundColor: theme.accent },
+                busy || !pasteReady ? styles.disabled : null,
+              ]}
+            >
+              <Text style={styles.continueText}>
+                {t('signIn.pasteFallback.continue')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-      {showPaste ? (
-        <View style={styles.pasteBox}>
-          <Text style={[styles.pasteTitle, { color: theme.text }]}>
-            {t('signIn.pasteFallback.title')}
-          </Text>
-          <Text style={[styles.pasteBody, { color: theme.textSecondary }]}>
-            {t('signIn.pasteFallback.body')}
-          </Text>
-          <TextInput
-            value={paste}
-            onChangeText={setPaste}
-            placeholder={t('signIn.pasteFallback.placeholder')}
-            placeholderTextColor={theme.textSecondary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            editable={!busy}
-            returnKeyType="go"
-            onSubmitEditing={completePaste}
-            style={[
-              styles.pasteInput,
-              { color: theme.text, borderColor: theme.border },
-            ]}
-            accessibilityLabel={t('signIn.pasteFallback.placeholder')}
-          />
-          <GlassControl
-            interactive
-            onPress={completePaste}
-            disabled={busy || paste.trim() === ''}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('signIn.pasteFallback.continue')}
-            style={styles.demoButton}
-          >
-            <Text style={[styles.demoText, { color: theme.sendActive }]}>
-              {t('signIn.pasteFallback.continue')}
-            </Text>
-          </GlassControl>
-        </View>
-      ) : null}
-
-      <Pressable
-        style={styles.advancedToggle}
-        onPress={() => setAdvanced(a => !a)}
-        hitSlop={8}
-      >
-        <Icon name="chevron.down" size={12} color={theme.textSecondary} />
-        <Text style={[styles.advancedText, { color: theme.textSecondary }]}>
-          {t('signIn.advanced')}
-        </Text>
-      </Pressable>
-      {advanced ? (
-        <View style={styles.advancedBox}>
-          <GlassControl
-            interactive
-            onPress={enterDemo}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('signIn.demo.button')}
-            style={styles.demoButton}
-          >
-            <Text style={[styles.demoText, { color: theme.sendActive }]}>
-              {t('signIn.demo.button')}
-            </Text>
-          </GlassControl>
-          <Text style={[styles.demoHint, { color: theme.textSecondary }]}>
-            {t('signIn.demo.hint')}
-          </Text>
-        </View>
-      ) : null}
+        <Pressable
+          onPress={signIn}
+          disabled={busy}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('signIn.button')}
+          accessibilityState={{ disabled: busy }}
+          style={[
+            styles.primary,
+            { backgroundColor: theme.accent },
+            busy ? styles.disabled : null,
+          ]}
+        >
+          <Text style={styles.primaryText}>{t('signIn.button')}</Text>
+        </Pressable>
+      </View>
     </KeyboardAwareScrollView>
   );
 }
@@ -227,54 +214,51 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   root: {
     flexGrow: 1,
+    paddingHorizontal: 24,
+  },
+  hero: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 14,
   },
-  title: { fontSize: 26, fontWeight: '700' },
-  subtitle: { fontSize: 15, textAlign: 'center' },
+  logo: { width: 53, height: 96 },
+  bottom: {
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+    paddingBottom: 8,
+  },
   primary: {
+    borderRadius: 25,
+    paddingHorizontal: 32,
+    minHeight: 50,
+    minWidth: 220,
+    alignSelf: 'center',
+    flexGrow: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  error: { fontSize: 13, textAlign: 'center' },
+  pasteBox: { alignItems: 'center', gap: 10, width: '100%', maxWidth: 360 },
+  pasteInput: {
+    alignSelf: 'stretch',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontFamily: 'Menlo',
+  },
+  continue: {
     borderRadius: 22,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    paddingHorizontal: 24,
     minHeight: 44,
     alignSelf: 'center',
     flexGrow: 0,
     alignItems: 'center',
-    overflow: 'hidden',
+    justifyContent: 'center',
   },
-  primaryText: { fontSize: 17, fontWeight: '600' },
-  error: { fontSize: 13 },
-  pasteBox: { alignItems: 'center', gap: 8, width: '100%', maxWidth: 360 },
-  pasteTitle: { fontSize: 15, fontWeight: '600' },
-  pasteBody: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
-  pasteInput: {
-    alignSelf: 'stretch',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 16,
-    fontFamily: 'Menlo',
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 12,
-  },
-  advancedText: { fontSize: 13 },
-  advancedBox: { alignItems: 'center', gap: 10, marginTop: 4 },
-  demoButton: {
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    minHeight: 36,
-    alignSelf: 'center',
-    flexGrow: 0,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  demoText: { fontSize: 15, fontWeight: '600' },
-  demoHint: { fontSize: 12, textAlign: 'center', lineHeight: 16 },
+  continueText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  disabled: { opacity: 0.4 },
 });

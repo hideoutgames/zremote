@@ -13,6 +13,10 @@ import {
   bindUiPrefs,
   unbindUiPrefs,
   togglePinnedModel,
+  setVoiceInputMode,
+  setVoiceModelId,
+  setCleanupModelId,
+  setCleanupPromptOverride,
 } from '../uiPrefs';
 import {
   bindBackgroundFs,
@@ -284,4 +288,39 @@ test('togglePinnedModel persists and unpins', async () => {
   ]);
   await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
   expect(uiPrefsStore.getState().pinnedModels).toEqual([]);
+});
+
+test('voice prefs default to dictation and migrate missing fields', async () => {
+  expect(uiPrefsStore.getState().voiceInputMode).toBe('dictation');
+  expect(uiPrefsStore.getState().voiceModelId).toBeNull();
+  expect(uiPrefsStore.getState().cleanupModelId).toBeNull();
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBeNull();
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', { hapticsEnabled: false });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().voiceInputMode).toBe('dictation');
+  expect(uiPrefsStore.getState().voiceModelId).toBeNull();
+});
+
+test('voice prefs persist and reject an invalid mode', async () => {
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setVoiceInputMode('voiceModel');
+  await setVoiceModelId('whisper-tiny');
+  await setCleanupModelId('qwen25-0.5b-instruct');
+  await setCleanupPromptOverride('keep my words');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.voiceInputMode).toBe('voiceModel');
+  expect(saved?.voiceModelId).toBe('whisper-tiny');
+  expect(saved?.cleanupPromptOverride).toBe('keep my words');
+
+  await disk.saveUiPrefs('org', 'user', {
+    ...saved,
+    voiceInputMode: 'telepathy',
+  });
+  uiPrefsStore.setState({ voiceInputMode: 'dictation' });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().voiceInputMode).toBe('dictation');
+  expect(uiPrefsStore.getState().voiceModelId).toBe('whisper-tiny');
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBe('keep my words');
 });
