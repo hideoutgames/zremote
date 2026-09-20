@@ -470,7 +470,13 @@ test('FileDiff omits raw @@ hunk headers', async () => {
   expect(labels).toContain('new');
 });
 
-test('TerminalScreen has no TTL copy', async () => {
+test('TerminalScreen has no TTL copy and uses Menlo', async () => {
   const tree = await render(<TerminalScreen chatId="c1" />);
   expect(texts(tree.root).join(' ')).not.toContain('30 minutes');
+  expect(
+    tree.root.findAll(n => {
+      const flat = StyleSheet.flatten(n.props.style);
+      return flat?.fontFamily === 'Menlo';
+    }).length,
+  ).toBeGreaterThan(0);
 });

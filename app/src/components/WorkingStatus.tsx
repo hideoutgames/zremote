@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 12,
   },
   statusRowCompact: {
     paddingHorizontal: 0,
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   elapsed: { fontSize: 13, fontVariant: ['tabular-nums'] },
   bubbleRow: {
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 12,
     alignItems: 'flex-start',
   },
   bubble: {

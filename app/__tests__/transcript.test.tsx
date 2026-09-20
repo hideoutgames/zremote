@@ -168,7 +168,7 @@ test('AssistantMessage shows a plan card and turn changes', async () => {
   });
   const texts = textOf(tree!.root);
   expect(texts).toContain('Resize composer');
-  expect(texts).not.toContain('Changes 1');
+  expect(texts).toContain('Changes');
   expect(texts).toContain('Composer.tsx');
 });
 

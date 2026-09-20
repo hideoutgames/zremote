@@ -1,6 +1,6 @@
 // Terminal — tabs of PTY shells on the chat's host. Rendering is a justified
 // specialist renderer: AnsiScreen (pure, tested) produces a cell grid, drawn
-// as monospace Text runs per row. Input: a hidden TextInput captures
+// as Menlo Text runs per row. Input: a hidden TextInput captures
 // keystrokes; a key bar supplies Esc/Ctrl/arrows/Tab/Ctrl-C byte sequences.
 // Reconnects resume via `afterSeq` (never a new shell); detach keeps the PTY
 // alive; CloseTerminal only from the confirmed "Close shell" action.
@@ -18,16 +18,22 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
 import { TerminalClient, openTerminal } from '../zeron/terminal/client';
 import { AnsiScreen, base64Decode, type Cell } from '../zeron/terminal/ansi';
+import {
+  loadTerminalTabs,
+  saveTerminalTabs,
+  type TerminalTab,
+} from '../zeron/terminal/sessions';
 import type { TerminalEvent } from '../zeron/protocol/types';
-import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
-import { Glass } from '../components/Glass';
+
+export const TERM_FONT = 'Menlo';
 
 // xterm 16-color palette (dim + bright).
 const PALETTE16 = [
@@ -104,8 +110,11 @@ const rowRuns = (row: Cell[], defaultFg: string) => {
   return runs;
 };
 
-const CHAR_W = 7.8; // monospace 13pt advance, measured
-const CHAR_H = 17;
+const CHAR_W = 7.8; // Menlo 13pt advance
+const CHAR_H = 16;
+const FG = '#EEEEEC';
+const TAB_FG = '#A0A0A0';
+const TAB_ACTIVE = '#F5F5F5';
 
 const KEY_BYTES: Record<string, number[]> = {
   esc: [0x1b],
@@ -122,25 +131,20 @@ const KEY_BAR: {
   label: string;
   icon?: SFSymbol;
 }[] = [
-  { key: 'esc', label: 'esc' },
-  { key: 'ctrl', label: 'ctrl' },
-  { key: 'tab', label: '⇥' },
-  { key: 'left', label: 'left', icon: 'arrow.left' },
-  { key: 'down', label: 'down', icon: 'arrow.down' },
-  { key: 'up', label: 'up', icon: 'arrow.up' },
-  { key: 'right', label: 'right', icon: 'arrow.right' },
+  { key: 'esc', label: 'ESC' },
+  { key: 'ctrl', label: 'CTRL' },
+  { key: 'tab', label: 'TAB' },
+  { key: 'left', label: '←', icon: 'arrow.left' },
+  { key: 'down', label: '↓', icon: 'arrow.down' },
+  { key: 'up', label: '↑', icon: 'arrow.up' },
+  { key: 'right', label: '→', icon: 'arrow.right' },
   { key: 'ctrlc', label: '^C' },
 ];
 
-interface Tab {
-  client: TerminalClient;
-  screen: AnsiScreen;
-  exited: boolean;
-  exitCode?: number;
-}
+const shellLabel = (path: string): string =>
+  path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 export function TerminalScreen({ chatId }: { chatId: string }) {
-  const theme = useTheme();
   const runtime = useRuntime();
   const chat = useChat(chatId);
   const { width } = useWindowDimensions();
@@ -168,15 +172,27 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     }
   }, []);
 
-  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [active, setActive] = useState(0);
   const [ctrl, setCtrl] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [layoutReady, setLayoutReady] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const tabsRef = useRef<TerminalTab[]>([]);
   // Bumping forces a re-render after PTY data mutates the screen model.
   const [, setFrame] = useState(0);
   const bump = useCallback(() => setFrame(f => f + 1), []);
+  const restoredRef = useRef(false);
+
+  const commitTabs = useCallback(
+    (next: TerminalTab[], activeIndex?: number) => {
+      tabsRef.current = next;
+      saveTerminalTabs(chatId, next);
+      setTabs(next);
+      if (activeIndex !== undefined) setActive(activeIndex);
+    },
+    [chatId],
+  );
 
   const spawn = useCallback(() => {
     if (runtime === null || chat?.deviceId === undefined) {
@@ -187,7 +203,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     openTerminal(relay, chatId, cols, rows)
       .then(session => {
         const screen = new AnsiScreen(cols, rows);
-        const tab: Tab = {
+        const tab: TerminalTab = {
           client: undefined as never,
           screen,
           exited: false,
@@ -208,41 +224,55 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         tab.client = client;
         client.subscribe().catch(e => setError(String(e?.message ?? e)));
         client.resize(cols, rows);
-        setTabs(prev => [...prev, tab]);
-        setActive(tabs.length);
+        const next = [...tabsRef.current, tab];
+        commitTabs(next, next.length - 1);
       })
       .catch(e => setError(String(e?.message ?? e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, chat?.deviceId, chatId, cols, rows, bump]);
+  }, [runtime, chat?.deviceId, chatId, cols, rows, bump, commitTabs]);
 
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
-
-  // Error immediately when there is no host; otherwise wait for a real
-  // layout before OpenTerminal so the PTY is not sized to a collapsed sheet.
+  // Restore detached tabs for this chat, then wait for layout before
+  // OpenTerminal so a first shell is not sized to a collapsed sheet.
   useEffect(() => {
     if (runtime === null || chat?.deviceId === undefined) {
       setError(t('terminal.unavailable'));
       return;
     }
+    const existing = loadTerminalTabs(chatId);
+    if (existing.length > 0 && !restoredRef.current) {
+      restoredRef.current = true;
+      tabsRef.current = existing;
+      setTabs(existing);
+      setActive(0);
+      for (const tb of existing) {
+        if (!tb.exited)
+          tb.client.subscribe().catch(e => setError(String(e?.message ?? e)));
+      }
+    }
+  }, [runtime, chat?.deviceId, chatId]);
+
+  useEffect(() => {
+    if (runtime === null || chat?.deviceId === undefined) return;
     if (!layoutReady) return;
     if (tabsRef.current.length === 0) spawn();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runtime, chat?.deviceId, layoutReady]);
 
-  // Resize → debounced ResizeTerminal on the live client.
+  // Resize the local grid and the host PTY together.
   useEffect(() => {
     for (const tb of tabsRef.current) {
+      tb.screen.resize(cols, rows);
       if (!tb.exited) tb.client.resize(cols, rows);
     }
-  }, [cols, rows]);
+    bump();
+  }, [cols, rows, bump]);
 
   // Leaving the screen detaches (PTY stays alive on the host).
   useEffect(
     () => () => {
       for (const tb of tabsRef.current) tb.client.detach();
+      saveTerminalTabs(chatId, tabsRef.current);
     },
-    [],
+    [chatId],
   );
 
   const tab = tabs[active];
@@ -284,12 +314,12 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         onPress: () => {
           const idx = active;
           tab.client.close().catch(() => {});
-          setTabs(prev => prev.filter((_, i) => i !== idx));
-          setActive(Math.max(0, idx - 1));
+          const next = tabsRef.current.filter((_, i) => i !== idx);
+          commitTabs(next, Math.max(0, idx - 1));
         },
       },
     ]);
-  }, [tab, active]);
+  }, [tab, active, commitTabs]);
 
   const screen = tab?.screen;
   // Scrollback + visible grid as one virtualized list; follow-tail unless the
@@ -317,6 +347,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     },
     [],
   );
+  const cwd =
+    tab?.client.handle.session.cwd !== undefined
+      ? shellLabel(tab.client.handle.session.cwd)
+      : undefined;
   return (
     <View style={[styles.root, styles.termBg]}>
       <View style={styles.tabBar}>
@@ -327,7 +361,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           style={styles.tabScroll}
         >
           {tabs.map((tb, i) => {
-            const shell = tb.client.handle.session.shell;
+            const shell = shellLabel(tb.client.handle.session.shell);
             const selected = i === active;
             const a11y = tb.exited
               ? `${shell} ${i + 1}, ${t('terminal.exit').replace(
@@ -342,13 +376,16 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
                 accessibilityRole="button"
                 accessibilityLabel={a11y}
                 accessibilityState={{ selected }}
-                style={[styles.tab, tb.exited ? styles.tabExited : undefined]}
+                style={[
+                  styles.tab,
+                  selected ? styles.tabActive : undefined,
+                  tb.exited ? styles.tabExited : undefined,
+                ]}
               >
                 <Text
                   style={[
                     styles.tabLabel,
-                    selected ? styles.tabLabelActive : undefined,
-                    { color: selected ? theme.accent : theme.text },
+                    { color: selected ? TAB_ACTIVE : TAB_FG },
                   ]}
                   maxFontSizeMultiplier={1.6}
                 >
@@ -362,13 +399,18 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
                     accessibilityLabel={t('terminal.closeShell')}
                     style={styles.tabClose}
                   >
-                    <Icon name="xmark" size={12} color={theme.textSecondary} />
+                    <Icon name="xmark" size={11} color={TAB_FG} />
                   </Pressable>
                 ) : null}
               </Pressable>
             );
           })}
         </ScrollView>
+        {cwd !== undefined ? (
+          <Text style={styles.cwd} numberOfLines={1}>
+            {cwd}
+          </Text>
+        ) : null}
         <Pressable
           onPress={spawn}
           hitSlop={8}
@@ -376,11 +418,11 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           accessibilityLabel={t('terminal.new')}
           style={styles.iconBtn}
         >
-          <Icon name="plus" size={16} color={theme.text} />
+          <Icon name="plus" size={14} color={TAB_FG} />
         </Pressable>
       </View>
 
-      {/* Screen — monospace rows of styled runs; tap focuses the hidden input */}
+      {/* Screen — Menlo rows of styled runs; tap focuses the hidden input */}
       <Pressable
         style={styles.screen}
         onLayout={onScreenLayout}
@@ -396,7 +438,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           scrollEventThrottle={16}
           renderItem={({ item: row, index: y }) => (
             <Text style={styles.termRow} selectable={false}>
-              {rowRuns(row, '#EEEEEC').map((r, i) => (
+              {rowRuns(row, FG).map((r, i) => (
                 <Text key={i} style={[styles.termRun, r.style]}>
                   {r.text}
                 </Text>
@@ -408,7 +450,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           )}
           ListFooterComponent={
             tab?.exited ? (
-              <Text style={[styles.exited, { color: theme.textSecondary }]}>
+              <Text style={styles.exited}>
                 {t('terminal.exit').replace(
                   '{code}',
                   String(tab.exitCode ?? '?'),
@@ -420,9 +462,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
       </Pressable>
 
       {tabs.length === 0 ? (
-        <Text style={[styles.empty, { color: theme.textSecondary }]}>
-          {error ?? t('terminal.unavailable')}
-        </Text>
+        <Text style={styles.empty}>{error ?? t('terminal.unavailable')}</Text>
       ) : null}
 
       {/* Hidden input capturing keystrokes */}
@@ -438,44 +478,49 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         accessibilityLabel={t('terminal.input')}
       />
 
-      <Glass style={styles.keyBar}>
-        {KEY_BAR.map(spec => {
-          const selected = spec.key === 'ctrl' && ctrl;
-          return (
-            <Pressable
-              key={spec.key}
-              onPress={() => {
-                if (spec.key === 'ctrl') setCtrl(v => !v);
-                else send([...(KEY_BYTES[spec.key] ?? [])]);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={spec.label}
-              accessibilityState={{ selected }}
-              style={[
-                styles.keyBtn,
-                selected ? { backgroundColor: theme.accent } : null,
-              ]}
-            >
-              {spec.icon !== undefined ? (
-                <Icon
-                  name={spec.icon}
-                  size={16}
-                  color={selected ? '#fff' : theme.text}
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.keyLabel,
-                    { color: selected ? '#fff' : theme.text },
-                  ]}
-                >
-                  {spec.label}
-                </Text>
-              )}
-            </Pressable>
-          );
-        })}
-      </Glass>
+      <KeyboardStickyView offset={{ opened: 0 }} style={styles.keyBarSticky}>
+        <ScrollView
+          horizontal
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.keyBar}
+          testID="terminal-key-bar"
+        >
+          {KEY_BAR.map(spec => {
+            const selected = spec.key === 'ctrl' && ctrl;
+            return (
+              <Pressable
+                key={spec.key}
+                onPress={() => {
+                  if (spec.key === 'ctrl') setCtrl(v => !v);
+                  else send([...(KEY_BYTES[spec.key] ?? [])]);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={spec.label}
+                accessibilityState={{ selected }}
+                style={[styles.keyBtn, selected ? styles.keyBtnOn : null]}
+              >
+                {spec.icon !== undefined ? (
+                  <Icon
+                    name={spec.icon}
+                    size={14}
+                    color={selected ? '#000' : FG}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.keyLabel,
+                      selected ? styles.keyLabelOn : styles.keyLabelOff,
+                    ]}
+                  >
+                    {spec.label}
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </KeyboardStickyView>
     </View>
   );
 }
@@ -486,57 +531,88 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 8,
+    paddingLeft: 4,
     paddingRight: 4,
-    paddingVertical: 4,
+    minHeight: 32,
+    backgroundColor: '#1A1A1A',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#333',
   },
   tabScroll: { flex: 1 },
-  tabs: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tabs: { flexDirection: 'row', alignItems: 'center' },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    minHeight: 36,
+    minHeight: 32,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: '#333',
   },
+  tabActive: { backgroundColor: '#000' },
   tabExited: { opacity: 0.45 },
-  tabLabel: { fontSize: 15, fontWeight: '400' },
-  tabLabelActive: { fontWeight: '600' },
+  tabLabel: { fontFamily: TERM_FONT, fontSize: 12 },
   tabClose: {
-    minWidth: 24,
-    minHeight: 24,
+    minWidth: 22,
+    minHeight: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cwd: {
+    fontFamily: TERM_FONT,
+    fontSize: 11,
+    color: TAB_FG,
+    maxWidth: 96,
+    paddingHorizontal: 8,
   },
   iconBtn: {
-    minWidth: 44,
-    minHeight: 40,
+    minWidth: 36,
+    minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  screen: { flex: 1, padding: 8 },
+  screen: { flex: 1, paddingHorizontal: 8, paddingTop: 6 },
   termRow: { flexDirection: 'row', height: CHAR_H },
-  termRun: { fontFamily: 'monospace', fontSize: 13 },
-  cursor: { backgroundColor: '#EEEEEC' },
-  exited: { fontFamily: 'monospace', fontSize: 13, paddingTop: 8 },
-  empty: { fontSize: 14, textAlign: 'center', padding: 24 },
+  termRun: { fontFamily: TERM_FONT, fontSize: 13 },
+  cursor: { backgroundColor: FG },
+  exited: {
+    fontFamily: TERM_FONT,
+    fontSize: 13,
+    paddingTop: 8,
+    color: TAB_FG,
+  },
+  empty: {
+    fontFamily: TERM_FONT,
+    fontSize: 13,
+    textAlign: 'center',
+    padding: 24,
+    color: TAB_FG,
+  },
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+  keyBarSticky: {
+    backgroundColor: '#161616',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#333',
+  },
   keyBar: {
     flexDirection: 'row',
-    marginHorizontal: 8,
-    marginBottom: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    minHeight: 44,
     alignItems: 'center',
-    justifyContent: 'space-evenly',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 4,
+    minHeight: 40,
   },
   keyBtn: {
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: 40,
+    minHeight: 32,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 4,
+    backgroundColor: '#2A2A2A',
   },
-  keyLabel: { fontSize: 13, fontWeight: '600' },
+  keyBtnOn: { backgroundColor: FG },
+  keyLabel: { fontFamily: TERM_FONT, fontSize: 11, fontWeight: '600' },
+  keyLabelOff: { color: FG },
+  keyLabelOn: { color: '#000' },
 });

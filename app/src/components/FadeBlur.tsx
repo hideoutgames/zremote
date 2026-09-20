@@ -44,13 +44,16 @@ export function FadeBlur({
   style,
   fade = 'up',
   fadeHold,
+  tint: tintOverride,
 }: {
   intensity: number;
   style?: StyleProp<ViewStyle>;
   fade?: 'up' | 'down' | 'vertical' | 'radial' | 'horizontal' | 'none';
   /** For `down`, the 0–1 location where the opaque plateau ends.
+   *  For `up`, the 0–1 plateau at the bottom.
    *  For `horizontal`, the 0–1 edge inset of the fade on each side. */
   fadeHold?: number;
+  tint?: BlurTint;
 }) {
   const theme = useTheme();
   const [reduceTransparency, setReduceTransparency] = useState(false);
@@ -66,9 +69,10 @@ export function FadeBlur({
   }, []);
   if (reduceTransparency) return null;
   const tint: BlurTint =
-    theme.scheme === 'dark'
+    tintOverride ??
+    (theme.scheme === 'dark'
       ? 'systemThinMaterialDark'
-      : 'systemThinMaterialLight';
+      : 'systemThinMaterialLight');
   if (fade === 'none') {
     return (
       <BlurView
@@ -130,14 +134,20 @@ export function FadeBlur({
       ? (['transparent', 'black', 'transparent'] as const)
       : fade === 'down'
       ? (['black', 'black', 'transparent'] as const)
+      : fadeHold !== undefined && fadeHold > 0
+      ? (['transparent', 'black', 'black'] as const)
       : (['transparent', 'black'] as const);
   const hold =
-    fade === 'down' ? Math.min(0.85, Math.max(0.08, fadeHold ?? 0.55)) : 0.5;
+    fade === 'down' || fade === 'up'
+      ? Math.min(0.85, Math.max(0, fadeHold ?? (fade === 'down' ? 0.55 : 0)))
+      : 0.5;
   const locations =
     fade === 'vertical'
       ? ([0, 0.5, 1] as const)
       : fade === 'down'
-      ? ([0, hold, 1] as const)
+      ? ([0, Math.max(hold, 0.001), 1] as const)
+      : fadeHold !== undefined && fadeHold > 0
+      ? ([0, Math.max(0, Math.min(0.999, 1 - hold)), 1] as const)
       : ([0, 1] as const);
   return (
     <MaskedView

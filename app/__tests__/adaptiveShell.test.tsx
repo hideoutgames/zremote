@@ -5,7 +5,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Modal, Text } from 'react-native';
+import { Modal, StyleSheet, Text } from 'react-native';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import {
   AppServicesContext,
@@ -142,6 +142,20 @@ test('regular width with requestedChat opens that session, not compose', async (
   expect(
     tree.root.findAll(n => n.props.testID === 'session-title-pill').length,
   ).toBeGreaterThan(0);
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('sidebar inner fills the column with no horizontal padding', async () => {
+  const tree = await render();
+  const col = panel(tree.root)[0];
+  const inner = col.children.find(
+    (n): n is TestRenderer.ReactTestInstance =>
+      typeof n !== 'string' && n != null && typeof n === 'object',
+  ) as TestRenderer.ReactTestInstance;
+  const style = StyleSheet.flatten(inner.props.style);
+  expect(style.paddingHorizontal).toBeUndefined();
   await act(async () => {
     tree.unmount();
   });

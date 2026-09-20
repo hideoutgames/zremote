@@ -69,6 +69,7 @@ export function ThreadsBackgroundBlur() {
         fade={spec.fade}
         fadeHold={spec.fadeHold}
         intensity={spec.intensity}
+        tint="systemThinMaterialDark"
         style={StyleSheet.absoluteFill}
       />
       {dim ? (

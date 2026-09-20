@@ -72,11 +72,14 @@ import {
   usePinnedChatIds,
 } from '../zeron/state/uiPrefs';
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
-import { useTheme, type Theme } from '../theme';
+import { useTheme, darkTheme, type Theme } from '../theme';
 import { t } from '../i18n/strings';
 import {
   TopChromeFade,
+  ChromeFade,
+  ContentEdgeMask,
   TOP_CHROME_FADE_BAND,
+  THREADS_BOTTOM_FADE_BAND,
 } from '../components/TopChromeFade';
 import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
@@ -196,6 +199,12 @@ const ThreadStatus = ({
   );
 };
 
+const useThreadsListTheme = (): Theme => {
+  const theme = useTheme();
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
+  return wallpaper ? darkTheme : theme;
+};
+
 const ChatRow = React.memo(function ({
   chat,
   onOpen,
@@ -205,7 +214,7 @@ const ChatRow = React.memo(function ({
   onOpen: (id: string) => void;
   now: number;
 }) {
-  const theme = useTheme();
+  const theme = useThreadsListTheme();
   const runtime = useRuntime();
   const indicator = useIndicator(chat.id);
   const session = useStore(workspaceStore, s => s.sessions[chat.id]);
@@ -415,7 +424,7 @@ export function HomeScreen({
   /** 'sidebar' tightens top-bar padding; New thread is the same on both. */
   variant?: 'screen' | 'sidebar';
 }) {
-  const theme = useTheme();
+  const theme = useThreadsListTheme();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -594,107 +603,138 @@ export function HomeScreen({
       ]}
     >
       <ThreadsBackgroundBlur />
-      <LegendList
-        data={rest}
-        keyExtractor={item => item.id}
-        estimatedItemSize={78}
-        recycleItems
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      <ContentEdgeMask
+        topInset={chromeH}
+        bottomInset={
+          searching
+            ? 0
+            : bottomH !== 0
+            ? Math.max(0, bottomH - 8)
+            : insets.bottom + CIRCLE + 8
         }
-        ListHeaderComponent={
-          <>
-            <Text
-              style={[styles.largeTitle, { color: theme.text }]}
-              testID="home-title"
-            >
-              {spaceFilter === undefined
-                ? t('home.sessions')
-                : spaceName(spaceFilter)}
-            </Text>
-            {pinned.length > 0 ? (
-              <View style={styles.pinnedSection} testID="home-pinned-section">
-                <Text style={[styles.section, { color: theme.textSecondary }]}>
-                  {t('home.pinned')}
-                </Text>
-                {pinned.map(c => (
-                  <ChatRow
-                    key={c.id}
-                    chat={c}
-                    onOpen={onOpenSession}
-                    now={now}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </>
-        }
-        ListEmptyComponent={
-          pinned.length === 0 ? (
-            <Text style={[styles.empty, { color: theme.textSecondary }]}>
-              {t('home.empty')}
-            </Text>
-          ) : null
-        }
-        ListFooterComponent={
-          archived.length > 0 ? (
-            <View>
-              <Pressable
-                style={styles.archivedHeader}
-                onPress={() => setArchivedOpen(o => !o)}
-                hitSlop={6}
-                testID="home-archived-header"
+        bottomBand={searching ? 0 : THREADS_BOTTOM_FADE_BAND}
+      >
+        <LegendList
+          style={styles.fillList}
+          data={rest}
+          keyExtractor={item => item.id}
+          estimatedItemSize={78}
+          recycleItems
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListHeaderComponent={
+            <>
+              <Text
+                style={[styles.largeTitle, { color: theme.text }]}
+                testID="home-title"
               >
-                <View style={styles.archivedIcon}>
-                  <Icon
-                    name="archivebox"
-                    size={14}
-                    color={theme.textSecondary}
-                  />
-                </View>
-                <Text
-                  style={[styles.archivedLabel, { color: theme.textSecondary }]}
-                >
-                  {`${t('home.archived')} (${archived.length})`}
-                </Text>
-                <View style={styles.archivedIcon}>
-                  <Icon
-                    name={archivedOpen ? 'chevron.up' : 'chevron.down'}
-                    size={14}
-                    color={theme.textSecondary}
-                  />
-                </View>
-              </Pressable>
-              {archivedOpen
-                ? archived.map(c => (
+                {spaceFilter === undefined
+                  ? t('home.sessions')
+                  : spaceName(spaceFilter)}
+              </Text>
+              {pinned.length > 0 ? (
+                <View style={styles.pinnedSection} testID="home-pinned-section">
+                  <Text
+                    style={[styles.section, { color: theme.textSecondary }]}
+                  >
+                    {t('home.pinned')}
+                  </Text>
+                  {pinned.map(c => (
                     <ChatRow
                       key={c.id}
                       chat={c}
                       onOpen={onOpenSession}
                       now={now}
                     />
-                  ))
-                : null}
-            </View>
-          ) : null
-        }
-        contentContainerStyle={[
-          styles.listContent,
-          {
-            paddingTop: chromeH + LIST_GAP_BELOW_CHROME,
-            paddingBottom: bottomPad,
-          },
-        ]}
-        scrollIndicatorInsets={{
-          top: headerH,
-          bottom: searching ? 0 : bottomH,
-        }}
-        showsVerticalScrollIndicator={false}
-        keyboardDismissMode="interactive"
-        renderItem={renderRow}
-      />
+                  ))}
+                </View>
+              ) : null}
+            </>
+          }
+          ListEmptyComponent={
+            pinned.length === 0 ? (
+              <Text style={[styles.empty, { color: theme.textSecondary }]}>
+                {t('home.empty')}
+              </Text>
+            ) : null
+          }
+          ListFooterComponent={
+            archived.length > 0 ? (
+              <View>
+                <Pressable
+                  style={styles.archivedHeader}
+                  onPress={() => setArchivedOpen(o => !o)}
+                  hitSlop={6}
+                  testID="home-archived-header"
+                >
+                  <View style={styles.archivedIcon}>
+                    <Icon
+                      name="archivebox"
+                      size={14}
+                      color={theme.textSecondary}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.archivedLabel,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    {`${t('home.archived')} (${archived.length})`}
+                  </Text>
+                  <View style={styles.archivedIcon}>
+                    <Icon
+                      name={archivedOpen ? 'chevron.up' : 'chevron.down'}
+                      size={14}
+                      color={theme.textSecondary}
+                    />
+                  </View>
+                </Pressable>
+                {archivedOpen
+                  ? archived.map(c => (
+                      <ChatRow
+                        key={c.id}
+                        chat={c}
+                        onOpen={onOpenSession}
+                        now={now}
+                      />
+                    ))
+                  : null}
+              </View>
+            ) : null
+          }
+          contentContainerStyle={[
+            styles.listContent,
+            {
+              paddingTop: chromeH + LIST_GAP_BELOW_CHROME,
+              paddingBottom: bottomPad,
+            },
+          ]}
+          scrollIndicatorInsets={{
+            top: headerH,
+            bottom: searching ? 0 : bottomH,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="interactive"
+          renderItem={renderRow}
+        />
+      </ContentEdgeMask>
 
       <TopChromeFade inset={chromeH} />
+      {searching ? null : (
+        <ChromeFade
+          edge="bottom"
+          inset={0}
+          fadeBand={THREADS_BOTTOM_FADE_BAND}
+          style={{
+            bottom:
+              bottomH !== 0
+                ? Math.max(0, bottomH - 8)
+                : insets.bottom + CIRCLE + 8,
+          }}
+        />
+      )}
 
       <View
         style={[styles.topBar, { paddingTop: insets.top + 8 }]}
@@ -772,6 +812,7 @@ const CIRCLE = 44;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  fillList: { flex: 1 },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3 },
   topRow: {
     flexDirection: 'row',
@@ -781,7 +822,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingHorizontal: 16,
   },
-  topRowSidebar: { paddingHorizontal: 0 },
+  topRowSidebar: { paddingHorizontal: 16 },
   search: {
     flex: 1,
     flexDirection: 'row',
@@ -879,6 +920,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 3,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',

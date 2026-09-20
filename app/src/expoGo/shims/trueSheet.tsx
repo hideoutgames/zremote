@@ -23,6 +23,7 @@ export interface TrueSheetProps {
   maxContentHeight?: number;
   onDetentChange?: (event: { nativeEvent: { index: number } }) => void;
   dismissible?: boolean;
+  draggable?: boolean;
   children?: React.ReactNode;
   style?: object;
 }

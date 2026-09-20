@@ -26,6 +26,7 @@ export interface QueuePanelProps {
   canSteer: boolean;
   onAction: (id: string, action: QueueActionKind) => void;
   onMove?: (id: string, toIndex: number) => void;
+  onDragging?: (dragging: boolean) => void;
 }
 
 export function QueuePanel({
@@ -36,6 +37,7 @@ export function QueuePanel({
   canSteer,
   onAction,
   onMove,
+  onDragging,
 }: QueuePanelProps) {
   const theme = useTheme();
   const [dragId, setDragId] = useState<string | null>(null);
@@ -59,10 +61,13 @@ export function QueuePanel({
           const handle = PanResponder.create({
             onStartShouldSetPanResponder: () => onMove !== undefined,
             onMoveShouldSetPanResponder: () => onMove !== undefined,
+            onPanResponderTerminationRequest: () => false,
+            onShouldBlockNativeResponder: () => true,
             onPanResponderGrant: () => {
               startIndex.current = index;
               setDragId(item.id);
               setDragDy(0);
+              onDragging?.(true);
             },
             onPanResponderMove: (_e, g) => setDragDy(g.dy),
             onPanResponderRelease: (_e, g) => {
@@ -73,11 +78,13 @@ export function QueuePanel({
               );
               setDragId(null);
               setDragDy(0);
+              onDragging?.(false);
               if (next !== startIndex.current) onMove?.(item.id, next);
             },
             onPanResponderTerminate: () => {
               setDragId(null);
               setDragDy(0);
+              onDragging?.(false);
             },
           });
           return (
@@ -94,6 +101,7 @@ export function QueuePanel({
               {onMove !== undefined ? (
                 <View
                   {...handle.panHandlers}
+                  testID="queue-reorder-handle"
                   style={styles.handle}
                   accessibilityLabel={t('queue.reorder')}
                 >

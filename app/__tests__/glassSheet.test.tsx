@@ -16,6 +16,7 @@ test('GlassSheet defaults to half-screen with a full-screen swipe detent', async
   expect(GLASS_SHEET_DETENTS).toEqual([0.5, 1]);
   expect(sheet.props.detents).toEqual([0.5, 1]);
   expect(sheet.props.initialDetentIndex).toBe(0);
+  expect(sheet.props.draggable).toBe(true);
 });
 
 test('GlassSheet fills the detent so body content is not collapsed', async () => {
