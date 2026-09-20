@@ -26,7 +26,7 @@ const modelMenuItem = (
       {source !== undefined ? (
         <DropdownMenu.ItemImage
           source={source}
-          ios={{ style: { renderingMode: 'template' } }}
+          ios={{ style: { renderingMode: 'alwaysTemplate' } }}
         />
       ) : null}
       <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>

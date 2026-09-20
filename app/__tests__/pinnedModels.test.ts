@@ -130,9 +130,7 @@ test('composerMenuModels prefers pins and falls back to recents', () => {
   expect(recents[0]?.model).toBe('composer');
   expect(recents.map(i => i.model)).toContain('gpt-5');
   expect(recents.find(i => i.model === 'gpt-5')?.harnessName).toBe('Codex');
-  expect(recents.find(i => i.model === 'composer')?.harnessName).toBe(
-    'Cursor',
-  );
+  expect(recents.find(i => i.model === 'composer')?.harnessName).toBe('Cursor');
   expect(recents.length).toBeLessThanOrEqual(3);
 
   const locked = composerMenuModels(
