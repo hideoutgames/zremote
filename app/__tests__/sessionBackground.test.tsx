@@ -303,8 +303,8 @@ test('composer home pad does not snap when the keyboard becomes visible', async 
     expect(closed).toBe(42);
     expect(opened).toBe(42);
   } finally {
-    mocked.mockImplementation(
-      (selector: (s: { height: number }) => unknown) => selector({ height: 0 }),
+    mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
+      selector({ height: 0 }),
     );
     jest.restoreAllMocks();
   }
