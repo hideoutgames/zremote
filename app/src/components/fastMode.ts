@@ -2,7 +2,12 @@
 // demo fixtures: fast; ACP: fast-mode). Codex advertises Fast as serviceTier
 // (or service-tier) with a `fast` choice, not a dedicated fastMode option.
 
-import type { Model, ModelOption } from '../zeron/protocol/types';
+import type {
+  Model,
+  ModelOption,
+  ModelOptionChoice,
+} from '../zeron/protocol/types';
+import { t } from '../i18n/strings';
 
 export const FAST_OPTION_IDS = ['fast', 'fastMode', 'fast-mode'] as const;
 
@@ -56,4 +61,51 @@ export const fastOnChoice = (option: ModelOption): string => {
 export const fastOffChoice = (option: ModelOption): string => {
   const off = option.choices.find(c => isFastOffChoice(c.id));
   return off?.id ?? option.defaultChoice;
+};
+
+const GENERIC_ON_LABELS = new Set(['on', 'true', 'yes', '1']);
+const GENERIC_OFF_LABELS = new Set(['off', 'false', 'no', '0']);
+
+/** Menu title for a Fast catalog choice: off-like ids are always Normal. */
+export const fastChoiceLabel = (choice: ModelOptionChoice): string => {
+  if (isFastOffChoice(choice.id)) return t('picker.fastNormal');
+  const label = choice.label.trim();
+  if (
+    label === '' ||
+    GENERIC_ON_LABELS.has(label.toLowerCase()) ||
+    GENERIC_OFF_LABELS.has(label.toLowerCase())
+  ) {
+    return t('picker.fast');
+  }
+  return choice.label;
+};
+
+/** Fast dropdown items: provider names for on-like choices, Normal for off. */
+export const fastMenuItems = (
+  option?: ModelOption,
+): { id: string; label: string }[] => {
+  if (option === undefined) {
+    return [
+      { id: 'on', label: t('picker.fast') },
+      { id: 'off', label: t('picker.fastNormal') },
+    ];
+  }
+  if (option.choices.length > 2) {
+    return option.choices.map(c => ({
+      id: c.id,
+      label: fastChoiceLabel(c),
+    }));
+  }
+  const on = option.choices.find(c => !isFastOffChoice(c.id));
+  const off = option.choices.find(c => isFastOffChoice(c.id));
+  return [
+    {
+      id: on?.id ?? fastOnChoice(option),
+      label: on !== undefined ? fastChoiceLabel(on) : t('picker.fast'),
+    },
+    {
+      id: off?.id ?? fastOffChoice(option),
+      label: t('picker.fastNormal'),
+    },
+  ];
 };
