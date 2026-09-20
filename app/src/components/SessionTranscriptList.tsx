@@ -13,7 +13,6 @@ import React, {
 } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -30,7 +29,6 @@ import type { MessageEntry } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
 import { transcriptHorizontalPadding } from '../navigation/layout';
-import { useTheme } from '../theme';
 import {
   ContentEdgeMask,
   CHAT_TOP_FADE_BAND,
@@ -134,7 +132,6 @@ export const SessionTranscriptList = forwardRef<
   ref,
 ) {
   'use no memo';
-  const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const keyboardHeight = useKeyboardState(s => s.height);
   const listRef = useRef<FlashListRef<TranscriptRow>>(null);
@@ -650,11 +647,6 @@ export const SessionTranscriptList = forwardRef<
           scrollIndicatorInsets={{ top: insetsTop + 96 }}
           showsVerticalScrollIndicator={!overflowing}
           keyboardDismissMode="interactive"
-          ListEmptyComponent={
-            <Text style={[styles.empty, { color: theme.textSecondary }]}>
-              {t('session.empty')}
-            </Text>
-          }
         />
       </ContentEdgeMask>
       {overflowing && railItems.length > 1 && railHeight > 0 ? (
@@ -677,5 +669,4 @@ export const SessionTranscriptList = forwardRef<
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   listContent: { paddingBottom: 4 },
-  empty: { fontSize: 15, textAlign: 'center', padding: 32 },
 });
