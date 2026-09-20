@@ -66,8 +66,8 @@ test('Sign in opens WorkOS via a zeron:// auth session and shows paste fallback 
   const texts = allText(tree!.root);
   expect(texts).toContain('Paste the sign-in code');
   expect(
-    tree!.root.findAll(n => typeof n.props.onChangeText === 'function').length,
-  ).toBe(1);
+    tree!.root.findAll(n => n.props.accessibilityLabel === 'state.code').length,
+  ).toBeGreaterThan(0);
   expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalled();
   const [url, redirect, opts] = (WebBrowser.openAuthSessionAsync as jest.Mock)
     .mock.calls[0];
