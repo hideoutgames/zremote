@@ -27,7 +27,7 @@ const log = createLog();
 
 const PKCE_ENABLED = true;
 /** Keep Continue visible above the keyboard, not only the TextInput. */
-const PASTE_KEYBOARD_BOTTOM_OFFSET = 64;
+const PASTE_KEYBOARD_BOTTOM_OFFSET = 80;
 
 const pasteFromCallback = (code: string, state: string): string =>
   `${state}.${code}`;
@@ -121,6 +121,7 @@ export function SignInScreen() {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
       bottomOffset={PASTE_KEYBOARD_BOTTOM_OFFSET}
+      mode="layout"
     >
       <Text style={[styles.title, { color: theme.text }]}>
         {t('signIn.title')}

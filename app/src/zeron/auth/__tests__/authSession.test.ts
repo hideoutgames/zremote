@@ -309,7 +309,9 @@ describe('AuthSession sign-in', () => {
       pkce: false,
     });
     const next = await session.completePastedCode(
-      `zeron://auth/callback?code=pastedcode&state=${encodeURIComponent(state)}`,
+      `zeron://auth/callback?code=pastedcode&state=${encodeURIComponent(
+        state,
+      )}`,
     );
     expect(next.state).toBe('signedIn');
   });
