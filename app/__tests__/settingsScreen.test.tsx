@@ -4,6 +4,7 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import { authStore } from '../src/zeron/state/authStore';
@@ -14,6 +15,8 @@ import {
   type AppServices,
 } from '../src/app/runtimeContext';
 import type { DeviceRow } from '../src/zeron/protocol/types';
+
+const mockedHaptics = Haptics as jest.Mocked<typeof Haptics>;
 
 const device: DeviceRow = {
   id: 'host1',
@@ -226,4 +229,20 @@ test('theme row defaults to System and choosing Dark updates the store', async (
     dark.props.onPress();
   });
   expect(uiPrefsStore.getState().colorScheme).toBe('dark');
+});
+
+test('enabling haptics plays a confirmation impact', async () => {
+  uiPrefsStore.setState({ hapticsEnabled: false });
+  mockedHaptics.impactAsync.mockClear();
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const sw = mounted.root.findAll(
+    n =>
+      n.props.accessibilityLabel === 'Haptics' &&
+      typeof n.props.onValueChange === 'function',
+  )[0];
+  await act(async () => {
+    sw.props.onValueChange(true);
+  });
+  expect(uiPrefsStore.getState().hapticsEnabled).toBe(true);
+  expect(mockedHaptics.impactAsync).toHaveBeenCalledTimes(1);
 });

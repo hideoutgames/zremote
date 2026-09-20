@@ -1,0 +1,310 @@
+diff --git a/node_modules/expo-haptics/build/Haptics.d.ts b/node_modules/expo-haptics/build/Haptics.d.ts
+index 5eed642..110f0c2 100644
+--- a/node_modules/expo-haptics/build/Haptics.d.ts
++++ b/node_modules/expo-haptics/build/Haptics.d.ts
+@@ -22,6 +22,11 @@ export declare function impactAsync(style?: ImpactFeedbackStyle): Promise<void>;
+  * @return A `Promise` which fulfills once native size haptics functionality is triggered.
+  */
+ export declare function selectionAsync(): Promise<void>;
++/**
++ * Warm the Taptic Engine / Core Haptics engine so the next selection tick
++ * is not dropped. No-ops when the native module is absent.
++ */
++export declare function prepareSelectionAsync(): Promise<void>;
+ /**
+  * Use the device haptics engine to provide physical feedback to the user.
+  *
+diff --git a/node_modules/expo-haptics/ios/ExpoHaptics.podspec b/node_modules/expo-haptics/ios/ExpoHaptics.podspec
+index 8b0c432..47f4ee4 100644
+--- a/node_modules/expo-haptics/ios/ExpoHaptics.podspec
++++ b/node_modules/expo-haptics/ios/ExpoHaptics.podspec
+@@ -18,6 +18,7 @@ Pod::Spec.new do |s|
+   s.static_framework = true
+ 
+   s.dependency 'ExpoModulesCore'
++  s.frameworks = 'CoreHaptics', 'AVFoundation'
+ 
+   s.source_files = "**/*.{h,m,swift}"
+   s.pod_target_xcconfig = {
+diff --git a/node_modules/expo-haptics/ios/HapticsModule.swift b/node_modules/expo-haptics/ios/HapticsModule.swift
+index 41659a0..45c94bd 100644
+--- a/node_modules/expo-haptics/ios/HapticsModule.swift
++++ b/node_modules/expo-haptics/ios/HapticsModule.swift
+@@ -1,31 +1,187 @@
++import AVFoundation
++import CoreHaptics
+ import ExpoModulesCore
++import UIKit
+ 
+ public class HapticsModule: Module {
++  // UIFeedbackGenerator plays asynchronously. Expo's stock implementation
++  // allocated a generator, called prepare()+fire, and returned — ARC then
++  // released it before the Taptic Engine ran. iOS 17.5+ also wants the
++  // generator attached to a view; the no-view initializers are deprecated
++  // and no-op on recent systems. Keep generators + a Core Haptics engine
++  // on the module (the module lives for the app lifetime).
++  private var selectionGenerator: UISelectionFeedbackGenerator?
++  private var notificationGenerator: UINotificationFeedbackGenerator?
++  private var impactGenerators: [String: UIImpactFeedbackGenerator] = [:]
++  private var hapticEngine: CHHapticEngine?
++  private var lastPlayer: CHHapticPatternPlayer?
++
+   public func definition() -> ModuleDefinition {
+     Name("ExpoHaptics")
+ 
+-    AsyncFunction("notificationAsync") { (notificationType: NotificationType) in
+-      let generator = UINotificationFeedbackGenerator()
++    AsyncFunction("prepareSelectionAsync") {
++      self.warmEngine()
++      let generator = self.selectionFeedback()
+       generator.prepare()
+-      generator.notificationOccurred(notificationType.toFeedbackType())
++    }
++    .runOnQueue(.main)
++
++    AsyncFunction("notificationAsync") { (notificationType: NotificationType) in
++      self.playNotification(notificationType)
+     }
+     .runOnQueue(.main)
+ 
+     AsyncFunction("impactAsync") { (style: ImpactStyle) in
+-      let generator = UIImpactFeedbackGenerator(style: style.toFeedbackStyle())
+-      generator.prepare()
+-      generator.impactOccurred()
++      self.playImpact(style)
+     }
+     .runOnQueue(.main)
+ 
+     AsyncFunction("selectionAsync") {
+-      let generator = UISelectionFeedbackGenerator()
+-      generator.prepare()
+-      generator.selectionChanged()
++      self.playSelection()
+     }
+     .runOnQueue(.main)
+   }
+ 
++  // MARK: - Core Haptics
++
++  private func warmEngine() {
++    guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
++    if hapticEngine != nil { return }
++    do {
++      try AVAudioSession.sharedInstance()
++        .setAllowHapticsAndSystemSoundsDuringRecording(true)
++      let engine = try CHHapticEngine()
++      engine.playsHapticsOnly = true
++      engine.isAutoShutdownEnabled = false
++      engine.resetHandler = { [weak self] in
++        try? self?.hapticEngine?.start()
++      }
++      engine.stoppedHandler = { [weak self] _ in
++        try? self?.hapticEngine?.start()
++      }
++      try engine.start()
++      hapticEngine = engine
++    } catch {
++      hapticEngine = nil
++    }
++  }
++
++  @discardableResult
++  private func playTransient(intensity: Float, sharpness: Float, at time: TimeInterval = 0) -> Bool {
++    playEvents([
++      CHHapticEvent(
++        eventType: .hapticTransient,
++        parameters: [
++          CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
++          CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)
++        ],
++        relativeTime: time
++      )
++    ])
++  }
++
++  private func playEvents(_ events: [CHHapticEvent]) -> Bool {
++    warmEngine()
++    guard let engine = hapticEngine else { return false }
++    do {
++      let pattern = try CHHapticPattern(events: events, parameters: [])
++      let player = try engine.makePlayer(with: pattern)
++      // Retain across the async playback; otherwise ARC drops the player.
++      lastPlayer = player
++      try player.start(atTime: CHHapticTimeImmediate)
++      return true
++    } catch {
++      return false
++    }
++  }
++
++  // MARK: - UIFeedbackGenerator (system patterns, view-attached)
++
++  private func hostView() -> UIView? {
++    let windows = UIApplication.shared.connectedScenes
++      .compactMap { $0 as? UIWindowScene }
++      .flatMap { $0.windows }
++    let window = windows.first { $0.isKeyWindow } ?? windows.last
++    guard let root = window?.rootViewController else { return window }
++    return Self.topViewController(from: root).viewIfLoaded ?? window
++  }
++
++  private static func topViewController(from vc: UIViewController) -> UIViewController {
++    if let presented = vc.presentedViewController {
++      return topViewController(from: presented)
++    }
++    if let nav = vc as? UINavigationController, let visible = nav.visibleViewController {
++      return topViewController(from: visible)
++    }
++    if let tab = vc as? UITabBarController, let selected = tab.selectedViewController {
++      return topViewController(from: selected)
++    }
++    return vc
++  }
++
++  private func selectionFeedback() -> UISelectionFeedbackGenerator {
++    if let existing = selectionGenerator { return existing }
++    let generator: UISelectionFeedbackGenerator
++    if #available(iOS 17.5, *), let view = hostView() {
++      generator = UISelectionFeedbackGenerator(view: view)
++    } else {
++      generator = UISelectionFeedbackGenerator()
++    }
++    selectionGenerator = generator
++    return generator
++  }
++
++  private func notificationFeedback() -> UINotificationFeedbackGenerator {
++    if let existing = notificationGenerator { return existing }
++    let generator: UINotificationFeedbackGenerator
++    if #available(iOS 17.5, *), let view = hostView() {
++      generator = UINotificationFeedbackGenerator(view: view)
++    } else {
++      generator = UINotificationFeedbackGenerator()
++    }
++    notificationGenerator = generator
++    return generator
++  }
++
++  private func impactFeedback(_ style: UIImpactFeedbackGenerator.FeedbackStyle) -> UIImpactFeedbackGenerator {
++    let key = String(describing: style)
++    if let existing = impactGenerators[key] { return existing }
++    let generator: UIImpactFeedbackGenerator
++    if #available(iOS 17.5, *), let view = hostView() {
++      generator = UIImpactFeedbackGenerator(style: style, view: view)
++    } else {
++      generator = UIImpactFeedbackGenerator(style: style)
++    }
++    impactGenerators[key] = generator
++    return generator
++  }
++
++  private func playSelection() {
++    if playTransient(intensity: 0.55, sharpness: 0.35) { return }
++    // Recreate against the current presented view (effort overlay Modal).
++    selectionGenerator = nil
++    let generator = selectionFeedback()
++    generator.selectionChanged()
++    generator.prepare()
++  }
++
++  private func playImpact(_ style: ImpactStyle) {
++    let (intensity, sharpness) = style.coreHaptic()
++    if playTransient(intensity: intensity, sharpness: sharpness) { return }
++    let native = style.toFeedbackStyle()
++    impactGenerators.removeValue(forKey: String(describing: native))
++    let generator = impactFeedback(native)
++    generator.impactOccurred()
++    generator.prepare()
++  }
++
++  private func playNotification(_ type: NotificationType) {
++    if playEvents(type.coreHapticEvents()) { return }
++    notificationGenerator = nil
++    let generator = notificationFeedback()
++    generator.notificationOccurred(type.toFeedbackType())
++  }
++
+   enum NotificationType: String, Enumerable {
+     case success
+     case warning
+@@ -41,6 +197,37 @@ public class HapticsModule: Module {
+         return .error
+       }
+     }
++
++    func coreHapticEvents() -> [CHHapticEvent] {
++      func transient(_ intensity: Float, _ sharpness: Float, _ time: TimeInterval) -> CHHapticEvent {
++        CHHapticEvent(
++          eventType: .hapticTransient,
++          parameters: [
++            CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
++            CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)
++          ],
++          relativeTime: time
++        )
++      }
++      switch self {
++      case .success:
++        return [
++          transient(0.55, 0.35, 0),
++          transient(0.85, 0.55, 0.12)
++        ]
++      case .warning:
++        return [
++          transient(0.7, 0.3, 0),
++          transient(0.5, 0.2, 0.14)
++        ]
++      case .error:
++        return [
++          transient(1.0, 0.85, 0),
++          transient(0.9, 0.9, 0.1),
++          transient(1.0, 0.7, 0.22)
++        ]
++      }
++    }
+   }
+ 
+   enum ImpactStyle: String, Enumerable {
+@@ -64,5 +251,20 @@ public class HapticsModule: Module {
+         return .rigid
+       }
+     }
++
++    func coreHaptic() -> (Float, Float) {
++      switch self {
++      case .light:
++        return (0.45, 0.35)
++      case .medium:
++        return (0.7, 0.5)
++      case .heavy:
++        return (1.0, 0.7)
++      case .soft:
++        return (0.4, 0.15)
++      case .rigid:
++        return (0.85, 0.9)
++      }
++    }
+   }
+ }
+diff --git a/node_modules/expo-haptics/src/Haptics.ts b/node_modules/expo-haptics/src/Haptics.ts
+index ffa7d34..3d2b281 100644
+--- a/node_modules/expo-haptics/src/Haptics.ts
++++ b/node_modules/expo-haptics/src/Haptics.ts
+@@ -51,6 +51,17 @@ export async function selectionAsync(): Promise<void> {
+   await ExpoHaptics.selectionAsync();
+ }
+ 
++/**
++ * Warm the Taptic Engine / Core Haptics engine so the next selection tick
++ * is not dropped. No-ops when the native module is absent.
++ */
++export async function prepareSelectionAsync(): Promise<void> {
++  if (!ExpoHaptics?.prepareSelectionAsync) {
++    return;
++  }
++  await ExpoHaptics.prepareSelectionAsync();
++}
++
+ /**
+  * Use the device haptics engine to provide physical feedback to the user.
+  *
