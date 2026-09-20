@@ -106,6 +106,7 @@ export function ChatBackgroundBlur({
             ? [styles.column, { maxWidth: blurWidth }]
             : StyleSheet.absoluteFill
         }
+        testID="chat-background-blur-column"
       >
         <FadeBlur
           fade={spec.fade}

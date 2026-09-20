@@ -977,6 +977,7 @@ function ActiveSessionScreen({
         <View
           ref={composerRef}
           onLayout={event => transcriptRef.current?.onComposerLayout(event)}
+          testID="session-composer-column"
           style={[
             styles.measureCap,
             composerMaxWidth !== undefined

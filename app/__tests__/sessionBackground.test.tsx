@@ -1,5 +1,5 @@
 import React from 'react';
-import { TextInput } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import { SessionScreen } from '../src/screens/SessionScreen';
@@ -192,17 +192,13 @@ test('iPad compose composer is a centered max-width column', async () => {
     <SessionScreen onBack={() => {}} composerMaxWidth={560} />,
   );
   const center = mounted.root.findByProps({ testID: 'compose-center' });
-  const centerStyle = Array.isArray(center.props.style)
-    ? center.props.style.flat()
-    : [center.props.style];
-  expect(centerStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  const centerStyle = StyleSheet.flatten(center.props.style);
+  expect(centerStyle.alignItems).toBe('center');
   const composer = mounted.root.findByProps({ testID: 'compose-composer' });
-  const composerStyle = Array.isArray(composer.props.style)
-    ? composer.props.style.flat()
-    : [composer.props.style];
-  expect(composerStyle.some(s => s?.width === '100%')).toBe(true);
-  expect(composerStyle.some(s => s?.maxWidth === 560)).toBe(true);
-  expect(composerStyle.some(s => s?.alignSelf === 'center')).toBe(false);
+  const composerStyle = StyleSheet.flatten(composer.props.style);
+  expect(composerStyle.width).toBe('100%');
+  expect(composerStyle.maxWidth).toBe(560);
+  expect(composerStyle.alignSelf).not.toBe('center');
 });
 
 test('iPad session composer parent centers a max-width column', async () => {
@@ -221,17 +217,13 @@ test('iPad session composer parent centers a max-width column', async () => {
     <SessionScreen chatId="c1" onBack={() => {}} composerMaxWidth={560} />,
   );
   const wrap = mounted.root.findByProps({ testID: 'session-composer' });
-  const wrapStyle = Array.isArray(wrap.props.style)
-    ? wrap.props.style.flat()
-    : [wrap.props.style];
-  expect(wrapStyle.some(s => s?.alignItems === 'center')).toBe(true);
-  const inner = wrap.children[0] as TestRenderer.ReactTestInstance;
-  const innerStyle = Array.isArray(inner.props.style)
-    ? inner.props.style.flat()
-    : [inner.props.style];
-  expect(innerStyle.some(s => s?.width === '100%')).toBe(true);
-  expect(innerStyle.some(s => s?.maxWidth === 560)).toBe(true);
-  expect(innerStyle.some(s => s?.alignSelf === 'center')).toBe(false);
+  const wrapStyle = StyleSheet.flatten(wrap.props.style);
+  expect(wrapStyle.alignItems).toBe('center');
+  const inner = mounted.root.findByProps({ testID: 'session-composer-column' });
+  const innerStyle = StyleSheet.flatten(inner.props.style);
+  expect(innerStyle.width).toBe('100%');
+  expect(innerStyle.maxWidth).toBe(560);
+  expect(innerStyle.alignSelf).not.toBe('center');
 });
 
 test('chat blur column is parent-centered on iPad', async () => {
@@ -250,17 +242,18 @@ test('chat blur column is parent-centered on iPad', async () => {
     <SessionScreen chatId="c1" onBack={() => {}} contentMaxWidth={720} />,
   );
   const blur = mounted.root.findByProps({ testID: 'chat-background-blur' });
-  const layerStyle = Array.isArray(blur.props.style)
-    ? blur.props.style.flat()
-    : [blur.props.style];
-  expect(layerStyle.some(s => s?.alignItems === 'center')).toBe(true);
-  const column = blur.children[0] as TestRenderer.ReactTestInstance;
-  const columnStyle = Array.isArray(column.props.style)
-    ? column.props.style.flat()
-    : [column.props.style];
-  expect(columnStyle.some(s => s?.width === '100%')).toBe(true);
-  expect(columnStyle.some(s => s?.alignSelf === 'center')).toBe(false);
+  const layerStyle = StyleSheet.flatten(blur.props.style);
+  expect(layerStyle.alignItems).toBe('center');
+  const column = mounted.root.findByProps({
+    testID: 'chat-background-blur-column',
+  });
+  const columnStyle = StyleSheet.flatten(column.props.style);
+  expect(columnStyle.width).toBe('100%');
+  expect(columnStyle.alignSelf).not.toBe('center');
+  expect(columnStyle.maxWidth).toBe(chatBlurMaxWidth(720));
 });
+
+test('no artwork means no wallpaper or blur layers', async () => {
   uiPrefsStore.setState({
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',

@@ -692,6 +692,10 @@ test('wide overflowing iPad transcript does not add extra rail padding', async (
     paddingLeft: 140,
     paddingRight: 140,
   });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
 
 test('width change while following re-anchors to the end', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
