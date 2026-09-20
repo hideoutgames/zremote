@@ -1,20 +1,24 @@
 // Window-sized session wallpaper: cover-fit artwork behind Home, existing
 // chats, and new-thread compose. Treatments (dither / ASCII / halftone /
-// scanlines) use a static Skia RuntimeEffect — no Reanimated worklets.
-// Falls back to the untreated image when the shader or decode fails
-// (Jest, Expo Go, compile errors). Mount once at AdaptiveShell / RootPager
-// so every surface shares the same crop.
+// scanlines) raster in source-image space (≤2048, matching desktop) via a
+// static Skia RuntimeEffect, then the snapshot is cover-fitted. Falls back
+// to the untreated image when the shader or decode fails (Jest, Expo Go,
+// compile errors). Mount once at AdaptiveShell / RootPager so every surface
+// shares the same crop.
 
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import {
   Canvas,
-  Fill,
-  ImageShader,
-  Shader,
+  FilterMode,
+  Image as SkiaImage,
+  MipmapMode,
   Skia,
+  TileMode,
   useImage,
+  type SkImage,
+  type SkRuntimeEffect,
 } from '@shopify/react-native-skia';
 import { useTheme } from '../theme';
 import {
@@ -30,82 +34,16 @@ import {
   contrastSchemeFromLuminance,
   setWallpaperContrast,
 } from '../zeron/state/wallpaperContrast';
+import {
+  ASCII_SKSL,
+  BACKGROUND_EFFECT_MAX_EDGE,
+  DITHER_SKSL,
+  HALFTONE_SKSL,
+  SCANLINES_SKSL,
+  thumbnailSize,
+} from './backgroundEffects';
 
-const SCANLINES = `
-uniform shader image;
-uniform float light;
-half4 main(float2 xy) {
-  half4 c = image.eval(xy);
-  float gain = mod(floor(xy.y), 3.0) < 0.5 ? 0.52 : 1.0;
-  half3 rgb = light > 0.5
-    ? c.rgb + (half3(1.0) - c.rgb) * (1.0 - gain)
-    : c.rgb * gain;
-  return half4(rgb, c.a);
-}
-`;
-
-const DITHER = `
-uniform shader image;
-half4 main(float2 xy) {
-  half4 c = image.eval(xy);
-  float2 p = floor(xy / 2.0);
-  float bx = mod(p.x, 4.0);
-  float by = mod(p.y, 4.0);
-  float bayer = 0.0;
-  if (by < 0.5) {
-    bayer = bx < 0.5 ? 0.0 : bx < 1.5 ? 8.0 : bx < 2.5 ? 2.0 : 10.0;
-  } else if (by < 1.5) {
-    bayer = bx < 0.5 ? 12.0 : bx < 1.5 ? 4.0 : bx < 2.5 ? 14.0 : 6.0;
-  } else if (by < 2.5) {
-    bayer = bx < 0.5 ? 3.0 : bx < 1.5 ? 11.0 : bx < 2.5 ? 1.0 : 9.0;
-  } else {
-    bayer = bx < 0.5 ? 15.0 : bx < 1.5 ? 7.0 : bx < 2.5 ? 13.0 : 5.0;
-  }
-  half3 q = floor(c.rgb * 4.0 + ((bayer / 16.0) - 0.5)) / 4.0;
-  return half4(clamp(q, 0.0, 1.0), c.a);
-}
-`;
-
-const HALFTONE = `
-uniform shader image;
-uniform float light;
-half4 main(float2 xy) {
-  float2 origin = floor(xy / 4.0) * 4.0;
-  half4 sample = image.eval(origin + float2(2.0));
-  half4 src = image.eval(xy);
-  float luma = dot(sample.rgb, half3(0.299, 0.587, 0.114));
-  if (light > 0.5) luma = 1.0 - luma;
-  float radius = 2.0 * (0.3 + 0.7 * sqrt(max(luma, 0.0)));
-  float dist = length(xy - (origin + float2(1.5)));
-  float coverage = clamp(radius + 0.5 - dist, 0.0, 1.0) * sample.a;
-  float paper = light > 0.5 ? 1.0 : 0.0;
-  half3 mixed = src.rgb * 0.60
-    + mix(half3(paper), sample.rgb, coverage) * 0.40;
-  return half4(mixed, src.a);
-}
-`;
-
-const ASCII = `
-uniform shader image;
-uniform float light;
-half4 main(float2 xy) {
-  float2 cell = float2(6.0, 8.0);
-  float2 origin = floor(xy / cell) * cell;
-  half4 sample = image.eval(origin + float2(3.0, 4.0));
-  half4 src = image.eval(xy);
-  float luma = dot(sample.rgb, half3(0.299, 0.587, 0.114));
-  if (light > 0.5) luma = 1.0 - luma;
-  float level = floor(sqrt(max(luma, 0.0)) * 9.0 + 0.5);
-  float2 local = xy - origin;
-  float ink = step(local.x, 4.5) * step(local.y, 6.5) * step(2.5, level);
-  float paper = light > 0.5 ? 1.0 : 0.0;
-  half3 mixed = src.rgb * 0.60
-    + mix(half3(paper), sample.rgb, ink) * 0.40;
-  return half4(mixed, src.a);
-}
-`;
-
-const compile = (src: string) => {
+const compile = (src: string): SkRuntimeEffect | null => {
   try {
     return Skia.RuntimeEffect.Make(src);
   } catch {
@@ -113,11 +51,67 @@ const compile = (src: string) => {
   }
 };
 
-const SHADERS = {
-  scanlines: compile(SCANLINES),
-  dither: compile(DITHER),
-  halftone: compile(HALFTONE),
-  ascii: compile(ASCII),
+const SHADERS: Record<
+  Exclude<NewThreadBackgroundEffect, 'none'>,
+  SkRuntimeEffect | null
+> = {
+  scanlines: compile(SCANLINES_SKSL),
+  dither: compile(DITHER_SKSL),
+  halftone: compile(HALFTONE_SKSL),
+  ascii: compile(ASCII_SKSL),
+};
+
+const thumbnailImage = (image: SkImage): SkImage | null => {
+  const srcW = image.width();
+  const srcH = image.height();
+  const { width, height } = thumbnailSize(
+    srcW,
+    srcH,
+    BACKGROUND_EFFECT_MAX_EDGE,
+  );
+  if (width <= 0 || height <= 0) return null;
+  if (width === srcW && height === srcH) return image;
+  const surface = Skia.Surface.MakeOffscreen(width, height);
+  if (surface == null) return null;
+  surface
+    .getCanvas()
+    .drawImageRectOptions(
+      image,
+      Skia.XYWHRect(0, 0, srcW, srcH),
+      Skia.XYWHRect(0, 0, width, height),
+      FilterMode.Linear,
+      MipmapMode.None,
+      Skia.Paint(),
+    );
+  return surface.makeImageSnapshot();
+};
+
+const rasterizeBackgroundEffect = (
+  image: SkImage,
+  effect: Exclude<NewThreadBackgroundEffect, 'none'>,
+  light: boolean,
+): SkImage | null => {
+  const runtime = SHADERS[effect];
+  if (runtime == null) return null;
+  const source = thumbnailImage(image);
+  if (source == null) return null;
+  const width = source.width();
+  const height = source.height();
+  if (width <= 0 || height <= 0) return null;
+  const surface = Skia.Surface.MakeOffscreen(width, height);
+  if (surface == null) return null;
+  const imageShader = source.makeShaderOptions(
+    TileMode.Clamp,
+    TileMode.Clamp,
+    FilterMode.Nearest,
+    MipmapMode.None,
+  );
+  const uniforms = effect === 'dither' ? [] : [light ? 1 : 0];
+  const shader = runtime.makeShaderWithChildren(uniforms, [imageShader]);
+  const paint = Skia.Paint();
+  paint.setShader(shader);
+  surface.getCanvas().drawRect(Skia.XYWHRect(0, 0, width, height), paint);
+  return surface.makeImageSnapshot();
 };
 
 function UntreatedImage({ uri }: { uri: string }) {
@@ -144,24 +138,35 @@ function TreatedImage({
   height: number;
 }) {
   const image = useImage(uri);
-  const shader = SHADERS[effect];
-  if (image == null || shader == null || width <= 0 || height <= 0) {
+  const rasterLight = effect === 'dither' ? false : light;
+  const [treated, setTreated] = useState<SkImage | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setTreated(null);
+    if (image == null) return;
+    try {
+      const snapshot = rasterizeBackgroundEffect(image, effect, rasterLight);
+      if (!cancelled) setTreated(snapshot);
+    } catch {
+      if (!cancelled) setTreated(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [image, effect, rasterLight]);
+  if (treated == null || width <= 0 || height <= 0 || SHADERS[effect] == null) {
     return <UntreatedImage uri={uri} />;
   }
   return (
     <Canvas style={{ width, height }} pointerEvents="none">
-      <Fill>
-        <Shader
-          source={shader}
-          uniforms={effect === 'dither' ? {} : { light: light ? 1 : 0 }}
-        >
-          <ImageShader
-            image={image}
-            fit="cover"
-            rect={{ x: 0, y: 0, width, height }}
-          />
-        </Shader>
-      </Fill>
+      <SkiaImage
+        image={treated}
+        fit="cover"
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+      />
     </Canvas>
   );
 }
