@@ -13,9 +13,11 @@ test('Icon renders expo-symbols at the requested size', async () => {
   const style = wrap.props.style.flat();
   expect(style.some((s: { width?: number }) => s?.width === 18)).toBe(true);
   expect(style.some((s: { height?: number }) => s?.height === 18)).toBe(true);
-  const symbol = tree!.root.findByProps({ name: 'folder' });
+  const symbol = tree!.root.findByProps({
+    name: 'folder',
+    resizeMode: 'scaleAspectFit',
+  });
   expect(symbol.props.size).toBe(18);
-  expect(symbol.props.resizeMode).toBe('scaleAspectFit');
   expect(symbol.props.tintColor).toBe('#fff');
   await act(async () => {
     tree?.unmount();
