@@ -251,12 +251,21 @@ export class AuthSession implements TokenSource {
     code: string;
     state: string;
   }): Promise<AuthState> {
+    if (
+      this.authState.state === 'signedIn' ||
+      this.authState.state === 'needsOrganization'
+    ) {
+      return this.authState;
+    }
     const pending = this.consumePending(opts.state);
     try {
       const { user, tokens } = await this.client.exchange(opts.code, {
         codeVerifier: pending.codeVerifier,
       });
       return await this.adoptTokens(user, tokens);
+    } catch (e) {
+      this.pendingSignIns.set(pending.state, pending);
+      throw e;
     } finally {
       await this.persistPending();
     }

@@ -92,6 +92,9 @@ test('Advanced → Try demo mode lands on Home with fixture data', async () => {
     for (let i = 0; i < 10; i++) await Promise.resolve();
   });
   await pressByText(tree!.root, 'Advanced');
+  const advancedTexts = allText(tree!.root);
+  expect(advancedTexts.some(s => s.includes('Edge URL'))).toBe(false);
+  expect(advancedTexts.some(s => s.includes('https://edge.test'))).toBe(false);
   await pressByText(tree!.root, 'Try demo mode');
   // Runtime create + registry dial run on microtasks only.
   await act(async () => {

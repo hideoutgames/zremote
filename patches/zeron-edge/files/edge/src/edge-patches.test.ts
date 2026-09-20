@@ -106,8 +106,10 @@ describe("cli callback iOS hop", () => {
     const body = await res!.text();
     expect(body).toContain("zeron://auth/callback?code=abc&state=xyz");
     expect(body).toContain("Open ZRemote");
-    expect(body).not.toContain("Paste this code");
-    expect(body).not.toContain('id="paste"');
+    expect(body).toContain("If nothing happens, this code still works");
+    expect(body).toContain('id="paste"');
+    expect(body).toContain("xyz.abc");
+    expect(body).toContain("Copy code");
   });
 
   it("302-redirects zr1. state even on a desktop user agent", async () => {
@@ -117,7 +119,8 @@ describe("cli callback iOS hop", () => {
       "zeron://auth/callback?code=abc&state=zr1.abc"
     );
     const body = await res!.text();
-    expect(body).not.toContain("Paste this code");
+    expect(body).toContain("zr1.abc.abc");
+    expect(body).toContain('id="paste"');
   });
 
   it("keeps the paste-code page for desktop user agents", async () => {
