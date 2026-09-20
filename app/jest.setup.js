@@ -173,10 +173,14 @@ jest.mock('@legendapp/list/keyboard', () => {
   const scrollMessageToEnd = jest.fn(() => Promise.resolve());
   const onComposerLayout = jest.fn();
   const scrollToIndex = jest.fn(() => Promise.resolve());
+  const scrollToOffset = jest.fn();
   return {
     KeyboardAwareLegendList: ReactLib.forwardRef(
       (props: object, ref: unknown) => {
-        ReactLib.useImperativeHandle(ref, () => ({ scrollToIndex }));
+        ReactLib.useImperativeHandle(ref, () => ({
+          scrollToIndex,
+          scrollToOffset,
+        }));
         return ReactLib.createElement(RN.FlatList, props);
       },
     ),
@@ -191,6 +195,7 @@ jest.mock('@legendapp/list/keyboard', () => {
     __scrollMessageToEnd: scrollMessageToEnd,
     __onComposerLayout: onComposerLayout,
     __scrollToIndex: scrollToIndex,
+    __scrollToOffset: scrollToOffset,
   };
 });
 

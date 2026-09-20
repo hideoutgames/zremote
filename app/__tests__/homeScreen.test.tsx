@@ -650,3 +650,42 @@ test('thread harness marks tint with theme text so they stay visible in dark mod
     themeSpy.mockRestore();
   }
 });
+
+test('threads title uses white type when wallpaper is set, even in light theme', async () => {
+  const themeSpy = jest
+    .spyOn(Theme, 'useTheme')
+    .mockReturnValue(Theme.lightTheme);
+  uiPrefsStore.setState({
+    newThreadComposerBackground: {
+      uri: 'file:///docs/new-thread-backgrounds/x.png',
+      name: 'sunset.png',
+    },
+  });
+  workspaceStore.setState({
+    chats: [chat({ title: 'Fix the flaky test' })],
+  });
+  try {
+    const mounted = await render(
+      <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+    );
+    const homeTitle = mounted.root.findAll(
+      n => n.props.testID === 'home-title',
+    )[0];
+    const homeTitleStyle = Array.isArray(homeTitle.props.style)
+      ? homeTitle.props.style.flat()
+      : [homeTitle.props.style];
+    expect(homeTitleStyle.some(s => s?.color === Theme.darkTheme.text)).toBe(
+      true,
+    );
+    expect(
+      mounted.root.findAll(n => n.props.testID === 'bottom-chrome-fade').length,
+    ).toBeGreaterThan(0);
+  } finally {
+    await act(async () => {
+      tree?.unmount();
+    });
+    tree = undefined;
+    themeSpy.mockRestore();
+    uiPrefsStore.setState({ newThreadComposerBackground: undefined });
+  }
+});

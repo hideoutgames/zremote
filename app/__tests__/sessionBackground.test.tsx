@@ -131,6 +131,7 @@ test('active session keeps the chrome fade and adds a column blur', async () => 
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
   expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'bottom-chrome-fade')).toBeGreaterThan(0);
 });
 
 test('composer dim is absent until the keyboard is visible', async () => {
@@ -217,5 +218,7 @@ test('home list uses full-bleed regular blur at the 750pt test window', async ()
   );
   const blur = mounted.root.findAllByType(FadeBlur)[0];
   expect(blur.props.fade).toBe('none');
+  expect(blur.props.tint).toBe('systemThinMaterialDark');
   expect(count(mounted.root, 'session-background-dim')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'bottom-chrome-fade')).toBeGreaterThan(0);
 });

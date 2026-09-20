@@ -27,11 +27,13 @@ export function GlassSheet({
   onDismiss,
   children,
   maxContentHeight,
+  draggable = true,
 }: {
   title?: string;
   onDismiss: () => void;
   children: ReactNode;
   maxContentHeight?: number;
+  draggable?: boolean;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -55,6 +57,7 @@ export function GlassSheet({
       maxContentHeight={cap}
       backgroundColor="transparent"
       grabber
+      draggable={draggable}
     >
       <View testID="glass-sheet" style={styles.fill}>
         <Glass

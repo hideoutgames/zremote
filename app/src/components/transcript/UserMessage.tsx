@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   row: {
     alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 12,
   },
   stack: {
     alignSelf: 'flex-end',

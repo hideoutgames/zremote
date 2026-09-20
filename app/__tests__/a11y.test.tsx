@@ -291,7 +291,7 @@ test('compose composer: desktop, project, checkout, and branch sit above the inp
   expect(checkout[0].props.nestedScrollEnabled).toBe(true);
 });
 
-test('compact session composer keeps the surround blur; compose never does', async () => {
+test('compact session composer has no surround blur; chrome fade sits under it', async () => {
   const spy = jest.spyOn(Dimensions, 'get').mockReturnValue({
     width: 390,
     height: 844,
@@ -306,7 +306,7 @@ test('compact session composer keeps the surround blur; compose never does', asy
           n.props.testID === 'composer-surround-blur' &&
           typeof n.type === 'string',
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     act(() => {
       session.unmount();
     });
@@ -530,6 +530,11 @@ test('queue panel: send now and delete are icon-only labelled buttons', async ()
     true,
   );
   expect(labels.some(l => l.label === 'Reorder')).toBe(true);
+  const handle = mounted.root.findByProps({ testID: 'queue-reorder-handle' });
+  // PanResponder maps terminationRequest onto the View; native blocking is
+  // folded into onResponderGrant's return value (not a View prop).
+  expect(handle.props.onResponderTerminationRequest()).toBe(false);
+  expect(typeof handle.props.onResponderGrant).toBe('function');
 });
 
 test('queued pill is a labelled button', async () => {

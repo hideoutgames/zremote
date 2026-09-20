@@ -39,7 +39,6 @@ import { ImagePreviewModal } from './ImagePreviewModal';
 import { TextFileSheet } from './TextFileSheet';
 import { CheckoutChips, type CheckoutChipsProps } from './CheckoutSelector';
 import { Glass } from './Glass';
-import { FadeBlur } from './FadeBlur';
 import { Icon } from './Icon';
 import { ModelMenuButton } from './ModelMenuButton';
 import { FastMenuButton } from './FastMenuButton';
@@ -53,7 +52,6 @@ import { useAttachments } from '../hooks/useAttachments';
 import { isImageMime } from '../zeron/attachments/validate';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import {
   clearDraft,
   removeAttachment,
@@ -217,7 +215,6 @@ export const Composer = React.memo(function ({
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const regular = windowWidth >= REGULAR_MIN_WIDTH;
   const extraMax = composerExtraMax(windowHeight);
   const extraHeight = clampComposerExtraHeight(
     useComposerExtraHeight(),
@@ -524,15 +521,6 @@ export const Composer = React.memo(function ({
           })
         }
       >
-        {regular || mode === 'compose' ? null : (
-          <View
-            testID="composer-surround-blur"
-            pointerEvents="none"
-            style={styles.surroundBlur}
-          >
-            <FadeBlur intensity={22} style={StyleSheet.absoluteFill} />
-          </View>
-        )}
         <Glass style={styles.glass}>
           <View
             style={styles.grabberHit}
@@ -864,14 +852,6 @@ const CIRCLE = 32;
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
   glassWrap: { position: 'relative' },
-  surroundBlur: {
-    position: 'absolute',
-    top: -64,
-    left: -8,
-    right: -8,
-    bottom: -8,
-    overflow: 'hidden',
-  },
   grabberHit: {
     alignItems: 'center',
     justifyContent: 'center',

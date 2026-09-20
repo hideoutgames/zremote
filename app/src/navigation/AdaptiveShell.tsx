@@ -11,7 +11,7 @@
 // compact pager path. `useNativeSplitView` is intentionally false — flip only
 // after the Mac verification checklist in docs/NATIVE_MODULES.md passes.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -46,6 +46,24 @@ import { t } from '../i18n/strings';
  *  (docs/NATIVE_MODULES.md). When true, swap the JS columns for
  *  `ZeronSplitView` from modules/zeron-split-view. */
 export const USE_NATIVE_SPLIT_VIEW = false;
+export const SIDEBAR_ANIM_MS = 280;
+
+function useDeferredComposerMaxWidth(
+  next: number | undefined,
+): number | undefined {
+  const [width, setWidth] = useState(next);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      setWidth(next);
+      return;
+    }
+    const id = setTimeout(() => setWidth(next), SIDEBAR_ANIM_MS);
+    return () => clearTimeout(id);
+  }, [next]);
+  return width;
+}
 
 function InFlowSidebar({
   visible,
@@ -66,7 +84,7 @@ function InFlowSidebar({
     collapse.value = reduceMotion
       ? target
       : withTiming(target, {
-          duration: 280,
+          duration: SIDEBAR_ANIM_MS,
           easing: Easing.out(Easing.cubic),
         });
   }, [visible, reduceMotion, collapse]);
@@ -117,6 +135,7 @@ export function AdaptiveShell({
 
   const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen: false };
   const layout = layoutFor(width, prefs);
+  const composerMaxWidth = useDeferredComposerMaxWidth(layout.composerMaxWidth);
 
   useEffect(() => {
     if (layout.mode === 'compact') return;
@@ -171,7 +190,7 @@ export function AdaptiveShell({
               onCreated={openSession}
               leadingIcon="sidebar.left"
               contentMaxWidth={layout.measureCap}
-              composerMaxWidth={layout.composerMaxWidth}
+              composerMaxWidth={composerMaxWidth}
             />
           </AppErrorBoundary>
         ) : chatId !== null ? (
@@ -182,7 +201,7 @@ export function AdaptiveShell({
               onBack={toggleSidebar}
               leadingIcon="sidebar.left"
               contentMaxWidth={layout.measureCap}
-              composerMaxWidth={layout.composerMaxWidth}
+              composerMaxWidth={composerMaxWidth}
             />
           </AppErrorBoundary>
         ) : (
@@ -241,7 +260,6 @@ const styles = StyleSheet.create({
   },
   sidebarInner: {
     flex: 1,
-    paddingHorizontal: 20,
     borderRightWidth: StyleSheet.hairlineWidth,
   },
   detail: { flex: 1 },

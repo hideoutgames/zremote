@@ -131,7 +131,11 @@ import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { createLog } from '../zeron/log';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
-import { TopChromeFade } from '../components/TopChromeFade';
+import {
+  TopChromeFade,
+  ChromeFade,
+  TOP_CHROME_FADE_BAND,
+} from '../components/TopChromeFade';
 import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
@@ -530,6 +534,7 @@ function ActiveSessionScreen({
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [queueDragging, setQueueDragging] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
   const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
     undefined,
@@ -716,6 +721,11 @@ function ActiveSessionScreen({
       />
 
       <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
+      <ChromeFade
+        edge="bottom"
+        inset={composerHeight}
+        fadeBand={TOP_CHROME_FADE_BAND}
+      />
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
@@ -1120,6 +1130,7 @@ function ActiveSessionScreen({
         <GlassSheet
           title={t('queue.title')}
           onDismiss={() => setQueueOpen(false)}
+          draggable={!queueDragging}
         >
           <QueuePanel
             queue={session.queue}
@@ -1136,6 +1147,7 @@ function ActiveSessionScreen({
             onMove={(id, to) => {
               controller?.moveQueued(id, to);
             }}
+            onDragging={setQueueDragging}
           />
         </GlassSheet>
       ) : null}

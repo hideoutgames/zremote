@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
+import { t } from '../../i18n/strings';
 import type { TurnChange } from './turnChanges';
 import { fileKindIcon } from './turnChanges';
 
@@ -32,6 +33,12 @@ export function TurnChangesCard({
             },
       ]}
     >
+      <Text
+        style={[styles.heading, { color: theme.text }]}
+        accessibilityRole="header"
+      >
+        {t('session.changes')}
+      </Text>
       {files.map(file => (
         <Pressable
           key={file.path}
@@ -74,9 +81,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
-    paddingTop: 6,
+    paddingTop: 10,
     paddingBottom: 6,
     marginTop: 10,
+  },
+  heading: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingBottom: 4,
   },
   embedded: {
     borderWidth: 0,

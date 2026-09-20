@@ -251,11 +251,7 @@ export const AssistantMessage = React.memo(function ({
               />
             ) : null}
             {files.length > 0 && onOpenFileDiff !== undefined ? (
-              <TurnChangesCard
-                embedded
-                files={files}
-                onOpenFile={onOpenFileDiff}
-              />
+              <TurnChangesCard files={files} onOpenFile={onOpenFileDiff} />
             ) : null}
             {showWorking ? (
               <WorkingStatusRow
@@ -275,7 +271,7 @@ export const AssistantMessage = React.memo(function ({
 const styles = StyleSheet.create({
   row: {
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 12,
     gap: 8,
     alignItems: 'flex-start',
   },

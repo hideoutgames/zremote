@@ -2,7 +2,11 @@ import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import {
   TopChromeFade,
+  ChromeFade,
+  maskStopsFor,
   TOP_CHROME_BLUR_INTENSITY,
+  TOP_CHROME_FADE_BAND,
+  THREADS_BOTTOM_FADE_BAND,
 } from '../src/components/TopChromeFade';
 import { FadeBlur } from '../src/components/FadeBlur';
 
@@ -39,6 +43,35 @@ test('FadeBlur horizontal mode still mounts a mask', async () => {
   await act(async () => {
     tree?.unmount();
   });
+});
+
+test('ChromeFade bottom sizes the plateau to the composer inset', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <ChromeFade edge="bottom" inset={120} fadeBand={TOP_CHROME_FADE_BAND} />,
+    );
+  });
+  const fade = tree!.root.findByProps({ testID: 'bottom-chrome-fade' });
+  const style = Array.isArray(fade.props.style)
+    ? fade.props.style.flat()
+    : [fade.props.style];
+  expect(style.some(s => s?.height === 120 + TOP_CHROME_FADE_BAND)).toBe(true);
+  await act(async () => {
+    tree?.unmount();
+  });
+});
+
+test('threads bottom fade band is shorter than the chat composer band', () => {
+  expect(THREADS_BOTTOM_FADE_BAND).toBeLessThan(TOP_CHROME_FADE_BAND);
+});
+
+test('maskStopsFor hides the composer plateau and fades above it', () => {
+  const stops = maskStopsFor(400, 80, 56, 120, 56);
+  expect(stops.locations[0]).toBe(0);
+  expect(stops.locations[stops.locations.length - 1]).toBe(1);
+  expect(stops.colors[0]).toBe('transparent');
+  expect(stops.colors[stops.colors.length - 1]).toBe('transparent');
 });
 
 test('FadeBlur none mode still mounts a blur', async () => {
