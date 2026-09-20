@@ -369,6 +369,8 @@ const en = {
   'picker.search': 'Search',
   'picker.more': 'More',
   'picker.fastMode': 'Fast mode',
+  'picker.fast': 'Fast',
+  'picker.fastNormal': 'Normal',
   'picker.agents': 'Agents',
   'picker.models': 'Models',
   'picker.effort': 'Effort',

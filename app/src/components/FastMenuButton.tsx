@@ -1,6 +1,7 @@
 // Composer Fast control: outline/filled bolt + trailing chevron, matching
-// the model/effort chips. Dropdown is On/Off, or the catalog's extra
-// choices when the provider exposes more than a binary switch.
+// the model/effort chips. Dropdown is Normal plus the provider's Fast
+// choice(s), or the catalog's extra named choices when there are more
+// than a binary switch.
 
 import React from 'react';
 import { Pressable } from 'react-native';
@@ -10,7 +11,12 @@ import { ComposerMenuChip } from './ComposerMenuChip';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import type { ModelOption } from '../zeron/protocol/types';
-import { fastOffChoice, fastOnChoice, isFastOffChoice } from './fastMode';
+import {
+  fastMenuItems,
+  fastOffChoice,
+  fastOnChoice,
+  isFastOffChoice,
+} from './fastMode';
 
 export function FastMenuButton({
   enabled,
@@ -26,19 +32,7 @@ export function FastMenuButton({
   const theme = useTheme();
   const color = enabled ? theme.fastAccent : theme.text;
   const multi = (option?.choices.length ?? 0) > 2;
-  const items =
-    option !== undefined && multi
-      ? option.choices
-      : [
-          {
-            id: option !== undefined ? fastOnChoice(option) : 'on',
-            label: t('common.on'),
-          },
-          {
-            id: option !== undefined ? fastOffChoice(option) : 'off',
-            label: t('common.off'),
-          },
-        ];
+  const items = fastMenuItems(option);
   const selectedId =
     value ??
     (enabled

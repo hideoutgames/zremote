@@ -1,5 +1,7 @@
 import type { ModelOption } from '../src/zeron/protocol/types';
 import {
+  fastChoiceLabel,
+  fastMenuItems,
   fastOffChoice,
   fastOnChoice,
   findFastOption,
@@ -93,4 +95,44 @@ test('on/off choices', () => {
   const opt = option('fast');
   expect(fastOnChoice(opt)).toBe('on');
   expect(fastOffChoice(opt)).toBe('off');
+});
+
+test('Claude-style Off/On menu labels are Fast / Normal', () => {
+  expect(fastMenuItems(option('fastMode'))).toEqual([
+    { id: 'on', label: 'Fast' },
+    { id: 'off', label: 'Normal' },
+  ]);
+});
+
+test('Codex Standard/Fast menu labels are Fast / Normal', () => {
+  expect(fastMenuItems(serviceTier())).toEqual([
+    { id: 'fast', label: 'Fast' },
+    { id: 'default', label: 'Normal' },
+  ]);
+});
+
+test('multi-choice menus keep provider names and remap off to Normal', () => {
+  const opt: ModelOption = {
+    id: 'fast',
+    label: 'Fast mode',
+    choices: [
+      { id: 'off', label: 'Off' },
+      { id: 'turbo', label: 'Turbo' },
+      { id: 'extra', label: 'Extra' },
+    ],
+    defaultChoice: 'off',
+  };
+  expect(fastMenuItems(opt)).toEqual([
+    { id: 'off', label: 'Normal' },
+    { id: 'turbo', label: 'Turbo' },
+    { id: 'extra', label: 'Extra' },
+  ]);
+  expect(fastChoiceLabel({ id: 'turbo', label: 'Turbo' })).toBe('Turbo');
+});
+
+test('variant fallback menu is Fast / Normal', () => {
+  expect(fastMenuItems()).toEqual([
+    { id: 'on', label: 'Fast' },
+    { id: 'off', label: 'Normal' },
+  ]);
 });
