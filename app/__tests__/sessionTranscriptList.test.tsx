@@ -6,6 +6,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text, View, type LayoutChangeEvent } from 'react-native';
 import {
   SessionTranscriptList,
+  LIST_RESIZE_REMOUNT_DELTA,
   RAIL_RIGHT,
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
@@ -756,6 +757,69 @@ test('width change while not following restores the saved offset', async () => {
     offset: 320,
     animated: false,
   });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('sub-delta width ticks do not remount or restore scroll', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 844 } },
+    });
+  });
+  expect(listProps(tree!).testID).toBe('session-transcript-list-0');
+  scrollToEnd.mockClear();
+  scrollToOffset.mockClear();
+  const tick = LIST_RESIZE_REMOUNT_DELTA - 1;
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: {
+        layout: { x: 0, y: 0, width: 400 + tick, height: 844 },
+      },
+    });
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: {
+        layout: { x: 0, y: 0, width: 400 + tick * 2, height: 844 },
+      },
+    });
+  });
+  await act(async () => {
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  expect(listProps(tree!).testID).toBe('session-transcript-list-0');
+  expect(scrollToEnd).not.toHaveBeenCalled();
+  expect(scrollToOffset).not.toHaveBeenCalled();
+
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: {
+        layout: {
+          x: 0,
+          y: 0,
+          width: 400 + tick * 2 + LIST_RESIZE_REMOUNT_DELTA,
+          height: 844,
+        },
+      },
+    });
+  });
+  await act(async () => {
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  expect(listProps(tree!).testID).toBe('session-transcript-list-1');
+  expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
   await act(async () => {
     tree!.unmount();
   });

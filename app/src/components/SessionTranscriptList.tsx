@@ -47,7 +47,9 @@ const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 const RAIL_PADDING_RIGHT = 40;
 export const RAIL_RIGHT = 4;
 /** Remount FlashList after a sidebar-sized width jump so hit testing
- *  picks up the new column. Smaller layout ticks only re-anchor. */
+ *  picks up the new column. Sub-delta ticks are ignored (no remount,
+ *  no scroll restore) so a layout animation cannot remount the list
+ *  several times in one collapse. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
 const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
 const END_THRESHOLD = 1;
@@ -272,13 +274,12 @@ export const SessionTranscriptList = forwardRef<
     const prev = prevListWidthRef.current;
     prevListWidthRef.current = listWidth;
     if (prev === 0 || listWidth === 0 || prev === listWidth) return;
+    if (Math.abs(listWidth - prev) < LIST_RESIZE_REMOUNT_DELTA) return;
     pendingRestoreRef.current = {
       offset: savedOffsetRef.current,
       follow: followingRef.current,
     };
-    if (Math.abs(listWidth - prev) >= LIST_RESIZE_REMOUNT_DELTA) {
-      setListHitKey(key => key + 1);
-    }
+    setListHitKey(key => key + 1);
   }, [listWidth]);
 
   useEffect(() => {
@@ -495,6 +496,7 @@ export const SessionTranscriptList = forwardRef<
       >
         <FlashList
           key={listHitKey}
+          testID={`session-transcript-list-${listHitKey}`}
           ref={listRef}
           style={styles.fill}
           data={data}
