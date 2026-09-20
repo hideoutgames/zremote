@@ -38,6 +38,30 @@ export const thumbnailSize = (
   };
 };
 
+/** Cover-fit a source rect onto a dest canvas: scale first, then center. */
+export type CoverFitTransform = [
+  { translateX: number },
+  { translateY: number },
+  { scale: number },
+];
+
+export const coverFitTransform = (
+  srcW: number,
+  srcH: number,
+  destW: number,
+  destH: number,
+): CoverFitTransform => {
+  if (srcW <= 0 || srcH <= 0 || destW <= 0 || destH <= 0) {
+    return [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }];
+  }
+  const scale = Math.max(destW / srcW, destH / srcH);
+  return [
+    { translateX: (destW - srcW * scale) / 2 },
+    { translateY: (destH - srcH * scale) / 2 },
+    { scale },
+  ];
+};
+
 /** Rec.601 luma in 0..1, matching desktop `to_luma8` / shader dots. */
 export const rec601Luma01 = (r: number, g: number, b: number): number =>
   0.299 * r + 0.587 * g + 0.114 * b;
