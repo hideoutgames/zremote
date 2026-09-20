@@ -605,7 +605,7 @@ test('messageCopyContent is a zeego Content element with a sent-at Label', () =>
   );
   const label = kids.find(
     k => React.isValidElement(k) && k.type === ContextMenu.Label,
-  ) as React.ReactElement;
+  ) as React.ReactElement<{ children?: React.ReactNode }>;
   expect(label).toBeDefined();
   expect(label.props.children).toBe(formatMessageSentAt(userEntry.createdAt));
 });
