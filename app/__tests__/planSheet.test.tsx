@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { PlanSheet } from '../src/components/PlanSheet';
 import { SESSION_SHEET_GRABBER_INSET } from '../src/components/SessionSheet';
 
@@ -38,12 +38,17 @@ test('PlanSheet fills the detent so the plan body is not collapsed', async () =>
   );
   expect(scroll).toEqual(expect.objectContaining({ flex: 1, minHeight: 0 }));
 
-  const header = StyleSheet.flatten(
-    tree!.root.findByProps({ testID: 'plan-sheet-header' }).props.style,
-  );
-  expect(header).toEqual(
+  const header = tree!.root.findByProps({ testID: 'plan-sheet-header' });
+  const headerStyle = StyleSheet.flatten(header.props.style);
+  expect(headerStyle).toEqual(
     expect.objectContaining({ paddingTop: SESSION_SHEET_GRABBER_INSET }),
   );
+  expect(header.findAllByType(Pressable)).toHaveLength(1);
+
+  const footer = StyleSheet.flatten(
+    tree!.root.findByProps({ testID: 'plan-sheet-footer' }).props.style,
+  );
+  expect(footer?.position).not.toBe('absolute');
 
   expect(texts(tree!.root)).toEqual(
     expect.arrayContaining(['Ship the login', 'Implement Plan']),
