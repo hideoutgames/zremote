@@ -138,10 +138,6 @@ import {
   ComposerChromeFade,
   ComposerStickyBottom,
 } from '../components/ComposerChromeAnim';
-import {
-  isComposerResizeActive,
-  onComposerResizeEnd,
-} from '../components/composerExtraHeight';
 import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
@@ -219,7 +215,6 @@ function ComposeSessionScreen({
   const keyboardHeight = useKeyboardState(s => s.height);
   const [headerH, setHeaderH] = useState(0);
   const [composerH, setComposerH] = useState(0);
-  const lastComposerHRef = useRef(0);
   const dismissPan = useKeyboardDismissPan();
   const wallpaper = useNewThreadComposerBackground() !== undefined;
   const shift = composeKeyboardShift({
@@ -227,15 +222,6 @@ function ComposeSessionScreen({
     composerHeight: composerH,
     keyboardHeight,
   });
-  useEffect(
-    () =>
-      onComposerResizeEnd(() => {
-        if (lastComposerHRef.current > 0) {
-          setComposerH(lastComposerHRef.current);
-        }
-      }),
-    [],
-  );
   return (
     <View
       style={[
@@ -259,12 +245,7 @@ function ComposeSessionScreen({
           autoFocus
           composerMaxWidth={composerMaxWidth}
           onCreated={id => onCreated?.(id)}
-          onLayout={e => {
-            const h = e.nativeEvent.layout.height;
-            lastComposerHRef.current = h;
-            if (isComposerResizeActive()) return;
-            setComposerH(h);
-          }}
+          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
         />
       </View>
       <View

@@ -75,17 +75,14 @@ import {
   setPlanMode,
   useComposerExtraHeight,
   setComposerExtraHeight,
+  setComposerExtraHeightLive,
 } from '../zeron/state/uiPrefs';
 import {
   beginComposerResize,
   clampComposerExtraHeight,
-  composerExtraHeightSV,
   composerExtraMax,
   endComposerResize,
-  isComposerResizeActive,
-  onComposerResizeEnd,
 } from './composerExtraHeight';
-import { ComposerExtraSizer } from './ComposerExtraSizer';
 import type { HarnessDescriptor, ModelOption } from '../zeron/protocol/types';
 import {
   composerAction,
@@ -226,11 +223,7 @@ export const Composer = React.memo(function ({
     extraMax,
   );
   const extraRef = useRef(extraHeight);
-  if (!isComposerResizeActive()) extraRef.current = extraHeight;
-  useEffect(() => {
-    if (isComposerResizeActive()) return;
-    composerExtraHeightSV.value = extraHeight;
-  }, [extraHeight]);
+  extraRef.current = extraHeight;
   const extraStartRef = useRef(0);
   const extraMaxRef = useRef(extraMax);
   extraMaxRef.current = extraMax;
@@ -259,16 +252,13 @@ export const Composer = React.memo(function ({
           extraStartRef.current - g.dy,
           extraMaxRef.current,
         );
-        extraRef.current = next;
-        composerExtraHeightSV.value = next;
+        setComposerExtraHeightLive(next);
       },
       onPanResponderRelease: (_e, g) => {
         const next = clampComposerExtraHeight(
           extraStartRef.current - g.dy,
           extraMaxRef.current,
         );
-        extraRef.current = next;
-        composerExtraHeightSV.value = next;
         setComposerExtraHeight(next);
         endComposerResize();
         if (
@@ -280,15 +270,14 @@ export const Composer = React.memo(function ({
         }
       },
       onPanResponderTerminate: () => {
-        composerExtraHeightSV.value = extraRef.current;
         setComposerExtraHeight(extraRef.current);
         endComposerResize();
       },
     }),
   ).current;
-  const inputMaxBase =
-    windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT;
-  const inputMaxHeight = inputMaxBase + extraHeight;
+  const inputMaxHeight =
+    (windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT) +
+    extraHeight;
   const inputRef = useRef<TextInput>(null);
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -528,33 +517,17 @@ export const Composer = React.memo(function ({
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
   const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
-  const pendingGlassSizeRef = useRef(glassSize);
-  useEffect(
-    () =>
-      onComposerResizeEnd(() => {
-        const next = pendingGlassSizeRef.current;
-        setGlassSize(prev =>
-          prev.w === next.w && prev.h === next.h ? prev : next,
-        );
-      }),
-    [],
-  );
 
   return (
     <View ref={composerRef} onLayout={onLayout} style={styles.container}>
       <View
         style={styles.glassWrap}
-        onLayout={e => {
-          const next = {
+        onLayout={e =>
+          setGlassSize({
             w: e.nativeEvent.layout.width,
             h: e.nativeEvent.layout.height,
-          };
-          pendingGlassSizeRef.current = next;
-          if (isComposerResizeActive()) return;
-          setGlassSize(prev =>
-            prev.w === next.w && prev.h === next.h ? prev : next,
-          );
-        }}
+          })
+        }
       >
         <Glass style={styles.glass}>
           <View
@@ -600,12 +573,8 @@ export const Composer = React.memo(function ({
 
           {/* minHeight spacer: layout grows by extraHeight 1:1, independent
             of iOS multiline TextInput intrinsic size. Text can still fill
-            the extra via maxHeight. Live extra is the shared value — this
-            wrapper does not re-render Composer on pan frames. */}
-          <ComposerExtraSizer
-            minHeight={INPUT_MIN_HEIGHT}
-            maxHeight={inputMaxBase}
-          >
+            the extra via maxHeight. */}
+          <View style={{ minHeight: INPUT_MIN_HEIGHT + extraHeight }}>
             <TextInput
               ref={inputRef}
               value={draft.text}
@@ -644,7 +613,7 @@ export const Composer = React.memo(function ({
               // flags on iOS — handled in the parent where available; the
               // modifier gap is documented in docs/ARCHITECTURE.md.
             />
-          </ComposerExtraSizer>
+          </View>
 
           <View style={styles.lowerRow}>
             <View style={styles.leftCluster}>

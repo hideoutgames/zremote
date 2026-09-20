@@ -37,7 +37,6 @@ import {
   isComposerResizeActive,
   onComposerResizeEnd,
 } from './composerExtraHeight';
-import { ComposerInsetBinding } from './ComposerInsetBinding';
 import { WorkingStatusBubble } from './WorkingStatus';
 import { PreviewRail } from './agentsKit/PreviewRail';
 import {
@@ -504,7 +503,6 @@ export const SessionTranscriptList = forwardRef<
         setListWidth(prev => (prev === width ? prev : width));
       }}
     >
-      <ComposerInsetBinding extraContentPadding={extraContentPadding} />
       <ContentEdgeMask
         topInset={insetsTop + 58}
         topBand={TOP_CHROME_FADE_BAND}

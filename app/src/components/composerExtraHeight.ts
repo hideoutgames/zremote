@@ -2,8 +2,9 @@
 // Layout must grow by exactly extraHeight (not iOS TextInput minHeight),
 // and the list inset must use that same extraHeight.
 //
-// Pan frames write composerExtraHeightSV only. Zustand commits on release
-// so Composer / SessionScreen / ContentEdgeMask do not re-render every move.
+// Pan frames write Zustand live extra height (Composer / New thread already
+// do this smoothly). Created threads skip setComposerInset / onComposerHeight
+// until release so FlashList + ContentEdgeMask do not re-render every move.
 
 import { makeMutable, type SharedValue } from 'react-native-reanimated';
 
