@@ -3,7 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import {
   UserMessage,
   USER_BUBBLE_TEXT_END_PAD,
@@ -12,6 +12,7 @@ import { AssistantMessage } from '../src/components/transcript/AssistantMessage'
 import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
+import { PlanBadge } from '../src/components/PlanBadge';
 import * as ContextMenu from 'zeego/context-menu';
 import type { MessageEntry, MessagePart } from '../src/zeron/protocol/types';
 
@@ -83,6 +84,25 @@ const textOf = (root: TestRenderer.ReactTestInstance): string[] =>
     return Array.isArray(c) ? c : [c];
   });
 
+const childList = (children: unknown): unknown[] =>
+  children == null ? [] : Array.isArray(children) ? children : [children];
+
+const badgeNestedInPrompt = (
+  root: TestRenderer.ReactTestInstance,
+  prompt: string,
+): boolean => {
+  const badge = root.findByType(PlanBadge);
+  let n: TestRenderer.ReactTestInstance | null = badge.parent;
+  while (n != null) {
+    if (n.type === Text) {
+      const parts = childList(n.props.children);
+      if (parts.some(p => p === prompt)) return true;
+    }
+    n = n.parent;
+  }
+  return false;
+};
+
 test('UserMessage strips the plan prefix and shows a Plan badge', async () => {
   const entry: MessageEntry = {
     ...userEntry,
@@ -127,6 +147,68 @@ test('UserMessage strips the build prefix and shows a Build badge', async () => 
   expect(texts.some(s => typeof s === 'string' && s.includes('/build'))).toBe(
     false,
   );
+});
+
+test('UserMessage inlines the Plan badge inside the prompt Text', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  expect(badgeNestedInPrompt(tree!.root, 'ship it')).toBe(true);
+  const badge = tree!.root.findByType(PlanBadge);
+  expect(badge.props.variant).toBe('inline');
+});
+
+test('UserMessage inlines the Build badge inside the prompt Text', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: '/build IMPLEMENT THE PLAN: Implement the plan.',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  expect(badgeNestedInPrompt(tree!.root, 'Implement the plan.')).toBe(true);
+});
+
+test('UserMessage keeps row padding when a Plan badge is present', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  const row = tree!.root.findAllByType(View).find(n => {
+    const style = Array.isArray(n.props.style)
+      ? n.props.style.flat()
+      : [n.props.style];
+    return style.some(s => s?.paddingVertical === 12);
+  });
+  expect(row).toBeDefined();
 });
 
 test('AssistantMessage shows a plan card and turn changes', async () => {
