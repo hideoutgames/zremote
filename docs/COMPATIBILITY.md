@@ -139,11 +139,11 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
    without UA sniffing), stored in memory and Keychain until consumed
    (15-minute TTL), and bound to the intercepted code (same CSRF discipline
    as the engine).
-3. **PKCE**: `PKCE_ENABLED` is on. `SignInScreen` injects `expo-crypto`
-   `randomBytes` / `sha256` into `beginSignIn` (Hermes Web Crypto is not
-   the production path). The edge exchange route must forward
-   `code_verifier` (`0001`); without that patch HTTPS-callback sign-in fails
-   PKCE validation. See `docs/HOST_EDGE_CHANGES.md`.
+3. **PKCE**: `PKCE_ENABLED` is off so authorize + exchange match the engine
+   and native `AuthClient.swift` (`{ code }` only). PKCE helpers remain in
+   `authKit` for a later re-enable. If PKCE is turned on, the edge must
+   forward `code_verifier` (`0001`) or WorkOS rejects every path. See
+   `docs/HOST_EDGE_CHANGES.md`.
 
 Tokens (access + refresh) live in Keychain-backed storage (`expo-secure-store`),
 namespaced by a sanitized edge URL (SecureStore keys cannot contain `:` or `/`).

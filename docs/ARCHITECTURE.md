@@ -27,7 +27,7 @@ terminal runs on the phone. Local speech transcription does.
 | Protocol codecs and wire types | `zeron/protocol/`                                  | Pure functions and types ported from the pinned Zeron sources (`chatFrames.ts`, `registryCore.ts`, `deviceFrames.ts`, `rpc.ts`, `types.ts`, `commands.ts`, `messages.ts`). No I/O, no React. Every file names its Zeron source.                                                                                                                                             |
 | Doc port                       | `zeron/doc/`                                       | `LoroDocPort` interface + `loro-crdt` adapter (Node) + native adapter (iOS). `sessionDoc.ts` projects a doc into entries/commands/queue and performs the phone's only writes (append command entries, queue rows). `registryDoc.ts` is the client-side row table with a pending-op overlay.                                                                                 |
 | Transports                     | `zeron/transport/`                                 | `edgeHttp.ts` (fetch + bearer + single-flight refresh), `registryClient.ts`, `chatRoomClient.ts`, `deviceRelayClient.ts`, `ws.ts` (WebSocket factory: NitroWebSocket on device, `ws` in Node). Reconnect/backoff/liveness discipline mirrors `crates/sync` and the Swift client.                                                                                            |
-| Auth                           | `zeron/auth/`                                      | AuthKit authorize URL, state binding, PKCE, exchange/refresh/orgs, `SecureStorePort`, the `SignedOut → NeedsOrganization → SignedIn` state machine.                                                                                                                                                                                                                         |
+| Auth                           | `zeron/auth/`                                      | AuthKit authorize URL, state binding, optional PKCE helpers, exchange/refresh/orgs, `SecureStorePort`, the `SignedOut → NeedsOrganization → SignedIn` state machine. The live app matches the engine: no `code_challenge`.                                                                                                                                                  |
 | Synchronized domain state      | `zeron/state/`                                     | zustand stores fed only by the layers above: `authStore`, `workspaceStore` (devices/spaces/chats/sessions + derived indicator/sort), `sessionStores` (one per open chat: entries, commands, run status, pending optimistic sends), `catalogStore` (per-device `ListHarnesses`/`ListModels`), `draftStore` (per-session drafts + staged attachments, persisted per account). |
 | Native services                | `zeron/native/` and `app/modules/*`                | `react-native-loro` (Nitro over loro-swift), `zeron-dictation` (SpeechAnalyzer / on-device SFSpeechRecognizer), Live Activities (`expo-widgets`), secure storage, haptics. Each has a JS port interface so Jest runs without them.                                                                                                                                          |
 | Presentation                   | `screens/`, `components/`, `components/agentsKit/` | Views receive typed domain state and callbacks; they never touch frames, sockets, or Loro. `components/agentsKit/` is the native adaptation of Agents Kit components (see `docs/AGENTS_KIT_PROVENANCE.md`).                                                                                                                                                                 |
@@ -160,8 +160,10 @@ the thread Details sheet.
 ## Auth callback
 
 `ZeronApp` waits for `AuthSession.restore()` (SecureStore) before showing
-`SignInScreen`, so a returning user never flashes signed-out. Sign-in uses
-PKCE (`PKCE_ENABLED`). WorkOS still redirects to the registered HTTPS URI
+`SignInScreen`, so a returning user never flashes signed-out. Authorize +
+exchange match the Zeron engine (`PKCE_ENABLED` is off): no `code_challenge`,
+and `POST /auth/exchange` is `{ code }` only. The edge holds the WorkOS
+client secret. WorkOS still redirects to the registered HTTPS URI
 `https://{edge}/auth/cli/callback`. The app starts
 `ASWebAuthenticationSession` on `zeron://auth/callback` (custom scheme,
 `preferUniversalLinks: false`) so the WorkOS sheet actually presents —
@@ -172,15 +174,15 @@ iPhone/iPad user-agents and `zr1.`-prefixed pending states to that scheme
 `ASWebAuthenticationSession`; the hop HTML also shows `state.code` so the
 in-app paste field works if the sheet is dismissed.
 
-PKCE SHA-256 is `expo-crypto`, injected at `beginSignIn`. Pending PKCE
-state is persisted in Keychain (15-minute TTL) so a Safari hop or process
-death can still `completeSignIn`. Tokens are stored under a sanitized
-SecureStore key (URL `:`/`/` are illegal in Keychain keys). `zeron://`
-Linking is the Safari-fallback return path if AuthSession fails to start.
-If AuthSession does not return a callback (cancel, dismiss, missing hop),
-`SignInScreen` shows a paste field: the user copies `state.code` from the
-edge hop/Copy-code page (or pastes the callback URL) and
-`completePastedCode` runs the same exchange.
+Pending sign-in state is persisted in Keychain (15-minute TTL) so a Safari
+hop or process death can still `completeSignIn`. Tokens are stored under a
+sanitized SecureStore key (URL `:`/`/` are illegal in Keychain keys).
+`zeron://` Linking is the Safari-fallback return path if AuthSession fails
+to start. Concurrent Linking + Sign-in `completeSignIn` calls join one
+in-flight exchange. If AuthSession does not return a callback (cancel,
+dismiss, missing hop), `SignInScreen` shows a paste field: the user copies
+`state.code` from the edge hop/Copy-code page (or pastes the callback URL)
+and `completePastedCode` runs the same exchange.
 Successful exchange persists tokens in Keychain; `restore()` on next
 launch signs the user in automatically. Desktop CLI `zeron login` still
 sees the paste-code page. AASA (`IOS_APP_IDS`) remains useful for HTTPS

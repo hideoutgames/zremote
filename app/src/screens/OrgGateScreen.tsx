@@ -194,6 +194,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     minHeight: 44,
+    alignSelf: 'stretch',
+    flexGrow: 0,
     alignItems: 'center',
     overflow: 'hidden',
   },

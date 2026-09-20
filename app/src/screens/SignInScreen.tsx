@@ -1,6 +1,7 @@
 // Sign-in: WorkOS redirect stays the registered HTTPS URI; AuthSession
 // listens on zeron:// so the sheet actually presents. The edge 302-hops
-// to that scheme. PKCE throughout. If the hop is missing or the sheet is
+// to that scheme. Authorize + exchange match the Zeron engine (no PKCE —
+// the edge holds the client secret). If the hop is missing or the sheet is
 // dismissed, paste the Copy-code page value (or the callback URL) to
 // complete. Demo remains under Advanced.
 
@@ -14,6 +15,7 @@ import {
 } from '../zeron/native/authBrowser';
 import { appConfig } from '../zeron/native/appConfig';
 import { parseCallbackUrl } from '../zeron/auth/authKit';
+import { authFailureLog } from '../zeron/auth/authClient';
 import { randomBytes, sha256 } from '../zeron/native/expoCrypto';
 import { useAuthSession } from '../app/runtimeContext';
 import { GlassControl } from '../components/Glass';
@@ -25,7 +27,9 @@ import { createLog } from '../zeron/log';
 
 const log = createLog();
 
-const PKCE_ENABLED = true;
+/** Match the engine / iOS AuthClient: no code_challenge. PKCE helpers stay
+ *  in authKit for a later re-enable once edge patch 0001 is confirmed. */
+const PKCE_ENABLED = false;
 /** Keep Continue visible above the keyboard, not only the TextInput. */
 const PASTE_KEYBOARD_BOTTOM_OFFSET = 80;
 
@@ -69,8 +73,7 @@ export function SignInScreen() {
           });
           return;
         } catch (e) {
-          const name = e instanceof Error ? e.name : 'Error';
-          log.warn(`sign-in failed (${name})`);
+          log.warn(`sign-in failed (${authFailureLog(e)})`);
           setError(t('signIn.error.generic'));
           if (link.state !== undefined) {
             setPaste(pasteFromCallback(link.code, link.state));
@@ -84,8 +87,7 @@ export function SignInScreen() {
       }
       setShowPaste(true);
     } catch (e) {
-      const name = e instanceof Error ? e.name : 'Error';
-      log.warn(`sign-in failed (${name})`);
+      log.warn(`sign-in failed (${authFailureLog(e)})`);
       setError(t('signIn.error.generic'));
       setShowPaste(true);
     } finally {
@@ -100,8 +102,7 @@ export function SignInScreen() {
     try {
       await auth.completePastedCode(paste);
     } catch (e) {
-      const name = e instanceof Error ? e.name : 'Error';
-      log.warn(`paste sign-in failed (${name})`);
+      log.warn(`paste sign-in failed (${authFailureLog(e)})`);
       setError(t('signIn.error.generic'));
     } finally {
       setBusy(false);
@@ -238,6 +239,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 12,
     minHeight: 44,
+    alignSelf: 'center',
+    flexGrow: 0,
     alignItems: 'center',
     overflow: 'hidden',
   },
@@ -267,6 +270,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     minHeight: 36,
+    alignSelf: 'center',
+    flexGrow: 0,
     alignItems: 'center',
     overflow: 'hidden',
   },

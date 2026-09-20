@@ -122,7 +122,7 @@ test('compose session stays sharp: chrome fade, no list or chat blur', async () 
   expect(centerStyle.some(s => s?.alignItems === 'center')).toBe(true);
 });
 
-test('active session keeps the chrome fade and adds a column blur', async () => {
+test('active session keeps a content mask and no top overlay fade', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -137,7 +137,8 @@ test('active session keeps the chrome fade and adds a column blur', async () => 
   const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
-  expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'top-chrome-fade')).toBe(0);
   expect(count(mounted.root, 'bottom-chrome-fade')).toBeGreaterThan(0);
 });
 
@@ -161,7 +162,7 @@ test('composer dim is absent until the keyboard is visible', async () => {
   expect(count(mounted.root, 'composer-focus-dim')).toBe(0);
 });
 
-test('focused composer dim sits above the top chrome fade', async () => {
+test('focused composer dim sits above the bottom chrome fade', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -183,7 +184,7 @@ test('focused composer dim sits above the top chrome fade', async () => {
     input.props.onFocus();
   });
   const dim = mounted.root.findByProps({ testID: 'composer-focus-dim' });
-  const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
+  const fade = mounted.root.findByProps({ testID: 'bottom-chrome-fade' });
   expect(zIndexOf(dim)).toBeGreaterThan(zIndexOf(fade));
   mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
     selector({ height: 0 }),

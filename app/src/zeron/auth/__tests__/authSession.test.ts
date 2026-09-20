@@ -4,7 +4,7 @@
 // fetch throughout.
 
 import { createHash, randomBytes } from 'crypto';
-import { AuthClient } from '../authClient';
+import { AuthClient, AuthRequestError, authFailureLog } from '../authClient';
 import {
   AuthSession,
   DevAuthSession,
@@ -167,6 +167,16 @@ describe('authKit', () => {
     });
     expect(parseCallbackUrl('zeron://cb?error=access_denied')).toEqual({
       error: 'access_denied',
+    });
+  });
+
+  test('parseCallbackUrl keeps plus signs and skips bad encoding', () => {
+    expect(parseCallbackUrl('zeron://cb?code=ab+cd&state=s')).toEqual({
+      code: 'ab+cd',
+      state: 's',
+    });
+    expect(parseCallbackUrl('zeron://cb?code=%ZZ&state=ok')).toEqual({
+      state: 'ok',
     });
   });
 
@@ -354,6 +364,76 @@ describe('AuthSession sign-in', () => {
     });
     expect(next).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
     expect(calls.filter(c => c.url.endsWith('/auth/exchange'))).toHaveLength(1);
+  });
+
+  test('concurrent completeSignIn joins one exchange', async () => {
+    let finish!: (json: unknown) => void;
+    const wait = new Promise<unknown>(resolve => {
+      finish = resolve;
+    });
+    const calls: string[] = [];
+    const fetchImpl: FetchImpl = async url => {
+      if (!url.endsWith('/auth/exchange')) {
+        return {
+          status: 404,
+          headers: { get: () => null },
+          arrayBuffer: async () => new ArrayBuffer(0),
+          text: async () => '{}',
+        };
+      }
+      calls.push('exchange');
+      const json = await wait;
+      return {
+        status: 200,
+        headers: { get: () => null },
+        arrayBuffer: async () => new ArrayBuffer(0),
+        text: async () => JSON.stringify(json),
+      };
+    };
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    const first = session.completeSignIn({ code: 'thecode', state });
+    const second = session.completeSignIn({ code: 'other', state });
+    await Promise.resolve();
+    finish(signedInTokens());
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toEqual(b);
+    expect(a).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
+    expect(calls).toHaveLength(1);
+  });
+
+  test('exchange missing tokens is invalidResponse not a TypeError', async () => {
+    const { session } = makeSession(
+      authFetch({
+        exchange: () => ({ json: { user } }),
+      }).fetchImpl,
+    );
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    await expect(
+      session.completeSignIn({ code: 'c', state }),
+    ).rejects.toBeInstanceOf(AuthRequestError);
+  });
+
+  test('authFailureLog reports kind and status, never a body', () => {
+    expect(
+      authFailureLog(
+        new AuthRequestError({
+          kind: 'http',
+          status: 401,
+          body: 'secret-code',
+        }),
+      ),
+    ).toBe('AuthRequestError http 401');
+    expect(
+      authFailureLog(new AuthRequestError({ kind: 'invalidResponse' })),
+    ).toBe('AuthRequestError invalidResponse');
+    expect(authFailureLog(new TypeError('split'))).toBe('TypeError');
   });
 
   test('PKCE beginSignIn adds S256 challenge and exchanges the verifier', async () => {

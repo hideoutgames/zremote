@@ -33,9 +33,9 @@ import {
   clampComposerExtraHeight,
   composerBaseHeightSV,
   composerExtraMax,
-  composerListInset,
-  isComposerResizeActive,
-  onComposerResizeEnd,
+  composerInsetSV,
+  rememberComposerInset,
+  seedComposerInset,
 } from './composerExtraHeight';
 import { WorkingStatusBubble } from './WorkingStatus';
 import { PreviewRail } from './agentsKit/PreviewRail';
@@ -136,7 +136,7 @@ export const SessionTranscriptList = forwardRef<
   const [contentHeight, setContentHeight] = useState(0);
   const [listHeight, setListHeight] = useState(0);
   const [listWidth, setListWidth] = useState(0);
-  const [composerInset, setComposerInset] = useState(0);
+  const [composerInset, setComposerInset] = useState(seedComposerInset);
   const [viewableIds, setViewableIds] = useState<string[]>([]);
   const [scrollMetrics, setScrollMetrics] = useState({
     offset: 0,
@@ -164,12 +164,12 @@ export const SessionTranscriptList = forwardRef<
   const railJumpRafRef = useRef<number | null>(null);
   const viewableIdsRef = useRef<string[]>([]);
   const atEndRef = useRef(false);
-  const composerInsetRef = useRef(0);
+  const extraContentPadding = useSharedValue(seedComposerInset());
+  const composerInsetRef = useRef(extraContentPadding.value);
   const lastDistanceRef = useRef(0);
   const scrollToEndRef = useRef<
     (opts: { animated: boolean; closeKeyboard: boolean }) => Promise<void>
   >(async () => {});
-  const extraContentPadding = useSharedValue(0);
   const blankSpace = useSharedValue(0);
   const freeze = useSharedValue(false);
 
@@ -185,8 +185,6 @@ export const SessionTranscriptList = forwardRef<
     uiPrefsStore.getState().composerExtraHeight,
     composerExtraMax(windowHeight),
   );
-  const baseHeightRef = useRef<number | null>(null);
-  const lastMeasuredRef = useRef<number | null>(null);
   const onComposerHeightRef = useRef(onComposerHeight);
   onComposerHeightRef.current = onComposerHeight;
   const onShowScrollDownRef = useRef(onShowScrollDown);
@@ -231,24 +229,23 @@ export const SessionTranscriptList = forwardRef<
         viewableIds,
       });
 
-  const publishInset = useCallback(
-    (extraHeight: number) => {
-      const base = baseHeightRef.current;
-      if (base === null) return;
+  const publishMeasuredInset = useCallback(
+    (height: number) => {
+      if (height <= 0) return;
       const extra = clampComposerExtraHeight(
-        extraHeight,
+        extraHeightRef.current,
         composerExtraMax(windowHeightRef.current),
       );
       extraHeightRef.current = extra;
-      composerBaseHeightSV.value = base;
-      const inset = composerListInset(base, extra);
-      extraContentPadding.value = inset;
-      if (isComposerResizeActive()) return;
+      rememberComposerInset(height);
+      composerBaseHeightSV.value = height - extra;
+      composerInsetSV.value = height;
+      extraContentPadding.value = height;
       const prev = composerInsetRef.current;
-      composerInsetRef.current = inset;
-      setComposerInset(inset);
-      onComposerHeightRef.current(inset);
-      if (followingRef.current && prev !== inset) {
+      composerInsetRef.current = height;
+      setComposerInset(height);
+      onComposerHeightRef.current(height);
+      if (followingRef.current && prev !== height) {
         scrollToEndRef
           .current({
             animated: false,
@@ -276,30 +273,18 @@ export const SessionTranscriptList = forwardRef<
   );
   scrollToEndRef.current = scrollMessageToEnd;
 
-  useEffect(
-    () =>
-      uiPrefsStore.subscribe((s, prev) => {
-        if (s.composerExtraHeight === prev.composerExtraHeight) return;
-        extraHeightRef.current = clampComposerExtraHeight(
-          s.composerExtraHeight,
-          composerExtraMax(windowHeightRef.current),
-        );
-        publishInset(s.composerExtraHeight);
-      }),
-    [publishInset],
-  );
-
-  useEffect(
-    () =>
-      onComposerResizeEnd(() => {
-        publishInset(uiPrefsStore.getState().composerExtraHeight);
-      }),
-    [publishInset],
-  );
+  useEffect(() => {
+    const seed = seedComposerInset();
+    extraContentPadding.value = seed;
+    composerInsetSV.value = seed;
+    composerInsetRef.current = seed;
+    onComposerHeightRef.current(seed);
+  }, [extraContentPadding, openKey]);
 
   useEffect(() => {
     if (entries.length === 0 && !working) return;
     if (scrolledForKeyRef.current === openKey) return;
+    if (composerInsetRef.current <= 0) return;
     scrolledForKeyRef.current = openKey;
     hasOverflowedRef.current = true;
     setFollowing(true);
@@ -351,33 +336,10 @@ export const SessionTranscriptList = forwardRef<
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      if (isComposerResizeActive()) return;
       const height = event.nativeEvent.layout.height;
-      const extra = extraHeightRef.current;
-      const base = baseHeightRef.current;
-      if (base !== null) {
-        const expected = composerListInset(base, extra);
-        if (height === expected) {
-          lastMeasuredRef.current = height;
-          publishInset(extra);
-          return;
-        }
-        // Ignore a stale layout from before the extra-height write.
-        if (
-          lastMeasuredRef.current !== null &&
-          height === lastMeasuredRef.current
-        ) {
-          return;
-        }
-      }
-      baseHeightRef.current = height - extra;
-      lastMeasuredRef.current = height;
-      // Full sticky stack (chrome + composer). Extra height is applied as
-      // base + extra so the transcript tracks the grabber 1:1 without
-      // waiting for TextInput minHeight layout. Home/threads unchanged.
-      publishInset(extra);
+      publishMeasuredInset(height);
     },
-    [publishInset],
+    [publishMeasuredInset],
   );
 
   const followEnd = useCallback(

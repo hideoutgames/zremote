@@ -150,8 +150,10 @@ npm run test:unit && wrangler deploy
 
 ## What works WITHOUT these patches
 
-- Without `0001`, PKCE exchange fails on every path (hop, HTTPS, or paste).
-  Without `0004`/`0005`, iOS 17.0–17.3 / Safari fallback land on the
+- Without `0001`, PKCE exchange fails on every path (hop, HTTPS, or paste)
+  **if the client sends a `code_challenge`**. The iOS app currently matches
+  the engine (no PKCE), so code exchange works without `0001`. Without
+  `0004`/`0005`, iOS 17.0–17.3 / Safari fallback land on the
   Copy-code page; the in-app paste field is the fallback. iOS 17.4+
   intercepts the HTTPS WorkOS callback in-session without the hop.
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
