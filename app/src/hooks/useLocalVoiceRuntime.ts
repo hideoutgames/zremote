@@ -27,23 +27,26 @@ export const useLocalVoiceRuntime = (
     }
     let mounted = true;
     const manager = getVoiceModelManager();
-    const transcriptionPath =
-      voiceModelId != null ? manager?.installedPath(voiceModelId) ?? '' : '';
-    const cleanupPath =
-      cleanupModelId != null
-        ? manager?.installedPath(cleanupModelId)
-        : undefined;
-    if (voiceModelId != null && transcriptionPath !== '') {
-      manager?.markInUse(voiceModelId);
-    }
-    if (cleanupModelId != null && cleanupPath !== undefined) {
-      manager?.markInUse(cleanupModelId);
-    }
-    Promise.all([
-      resolveVoiceCapture(),
-      resolveTranscriptionEngine(),
-      resolveCleanupEngine(),
-    ]).then(([capture, transcription, cleanup]) => {
+    const load = async (): Promise<void> => {
+      await manager?.waitReady();
+      if (!mounted) return;
+      const transcriptionPath =
+        voiceModelId != null ? manager?.installedPath(voiceModelId) ?? '' : '';
+      const cleanupPath =
+        cleanupModelId != null
+          ? manager?.installedPath(cleanupModelId)
+          : undefined;
+      if (voiceModelId != null && transcriptionPath !== '') {
+        manager?.markInUse(voiceModelId);
+      }
+      if (cleanupModelId != null && cleanupPath !== undefined) {
+        manager?.markInUse(cleanupModelId);
+      }
+      const [capture, transcription, cleanup] = await Promise.all([
+        resolveVoiceCapture(),
+        resolveTranscriptionEngine(),
+        resolveCleanupEngine(),
+      ]);
       if (!mounted) return;
       setRuntime({
         capture,
@@ -53,6 +56,9 @@ export const useLocalVoiceRuntime = (
         cleanupPath,
         deleteAudio,
       });
+    };
+    load().catch(() => {
+      if (mounted) setRuntime(undefined);
     });
     return () => {
       mounted = false;

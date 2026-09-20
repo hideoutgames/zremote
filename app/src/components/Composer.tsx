@@ -461,6 +461,10 @@ export const Composer = React.memo(function ({
     return () => voiceSession.invalidate();
   }, [chatId, voiceInputMode, voiceRuntime, cleanupPromptOverride]);
 
+  useEffect(() => {
+    setVoiceNotice(null);
+  }, [chatId, voiceInputMode]);
+
   // Stop capture on background / unmount (never leak the mic).
   useEffect(() => {
     const sub = AppState.addEventListener('change', s => {
@@ -981,34 +985,39 @@ export const Composer = React.memo(function ({
           {t('session.workingHint')}
         </Text>
       ) : null}
-      {voiceNotice?.kind === 'cleanupFailed' ? (
-        <Text
-          style={[styles.hint, { color: theme.textSecondary }]}
-          accessibilityLiveRegion="polite"
+      {voiceNotice?.kind === 'cleanupFailed' ||
+      voiceNotice?.kind === 'transcribeFailed' ||
+      voiceNotice?.kind === 'restore' ? (
+        <Glass
+          style={[
+            styles.voiceBanner,
+            { backgroundColor: theme.glassFallbackBackground },
+          ]}
         >
-          {t('composer.voiceCleanupFailed')}
-        </Text>
-      ) : null}
-      {voiceNotice?.kind === 'restore' ? (
-        <Pressable
-          onPress={restoreVoiceText}
-          accessibilityRole="button"
-          accessibilityLabel={t('composer.voiceRestore')}
-          testID="composer-restore-voice"
-          hitSlop={6}
-        >
-          <Text style={[styles.hint, { color: theme.accent }]}>
-            {t('composer.voiceRestore')}
-          </Text>
-        </Pressable>
-      ) : null}
-      {voiceNotice?.kind === 'transcribeFailed' ? (
-        <Text
-          style={[styles.hint, { color: theme.textSecondary }]}
-          accessibilityLiveRegion="polite"
-        >
-          {t('composer.voiceTranscribeFailed')}
-        </Text>
+          {voiceNotice.kind === 'restore' ? (
+            <Pressable
+              onPress={restoreVoiceText}
+              accessibilityRole="button"
+              accessibilityLabel={t('composer.voiceRestore')}
+              testID="composer-restore-voice"
+              hitSlop={6}
+              style={styles.voiceBannerPress}
+            >
+              <Text style={[styles.voiceBannerAction, { color: theme.text }]}>
+                {t('composer.voiceRestore')}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text
+              style={[styles.voiceBannerText, { color: theme.text }]}
+              accessibilityLiveRegion="polite"
+            >
+              {voiceNotice.kind === 'cleanupFailed'
+                ? t('composer.voiceCleanupFailed')
+                : t('composer.voiceTranscribeFailed')}
+            </Text>
+          )}
+        </Glass>
       ) : null}
 
       <View
@@ -1127,5 +1136,17 @@ const styles = StyleSheet.create({
   chipSpacer: { flexGrow: 1, minWidth: 0 },
   effortChipHidden: { opacity: 0 },
   hint: { fontSize: 12, textAlign: 'center' },
+  voiceBanner: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    overflow: 'hidden',
+  },
+  voiceBannerText: { fontSize: 14, flex: 1 },
+  voiceBannerAction: { fontSize: 14, fontWeight: '600' },
+  voiceBannerPress: { flex: 1, minHeight: 44, justifyContent: 'center' },
   homePad: {},
 });

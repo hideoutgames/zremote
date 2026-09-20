@@ -34,7 +34,7 @@ terminal runs on the phone. Local speech transcription does.
 
 ## Identity and scoping
 
-- **Account** = WorkOS user (`sub`) inside an **organization** (`org_id` claim). All caches, drafts, doc snapshots, registry snapshots, and push registrations are keyed by `{orgId}/{userId}`; sign-out closes rooms, removes Live Activity registrations, and isolates (does not merge) the cache.
+- **Account** = WorkOS user (`sub`) inside an **organization** (`org_id` claim). All caches, drafts, doc snapshots, registry snapshots, and push registrations are keyed by `{orgId}/{userId}`; sign-out closes rooms, removes Live Activity registrations, and isolates (does not merge) the cache. Voice Input mode, selected model IDs, and the cleanup prompt live in account-scoped `uiPrefs.json`. Whisper/GGUF weights are device-local (`{document}/zeron/models/`) — never CRDT-synced, never under `{org}/{user}`.
 - **Device** = a UUID minted once per install and stored in secure storage. It stamps registry ops (HLC suffix), command `issuedBy`, and the `device` field on chat2/registry hellos. The phone never writes an engine `devices` row.
 - **Space** = (deviceId, folder) row. **Chat/session** = registry `chats` row (+ `sessions` status row) and its chat2 Loro doc. **Checkout** = `cwd`/`branch`/`checkoutId` on the chat row.
 - **Run / turn / message** ids come from the doc; the phone mints message ids for optimistic echo (`run.messageId`), command ids, and upload ids.

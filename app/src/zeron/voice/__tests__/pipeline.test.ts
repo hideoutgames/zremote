@@ -224,6 +224,42 @@ test('missing model is reported without starting capture', async () => {
   expect(cap.start).not.toHaveBeenCalled();
 });
 
+test('inserts at the caret captured when recording started', async () => {
+  let draft = 'ab';
+  let selection = 1;
+  const session = new LocalVoiceSession({
+    chatId: 'c1',
+    getDraft: () => draft,
+    setDraft: t => {
+      draft = t;
+    },
+    getSelection: () => selection,
+    capture: capture(),
+    transcription: transcription('X'),
+    transcriptionPath: '/m.bin',
+    cleanupPath: '',
+    onStage: () => {},
+    onNotice: () => {},
+  });
+  await session.start();
+  selection = 2;
+  await session.stop();
+  expect(draft).toBe('aXb');
+});
+
+test('over-limit transcripts skip cleanup without truncating', async () => {
+  const raw = 'word '.repeat(1_000).trim();
+  const cln = cleanup('should not run');
+  const { session, getDraft } = setup({
+    transcript: raw,
+    cleanupEngine: cln,
+  });
+  await session.start();
+  await session.stop();
+  expect(getDraft()).toBe(`prefix ${raw}`);
+  expect(cln.clean).not.toHaveBeenCalled();
+});
+
 test('cancel processing after transcription keeps raw text', async () => {
   let resumeClean: (v: { text: string }) => void = () => {};
   let draft = '';

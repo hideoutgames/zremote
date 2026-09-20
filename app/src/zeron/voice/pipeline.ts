@@ -46,6 +46,7 @@ export class LocalVoiceSession {
   private stage: VoicePipelineStage = 'idle';
   private audioUri: string | undefined;
   private durationMs = 0;
+  private caret = 0;
   private insertion: VoiceInsertionRange | undefined;
   private watchdog: unknown;
   private recordingId = '';
@@ -82,6 +83,7 @@ export class LocalVoiceSession {
     if (this.host.transcriptionPath === '') return 'missingModel';
     const mine = this.begin('preparing');
     this.insertion = undefined;
+    this.caret = this.host.getSelection();
     this.host.onNotice(null);
     try {
       await this.host.capture.start();
@@ -162,7 +164,7 @@ export class LocalVoiceSession {
     }
     const { text, range } = spliceVoiceText(
       this.host.getDraft(),
-      this.host.getSelection(),
+      this.caret,
       result.text,
     );
     this.host.setDraft(text);

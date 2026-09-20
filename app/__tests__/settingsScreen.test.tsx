@@ -7,6 +7,7 @@ import { Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
+import * as dictationNative from '../src/zeron/native/dictation';
 import { authStore } from '../src/zeron/state/authStore';
 import { demoModeStore } from '../src/demo/demoMode';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
@@ -359,6 +360,14 @@ test('Voice Model mode shows model pickers and hides Language', async () => {
       n => n.props.testID === 'settings-cleanup-instructions',
     ).length,
   ).toBe(0);
+});
+
+test('Voice Model mode does not probe Apple Speech', async () => {
+  const spy = jest.spyOn(dictationNative, 'resolveDictationPort');
+  setVoiceInputMode('voiceModel');
+  await render(<SettingsScreen onClose={() => {}} />);
+  expect(spy).not.toHaveBeenCalled();
+  spy.mockRestore();
 });
 
 test('Disabled mode hides voice-specific rows', async () => {

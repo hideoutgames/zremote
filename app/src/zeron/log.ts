@@ -5,7 +5,7 @@
 export type LogSink = (line: string) => void;
 
 const SENSITIVE =
-  /(token|bearer|authorization|password|secret|prompt|refresh|transcript|dictation)/i;
+  /(token|bearer|authorization|password|secret|prompt|refresh|transcript|dictation|whisper|cleanup output|\baudio\b)/i;
 
 const defaultSink: LogSink = line => {
   console.log(`[zeron] ${line}`);

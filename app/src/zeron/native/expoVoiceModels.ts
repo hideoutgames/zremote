@@ -92,6 +92,8 @@ export const expoVoiceModelFs: VoiceModelFs = {
 
 export const expoVoiceHasher: VoiceHasher = {
   async sha256File(path) {
+    // expo-crypto hashes a whole ArrayBuffer. Production verify must hash
+    // natively in chunks — this path is unused until artifacts are pinned.
     const bytes = await expoVoiceModelFs.readBytes(path);
     if (bytes === undefined) throw new Error('missing model file');
     const digest = await Crypto.digest(
