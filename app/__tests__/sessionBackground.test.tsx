@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import { StyleSheet, Text, TextInput } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import { SessionScreen } from '../src/screens/SessionScreen';
@@ -21,6 +21,7 @@ import {
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import { setWallpaperContrast } from '../src/zeron/state/wallpaperContrast';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
+import * as Theme from '../src/theme';
 
 const services: AppServices = {
   auth: null as never,
@@ -87,7 +88,8 @@ test('home list mounts the threads blur when artwork is set', async () => {
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   expect(count(mounted.root, 'session-background-blur')).toBeGreaterThan(0);
-  expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'top-chrome-fade')).toBe(0);
 });
 
 const zIndexOf = (node: TestRenderer.ReactTestInstance): number => {
@@ -294,5 +296,55 @@ test('home list uses full-bleed regular blur at the 750pt test window', async ()
   expect(blur.props.tint).toBe('systemThinMaterialDark');
   expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
   expect(count(mounted.root, 'session-background-dim')).toBeGreaterThan(0);
-  expect(count(mounted.root, 'bottom-chrome-fade')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'bottom-chrome-fade')).toBe(0);
+  expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
+});
+
+test('session chrome uses dark buttons when wallpaper is set in light theme', async () => {
+  const themeSpy = jest
+    .spyOn(Theme, 'useTheme')
+    .mockReturnValue(Theme.lightTheme);
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  try {
+    const mounted = await render(
+      <SessionScreen chatId="c1" onBack={() => {}} />,
+    );
+    const back = mounted.root.findAll(
+      n => n.props.name === 'chevron.left' && n.props.tintColor != null,
+    )[0];
+    expect(back.props.tintColor).toBe(Theme.darkTheme.text);
+    const overflow = mounted.root.findAll(
+      n => n.props.name === 'ellipsis' && n.props.tintColor != null,
+    )[0];
+    expect(overflow.props.tintColor).toBe(Theme.darkTheme.text);
+    const glassTints = mounted.root.findAll(
+      n => n.props.tint === 'systemThinMaterialDark',
+    );
+    expect(glassTints.length).toBeGreaterThan(0);
+    const empty = mounted.root.findAll(n => {
+      const c = n.props.children;
+      return typeof c === 'string' && c.includes('Nothing here yet');
+    })[0];
+    expect(empty).toBeDefined();
+    if (empty === undefined) return;
+    const emptyStyle = Array.isArray(empty.props.style)
+      ? empty.props.style.flat()
+      : [empty.props.style];
+    expect(
+      emptyStyle.some(s => s?.color === Theme.lightTheme.textSecondary),
+    ).toBe(true);
+    expect(mounted.root.findAllByType(Text).length).toBeGreaterThan(0);
+  } finally {
+    themeSpy.mockRestore();
+  }
 });

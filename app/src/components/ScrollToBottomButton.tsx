@@ -3,13 +3,13 @@ import { StyleSheet } from 'react-native';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { GlassControl } from './Glass';
 import { Icon } from './Icon';
-import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 
 const SIZE = 38;
 
 // Floating glass chevron that scrolls the conversation to the very bottom.
 export function ScrollToBottomButton({ onPress }: { onPress: () => void }) {
-  const theme = useTheme();
+  const theme = useChromeTheme();
   return (
     <Animated.View
       entering={ZoomIn.duration(160)}

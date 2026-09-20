@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { GlassControl } from './Glass';
 import { BrandMark } from './BrandMark';
 import { svgForPullRequest } from './harnessBrand';
-import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
 import type { PrBadgeModel } from './prBadge';
 
@@ -23,7 +23,7 @@ export function ComposerChromeRow({
   pr: PrBadgeModel | undefined;
   onOpenPr: () => void;
 }) {
-  const theme = useTheme();
+  const theme = useChromeTheme();
   if (queueCount <= 0 && pr === undefined) return null;
 
   const prColor =

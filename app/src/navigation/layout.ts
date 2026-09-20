@@ -40,8 +40,8 @@ export const columnSideGutter = (
 };
 
 /** FlashList honors padding on `contentContainerStyle`; maxWidth does not
- *  shrink virtualized rows. `railReserve` is extra right padding only when
- *  the centered gutter is too small for the preview rail. */
+ *  shrink virtualized rows. The preview rail overlays and does not reserve
+ *  extra right padding, so gutters stay equal. */
 export const transcriptHorizontalPadding = (
   listWidth: number,
   contentMaxWidth: number | undefined,

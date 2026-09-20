@@ -28,7 +28,7 @@ import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
 import { transcriptHorizontalPadding } from '../navigation/layout';
 import { useTheme } from '../theme';
-import { ContentEdgeMask, TOP_CHROME_FADE_BAND } from './TopChromeFade';
+import { ContentEdgeMask, COMPOSER_BOTTOM_FADE_BAND } from './TopChromeFade';
 import {
   clampComposerExtraHeight,
   composerExtraMax,
@@ -44,7 +44,6 @@ import {
 import { TranscriptChatScrollView } from './TranscriptChatScrollView';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
-const RAIL_PADDING_RIGHT = 40;
 export const RAIL_RIGHT = 4;
 /** Remount FlashList after a sidebar-sized width jump so hit testing
  *  picks up the new column. Sub-delta ticks are ignored (no remount,
@@ -52,7 +51,19 @@ export const RAIL_RIGHT = 4;
  *  several times in one collapse. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
 const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
-const END_THRESHOLD = 1;
+export const END_THRESHOLD = 1;
+
+export const listEndDistance = (
+  contentHeight: number,
+  offset: number,
+  layoutHeight: number,
+): number => contentHeight - offset - layoutHeight;
+
+export const isTranscriptAtEnd = (
+  distance: number,
+  composerInset: number,
+  threshold = END_THRESHOLD,
+): boolean => distance + composerInset <= threshold;
 
 export const WORKING_STATUS_ID = '__working-status__';
 
@@ -143,6 +154,11 @@ export const SessionTranscriptList = forwardRef<
   followingRef.current = following;
   const viewableIdsRef = useRef<string[]>([]);
   const atEndRef = useRef(false);
+  const composerInsetRef = useRef(0);
+  const lastDistanceRef = useRef(0);
+  const scrollToEndRef = useRef<
+    (opts: { animated: boolean; closeKeyboard: boolean }) => Promise<void>
+  >(async () => {});
   const extraContentPadding = useSharedValue(0);
   const blankSpace = useSharedValue(0);
   const freeze = useSharedValue(false);
@@ -214,9 +230,19 @@ export const SessionTranscriptList = forwardRef<
         composerExtraMax(windowHeightRef.current),
       );
       const inset = composerListInset(base, extra);
+      const prev = composerInsetRef.current;
+      composerInsetRef.current = inset;
       setComposerInset(inset);
       extraContentPadding.value = inset;
       onComposerHeightRef.current(inset);
+      if (followingRef.current && prev !== inset) {
+        scrollToEndRef
+          .current({
+            animated: false,
+            closeKeyboard: false,
+          })
+          .catch(() => {});
+      }
     },
     [extraContentPadding],
   );
@@ -228,13 +254,14 @@ export const SessionTranscriptList = forwardRef<
         ? KeyboardController.dismiss()
         : Promise.resolve();
       const scrollOpts = { animated: opts.animated };
-      chatScrollRef.current?.scrollToEnd?.(scrollOpts);
       listRef.current?.scrollToEnd(scrollOpts);
+      chatScrollRef.current?.scrollToEnd?.(scrollOpts);
       await dismissPromise;
       freeze.set(false);
     },
     [freeze],
   );
+  scrollToEndRef.current = scrollMessageToEnd;
 
   useEffect(
     () =>
@@ -402,9 +429,13 @@ export const SessionTranscriptList = forwardRef<
         contentHeight: contentSize.height,
       });
       savedOffsetRef.current = contentOffset.y;
-      const distance =
-        contentSize.height - contentOffset.y - layoutMeasurement.height;
-      applyEndVisible(distance <= END_THRESHOLD);
+      const distance = listEndDistance(
+        contentSize.height,
+        contentOffset.y,
+        layoutMeasurement.height,
+      );
+      lastDistanceRef.current = distance;
+      applyEndVisible(isTranscriptAtEnd(distance, composerInsetRef.current));
     },
     [applyEndVisible],
   );
@@ -462,7 +493,14 @@ export const SessionTranscriptList = forwardRef<
         blankSpace={blankSpace}
         freeze={freeze}
         offset={insetsBottom}
-        onEndVisible={applyEndVisible}
+        onEndVisible={() =>
+          applyEndVisible(
+            isTranscriptAtEnd(
+              lastDistanceRef.current,
+              composerInsetRef.current,
+            ),
+          )
+        }
       />
     ),
     [applyEndVisible, blankSpace, extraContentPadding, freeze, insetsBottom],
@@ -490,9 +528,8 @@ export const SessionTranscriptList = forwardRef<
     >
       <ContentEdgeMask
         topInset={insetsTop + 58}
-        topBand={TOP_CHROME_FADE_BAND}
         bottomInset={composerInset}
-        bottomBand={TOP_CHROME_FADE_BAND}
+        bottomBand={COMPOSER_BOTTOM_FADE_BAND}
       >
         <FlashList
           key={listHitKey}
@@ -534,11 +571,7 @@ export const SessionTranscriptList = forwardRef<
             styles.listContent,
             {
               paddingTop: insetsTop + 96,
-              ...transcriptHorizontalPadding(
-                listWidth,
-                contentMaxWidth,
-                overflowing ? RAIL_PADDING_RIGHT : 0,
-              ),
+              ...transcriptHorizontalPadding(listWidth, contentMaxWidth, 0),
             },
           ]}
           scrollIndicatorInsets={{ top: insetsTop + 96 }}
