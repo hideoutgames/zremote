@@ -1,5 +1,5 @@
 // Settings: inset-grouped account, desktops, and prefs. Per-desktop page
-// covers rename, software update, session titles, agent accounts, harnesses.
+// covers rename, software update, agent accounts, harnesses.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -19,17 +19,12 @@ import { authStore } from '../zeron/state/authStore';
 import { catalogStore } from '../zeron/state/catalogStore';
 import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
 import { useAppServices, useRuntime } from '../app/runtimeContext';
-import type {
-  DeviceRow,
-  TitleSettings,
-  UpdateStatus,
-} from '../zeron/protocol/types';
+import type { DeviceRow, UpdateStatus } from '../zeron/protocol/types';
 import { METHODS } from '../zeron/protocol/rpc';
 import { AgentAccountsScreen } from './AgentAccountsScreen';
 import { Icon } from '../components/Icon';
 import {
   SettingsGroup,
-  SettingsInputRow,
   SettingsRow,
   settingsPageBackground,
 } from '../components/settings/SettingsList';
@@ -90,8 +85,6 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
   const catalog = useStore(catalogStore, s => s.byDevice[device.id]);
   const [update, setUpdate] = useState<UpdateStatus | undefined>(undefined);
   const [applying, setApplying] = useState(false);
-  const [title, setTitle] = useState<TitleSettings>({});
-  const [titleLoaded, setTitleLoaded] = useState(false);
 
   useEffect(() => {
     if (runtime !== null)
@@ -121,29 +114,6 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
       stream?.cancel();
     };
   }, [runtime, device.id]);
-
-  useEffect(() => {
-    if (runtime === null) return;
-    runtime
-      .relayFor(device.id)
-      .call<TitleSettings>(METHODS.GET_TITLE_SETTINGS, {})
-      .then(s => {
-        setTitle(s);
-        setTitleLoaded(true);
-      })
-      .catch(() => {});
-  }, [runtime, device.id]);
-
-  const saveTitle = useCallback(
-    (next: TitleSettings) => {
-      setTitle(next);
-      runtime
-        ?.relayFor(device.id)
-        .call(METHODS.SET_TITLE_SETTINGS, { ...next })
-        .catch(e => log.warn(`SetTitleSettings: ${e}`));
-    },
-    [runtime, device.id],
-  );
 
   const rename = useCallback(() => {
     Alert.prompt(
@@ -234,23 +204,6 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
               update.updateAvailable && !applying ? applyUpdate : undefined
             }
             accessibilityLabel={t('settings.softwareUpdate')}
-          />
-        </SettingsGroup>
-      ) : null}
-
-      {titleLoaded ? (
-        <SettingsGroup header={t('settings.titleSettings')}>
-          <SettingsInputRow
-            label={t('settings.titleHarness')}
-            value={title.harness ?? ''}
-            onChangeText={v => saveTitle({ ...title, harness: v || undefined })}
-            placeholder={t('settings.titleHarness')}
-          />
-          <SettingsInputRow
-            label={t('settings.titleModel')}
-            value={title.model ?? ''}
-            onChangeText={v => saveTitle({ ...title, model: v || undefined })}
-            placeholder={t('settings.titleModel')}
           />
         </SettingsGroup>
       ) : null}

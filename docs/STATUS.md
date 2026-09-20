@@ -55,7 +55,7 @@ Needs a Mac build, a device, or a host in the right state:
 - Files/Changes/History RPC round-trips on a live checkout.
 - Previews screen exists but is unwired from the session overflow.
 - Agent account flows (activate/forget/login) — need provider CLIs.
-- Device rename / `UpdateStatus` / `ApplyUpdate` / title settings.
+- Device rename / `UpdateStatus` / `ApplyUpdate`.
 - Adaptive shell visuals on iPad; account isolation (by construction);
   archived settings page (shelf exists, per-device page absent).
 - Real agent runs — e2e uses the `mock` harness only (the host lists
