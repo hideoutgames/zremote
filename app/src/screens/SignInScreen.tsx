@@ -1,9 +1,11 @@
 // Sign-in: WorkOS redirect stays the registered HTTPS URI; AuthSession
 // listens on zeron:// so the sheet actually presents. The edge 302-hops
-// to that scheme. PKCE throughout. Demo remains under Advanced.
+// to that scheme. PKCE throughout. If the hop is missing or the sheet is
+// dismissed, paste the Copy-code page value to complete. Demo remains
+// under Advanced.
 
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   httpsAuthCallbackUrl,
@@ -32,6 +34,8 @@ export function SignInScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
+  const [showPaste, setShowPaste] = useState(false);
+  const [paste, setPaste] = useState('');
 
   const signIn = useCallback(async () => {
     setBusy(true);
@@ -49,6 +53,7 @@ export function SignInScreen() {
         const link = parseCallbackUrl(result.url);
         if (link.error !== undefined || link.code === undefined) {
           setError(t('signIn.error.generic'));
+          setShowPaste(true);
           return;
         }
         await auth.completeSignIn({
@@ -60,14 +65,31 @@ export function SignInScreen() {
       if (result.type !== 'cancel') {
         setError(t('signIn.error.generic'));
       }
+      setShowPaste(true);
     } catch (e) {
       const name = e instanceof Error ? e.name : 'Error';
       log.warn(`sign-in failed (${name})`);
       setError(t('signIn.error.generic'));
+      setShowPaste(true);
     } finally {
       setBusy(false);
     }
   }, [auth, edgeUrl]);
+
+  const completePaste = useCallback(async () => {
+    if (paste.trim() === '') return;
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.completePastedCode(paste);
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`paste sign-in failed (${name})`);
+      setError(t('signIn.error.generic'));
+    } finally {
+      setBusy(false);
+    }
+  }, [auth, paste]);
 
   return (
     <View
@@ -102,6 +124,45 @@ export function SignInScreen() {
 
       {error !== null ? (
         <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
+      ) : null}
+
+      {showPaste ? (
+        <View style={styles.pasteBox}>
+          <Text style={[styles.pasteTitle, { color: theme.text }]}>
+            {t('signIn.pasteFallback.title')}
+          </Text>
+          <Text style={[styles.pasteBody, { color: theme.textSecondary }]}>
+            {t('signIn.pasteFallback.body')}
+          </Text>
+          <TextInput
+            value={paste}
+            onChangeText={setPaste}
+            placeholder={t('signIn.pasteFallback.placeholder')}
+            placeholderTextColor={theme.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            editable={!busy}
+            style={[
+              styles.pasteInput,
+              { color: theme.text, borderColor: theme.border },
+            ]}
+            accessibilityLabel={t('signIn.pasteFallback.placeholder')}
+          />
+          <GlassControl
+            interactive
+            onPress={completePaste}
+            disabled={busy || paste.trim() === ''}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('signIn.pasteFallback.continue')}
+            style={styles.demoButton}
+          >
+            <Text style={[styles.demoText, { color: theme.sendActive }]}>
+              {t('signIn.pasteFallback.continue')}
+            </Text>
+          </GlassControl>
+        </View>
       ) : null}
 
       <Pressable
@@ -160,6 +221,17 @@ const styles = StyleSheet.create({
   },
   primaryText: { fontSize: 17, fontWeight: '600' },
   error: { fontSize: 13 },
+  pasteBox: { alignItems: 'center', gap: 8, width: '100%', maxWidth: 360 },
+  pasteTitle: { fontSize: 15, fontWeight: '600' },
+  pasteBody: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  pasteInput: {
+    alignSelf: 'stretch',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 16,
+    fontFamily: 'Menlo',
+  },
   advancedToggle: {
     flexDirection: 'row',
     alignItems: 'center',

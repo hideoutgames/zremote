@@ -128,9 +128,12 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
    shows. HTTPS AuthSession with `preferUniversalLinks: true` is not used:
    without verified AASA/`webcredentials` it silently returns `cancel` and
    never opens `api.workos.com`. `zeron://` Linking is the Safari-fallback
-   return path if AuthSession fails to start. There is no in-app paste-code
-   UI; cancel/error shows a generic message and the user taps Sign in
-   again. Desktop CLI `zeron login` still sees the paste-code page.
+   return path if AuthSession fails to start. If the hop is missing or the
+   sheet is cancelled/dismissed, `SignInScreen` shows a paste field so the
+   user can paste `state.code` from the Copy-code page;
+   `completePastedCode` exchanges it and Keychain `restore()` signs in on
+   the next launch. Desktop CLI `zeron login` still sees the paste-code
+   page.
 2. `state` is minted per attempt with a `zr1.` prefix (so the edge can hop
    without UA sniffing), stored in memory and Keychain until consumed
    (15-minute TTL), and bound to the intercepted code (same CSRF discipline
