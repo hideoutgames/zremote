@@ -775,25 +775,23 @@ export const Composer = React.memo(function ({
                           color={theme.textSecondary}
                         />
                       ) : (
-                        <View style={styles.iconClip} collapsable={false}>
-                          <Icon
-                            name={
-                              right === 'stop'
-                                ? 'stop.fill'
-                                : right === 'cancel'
-                                ? 'xmark'
-                                : 'arrow.up'
-                            }
-                            size={right === 'send' ? 17 : 15}
-                            color={
-                              right === 'send' && !sendArmed
-                                ? '#FFFFFF'
-                                : theme.scheme === 'dark'
-                                ? '#000000'
-                                : '#FFFFFF'
-                            }
-                          />
-                        </View>
+                        <Icon
+                          name={
+                            right === 'stop'
+                              ? 'stop.fill'
+                              : right === 'cancel'
+                              ? 'xmark'
+                              : 'arrow.up'
+                          }
+                          size={right === 'send' ? 17 : 15}
+                          color={
+                            right === 'send' && !sendArmed
+                              ? '#FFFFFF'
+                              : theme.scheme === 'dark'
+                              ? '#000000'
+                              : '#FFFFFF'
+                          }
+                        />
                       )}
                     </View>
                   </Pressable>
@@ -927,13 +925,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     height: 44,
     overflow: 'visible',
-  },
-  iconClip: {
-    width: CIRCLE,
-    height: CIRCLE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
   },
   actionChipsScroll: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   actionChips: {

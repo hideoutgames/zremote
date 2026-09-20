@@ -27,7 +27,10 @@ const render = async () => {
 };
 
 const chevronTint = (tree: TestRenderer.ReactTestRenderer) =>
-  tree.root.findByProps({ symbolName: 'chevron.down' }).props.tintColor;
+  tree.root.findByProps({
+    name: 'chevron.down',
+    resizeMode: 'scaleAspectFit',
+  }).props.tintColor;
 
 afterEach(() => {
   mockedUseTheme.mockReset();

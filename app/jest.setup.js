@@ -68,7 +68,7 @@ jest.mock('expo-glass-effect', () => ({
   isLiquidGlassAvailable: () => false,
 }));
 
-jest.mock('react-native-nitro-symbols', () => ({
+jest.mock('expo-symbols', () => ({
   SymbolView: (props: object) =>
     require('react').createElement(require('react-native').View, props),
 }));

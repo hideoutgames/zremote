@@ -64,7 +64,6 @@
     "react-native-nitro-fetch": "^1.4.2",
     "react-native-nitro-image": "^0.15.1",
     "react-native-nitro-modules": "^0.35.10",
-    "react-native-nitro-symbols": "^0.0.8",
     "react-native-nitro-text-decoder": "^0.2.0",
     "react-native-nitro-web-image": "^0.15.1",
     "react-native-nitro-websockets": "^1.1.0",
