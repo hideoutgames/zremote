@@ -1015,7 +1015,7 @@ test('width change while following re-anchors to the end', async () => {
   });
 });
 
-test('width change while not following restores the saved offset', async () => {
+test('width change while not following keeps the list mounted', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
@@ -1046,10 +1046,8 @@ test('width change while not following restores the saved offset', async () => {
     });
   });
   expect(scrollToEnd).not.toHaveBeenCalled();
-  expect(scrollToOffset).toHaveBeenCalledWith({
-    offset: 320,
-    animated: false,
-  });
+  expect(scrollToOffset).not.toHaveBeenCalled();
+  expect(listProps(tree!).testID).toBe('session-transcript-list');
   await act(async () => {
     tree!.unmount();
   });
@@ -1067,7 +1065,7 @@ test('sub-delta width ticks do not remount or restore scroll', async () => {
       nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 844 } },
     });
   });
-  expect(listProps(tree!).testID).toBe('session-transcript-list-0');
+  expect(listProps(tree!).testID).toBe('session-transcript-list');
   scrollToEnd.mockClear();
   scrollToOffset.mockClear();
   const tick = LIST_RESIZE_REMOUNT_DELTA - 1;
@@ -1090,7 +1088,7 @@ test('sub-delta width ticks do not remount or restore scroll', async () => {
       requestAnimationFrame(() => resolve());
     });
   });
-  expect(listProps(tree!).testID).toBe('session-transcript-list-0');
+  expect(listProps(tree!).testID).toBe('session-transcript-list');
   expect(scrollToEnd).not.toHaveBeenCalled();
   expect(scrollToOffset).not.toHaveBeenCalled();
 
@@ -1111,7 +1109,7 @@ test('sub-delta width ticks do not remount or restore scroll', async () => {
       requestAnimationFrame(() => resolve());
     });
   });
-  expect(listProps(tree!).testID).toBe('session-transcript-list-1');
+  expect(listProps(tree!).testID).toBe('session-transcript-list');
   expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
   await act(async () => {
     tree!.unmount();

@@ -1,6 +1,7 @@
 import {
   COMPOSE_KEYBOARD_GAP,
   composeKeyboardShift,
+  composerKeyboardStickyOffset,
 } from '../src/navigation/composeKeyboardShift';
 
 test('composeKeyboardShift is zero when the keyboard is down', () => {
@@ -42,4 +43,26 @@ test('composeKeyboardShift lifts only the overlapping amount', () => {
       keyboardHeight: 400,
     }),
   ).toBe(-(100 + COMPOSE_KEYBOARD_GAP));
+});
+
+test('composeKeyboardShift is a worklet-safe export', () => {
+  expect(typeof composeKeyboardShift).toBe('function');
+  expect(
+    composeKeyboardShift({
+      windowHeight: 800,
+      composerHeight: 200,
+      keyboardHeight: 0,
+    }),
+  ).toBe(0);
+});
+
+test('composerKeyboardStickyOffset eats the home inset while open', () => {
+  expect(composerKeyboardStickyOffset(34)).toEqual({
+    closed: 0,
+    opened: 34,
+  });
+  expect(composerKeyboardStickyOffset(0)).toEqual({
+    closed: 0,
+    opened: 0,
+  });
 });

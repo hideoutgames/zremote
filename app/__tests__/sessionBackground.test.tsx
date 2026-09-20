@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, TextInput } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { useKeyboardState } from 'react-native-keyboard-controller';
+import * as SafeAreaContext from 'react-native-safe-area-context';
+import { composerKeyboardStickyOffset } from '../src/navigation/composeKeyboardShift';
 import { SessionScreen } from '../src/screens/SessionScreen';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
@@ -221,6 +223,108 @@ test('iPad session composer parent centers a max-width column', async () => {
   expect(innerStyle.width).toBe('100%');
   expect(innerStyle.maxWidth).toBe(560);
   expect(innerStyle.alignSelf).not.toBe('center');
+});
+
+test('session composer sticky offset interpolates the home inset', async () => {
+  jest.spyOn(SafeAreaContext, 'useSafeAreaInsets').mockReturnValue({
+    top: 47,
+    left: 0,
+    right: 0,
+    bottom: 34,
+  });
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  try {
+    const mounted = await render(
+      <SessionScreen chatId="c1" onBack={() => {}} />,
+    );
+    const wrap = mounted.root.findByProps({ testID: 'session-composer' });
+    expect(wrap.props.offset).toEqual(composerKeyboardStickyOffset(34));
+    const pad = mounted.root.findByProps({ testID: 'composer-home-pad' });
+    expect(StyleSheet.flatten(pad.props.style).height).toBe(42);
+  } finally {
+    jest.restoreAllMocks();
+  }
+});
+
+test('composer home pad does not snap when the keyboard becomes visible', async () => {
+  jest.spyOn(SafeAreaContext, 'useSafeAreaInsets').mockReturnValue({
+    top: 47,
+    left: 0,
+    right: 0,
+    bottom: 34,
+  });
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mocked = useKeyboardState as jest.Mock;
+  mocked.mockImplementation(
+    (selector: (s: { isVisible: boolean; height: number }) => unknown) =>
+      selector({ isVisible: false, height: 0 }),
+  );
+  try {
+    const mounted = await render(
+      <SessionScreen chatId="c1" onBack={() => {}} />,
+    );
+    const closed = StyleSheet.flatten(
+      mounted.root.findByProps({ testID: 'composer-home-pad' }).props.style,
+    ).height;
+    mocked.mockImplementation(
+      (selector: (s: { isVisible: boolean; height: number }) => unknown) =>
+        selector({ isVisible: true, height: 336 }),
+    );
+    await act(async () => {
+      mounted.update(
+        <AppServicesContext.Provider value={services}>
+          <SessionScreen chatId="c1" onBack={() => {}} />
+        </AppServicesContext.Provider>,
+      );
+    });
+    const opened = StyleSheet.flatten(
+      mounted.root.findByProps({ testID: 'composer-home-pad' }).props.style,
+    ).height;
+    expect(closed).toBe(42);
+    expect(opened).toBe(42);
+  } finally {
+    mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
+      selector({ height: 0 }),
+    );
+    jest.restoreAllMocks();
+  }
+});
+
+test('compose-center does not apply a JS keyboard translateY', async () => {
+  (useKeyboardState as jest.Mock).mockImplementation(
+    (selector: (s: { height: number }) => unknown) => selector({ height: 400 }),
+  );
+  try {
+    const mounted = await render(<SessionScreen onBack={() => {}} />);
+    const center = mounted.root.findByProps({ testID: 'compose-center' });
+    const centerStyle = StyleSheet.flatten(center.props.style);
+    const ty = centerStyle.transform?.[0]?.translateY as number | undefined;
+    expect(ty === undefined || ty === 0).toBe(true);
+  } finally {
+    (useKeyboardState as jest.Mock).mockImplementation(
+      (selector: (s: { height: number }) => unknown) => selector({ height: 0 }),
+    );
+  }
 });
 
 test('no artwork means no wallpaper or blur layers', async () => {

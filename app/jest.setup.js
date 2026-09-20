@@ -13,9 +13,16 @@ jest.mock('react-native-reanimated', () => ({
   // Upstream `makeMutable` is identity; shared values need `.value`.
   makeMutable: init => ({ value: init }),
 }));
-jest.mock('react-native-keyboard-controller', () =>
-  require('react-native-keyboard-controller/jest'),
-);
+jest.mock('react-native-keyboard-controller', () => {
+  const actual = require('react-native-keyboard-controller/jest');
+  return {
+    ...actual,
+    useReanimatedKeyboardAnimation: () => ({
+      height: { value: 0 },
+      progress: { value: 0 },
+    }),
+  };
+});
 // The package's own mock exports the whole module as a default export.
 jest.mock(
   'react-native-safe-area-context',

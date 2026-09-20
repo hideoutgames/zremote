@@ -128,7 +128,8 @@ import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { createLog } from '../zeron/log';
 import { ComposerStickyBottom } from '../components/ComposerChromeAnim';
-import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
+import { ComposeKeyboardShift } from '../components/ComposeKeyboardShift';
+import { composerKeyboardStickyOffset } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
 const log = createLog();
@@ -202,16 +203,9 @@ function ComposeSessionScreen({
   const theme = useTheme();
   const chrome = useChromeTheme();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const keyboardHeight = useKeyboardState(s => s.height);
   const [composerH, setComposerH] = useState(0);
   const dismissPan = useKeyboardDismissPan();
   const wallpaper = useNewThreadComposerBackground() !== undefined;
-  const shift = composeKeyboardShift({
-    windowHeight,
-    composerHeight: composerH,
-    keyboardHeight,
-  });
   return (
     <View
       style={[
@@ -225,9 +219,10 @@ function ComposeSessionScreen({
         style={styles.composeDismiss}
         {...dismissPan.panHandlers}
       />
-      <View
+      <ComposeKeyboardShift
         testID="compose-center"
-        style={[styles.composeCenter, { transform: [{ translateY: shift }] }]}
+        composerHeight={composerH}
+        style={styles.composeCenter}
         pointerEvents="box-none"
       >
         <ComposeComposer
@@ -236,7 +231,7 @@ function ComposeSessionScreen({
           onCreated={id => onCreated?.(id)}
           onLayout={e => setComposerH(e.nativeEvent.layout.height)}
         />
-      </View>
+      </ComposeKeyboardShift>
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
@@ -707,7 +702,10 @@ function ActiveSessionScreen({
     () => composerPrBadge(checkoutSummary, checkoutDiff),
     [checkoutSummary, checkoutDiff],
   );
-  const keyboardOffset = { opened: 0 };
+  const keyboardOffset = useMemo(
+    () => composerKeyboardStickyOffset(insets.bottom),
+    [insets.bottom],
+  );
 
   const wallpaper = useNewThreadComposerBackground() !== undefined;
 
