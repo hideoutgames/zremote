@@ -107,6 +107,7 @@ const en = {
   'session.submit': 'Submit',
   'session.question.custom': 'Your answer',
   'session.working': 'Working',
+  'session.workedFor': 'Worked for {time}',
   'session.toolRunning': 'Running',
   'session.toolFailed': 'Failed',
   'session.queuedLocally': 'Queued',

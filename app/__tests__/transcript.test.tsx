@@ -742,6 +742,60 @@ test('UserMessage folds after 1000 characters', async () => {
   expect(textOf(tree!.root)).toContain(long);
 });
 
+test('AssistantMessage shows Worked for on a completed turn', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={assistantEntry}
+        onOpenReasoning={() => {}}
+        workedFor="14m 38s"
+      />,
+    );
+  });
+  expect(textOf(tree!.root)).toContain('Worked for 14m 38s');
+  expect(tree!.root.findAll(n => n.props.testID === 'worked-for').length).toBe(
+    1,
+  );
+});
+
+test('AssistantMessage hides Worked for while the live strip is showing', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={assistantEntry}
+        onOpenReasoning={() => {}}
+        showWorking
+        workingChatId="c1"
+        workingStartedAt={Date.now()}
+        workedFor="14m 38s"
+      />,
+    );
+  });
+  expect(tree!.root.findAll(n => n.props.testID === 'worked-for').length).toBe(
+    0,
+  );
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
+  ).toBeGreaterThan(0);
+});
+
+test('AssistantMessage omits Worked for when no duration was frozen', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
+    );
+  });
+  expect(tree!.root.findAll(n => n.props.testID === 'worked-for').length).toBe(
+    0,
+  );
+  expect(textOf(tree!.root).some(s => String(s).includes('Worked for'))).toBe(
+    false,
+  );
+});
+
 test('AssistantMessage puts tools, changes, and working inside the bubble', async () => {
   const now = Date.now();
   let tree: TestRenderer.ReactTestRenderer | undefined;

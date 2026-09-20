@@ -53,6 +53,11 @@ import {
 } from '../zeron/state/uiPrefs';
 import { sessionTitle } from '../zeron/state/sessionTruth';
 import {
+  bindPendingWorkedDuration,
+  workedDurationStore,
+  workedForLabel,
+} from '../zeron/state/workedDuration';
+import {
   setChatArchived,
   setChatConfig,
   renameChat,
@@ -346,6 +351,11 @@ function ActiveSessionScreen({
     phase === 'queuedLocally' ||
     phase === 'synchronized';
   const lastEntryId = entries[entries.length - 1]?.id;
+  const workedByMessage = useStore(workedDurationStore, s => s.byMessageId);
+
+  useEffect(() => {
+    bindPendingWorkedDuration(chatId);
+  }, [chatId, entries]);
 
   // Local send/steer ids play SlideInDown once. Historical rows (thread
   // open, list recycle) must not — UserMessage entering is mount-time.
@@ -399,6 +409,12 @@ function ActiveSessionScreen({
           showWorking={agentWorking && item.id === lastEntryId}
           workingChatId={chatId}
           workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+          workedFor={
+            (agentWorking && item.id === lastEntryId) ||
+            (item.status !== 'complete' && item.status !== 'aborted')
+              ? undefined
+              : workedForLabel(item.id)
+          }
         />
       ),
     [
@@ -411,6 +427,7 @@ function ActiveSessionScreen({
       lastEntryId,
       row?.startedAt,
       row?.updatedAt,
+      workedByMessage,
     ],
   );
 

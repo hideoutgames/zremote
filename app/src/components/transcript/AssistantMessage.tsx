@@ -1,6 +1,6 @@
 // Assistant transcript row: every AI artifact for the turn lives inside one
-// bubble — text, reasoning, tools, todos, questions, plan, file changes, and
-// the live working strip.
+// bubble — text, reasoning, tools, todos, questions, plan, file changes, the
+// live working strip, and a Worked-for caption after the turn settles.
 
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -216,6 +216,7 @@ export const AssistantMessage = React.memo(function ({
   showWorking = false,
   workingChatId = '',
   workingStartedAt = 0,
+  workedFor,
 }: {
   entry: MessageEntry;
   onOpenReasoning: (text: string) => void;
@@ -226,6 +227,7 @@ export const AssistantMessage = React.memo(function ({
   showWorking?: boolean;
   workingChatId?: string;
   workingStartedAt?: number;
+  workedFor?: string;
 }) {
   const theme = useTheme();
   const streaming = entry.status === 'streaming';
@@ -297,6 +299,13 @@ export const AssistantMessage = React.memo(function ({
                 chatId={workingChatId}
                 startedAt={workingStartedAt}
               />
+            ) : workedFor !== undefined ? (
+              <Text
+                testID="worked-for"
+                style={[styles.workedFor, { color: theme.textSecondary }]}
+              >
+                {t('session.workedFor').replace('{time}', workedFor)}
+              </Text>
             ) : null}
           </FrostedBubble>
         </View>
@@ -331,6 +340,7 @@ const styles = StyleSheet.create({
   },
   traceLabel: { flex: 1, fontSize: 16 },
   error: { fontSize: 13, marginTop: 4 },
+  workedFor: { fontSize: 13, fontVariant: ['tabular-nums'] },
   imageCard: {
     flexDirection: 'row',
     alignItems: 'center',
