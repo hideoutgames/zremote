@@ -55,8 +55,9 @@ import { sessionTitle } from '../zeron/state/sessionTruth';
 import {
   bindPendingWorkedDuration,
   workedDurationStore,
-  workedForLabel,
+  type FrozenWorkedDuration,
 } from '../zeron/state/workedDuration';
+import { formatWorkedDurationRange } from '../zeron/state/workingElapsed';
 import {
   setChatArchived,
   setChatConfig,
@@ -142,6 +143,19 @@ import { composerKeyboardStickyOffset } from '../navigation/composeKeyboardShift
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
 const log = createLog();
+
+const workedForCaption = (
+  item: MessageEntry,
+  hide: boolean,
+  byId: Record<string, FrozenWorkedDuration>,
+): string | undefined => {
+  if (hide) return undefined;
+  if (item.status !== 'complete' && item.status !== 'aborted') return undefined;
+  const frozen = byId[item.id];
+  return frozen === undefined
+    ? undefined
+    : formatWorkedDurationRange(frozen.startedAt, frozen.endedAt);
+};
 
 const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({
@@ -409,12 +423,11 @@ function ActiveSessionScreen({
           showWorking={agentWorking && item.id === lastEntryId}
           workingChatId={chatId}
           workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
-          workedFor={
-            (agentWorking && item.id === lastEntryId) ||
-            (item.status !== 'complete' && item.status !== 'aborted')
-              ? undefined
-              : workedForLabel(item.id)
-          }
+          workedFor={workedForCaption(
+            item,
+            agentWorking && item.id === lastEntryId,
+            workedByMessage,
+          )}
         />
       ),
     [

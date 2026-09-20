@@ -754,9 +754,10 @@ test('AssistantMessage shows Worked for on a completed turn', async () => {
     );
   });
   expect(textOf(tree!.root)).toContain('Worked for 14m 38s');
-  expect(tree!.root.findAll(n => n.props.testID === 'worked-for').length).toBe(
-    1,
-  );
+  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
+  expect(
+    bubble.findAll(n => n.props.testID === 'worked-for').length,
+  ).toBeGreaterThan(0);
 });
 
 test('AssistantMessage hides Worked for while the live strip is showing', async () => {

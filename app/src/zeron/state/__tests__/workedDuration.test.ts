@@ -58,7 +58,7 @@ test('remembers start while working and freezes on idle', () => {
   rememberWorkingStart('c1', 1_000);
   expect(freezeWorkedDuration('c1', 1_000 + 38_000)).toEqual({
     startedAt: 1_000,
-    endedAt: 1_038_000,
+    endedAt: 39_000,
   });
   getSessionStore('c1').setState({ entries: [assistant('a1')] });
   bindPendingWorkedDuration('c1');
