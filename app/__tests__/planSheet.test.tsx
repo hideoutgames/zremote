@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { PlanSheet } from '../src/components/PlanSheet';
 import { SESSION_SHEET_GRABBER_INSET } from '../src/components/SessionSheet';
 
@@ -43,7 +43,16 @@ test('PlanSheet fills the detent so the plan body is not collapsed', async () =>
   expect(headerStyle).toEqual(
     expect.objectContaining({ paddingTop: SESSION_SHEET_GRABBER_INSET }),
   );
-  expect(header.findAllByType(Pressable)).toHaveLength(1);
+  const headerKids = React.Children.toArray(header.props.children);
+  expect(headerKids).toHaveLength(3);
+  const close = headerKids[0] as React.ReactElement<{
+    accessibilityLabel?: string;
+  }>;
+  const spacer = headerKids[2] as React.ReactElement<{ style?: object }>;
+  expect(close.props.accessibilityLabel).toBe('Back');
+  expect(StyleSheet.flatten(spacer.props.style)).not.toEqual(
+    expect.objectContaining({ borderWidth: StyleSheet.hairlineWidth }),
+  );
 
   const footer = StyleSheet.flatten(
     tree!.root.findByProps({ testID: 'plan-sheet-footer' }).props.style,
