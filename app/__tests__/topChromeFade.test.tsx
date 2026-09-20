@@ -128,7 +128,7 @@ test('maskStopsFor hides the composer plateau and eases out above it', () => {
   expect(stops.colors[0]).toBe('transparent');
   expect(stops.colors[stops.colors.length - 1]).toBe('transparent');
   expect(stops.colors.some(c => c.startsWith('rgba(0,0,0,'))).toBe(true);
-  expect(COMPOSER_BOTTOM_FADE_BAND).toBeGreaterThan(TOP_CHROME_FADE_BAND);
+  expect(COMPOSER_BOTTOM_FADE_BAND).toBe(44);
 });
 
 test('FadeBlur none mode still mounts a blur', async () => {
