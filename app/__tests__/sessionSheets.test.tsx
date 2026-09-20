@@ -1,6 +1,7 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { ThreadDetailsSheet } from '../src/components/ThreadDetailsSheet';
 import { SubagentsSheet } from '../src/components/SubagentsSheet';
 import { HistoryScreen } from '../src/screens/HistoryScreen';
@@ -8,7 +9,10 @@ import { SessionScreen } from '../src/screens/SessionScreen';
 import { SessionSheet } from '../src/components/SessionSheet';
 import { FileDiff } from '../src/components/agentsKit/FileDiff';
 import { parseUnified } from '../src/zeron/diff/parseUnified';
-import { TerminalScreen } from '../src/screens/TerminalScreen';
+import {
+  TerminalScreen,
+  KEY_BAR_KEYBOARD_LIFT,
+} from '../src/screens/TerminalScreen';
 import {
   AppServicesContext,
   type AppServices,
@@ -479,4 +483,31 @@ test('TerminalScreen has no TTL copy and uses Menlo', async () => {
       return flat?.fontFamily === 'Menlo';
     }).length,
   ).toBeGreaterThan(0);
+});
+
+const keyBarMargin = (root: TestRenderer.ReactTestInstance) =>
+  StyleSheet.flatten(
+    root.findByProps({ testID: 'terminal-key-bar' }).props.style,
+  ).marginBottom;
+
+test('TerminalScreen key bar sits 8pt above the sheet when the keyboard is down', async () => {
+  const tree = await render(<TerminalScreen chatId="c1" />);
+  expect(keyBarMargin(tree.root)).toBe(8);
+});
+
+test('TerminalScreen key bar lifts above the keyboard', async () => {
+  const mocked = useKeyboardState as jest.Mock;
+  mocked.mockImplementation(
+    (selector: (s: { isVisible: boolean; height: number }) => unknown) =>
+      selector({ isVisible: true, height: 336 }),
+  );
+  try {
+    const tree = await render(<TerminalScreen chatId="c1" />);
+    expect(keyBarMargin(tree.root)).toBe(8 + KEY_BAR_KEYBOARD_LIFT);
+  } finally {
+    mocked.mockImplementation(
+      (selector: (s: { isVisible: boolean; height: number }) => unknown) =>
+        selector({ isVisible: false, height: 0 }),
+    );
+  }
 });
