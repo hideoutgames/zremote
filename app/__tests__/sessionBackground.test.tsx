@@ -162,7 +162,7 @@ test('composer dim is absent until the keyboard is visible', async () => {
   expect(count(mounted.root, 'composer-focus-dim')).toBe(0);
 });
 
-test('focused composer dim sits above the top chrome fade', async () => {
+test('focused composer dim sits above the bottom chrome fade', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -184,7 +184,7 @@ test('focused composer dim sits above the top chrome fade', async () => {
     input.props.onFocus();
   });
   const dim = mounted.root.findByProps({ testID: 'composer-focus-dim' });
-  const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
+  const fade = mounted.root.findByProps({ testID: 'bottom-chrome-fade' });
   expect(zIndexOf(dim)).toBeGreaterThan(zIndexOf(fade));
   mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
     selector({ height: 0 }),

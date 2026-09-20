@@ -79,12 +79,19 @@ test('Sign in and Try demo buttons do not flex-grow with the column', async () =
   const demoHit = flattenStyle(demo.props.style);
   expect(signHit.some(s => s.flex === 1)).toBe(false);
   expect(demoHit.some(s => s.flex === 1)).toBe(false);
-  const signWrap = flattenStyle(signIn.parent?.props.style);
-  const demoWrap = flattenStyle(demo.parent?.props.style);
-  expect(signWrap.some(s => s.flexGrow === 0)).toBe(true);
-  expect(demoWrap.some(s => s.flexGrow === 0)).toBe(true);
-  expect(signWrap.some(s => s.alignSelf === 'center')).toBe(true);
-  expect(demoWrap.some(s => s.alignSelf === 'center')).toBe(true);
+  const wrapStyles = (node: TestRenderer.ReactTestInstance) => {
+    const out: Record<string, unknown>[] = [];
+    let cur: TestRenderer.ReactTestInstance | null = node;
+    while (cur) {
+      out.push(...flattenStyle(cur.props.style));
+      cur = cur.parent;
+    }
+    return out;
+  };
+  expect(wrapStyles(signIn).some(s => s.flexGrow === 0)).toBe(true);
+  expect(wrapStyles(demo).some(s => s.flexGrow === 0)).toBe(true);
+  expect(wrapStyles(signIn).some(s => s.alignSelf === 'center')).toBe(true);
+  expect(wrapStyles(demo).some(s => s.alignSelf === 'center')).toBe(true);
   await act(async () => {
     tree!.unmount();
   });

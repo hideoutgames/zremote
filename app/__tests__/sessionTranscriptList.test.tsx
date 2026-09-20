@@ -16,6 +16,7 @@ import type { MessageEntry } from '../src/zeron/protocol/types';
 import { setComposerExtraHeightLive } from '../src/zeron/state/uiPrefs';
 import {
   beginComposerResize,
+  COMPOSER_INSET_FALLBACK,
   composerBaseHeightSV,
   composerExtraHeightSV,
   composerInsetSV,
@@ -287,7 +288,7 @@ test('scroll-up clears follow and returning to the end restores it', async () =>
 
   await act(async () => {
     leaveEnd(tree!);
-    returnToEnd(tree!);
+    returnToEnd(tree!, COMPOSER_INSET_FALLBACK);
   });
   expect(followingOn(tree!)).toBe(true);
 
