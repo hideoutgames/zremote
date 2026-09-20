@@ -13,7 +13,11 @@ import type {
 } from '../../zeron/protocol/types';
 import { useTheme } from '../../theme';
 import { Icon } from '../Icon';
-import { ToolActivity, type ToolPart } from '../agentsKit/ToolActivity';
+import {
+  ToolActivity,
+  type FetchToolBlob,
+  type ToolPart,
+} from '../agentsKit/ToolActivity';
 import { TaskRows } from '../agentsKit/TaskRows';
 import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
@@ -86,14 +90,14 @@ const PartView = ({
   streaming,
   isLastText,
   onOpenReasoning,
-  onFetchOutput,
+  onFetchBlob,
   answers,
 }: {
   part: MessagePart;
   streaming: boolean;
   isLastText: boolean;
   onOpenReasoning: (text: string) => void;
-  onFetchOutput?: (partId: string) => void;
+  onFetchBlob?: FetchToolBlob;
   answers: readonly UserInputAnswer[];
 }) => {
   const theme = useTheme();
@@ -161,7 +165,7 @@ const PartView = ({
         );
       if (isSubagentSpawn(part))
         return <SubAgentCard embedded view={subagentView(part)} />;
-      return <ToolActivity parts={[part]} onFetchOutput={onFetchOutput} />;
+      return <ToolActivity parts={[part]} onFetchBlob={onFetchBlob} />;
     default:
       return null;
   }
@@ -170,7 +174,7 @@ const PartView = ({
 export const AssistantMessage = React.memo(function ({
   entry,
   onOpenReasoning,
-  onFetchOutput,
+  onFetchBlob,
   onOpenPlan,
   onOpenFileDiff,
   commands = NO_COMMANDS,
@@ -180,7 +184,7 @@ export const AssistantMessage = React.memo(function ({
 }: {
   entry: MessageEntry;
   onOpenReasoning: (text: string) => void;
-  onFetchOutput?: (partId: string) => void;
+  onFetchBlob?: FetchToolBlob;
   onOpenPlan?: (name: string, markdown: string) => void;
   onOpenFileDiff?: (file: TurnChange) => void;
   commands?: readonly SessionCommandEntry[];
@@ -219,7 +223,7 @@ export const AssistantMessage = React.memo(function ({
                 <ToolActivity
                   key={`tools-${i}`}
                   parts={item.parts}
-                  onFetchOutput={onFetchOutput}
+                  onFetchBlob={onFetchBlob}
                   autoOpen={streaming && i === items.length - 1}
                 />
               ) : (
@@ -229,7 +233,7 @@ export const AssistantMessage = React.memo(function ({
                   streaming={streaming}
                   isLastText={item.part.id === lastTextId}
                   onOpenReasoning={onOpenReasoning}
-                  onFetchOutput={onFetchOutput}
+                  onFetchBlob={onFetchBlob}
                   answers={
                     item.part.kind === 'input'
                       ? inputAnswers(commands, item.part.requestId)

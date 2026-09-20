@@ -26,6 +26,7 @@ import {
   DEMO_ORG,
   DEMO_PHONE,
   DEMO_USER,
+  DEMO_TOOL_BLOBS,
   HOST_DARK,
   HOST_LIVE,
 } from '../fixtures';
@@ -278,4 +279,24 @@ test('demo files listing hides ignored rows unless requested', async () => {
   expect(term.id).toMatch(/^term-/);
   expect(term.shell).toContain('zsh');
   rt.stop();
+});
+
+test('demo GET /blob returns fixture sidecar text', async () => {
+  const { edge } = await makeRuntime();
+  const res = await edge.fetchImpl('https://demo.invalid/blob/c-tools/t-exec', {
+    method: 'GET',
+  });
+  expect(res.status).toBe(200);
+  expect(await res.text()).toBe(DEMO_TOOL_BLOBS['t-exec']);
+  const diff = await edge.fetchImpl(
+    'https://demo.invalid/blob/c-tools/t-edit.diff',
+    { method: 'GET' },
+  );
+  expect(diff.status).toBe(200);
+  expect(JSON.parse(await diff.text()).path).toBe('/demo/src/header.ts');
+  const missing = await edge.fetchImpl(
+    'https://demo.invalid/blob/c-tools/nope',
+    { method: 'GET' },
+  );
+  expect(missing.status).toBe(404);
 });

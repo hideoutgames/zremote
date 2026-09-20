@@ -37,6 +37,7 @@ import {
   demoRefs,
   demoRegistryRows,
   demoTranscripts,
+  DEMO_TOOL_BLOBS,
   demoWorkspaceListing,
   demoChangeRequestFor,
   HOST_LIVE,
@@ -1506,6 +1507,18 @@ export class DemoEdge {
         text: async () => text,
       };
     };
+    if (url.includes('/blob/')) {
+      const match = /\/blob\/[^/?]+\/([^/?]+)/.exec(url);
+      const partId = match !== null ? decodeURIComponent(match[1]) : undefined;
+      const body = partId !== undefined ? DEMO_TOOL_BLOBS[partId] : undefined;
+      if (body === undefined) return json(404, { error: 'not_found' });
+      return {
+        status: 200,
+        headers: { get: () => 'text/plain; charset=utf-8' },
+        arrayBuffer: async () => enc.encode(body).buffer as ArrayBuffer,
+        text: async () => body,
+      };
+    }
     if (url.includes('/nudge')) return json(200, {});
     if (url.includes('/status')) {
       const attached = url.includes(`/${HOST_LIVE}/`);

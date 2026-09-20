@@ -321,6 +321,117 @@ test('streaming trailing tool group auto-opens', async () => {
   expect(textOf(tree!.root)).toContain('cargo test --workspace');
 });
 
+test('expanding a tool chip shows invocation and output', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 't1',
+        call: { kind: 'exec', command: 'cargo test --workspace' },
+        isError: false,
+        resolved: true,
+        output: 'test result: ok. 3 passed',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'tool-group-toggle' }).props.onPress();
+  });
+  expect(textOf(tree!.root)).toContain('cargo test --workspace');
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'tool-chip' }).props.onPress();
+  });
+  expect(textOf(tree!.root)).toContain('test result: ok. 3 passed');
+});
+
+test('expanded edit chip shows diff stats', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 'e1',
+        call: { kind: 'editFile', path: 'app/src/components/Composer.tsx' },
+        resolved: true,
+        diffStats: [
+          {
+            path: 'app/src/components/Composer.tsx',
+            additions: 12,
+            deletions: 3,
+          },
+        ],
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'tool-group-toggle' }).props.onPress();
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'tool-chip' }).props.onPress();
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('+12');
+  expect(texts).toContain('−3');
+});
+
+test('Show full output fetch upgrades the chip body', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 't1',
+        call: { kind: 'exec', command: 'cargo test --workspace' },
+        isError: false,
+        resolved: true,
+        output: 'ok',
+        outputRef: 'chat/t1',
+        outputBytes: 32,
+      },
+    ],
+  };
+  const seen: string[] = [];
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {}}
+        onFetchBlob={async partId => {
+          seen.push(partId);
+          return 'full cargo output\nline 2';
+        }}
+      />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'tool-group-toggle' }).props.onPress();
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'tool-chip' }).props.onPress();
+  });
+  expect(textOf(tree!.root)).toContain('Show full output (32 B)');
+  await act(async () => {
+    await tree!.root.findByProps({ testID: 'tool-blob-link' }).props.onPress();
+  });
+  expect(seen).toEqual(['t1']);
+  expect(textOf(tree!.root)).toContain('full cargo output');
+  expect(textOf(tree!.root)).toContain('line 2');
+});
+
 test('waiting assistant does not render an in-bubble working spinner', async () => {
   const entry: MessageEntry = {
     ...assistantEntry,

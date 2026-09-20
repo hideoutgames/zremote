@@ -554,6 +554,27 @@ const toolsTranscript = (nowMs: number): Record<string, unknown>[] => [
         resolved: true,
         output: 'ENOENT: no such file (simulated)',
       },
+      {
+        kind: 'tool',
+        id: 't-exec',
+        call: { kind: 'exec', command: 'rg "header" app/src' },
+        isError: false,
+        resolved: true,
+        output: 'app/src/components/Composer.tsx',
+        outputRef: `${CHAT_TOOLS}/t-exec`,
+        outputBytes: 84,
+      },
+      {
+        kind: 'tool',
+        id: 't-edit',
+        call: { kind: 'editFile', path: '/demo/src/header.ts' },
+        isError: false,
+        resolved: true,
+        diffStats: [
+          { path: '/demo/src/header.ts', additions: 2, deletions: 1 },
+        ],
+        diffRef: `${CHAT_TOOLS}/t-edit.diff`,
+      },
       textPart(
         'The Explorer found three call sites; one read failed on a moved file — shown above as an errored tool.',
       ),
@@ -604,6 +625,17 @@ const archivedTranscript = (nowMs: number): Record<string, unknown>[] => [
     nowMs - 80 * 86_400_000 + 60_000,
   ),
 ];
+
+/** Sidecar bodies for demo GET /blob/{chatId}/{partId}. */
+export const DEMO_TOOL_BLOBS: Record<string, string> = {
+  't-exec':
+    'app/src/components/Composer.tsx\napp/src/theme.ts\n3 matches in 2 files',
+  't-edit.diff': JSON.stringify({
+    path: '/demo/src/header.ts',
+    oldText: 'export const TITLE = "Old";',
+    newText: 'export const TITLE = "Header";',
+  }),
+};
 
 export const demoTranscripts = (
   nowMs: number,
