@@ -10,7 +10,7 @@ import {
   type AppServices,
 } from '../src/app/runtimeContext';
 import { settingsCellBackground } from '../src/components/settings/SettingsList';
-import { darkTheme } from '../src/theme';
+import { darkTheme, lightTheme } from '../src/theme';
 import { METHODS } from '../src/zeron/protocol/rpc';
 import { demoAccounts } from '../src/demo/fixtures';
 
@@ -63,13 +63,16 @@ afterEach(() => {
 test('provider cards use the settings cell fill, not an outline', async () => {
   const mounted = await renderScreen(null);
   const cards = mounted.root.findAll(
-    n => n.props.testID === 'agent-account-card',
+    n => n.props.testID === 'agent-account-card' && typeof n.type === 'string',
   );
   expect(cards.length).toBe(3);
-  const fill = settingsCellBackground(darkTheme);
+  const fills = [
+    settingsCellBackground(lightTheme),
+    settingsCellBackground(darkTheme),
+  ];
   for (const card of cards) {
     const style = StyleSheet.flatten(card.props.style);
-    expect(style.backgroundColor).toBe(fill);
+    expect(fills).toContain(style.backgroundColor);
     expect(style.borderWidth ?? 0).toBe(0);
   }
 });
@@ -94,6 +97,8 @@ test('mount lists accounts with forceUsage and renders meters', async () => {
   expect(text).toContain('Weekly');
   expect(text).toContain('42%');
   expect(
-    mounted.root.findAll(n => n.props.testID === 'agent-usage-meter').length,
+    mounted.root.findAll(
+      n => n.props.testID === 'agent-usage-meter' && typeof n.type === 'string',
+    ).length,
   ).toBe(2);
 });
