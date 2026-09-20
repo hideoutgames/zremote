@@ -120,7 +120,7 @@ requires-host-edge-change 6 · blocked 7 · not-started 15**
 | Account isolation (app auth ≠ agent auth)   | `crates/ui/src/settings/accounts.rs`  | separate token paths       | `zeron/auth` vs host RPCs      | implemented-unverified    | by construction; no e2e proof                                      |
 | Redacted logging / no tokens in URLs        | —                                     | bearer header, `redactUrl` | `transport/*`, `zeron/log.ts`  | verified                  | `deviceRelayClient.test.ts`; COMPATIBILITY.md                      |
 | Hardware keyboard modifiers (Cmd+Enter/Esc) | `crates/ui/src/settings/shortcuts.rs` | —                          | Composer notes                 | blocked                   | RN 0.86 `onKeyPress` exposes no modifier flags on iOS              |
-| Theme light/dark                            | `crates/ui/src/theme.rs`              | —                          | `theme.ts`                     | implemented-unverified    | styles exist; device render unverified                             |
+| Theme light/dark                            | `crates/ui/src/theme.rs`              | —                          | `theme.ts` + Settings Appearance System/Dark/Light | implemented-unverified    | styles exist; Settings override; device render unverified          |
 | Android                                     | —                                     | —                          | —                              | blocked                   | out of scope; `platforms: ['ios']`                                 |
 
 ## Desktop surfaces not yet on the phone

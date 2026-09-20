@@ -35,7 +35,8 @@ import { DemoEdge } from '../demo/demoEdge';
 import { exitDemo, useDemoMode } from '../demo/demoMode';
 import { DEMO_ORG, DEMO_PHONE, DEMO_USER } from '../demo/fixtures';
 import { createLog } from '../zeron/log';
-import { useTheme } from '../theme';
+import { applyColorSchemePreference, useTheme } from '../theme';
+import { useColorSchemePreference } from '../zeron/state/uiPrefs';
 import { AppServicesContext, type AppServices } from './runtimeContext';
 import { SignInScreen } from '../screens/SignInScreen';
 import { OrgGateScreen } from '../screens/OrgGateScreen';
@@ -56,8 +57,13 @@ const wsFactory = isExpoGo ? rnWsFactory : nitroWsFactory;
 
 export function ZeronApp() {
   const theme = useTheme();
+  const colorSchemePref = useColorSchemePreference();
   const status = useAuthStatus();
   const demoActive = useDemoMode();
+
+  useEffect(() => {
+    applyColorSchemePreference(colorSchemePref);
+  }, [colorSchemePref]);
 
   // One AuthSession per edge URL (persisted record is namespaced by baseUrl).
   const cfg = useMemo(() => appConfig(), []);

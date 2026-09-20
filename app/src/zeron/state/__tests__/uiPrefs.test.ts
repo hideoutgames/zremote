@@ -5,6 +5,7 @@ import {
   uiPrefsStore,
   installNewThreadComposerBackground,
   removeNewThreadComposerBackground,
+  setColorSchemePreference,
   setNewThreadBackgroundEffect,
   bindUiPrefs,
   unbindUiPrefs,
@@ -41,6 +42,7 @@ beforeEach(() => {
     composerExtraHeight: 0,
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',
+    colorScheme: 'system',
   });
 });
 
@@ -150,4 +152,28 @@ test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
   unbindUiPrefs();
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
   expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+});
+
+test('colorScheme defaults to system and persists', async () => {
+  expect(uiPrefsStore.getState().colorScheme).toBe('system');
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setColorSchemePreference('dark');
+  expect(uiPrefsStore.getState().colorScheme).toBe('dark');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.colorScheme).toBe('dark');
+});
+
+test('bindUiPrefs restores a saved colorScheme', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', { colorScheme: 'light' });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().colorScheme).toBe('light');
+});
+
+test('bindUiPrefs ignores an invalid colorScheme', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', { colorScheme: 'neon' });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().colorScheme).toBe('system');
 });

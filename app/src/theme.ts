@@ -2,12 +2,32 @@
 // (driven by useColorScheme); `theme` stays exported as the dark palette for
 // non-hook call sites that can't take a hook.
 
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
 import {
   chromeSchemeForWallpaper,
   useWallpaperContrastScheme,
   useWallpaperContrastUri,
 } from './zeron/state/wallpaperContrast';
+
+export type ColorSchemePreference = 'system' | 'light' | 'dark';
+
+export const COLOR_SCHEME_PREFERENCES: readonly ColorSchemePreference[] = [
+  'system',
+  'dark',
+  'light',
+];
+
+export const parseColorSchemePreference = (
+  v: unknown,
+): ColorSchemePreference | undefined =>
+  v === 'system' || v === 'light' || v === 'dark' ? v : undefined;
+
+/** Force light/dark, or `null` so RN follows the OS. */
+export const applyColorSchemePreference = (
+  pref: ColorSchemePreference,
+): void => {
+  Appearance.setColorScheme?.(pref === 'system' ? null : pref);
+};
 
 export interface Theme {
   scheme: 'light' | 'dark';

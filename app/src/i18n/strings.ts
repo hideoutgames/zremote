@@ -258,6 +258,10 @@ const en = {
   'settings.titleModel': 'Model',
   'settings.agentAccounts': 'Agent Accounts',
   'settings.appearance': 'Appearance',
+  'settings.theme': 'Theme',
+  'settings.theme.system': 'System',
+  'settings.theme.dark': 'Dark',
+  'settings.theme.light': 'Light',
   'settings.background': 'Background image',
   'settings.backgroundEmpty':
     'Add an image behind threads, chats, and new threads.',
