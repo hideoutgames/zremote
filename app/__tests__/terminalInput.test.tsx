@@ -93,11 +93,14 @@ beforeEach(() => {
 });
 
 const trees: TestRenderer.ReactTestRenderer[] = [];
-const render = async (element: React.ReactElement) => {
+const render = async (
+  element: React.ReactElement,
+  value: AppServices = services,
+) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <AppServicesContext.Provider value={services}>
+      <AppServicesContext.Provider value={value}>
         {element}
       </AppServicesContext.Provider>,
     );
@@ -192,7 +195,11 @@ test('screen layout, list touch, and key bar focus the hidden input', async () =
 test('typing and Enter send bytes to the active tab', async () => {
   const received: number[][] = [];
   stubTab(bytes => received.push([...bytes]));
-  const tree = await render(<TerminalScreen chatId="c1" />);
+  const tree = await render(<TerminalScreen chatId="c1" />, {
+    ...services,
+    // Restore effect skips loadTerminalTabs while runtime is null.
+    runtime: { relayFor: jest.fn() } as never,
+  });
   const input = tree.root.findByProps({ testID: 'terminal-input' });
   await act(async () => {
     input.props.onChangeText('hi');
