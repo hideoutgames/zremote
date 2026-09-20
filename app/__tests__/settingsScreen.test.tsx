@@ -8,7 +8,6 @@ import * as Haptics from 'expo-haptics';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import { authStore } from '../src/zeron/state/authStore';
-import { demoModeStore } from '../src/demo/demoMode';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import {
   AppServicesContext,
@@ -66,7 +65,6 @@ const allText = (root: TestRenderer.ReactTestInstance): string =>
 jest.useFakeTimers();
 
 beforeEach(() => {
-  demoModeStore.setState({ active: false });
   authStore.setState({
     status: {
       state: 'signedIn',

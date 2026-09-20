@@ -3,20 +3,11 @@
 
 const en = {
   // Sign in / org gate
-  'signIn.title': 'Sign in to ZRemote',
-  'signIn.subtitle': 'Control your Zeron sessions from anywhere.',
+  'signIn.logo': 'ZRemote',
   'signIn.button': 'Sign in',
-  'signIn.pasteFallback.title': 'Paste the sign-in code',
-  'signIn.pasteFallback.body':
-    'If the browser shows Copy code, copy it and paste it below to finish sign-in.',
   'signIn.pasteFallback.placeholder': 'state.code',
   'signIn.pasteFallback.continue': 'Continue',
-  'signIn.advanced': 'Advanced',
   'signIn.error.generic': 'Sign-in failed. Try again.',
-  'signIn.demo.button': 'Try demo mode',
-  'signIn.demo.hint':
-    'Sample hosts and sessions, no network or account. Nothing you do here is sent anywhere.',
-  'demo.badge': 'Demo',
   'orgGate.title': 'Choose an organization',
   'orgGate.create': 'Create organization',
   'orgGate.createPlaceholder': 'Organization name',
@@ -223,8 +214,6 @@ const en = {
   'settings.account': 'Account',
   'settings.signOut': 'Sign Out',
   'settings.signOutConfirm': 'Sign out of Zeron on this device?',
-  'settings.demoAccount': 'Demo account',
-  'settings.exitDemo': 'Exit demo',
   'settings.devices': 'Desktops',
   'settings.agents': 'Agents',
   'settings.connected': 'Connected',

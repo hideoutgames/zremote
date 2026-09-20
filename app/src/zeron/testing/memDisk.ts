@@ -1,6 +1,5 @@
 // In-memory DocDisk for deterministic runtime/state tests. The
-// implementation lives in src/zeron/native/memDocDisk.ts so demo mode can
-// share it.
+// implementation lives in src/zeron/native/memDocDisk.ts.
 
 import { DocDisk } from '../native/docDisk';
 import { MemoryDocFs } from '../native/memDocDisk';

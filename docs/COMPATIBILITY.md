@@ -83,7 +83,9 @@ encoded in a plugin.
 ### Branding
 
 The app icon and splash sources live in `app/assets/brand/` (`icon-1024.png`,
-`splash-logo.png`), copied from the repo-root `logos/` directory. The splash
+`splash-logo.png`), copied from the repo-root `logos/` directory. Sign-in uses
+theme-aware marks `zremote-mark-white.png` / `zremote-mark-black.png` from the
+same folder. The splash
 logo is a 109px-wide raster, so the bootsplash plugin's `logoWidth` is capped
 at 54 (2x = native resolution) until a vector or high-res logo is provided;
 `app/assets/bootsplash/*` is regenerated with `npx react-native-bootsplash

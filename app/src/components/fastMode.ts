@@ -1,5 +1,5 @@
 // Catalog option ids the host uses for Fast mode (claude catalog: fastMode;
-// demo fixtures: fast; ACP: fast-mode). Codex advertises Fast as serviceTier
+// ACP: fast-mode). Codex advertises Fast as serviceTier
 // (or service-tier) with a `fast` choice, not a dedicated fastMode option.
 
 import type { Model, ModelOption } from '../zeron/protocol/types';

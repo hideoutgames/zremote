@@ -29,11 +29,6 @@ import { getInitialUrl, addUrlListener } from '../zeron/native/authBrowser';
 import * as WebBrowser from 'expo-web-browser';
 import { parseZeronLink } from '../zeron/protocol/edge';
 import { AppRuntime } from '../zeron/runtime/appRuntime';
-import { staticTokenSource } from '../zeron/transport/tokenSource';
-import { memDocDisk } from '../zeron/native/memDocDisk';
-import { DemoEdge } from '../demo/demoEdge';
-import { exitDemo, useDemoMode } from '../demo/demoMode';
-import { DEMO_ORG, DEMO_PHONE, DEMO_USER } from '../demo/fixtures';
 import { createLog } from '../zeron/log';
 import { applyColorSchemePreference, useTheme } from '../theme';
 import { useColorSchemePreference } from '../zeron/state/uiPrefs';
@@ -60,7 +55,6 @@ export function ZeronApp() {
   const theme = useTheme();
   const colorSchemePref = useColorSchemePreference();
   const status = useAuthStatus();
-  const demoActive = useDemoMode();
 
   useEffect(() => {
     applyColorSchemePreference(colorSchemePref);
@@ -111,10 +105,6 @@ export function ZeronApp() {
   // ── Account-scoped runtime ────────────────────────────────────────────
   const [runtime, setRuntime] = useState<AppRuntime | null>(null);
   const accountRef = useRef<string | null>(null);
-  const demoEdge = useMemo(
-    () => (demoActive ? new DemoEdge({ clock: systemClock }) : null),
-    [demoActive],
-  );
 
   const signedIn = status.state === 'signedIn' ? status : undefined;
 
@@ -134,38 +124,20 @@ export function ZeronApp() {
     accountRef.current = key;
     let cancelled = false;
     (async () => {
-      const rt = demoActive
-        ? await AppRuntime.create({
-            // In-process simulated edge: same runtime seams, no network.
-            cfg: { baseUrl: 'https://demo.invalid' },
-            tokenSource: staticTokenSource('demo'),
-            deviceId: DEMO_PHONE,
-            deviceName: 'Demo Phone',
-            orgId: DEMO_ORG,
-            userId: DEMO_USER,
-            wsFactory: demoEdge!.wsFactory,
-            fetchImpl: demoEdge!.fetchImpl,
-            clock: systemClock,
-            docDisk: memDocDisk(),
-            loro: createLoroDoc,
-            sessionMode: 'relay',
-            readFileBase64,
-            log: line => log.info(line),
-          })
-        : await AppRuntime.create({
-            cfg: { baseUrl: cfg.edgeUrl },
-            tokenSource: auth,
-            deviceId: await deviceId(expoSecureStore),
-            deviceName: deviceName(),
-            orgId: signedIn.orgId,
-            userId: signedIn.user.id,
-            wsFactory,
-            clock: systemClock,
-            docDisk: createDocDisk(),
-            loro: createLoroDoc,
-            readFileBase64,
-            log: line => log.info(line),
-          });
+      const rt = await AppRuntime.create({
+        cfg: { baseUrl: cfg.edgeUrl },
+        tokenSource: auth,
+        deviceId: await deviceId(expoSecureStore),
+        deviceName: deviceName(),
+        orgId: signedIn.orgId,
+        userId: signedIn.user.id,
+        wsFactory,
+        clock: systemClock,
+        docDisk: createDocDisk(),
+        loro: createLoroDoc,
+        readFileBase64,
+        log: line => log.info(line),
+      });
       if (cancelled) {
         rt.stop();
         return;
@@ -179,7 +151,7 @@ export function ZeronApp() {
       rt?.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedIn?.orgId, signedIn?.user.id, demoActive, demoEdge]);
+  }, [signedIn?.orgId, signedIn?.user.id]);
 
   // ── Live Activities (iOS; expo-widgets) — lazily imported so the JS
   // bundle still loads where the pod/module is absent.
@@ -194,7 +166,7 @@ export function ZeronApp() {
   }, []);
 
   // One haptic when a run finishes while the app is open (any thread).
-  // Independent of APNs / Expo Go / demo — local CRDT status only.
+  // Independent of APNs / Expo Go — local CRDT status only.
   useEffect(() => {
     if (runtime === null) return;
     return bindRunFinishedHaptic();
@@ -207,8 +179,7 @@ export function ZeronApp() {
   }, [runtime]);
 
   useEffect(() => {
-    // Demo mode never registers push tokens — no real-edge traffic.
-    if (runtime === null || signedIn === undefined || demoActive) return;
+    if (runtime === null || signedIn === undefined) return;
     let unbind: (() => void) | undefined;
     import('../liveActivity/bindLiveActivities')
       .then(m => {
@@ -227,13 +198,11 @@ export function ZeronApp() {
       .catch(e => log.warn(`live activities unavailable: ${e}`));
     return () => unbind?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, signedIn?.orgId, demoActive]);
+  }, [runtime, signedIn?.orgId]);
 
-  // Alert banners when a run finishes. Skip Expo Go (wrong APNs topic)
-  // and demo (no real edge).
+  // Alert banners when a run finishes. Skip Expo Go (wrong APNs topic).
   useEffect(() => {
-    if (runtime === null || signedIn === undefined || demoActive || isExpoGo)
-      return;
+    if (runtime === null || signedIn === undefined || isExpoGo) return;
     let unbind: (() => void) | undefined;
     import('../notifications/bindPushNotifications')
       .then(m => {
@@ -253,7 +222,7 @@ export function ZeronApp() {
       .catch(e => log.warn(`push notifications unavailable: ${e}`));
     return () => unbind?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, signedIn?.orgId, demoActive, openSession]);
+  }, [runtime, signedIn?.orgId, openSession]);
 
   // ── AppState → foreground/background ──────────────────────────────────
   useEffect(() => {
@@ -284,20 +253,12 @@ export function ZeronApp() {
   }, [auth, edgeHost, openSession]);
 
   const signOut = useCallback(async () => {
-    if (demoActive) {
-      exitDemo();
-      const rt = runtime;
-      setRuntime(null);
-      accountRef.current = null;
-      rt?.stop();
-      return;
-    }
     await auth.signOut();
     const rt = runtime;
     setRuntime(null);
     accountRef.current = null;
     if (rt !== null) await rt.clearAccountCaches();
-  }, [auth, runtime, demoActive]);
+  }, [auth, runtime]);
 
   const services = useMemo<AppServices>(
     () => ({ auth, runtime, openSession, signOut }),
