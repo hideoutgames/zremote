@@ -4,9 +4,11 @@ import {
   TopChromeFade,
   ChromeFade,
   maskStopsFor,
+  composerMaskBottomInset,
   TOP_CHROME_BLUR_INTENSITY,
   TOP_CHROME_FADE_BAND,
   COMPOSER_BOTTOM_FADE_BAND,
+  COMPOSER_BELOW_PAD,
   CHROME_FADE_WASH_DARK,
   CHAT_TOP_FADE_BAND,
 } from '../src/components/TopChromeFade';
@@ -121,12 +123,35 @@ test('CHAT_TOP_FADE_BAND is half the session header chrome band', () => {
   expect(CHAT_TOP_FADE_BAND).toBe(28);
 });
 
-test('maskStopsFor hides the composer plateau and eases out above it', () => {
-  const stops = maskStopsFor(400, 80, 28, 120, COMPOSER_BOTTOM_FADE_BAND);
+test('composerMaskBottomInset uses the pad below the glass, not composer height', () => {
+  expect(COMPOSER_BELOW_PAD).toBe(8);
+  expect(composerMaskBottomInset(0, 34)).toBe(42);
+  expect(composerMaskBottomInset(336, 34)).toBe(344);
+});
+
+test('maskStopsFor keeps content visible under the composer and fades at the bottom', () => {
+  const height = 400;
+  const bottomInset = 42;
+  const composerHeight = 160;
+  const composerTop = 1 - composerHeight / height;
+  const fadeStart = 1 - (bottomInset + COMPOSER_BOTTOM_FADE_BAND) / height;
+  const fadeEnd = 1 - bottomInset / height;
+  const stops = maskStopsFor(
+    height,
+    80,
+    28,
+    bottomInset,
+    COMPOSER_BOTTOM_FADE_BAND,
+  );
   expect(stops.locations[0]).toBe(0);
   expect(stops.locations[stops.locations.length - 1]).toBe(1);
   expect(stops.colors[0]).toBe('transparent');
   expect(stops.colors[stops.colors.length - 1]).toBe('transparent');
+  expect(fadeStart).toBeGreaterThan(composerTop);
+  expect(stops.locations).toContain(fadeStart);
+  expect(stops.colors[stops.locations.indexOf(fadeStart)]).toBe('black');
+  expect(stops.locations).toContain(fadeEnd);
+  expect(stops.colors[stops.locations.indexOf(fadeEnd)]).toBe('transparent');
   expect(stops.colors.some(c => c.startsWith('rgba(0,0,0,'))).toBe(true);
   expect(COMPOSER_BOTTOM_FADE_BAND).toBe(44);
 });

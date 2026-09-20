@@ -24,6 +24,10 @@ import {
   isComposerResizeActive,
   resetComposerInsetSeed,
 } from '../src/components/composerExtraHeight';
+import {
+  COMPOSER_BELOW_PAD,
+  COMPOSER_BOTTOM_FADE_BAND,
+} from '../src/components/TopChromeFade';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 
 const flashMock = jest.requireMock('@shopify/flash-list') as {
@@ -161,6 +165,28 @@ test('isTranscriptAtEnd requires the composer inset', () => {
   expect(isTranscriptAtEnd(0, 200)).toBe(false);
   expect(isTranscriptAtEnd(-200, 200)).toBe(true);
   expect(isTranscriptAtEnd(-198, 200)).toBe(false);
+});
+
+test('content mask hides the pad below the glass, not the composer box', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  const mask = tree!.root.findByProps({ testID: 'content-edge-mask' });
+  expect(mask.props.maskElement.props.bottomInset).toBe(
+    34 + COMPOSER_BELOW_PAD,
+  );
+  expect(mask.props.maskElement.props.bottomBand).toBe(
+    COMPOSER_BOTTOM_FADE_BAND,
+  );
+  expect(mask.props.maskElement.props.bottomInset).not.toBe(
+    COMPOSER_INSET_FALLBACK,
+  );
+  await act(async () => {
+    tree?.unmount();
+  });
 });
 
 test('scrolls to the bottom once when entries are present on mount', async () => {
