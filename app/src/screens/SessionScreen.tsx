@@ -31,6 +31,8 @@ import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
 import {
   useSessionState,
+  useSessionCommands,
+  useSessionQueueLength,
   useRunPhase,
   dismissFailedSend,
 } from '../zeron/state/sessionStores';
@@ -338,6 +340,8 @@ function ActiveSessionScreen({
   }, [runtime, chatId]);
 
   const session = useSessionState(chatId);
+  const commands = useSessionCommands(chatId);
+  const queueCount = useSessionQueueLength(chatId);
   const chat = useChat(chatId);
   const row = useStore(workspaceStore, s => s.sessions[chatId]);
   const deviceId = runtime?.deviceId ?? '';
@@ -422,7 +426,7 @@ function ActiveSessionScreen({
           onFetchBlob={onFetchBlob}
           onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
           onOpenFileDiff={file => setFileDiff(file)}
-          commands={session.commands}
+          commands={commands}
           showWorking={agentWorking && item.id === lastEntryId}
           workingChatId={chatId}
           workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
@@ -438,7 +442,7 @@ function ActiveSessionScreen({
       onFetchBlob,
       chatId,
       onUserMessageEntered,
-      session.commands,
+      commands,
       agentWorking,
       lastEntryId,
       row?.startedAt,
@@ -464,9 +468,13 @@ function ActiveSessionScreen({
       }
       if (wt !== undefined) setDraftPendingWorktree(chatId, undefined);
       transcriptRef.current?.noteSent(entries.length);
-      transcriptRef.current?.scrollMessageToEnd({
-        animated: entries.length > 0,
-        closeKeyboard: true,
+      const list = transcriptRef.current;
+      const count = entries.length;
+      requestAnimationFrame(() => {
+        list?.scrollMessageToEnd({
+          animated: count > 0,
+          closeKeyboard: true,
+        });
       });
       return true;
     },
@@ -485,7 +493,7 @@ function ActiveSessionScreen({
   const doCancel = useCallback(() => {
     // Cancel the own still-pending run/steer command (queuedLocally /
     // synchronized phases) — same rule the phase machine used to pick it.
-    const own = session.commands.find(
+    const own = commands.find(
       c =>
         c.issuedBy === deviceId &&
         (c.kind === 'run' || c.kind === 'steer') &&
@@ -494,7 +502,7 @@ function ActiveSessionScreen({
         ),
     );
     if (own !== undefined) controller?.cancelOwnCommand(own.id);
-  }, [controller, session, deviceId]);
+  }, [controller, commands, deviceId]);
   const doRespond = useCallback(
     (requestId: string, answers: { questionId: string; labels: string[] }[]) =>
       controller?.respondInput(requestId, answers),
@@ -1037,7 +1045,7 @@ function ActiveSessionScreen({
           ]}
         >
           <ComposerChromeRow
-            queueCount={session.queue.length}
+            queueCount={queueCount}
             onOpenQueue={() => setQueueOpen(true)}
             pr={prBadge}
             onOpenPr={() => {

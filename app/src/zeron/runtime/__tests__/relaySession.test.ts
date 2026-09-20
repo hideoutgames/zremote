@@ -23,6 +23,7 @@ import { staticTokenSource } from '../../transport/tokenSource';
 import { FakeWsHub, fakeFetch } from '../../testing/fakeWs';
 import { memDisk, flush } from '../../testing/memDisk';
 import { setForceRelayMode, uiPrefsStore } from '../../state/uiPrefs';
+import { PROJECT_COALESCE_MS } from '../../state/projectCoalesce';
 
 const entry = (id: string, text: string): MessageEntry => ({
   id,
@@ -266,6 +267,12 @@ const makeSource = (
 
 const store = () => getSessionStore(CHAT).getState();
 
+const drain = async (clock: FakeClock): Promise<void> => {
+  await flush();
+  clock.advance(PROJECT_COALESCE_MS);
+  await flush();
+};
+
 describe('RelaySessionSource', () => {
   afterEach(() => {
     resetSessionStores();
@@ -273,7 +280,7 @@ describe('RelaySessionSource', () => {
   });
 
   it('reset then delta lands entries + contextUsage; queue lands rows', async () => {
-    const { src, relay } = makeSource();
+    const { src, relay, clock } = makeSource();
     src.start();
     await flush();
     const ts = relay.transcriptStreams[0];
@@ -281,7 +288,7 @@ describe('RelaySessionSource', () => {
       reset: [entry('u1', 'hi')],
       contextUsage: { tokens: 12, window: 200000 },
     });
-    await flush();
+    await drain(clock);
     expect(ids(store().entries)).toEqual(['u1']);
     expect(store().meta.contextUsage?.tokens).toBe(12);
     ts.push({
@@ -296,7 +303,7 @@ describe('RelaySessionSource', () => {
       remove: [],
       count: 2,
     });
-    await flush();
+    await drain(clock);
     expect(texts(store().entries)).toEqual(['hi', 'world']);
     expect(store().meta.contextUsage).toEqual({
       tokens: 12,
@@ -308,12 +315,49 @@ describe('RelaySessionSource', () => {
     src.stop();
   });
 
+  it('burst transcript frames share store writes via the quiet window', async () => {
+    const { src, relay, clock } = makeSource();
+    src.start();
+    await flush();
+    let writes = 0;
+    const unsub = getSessionStore(CHAT).subscribe(() => {
+      writes += 1;
+    });
+    writes = 0;
+    const ts = relay.transcriptStreams[0];
+    ts.push({ reset: [entry('a', 'h')] });
+    ts.push({
+      upsert: [{ after: 'a', entry: entry('b', 'i') }],
+      append: [],
+      remove: [],
+      count: 2,
+    });
+    ts.push({
+      upsert: [{ after: 'b', entry: entry('c', 'j') }],
+      append: [],
+      remove: [],
+      count: 3,
+    });
+    ts.push({
+      upsert: [{ after: 'c', entry: entry('d', 'k') }],
+      append: [],
+      remove: [],
+      count: 4,
+    });
+    expect(store().entries).toHaveLength(0);
+    await drain(clock);
+    expect(writes).toBeLessThanOrEqual(2);
+    expect(ids(store().entries)).toEqual(['a', 'b', 'c', 'd']);
+    unsub();
+    src.stop();
+  });
+
   it('teardown reopens streams and the new reset replaces state', async () => {
     const { src, clock, relay } = makeSource();
     src.start();
     await flush();
     relay.transcriptStreams[0].push({ reset: [entry('a', 'x')] });
-    await flush();
+    await drain(clock);
     expect(ids(store().entries)).toEqual(['a']);
     // Host tears the stream down; reopen after REOPEN_MS.
     relay.transcriptStreams[0].end();
@@ -323,7 +367,7 @@ describe('RelaySessionSource', () => {
     await flush();
     expect(relay.transcriptStreams.length).toBe(2);
     relay.transcriptStreams[1].push({ reset: [entry('b', 'fresh')] });
-    await flush();
+    await drain(clock);
     // Reset REPLACES — no merge/dedupe.
     expect(ids(store().entries)).toEqual(['b']);
     src.stop();
@@ -369,13 +413,13 @@ describe('RelaySessionSource', () => {
 
   it('interrupt holds stopping until the session row leaves working', async () => {
     let rowStatus: string | undefined = 'working';
-    const { src, relay } = makeSource({
+    const { src, relay, clock } = makeSource({
       sessionRow: () => ({ status: rowStatus }),
     });
     src.start();
     await flush();
     relay.transcriptStreams[0].push({ reset: [entry('a', 'x')] });
-    await flush();
+    await drain(clock);
     src.interrupt();
     await flush();
     let s = store();
@@ -395,7 +439,7 @@ describe('RelaySessionSource', () => {
       remove: [],
       count: 1,
     });
-    await flush();
+    await drain(clock);
     s = store();
     expect(s.commands.find(c => c.kind === 'interrupt')?.status).toBe(
       'applied',

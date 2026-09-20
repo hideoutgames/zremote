@@ -16,6 +16,7 @@ import { staticTokenSource } from '../../transport/tokenSource';
 import { FakeWsHub, fakeFetch, type FakeWs } from '../../testing/fakeWs';
 import { memDisk, flush } from '../../testing/memDisk';
 import type { Chat, SessionRow } from '../../protocol/types';
+import { PROJECT_COALESCE_MS } from '../../state/projectCoalesce';
 
 const cfg = { baseUrl: 'https://edge.test' };
 const DEVICE = 'phone1';
@@ -35,6 +36,7 @@ const makeController = (opts: { roomGen?: number } = {}) => {
   const hub = new FakeWsHub();
   const { fs, disk } = memDisk();
   const host = new LoroCrdtAdapter();
+  const phone = new LoroCrdtAdapter();
   const c = new SessionController('c1', {
     cfg,
     tokenSource: staticTokenSource('u@o1'),
@@ -44,14 +46,14 @@ const makeController = (opts: { roomGen?: number } = {}) => {
     wsFactory: hub.factory,
     clock,
     docDisk: disk,
-    loro: () => new LoroCrdtAdapter(),
+    loro: () => phone,
     fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
     chatMeta: () => ({
       hostDeviceId: 'host1',
       roomGen: opts.roomGen ?? 2,
     }),
   });
-  return { c, clock, hub, disk, fs, host };
+  return { c, clock, hub, disk, fs, host, phone };
 };
 
 /** start → room dialed → state → rowsDone ⇒ joined. */
@@ -341,6 +343,101 @@ describe('SessionController', () => {
     const cmdId = x.c.sendRun('hello', { cwd: '/x' });
     expect(cmdId).toBeTruthy();
     expect(lastPushBatchId(ws)).toBeTruthy();
+    x.c.stop();
+  });
+
+  it('sendRun projects once (basedOn reads the store, not a second toJSON)', async () => {
+    const x = makeController();
+    const orig = x.phone.toJSON.bind(x.phone);
+    let jsonCount = 0;
+    x.phone.toJSON = () => {
+      jsonCount += 1;
+      return orig();
+    };
+    const ws = await join(x);
+    jsonCount = 0;
+    x.c.sendRun('hello', {});
+    expect(jsonCount).toBe(1);
+    expect(lastPushBatchId(ws)).toBeTruthy();
+    x.c.stop();
+  });
+
+  it('basedOnTurnId is the last projected entry id', async () => {
+    const x = makeController();
+    const ws = await join(x);
+    x.host.pushMapToList('messages', {
+      id: 'turn-1',
+      role: 'user',
+      createdAt: 1,
+      deviceId: 'host1',
+    });
+    hostPush(x.host, ws);
+    await flush();
+    expect(store().entries.map(e => e.id)).toContain('turn-1');
+    x.c.sendRun('next', {});
+    const run = store().commands.find(c => c.kind === 'run');
+    expect(run?.basedOn?.turnId).toBe('turn-1');
+    x.c.stop();
+  });
+
+  it('same-tick applyRows share one toJSON and one store write', async () => {
+    const x = makeController();
+    const ws = await join(x);
+    const port = x.phone;
+    const orig = port.toJSON.bind(port);
+    let jsonCount = 0;
+    port.toJSON = () => {
+      jsonCount += 1;
+      return orig();
+    };
+    let writes = 0;
+    const unsub = getSessionStore('c1').subscribe(() => {
+      writes += 1;
+    });
+    jsonCount = 0;
+    writes = 0;
+    for (const id of ['a', 'b', 'c']) {
+      x.host.pushMapToList('messages', {
+        id,
+        role: 'user',
+        createdAt: 1,
+        deviceId: 'host1',
+      });
+      hostPush(x.host, ws);
+    }
+    expect(jsonCount).toBe(0);
+    expect(store().entries).toHaveLength(0);
+    await flush();
+    expect(jsonCount).toBe(1);
+    expect(writes).toBe(1);
+    expect(store().entries.map(e => e.id)).toEqual(['a', 'b', 'c']);
+    unsub();
+    x.c.stop();
+  });
+
+  it('a later row inside the coalesce window does not project until the timer', async () => {
+    const x = makeController();
+    const ws = await join(x);
+    x.host.pushMapToList('messages', {
+      id: 'a',
+      role: 'user',
+      createdAt: 1,
+      deviceId: 'host1',
+    });
+    hostPush(x.host, ws);
+    await flush();
+    expect(store().entries.map(e => e.id)).toEqual(['a']);
+    x.host.pushMapToList('messages', {
+      id: 'b',
+      role: 'user',
+      createdAt: 2,
+      deviceId: 'host1',
+    });
+    hostPush(x.host, ws);
+    await flush();
+    expect(store().entries.map(e => e.id)).toEqual(['a']);
+    x.clock.advance(PROJECT_COALESCE_MS);
+    expect(store().entries.map(e => e.id)).toEqual(['a', 'b']);
     x.c.stop();
   });
 });
