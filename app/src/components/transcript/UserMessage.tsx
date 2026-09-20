@@ -122,12 +122,13 @@ export const UserMessage = React.memo(function UserMessageInner({
                 contentStyle={styles.bubblePad}
                 tintColor={theme.userBubbleBackground}
               >
-                {kind !== null ? <PlanBadge kind={kind} /> : null}
-                {shown !== '' ? (
-                  <Text style={[styles.text, { color: theme.userBubbleText }]}>
-                    {shown}
-                  </Text>
-                ) : null}
+                <Text style={[styles.text, { color: theme.userBubbleText }]}>
+                  {kind !== null ? (
+                    <PlanBadge kind={kind} variant="inline" />
+                  ) : null}
+                  {kind !== null && shown !== '' ? ' ' : null}
+                  {shown !== '' ? shown : null}
+                </Text>
                 {foldable ? (
                   <Pressable
                     testID="user-bubble-fold"
