@@ -51,11 +51,7 @@ import {
   usePinnedModels,
   useRecentModels,
 } from '../zeron/state/uiPrefs';
-import {
-  sessionTitle,
-  hostLabel,
-  checkoutLabel,
-} from '../zeron/state/sessionTruth';
+import { sessionTitle } from '../zeron/state/sessionTruth';
 import {
   setChatArchived,
   setChatConfig,
@@ -712,9 +708,6 @@ function ActiveSessionScreen({
     [checkoutSummary, checkoutDiff],
   );
   const keyboardOffset = { opened: 0 };
-  const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
-    .filter(Boolean)
-    .join(' · ');
 
   const wallpaper = useNewThreadComposerBackground() !== undefined;
 
@@ -744,7 +737,7 @@ function ActiveSessionScreen({
         startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
       />
 
-      {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
+      {/* Header: back, title (tap → session menu), overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
@@ -752,68 +745,49 @@ function ActiveSessionScreen({
       >
         <View style={styles.headerRow} pointerEvents="box-none">
           <View style={styles.headerCenter} pointerEvents="box-none">
-            <View style={styles.titlePillWrap} pointerEvents="box-none">
-              <Glass
-                interactive
-                style={styles.titlePill}
-                testID="session-title-pill"
-              >
-                <DropdownMenu.Root>
-                  <DropdownMenu.Trigger asChild>
-                    <Pressable
-                      style={styles.titleHit}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('session.titleMenu')}
-                    >
-                      <Text
-                        style={[styles.title, { color: chrome.text }]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {sessionTitle(chat)}
-                      </Text>
-                      {subtitle !== '' ? (
-                        <Text
-                          style={[
-                            styles.subtitle,
-                            { color: chrome.textSecondary },
-                          ]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                          testID="session-header-subtitle"
-                        >
-                          {subtitle}
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Content>
-                    <DropdownMenu.Item key="rename" onSelect={onRename}>
-                      <DropdownMenu.ItemTitle>
-                        {t('session.rename')}
-                      </DropdownMenu.ItemTitle>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Group>
-                      <DropdownMenu.Item key="pin" onSelect={onPin}>
-                        <DropdownMenu.ItemTitle>
-                          {pinned ? t('session.unpin') : t('session.pin')}
-                        </DropdownMenu.ItemTitle>
-                        <DropdownMenu.ItemIcon
-                          ios={{ name: pinned ? 'pin.slash' : 'pin' }}
-                        />
-                      </DropdownMenu.Item>
-                    </DropdownMenu.Group>
-                    <DropdownMenu.Item key="archive" onSelect={onArchive}>
-                      <DropdownMenu.ItemTitle>
-                        {chat?.archived
-                          ? t('home.row.unarchive')
-                          : t('session.archive')}
-                      </DropdownMenu.ItemTitle>
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Root>
-              </Glass>
-            </View>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <Pressable
+                  style={styles.titleHit}
+                  testID="session-title-pill"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.titleMenu')}
+                >
+                  <Text
+                    style={[styles.title, { color: chrome.text }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    testID="session-header-title"
+                  >
+                    {sessionTitle(chat)}
+                  </Text>
+                </Pressable>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                <DropdownMenu.Item key="rename" onSelect={onRename}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.rename')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+                <DropdownMenu.Group>
+                  <DropdownMenu.Item key="pin" onSelect={onPin}>
+                    <DropdownMenu.ItemTitle>
+                      {pinned ? t('session.unpin') : t('session.pin')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon
+                      ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+                    />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Group>
+                <DropdownMenu.Item key="archive" onSelect={onArchive}>
+                  <DropdownMenu.ItemTitle>
+                    {chat?.archived
+                      ? t('home.row.unarchive')
+                      : t('session.archive')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           </View>
           <GlassControl
             interactive
@@ -1354,25 +1328,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 12,
   },
-  titlePillWrap: {
-    width: '100%',
-    alignItems: 'center',
-    minWidth: 0,
-  },
-  titlePill: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    maxWidth: '100%',
-    minWidth: 0,
-    flexShrink: 1,
-  },
   titleHit: {
+    height: 44,
+    width: '100%',
     maxWidth: '100%',
     minWidth: 0,
     alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 1,
   },
   circle: {
@@ -1391,14 +1353,8 @@ const styles = StyleSheet.create({
   title: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: 17,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  subtitle: {
-    minWidth: 0,
-    flexShrink: 1,
-    fontSize: 12,
+    fontSize: 20,
+    fontWeight: '500',
     textAlign: 'center',
   },
   failedWrap: {

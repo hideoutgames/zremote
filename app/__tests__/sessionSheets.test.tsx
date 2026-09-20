@@ -305,13 +305,14 @@ test('session overflow has History/Files/Terminal and not Changes/Previews', asy
   expect(byTestId(tree.root, 'session-sheet')).toHaveLength(0);
 });
 
-test('session header subtitle ellipsizes instead of clipping', async () => {
+test('session header is a plain title matching Threads, with no glass pill or subtitle', async () => {
   act(() => {
     workspaceStore.setState(s => ({
       ...s,
       chats: [
         {
           ...chat,
+          title: 'A very long thread title that should ellipsize in the header',
           cwd: '/very/long/path/to/the/current/worktree',
           branch: 'feature/extremely-long-branch-name-that-overflows',
         },
@@ -319,21 +320,36 @@ test('session header subtitle ellipsizes instead of clipping', async () => {
     }));
   });
   const tree = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
-  const subtitle = tree.root.findAll(
-    n => n.props.testID === 'session-header-subtitle',
+  expect(byTestId(tree.root, 'session-header-subtitle')).toHaveLength(0);
+  const labels = texts(tree.root);
+  expect(labels).not.toContain('workstation');
+  expect(
+    labels.some(l => String(l).includes('feature/extremely-long-branch')),
+  ).toBe(false);
+
+  const title = tree.root.findAll(
+    n => n.props.testID === 'session-header-title',
   )[0];
-  expect(subtitle).toBeDefined();
-  expect(subtitle.props.numberOfLines).toBe(1);
-  expect(subtitle.props.ellipsizeMode).toBe('tail');
-  const pill = tree.root.findAll(
+  expect(title).toBeDefined();
+  expect(title.props.numberOfLines).toBe(1);
+  expect(title.props.ellipsizeMode).toBe('tail');
+  const titleStyle = Array.isArray(title.props.style)
+    ? title.props.style.flat()
+    : [title.props.style];
+  expect(titleStyle.some(s => s?.fontSize === 20)).toBe(true);
+  expect(titleStyle.some(s => s?.fontWeight === '500')).toBe(true);
+
+  const trigger = tree.root.findAll(
     n => n.props.testID === 'session-title-pill',
   )[0];
-  const pillStyle = Array.isArray(pill.props.style)
-    ? pill.props.style.flat()
-    : [pill.props.style];
-  expect(pillStyle.some(s => s?.maxWidth === '100%')).toBe(true);
-  expect(pillStyle.some(s => s?.flexShrink === 1)).toBe(true);
-  expect(pillStyle.some(s => s?.overflow === 'hidden')).toBe(false);
+  expect(trigger).toBeDefined();
+  expect(trigger.props.interactive).toBeUndefined();
+  const triggerStyle = Array.isArray(trigger.props.style)
+    ? trigger.props.style.flat()
+    : [trigger.props.style];
+  expect(triggerStyle.some(s => s?.borderRadius === 18)).toBe(false);
+  expect(triggerStyle.some(s => s?.paddingHorizontal === 12)).toBe(false);
+  expect(triggerStyle.some(s => s?.height === 44)).toBe(true);
 });
 
 test('compose session is a blank chat with the composer', async () => {
