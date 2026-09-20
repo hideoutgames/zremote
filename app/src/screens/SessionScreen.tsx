@@ -880,7 +880,11 @@ function ActiveSessionScreen({
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
                     key="terminal"
-                    onSelect={() => setToolSheet('terminal')}
+                    onSelect={() => {
+                      KeyboardController.dismiss();
+                      setComposerFocused(false);
+                      setToolSheet('terminal');
+                    }}
                   >
                     <DropdownMenu.ItemTitle>
                       {t('session.terminal')}

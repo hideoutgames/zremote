@@ -32,6 +32,7 @@ import {
   saveTerminalTabs,
   type TerminalTab,
 } from '../zeron/terminal/sessions';
+import { createTerminalFocus } from '../zeron/terminal/focus';
 import type { TerminalEvent } from '../zeron/protocol/types';
 import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
@@ -163,30 +164,31 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   }));
   const cols = viewport.cols;
   const rows = viewport.rows;
-  const focusedOnce = useRef(false);
-  const onScreenLayout = useCallback((e: LayoutChangeEvent) => {
-    const { width: w, height: h } = e.nativeEvent.layout;
-    if (w <= 0 || h <= 0) return;
-    const next = {
-      cols: Math.max(20, Math.floor(w / CHAR_W)),
-      rows: Math.max(6, Math.floor(h / CHAR_H)),
-    };
-    setViewport(prev =>
-      prev.cols === next.cols && prev.rows === next.rows ? prev : next,
-    );
-    setLayoutReady(true);
-    if (!focusedOnce.current) {
-      focusedOnce.current = true;
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, []);
+  const inputRef = useRef<TextInput>(null);
+  const focus = useRef(createTerminalFocus(() => inputRef.current)).current;
+  useEffect(() => () => focus.dispose(), [focus]);
+  const onScreenLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const { width: w, height: h } = e.nativeEvent.layout;
+      if (w <= 0 || h <= 0) return;
+      const next = {
+        cols: Math.max(20, Math.floor(w / CHAR_W)),
+        rows: Math.max(6, Math.floor(h / CHAR_H)),
+      };
+      setViewport(prev =>
+        prev.cols === next.cols && prev.rows === next.rows ? prev : next,
+      );
+      setLayoutReady(true);
+      focus.focusInput();
+    },
+    [focus],
+  );
 
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [active, setActive] = useState(0);
   const [ctrl, setCtrl] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [layoutReady, setLayoutReady] = useState(false);
-  const inputRef = useRef<TextInput>(null);
   const tabsRef = useRef<TerminalTab[]>([]);
   // Bumping forces a re-render after PTY data mutates the screen model.
   const [, setFrame] = useState(0);
@@ -432,19 +434,23 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
       </View>
 
       {/* Screen — Menlo rows of styled runs; tap focuses the hidden input */}
-      <Pressable
+      <View
+        testID="terminal-screen"
         style={styles.screen}
         onLayout={onScreenLayout}
-        onPress={() => inputRef.current?.focus()}
         accessibilityLabel={t('terminal.screen')}
       >
         <LegendList
           ref={listRef}
+          testID="terminal-list"
           data={lineData}
           estimatedItemSize={CHAR_H}
           keyExtractor={(_, i) => `${i}`}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+          onTouchEnd={focus.focusInput}
           renderItem={({ item: row, index: y }) => (
             <Text style={styles.termRow} selectable={false}>
               {rowRuns(row, FG).map((r, i) => (
@@ -468,7 +474,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
             ) : null
           }
         />
-      </Pressable>
+      </View>
 
       {tabs.length === 0 ? (
         <Text style={styles.empty}>{error ?? t('terminal.unavailable')}</Text>
@@ -477,13 +483,22 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
       {/* Hidden input capturing keystrokes */}
       <TextInput
         ref={inputRef}
+        testID="terminal-input"
         style={styles.hiddenInput}
         value=""
         onChangeText={onKeyText}
         onKeyPress={onKeyPress}
+        onFocus={focus.onFocus}
+        onBlur={focus.onBlur}
         autoCapitalize="none"
         autoCorrect={false}
+        autoComplete="off"
+        spellCheck={false}
         autoFocus={false}
+        blurOnSubmit={false}
+        caretHidden
+        showSoftInputOnFocus
+        keyboardAppearance="dark"
         accessibilityLabel={t('terminal.input')}
       />
 
@@ -511,6 +526,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
                 onPress={() => {
                   if (spec.key === 'ctrl') setCtrl(v => !v);
                   else send([...(KEY_BYTES[spec.key] ?? [])]);
+                  focus.focusInput();
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={spec.label}
@@ -605,7 +621,14 @@ const styles = StyleSheet.create({
     padding: 24,
     color: TAB_FG,
   },
-  hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+  hiddenInput: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    opacity: 0.01,
+    left: 0,
+    top: 0,
+  },
   keyBarSticky: {
     backgroundColor: '#161616',
     borderTopWidth: StyleSheet.hairlineWidth,
