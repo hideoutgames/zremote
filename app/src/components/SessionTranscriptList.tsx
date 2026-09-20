@@ -446,32 +446,47 @@ export const SessionTranscriptList = forwardRef<
     [blankSpace],
   );
 
-  const performRailJump = useCallback((index: number, animated: boolean) => {
-    const jump = listRef.current?.scrollToIndex({
-      index,
-      animated,
-      viewPosition: 0.5,
-    });
-    jump?.catch(() => {
-      requestAnimationFrame(() => {
-        const retry = listRef.current?.scrollToIndex({
-          index,
-          animated: false,
-          viewPosition: 0.5,
-        });
-        retry?.catch(() => {
-          const count = entriesRef.current.length;
-          const max = Math.max(
-            0,
-            contentHeightRef.current - listHeightRef.current,
-          );
-          const offset =
-            count <= 1 ? 0 : (index / Math.max(1, count - 1)) * max;
-          listRef.current?.scrollToOffset({ offset, animated: false });
+  const offsetForRailIndex = useCallback((index: number): number => {
+    const count = entriesRef.current.length;
+    const max = Math.max(0, contentHeightRef.current - listHeightRef.current);
+    return count <= 1 ? 0 : (index / Math.max(1, count - 1)) * max;
+  }, []);
+
+  const scrollChatToOffset = useCallback(
+    (offset: number, animated: boolean) => {
+      listRef.current?.scrollToOffset({ offset, animated });
+      chatScrollRef.current?.scrollTo?.({ y: offset, animated });
+    },
+    [],
+  );
+
+  const performRailJump = useCallback(
+    (index: number, animated: boolean) => {
+      const offset = offsetForRailIndex(index);
+      // Proportional offset first so KeyboardChatScrollView moves even when
+      // FlashList scrollToIndex no-ops on an unmeasured row. scrollToIndex
+      // then refines to a centered item when layout exists.
+      scrollChatToOffset(offset, animated);
+      const jump = listRef.current?.scrollToIndex({
+        index,
+        animated,
+        viewPosition: 0.5,
+      });
+      jump?.catch(() => {
+        requestAnimationFrame(() => {
+          const retry = listRef.current?.scrollToIndex({
+            index,
+            animated: false,
+            viewPosition: 0.5,
+          });
+          retry?.catch(() => {
+            scrollChatToOffset(offset, false);
+          });
         });
       });
-    });
-  }, []);
+    },
+    [offsetForRailIndex, scrollChatToOffset],
+  );
 
   const flushPendingRailJump = useCallback(() => {
     const pending = pendingRailJumpRef.current;
