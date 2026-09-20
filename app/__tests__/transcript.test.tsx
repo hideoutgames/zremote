@@ -3,7 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   UserMessage,
   USER_BUBBLE_MAX_WIDTH,
@@ -629,6 +629,14 @@ const flatStyle = (style: unknown): Record<string, unknown>[] => {
   return [];
 };
 
+const shadowedHost = (
+  node: TestRenderer.ReactTestInstance,
+): TestRenderer.ReactTestInstance =>
+  node.findAll(n => {
+    const opacity = StyleSheet.flatten(n.props.style)?.shadowOpacity;
+    return typeof opacity === 'number';
+  })[0] ?? node;
+
 test('UserMessage shows the sent text inside a bubble sized to content', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -652,24 +660,15 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
-  expect(flatStyle(bubble.props.style).some(s => s.overflow === 'hidden')).toBe(
-    false,
-  );
+  const bubbleFlat = StyleSheet.flatten(shadowedHost(bubble).props.style);
+  expect(bubbleFlat.overflow).not.toBe('hidden');
+  expect(bubbleFlat.shadowOpacity).toBe(BUBBLE_SHADOW_OPACITY);
+  expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
   expect(
-    flatStyle(bubble.props.style).some(
-      s => s.shadowOpacity === BUBBLE_SHADOW_OPACITY,
-    ),
-  ).toBe(true);
-  expect(
-    flatStyle(bubble.props.style).some(
-      s => s.elevation === BUBBLE_SHADOW_ELEVATION,
-    ),
-  ).toBe(true);
-  expect(
-    bubble.children.some(n =>
-      flatStyle(n.props.style).some(s => s.overflow === 'hidden'),
-    ),
-  ).toBe(true);
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'user-bubble-clip' }).props.style,
+    ).overflow,
+  ).toBe('hidden');
 });
 
 test('UserMessage keeps the full prompt in the bubble Text', async () => {
@@ -728,16 +727,15 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
-  expect(style.some(s => s?.overflow === 'hidden')).toBe(false);
-  expect(style.some(s => s?.shadowOpacity === BUBBLE_SHADOW_OPACITY)).toBe(
-    true,
-  );
-  expect(style.some(s => s?.elevation === BUBBLE_SHADOW_ELEVATION)).toBe(true);
+  const bubbleFlat = StyleSheet.flatten(shadowedHost(bubble).props.style);
+  expect(bubbleFlat.overflow).not.toBe('hidden');
+  expect(bubbleFlat.shadowOpacity).toBe(BUBBLE_SHADOW_OPACITY);
+  expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
   expect(
-    bubble.children.some(n =>
-      flatStyle(n.props.style).some(s => s.overflow === 'hidden'),
-    ),
-  ).toBe(true);
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'assistant-bubble-clip' }).props.style,
+    ).overflow,
+  ).toBe('hidden');
 });
 
 test('UserMessage never ellipsizes a short prompt', async () => {

@@ -20,7 +20,6 @@ import { useTheme } from '../../theme';
 export const BUBBLE_BLUR_INTENSITY = 100;
 export const BUBBLE_SHADOW_OPACITY = 0.16;
 export const BUBBLE_SHADOW_RADIUS = 10;
-export const BUBBLE_SHADOW_OFFSET = { width: 0, height: 4 } as const;
 export const BUBBLE_SHADOW_ELEVATION = 4;
 const FALLBACK_ALPHA = 0.92;
 
@@ -82,6 +81,7 @@ export function FrostedBubble({
   return (
     <View testID={testID} style={wrapStyle} {...rest}>
       <View
+        testID={testID !== undefined ? `${testID}-clip` : undefined}
         style={[
           styles.clip,
           radius !== undefined ? { borderRadius: radius } : null,
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: BUBBLE_SHADOW_OPACITY,
     shadowRadius: BUBBLE_SHADOW_RADIUS,
-    shadowOffset: BUBBLE_SHADOW_OFFSET,
+    shadowOffset: { width: 0, height: 4 },
     elevation: BUBBLE_SHADOW_ELEVATION,
   },
   clip: { overflow: 'hidden' },

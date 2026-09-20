@@ -175,7 +175,7 @@ test('sessionBackgroundBlur defaults to off and persists', async () => {
   expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(false);
   const disk = memDocDisk();
   await bindUiPrefs(disk, 'org', 'user');
-  setSessionBackgroundBlur(true);
+  await setSessionBackgroundBlur(true);
   expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(true);
   const saved = await disk.loadUiPrefs('org', 'user');
   expect(saved?.sessionBackgroundBlur).toBe(true);

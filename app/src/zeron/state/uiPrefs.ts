@@ -376,9 +376,9 @@ export const setColorSchemePreference = (
 export const useColorSchemePreference = (): ColorSchemePreference =>
   useStore(uiPrefsStore, s => s.colorScheme);
 
-export const setSessionBackgroundBlur = (v: boolean): void => {
+export const setSessionBackgroundBlur = (v: boolean): Promise<void> => {
   uiPrefsStore.setState({ sessionBackgroundBlur: v });
-  save();
+  return saveAsync();
 };
 
 export const useSessionBackgroundBlur = (): boolean =>
