@@ -9,16 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import {
-  Canvas,
-  Group,
-  ImageShader,
-  Rect,
-  Shader,
-  Skia,
-  useImage,
-  type SkRuntimeEffect,
-} from '@shopify/react-native-skia';
+import * as SkiaNS from '@shopify/react-native-skia';
 import { useTheme } from '../theme';
 import {
   useNewThreadBackgroundEffect,
@@ -43,9 +34,9 @@ import {
   thumbnailSize,
 } from './backgroundEffects';
 
-const compile = (src: string): SkRuntimeEffect | null => {
+const compile = (src: string): SkiaNS.SkRuntimeEffect | null => {
   try {
-    return Skia.RuntimeEffect.Make(src);
+    return SkiaNS.Skia.RuntimeEffect.Make(src);
   } catch {
     return null;
   }
@@ -60,12 +51,12 @@ const SKSL: Record<Exclude<NewThreadBackgroundEffect, 'none'>, string> = {
 
 const compiled = new Map<
   Exclude<NewThreadBackgroundEffect, 'none'>,
-  SkRuntimeEffect | null
+  SkiaNS.SkRuntimeEffect | null
 >();
 
 const shaderFor = (
   effect: Exclude<NewThreadBackgroundEffect, 'none'>,
-): SkRuntimeEffect | null => {
+): SkiaNS.SkRuntimeEffect | null => {
   if (compiled.has(effect)) return compiled.get(effect) ?? null;
   const made = compile(SKSL[effect]);
   compiled.set(effect, made);
@@ -96,7 +87,7 @@ function TreatedImage({
   width: number;
   height: number;
 }) {
-  const image = useImage(uri);
+  const image = SkiaNS.useImage(uri);
   const shader = shaderFor(effect);
   const rasterLight = effect === 'dither' ? false : light;
   if (image == null || shader == null || width <= 0 || height <= 0) {
@@ -108,28 +99,28 @@ function TreatedImage({
   }
   const transform = coverFitTransform(thumb.width, thumb.height, width, height);
   return (
-    <Canvas
+    <SkiaNS.Canvas
       testID="new-thread-background-treated"
       style={{ width, height }}
       pointerEvents="none"
     >
-      <Group transform={transform}>
-        <Rect x={0} y={0} width={thumb.width} height={thumb.height}>
-          <Shader
+      <SkiaNS.Group transform={transform}>
+        <SkiaNS.Rect x={0} y={0} width={thumb.width} height={thumb.height}>
+          <SkiaNS.Shader
             source={shader}
             uniforms={effect === 'dither' ? {} : { light: rasterLight ? 1 : 0 }}
           >
-            <ImageShader
+            <SkiaNS.ImageShader
               image={image}
               fit="fill"
               tx="clamp"
               ty="clamp"
               rect={{ x: 0, y: 0, width: thumb.width, height: thumb.height }}
             />
-          </Shader>
-        </Rect>
-      </Group>
-    </Canvas>
+          </SkiaNS.Shader>
+        </SkiaNS.Rect>
+      </SkiaNS.Group>
+    </SkiaNS.Canvas>
   );
 }
 
@@ -172,7 +163,7 @@ function Artwork({
 const SAMPLE_SIZE = 32;
 
 function WallpaperContrastSampler({ uri }: { uri: string }) {
-  const image = useImage(uri);
+  const image = SkiaNS.useImage(uri);
   useEffect(() => {
     let cancelled = false;
     setWallpaperContrast(uri, undefined);
@@ -186,16 +177,19 @@ function WallpaperContrastSampler({ uri }: { uri: string }) {
         if (srcW <= 0 || srcH <= 0) {
           commit('dark');
         } else {
-          const surface = Skia.Surface.MakeOffscreen(SAMPLE_SIZE, SAMPLE_SIZE);
+          const surface = SkiaNS.Skia.Surface.MakeOffscreen(
+            SAMPLE_SIZE,
+            SAMPLE_SIZE,
+          );
           if (surface == null) {
             commit('dark');
           } else {
             const canvas = surface.getCanvas();
-            const paint = Skia.Paint();
+            const paint = SkiaNS.Skia.Paint();
             canvas.drawImageRect(
               image,
-              Skia.XYWHRect(0, 0, srcW, srcH),
-              Skia.XYWHRect(0, 0, SAMPLE_SIZE, SAMPLE_SIZE),
+              SkiaNS.Skia.XYWHRect(0, 0, srcW, srcH),
+              SkiaNS.Skia.XYWHRect(0, 0, SAMPLE_SIZE, SAMPLE_SIZE),
               paint,
             );
             const snap = surface.makeImageSnapshot();
