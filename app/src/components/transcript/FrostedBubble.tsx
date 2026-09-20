@@ -57,7 +57,14 @@ export function FrostedBubble({
     return () => sub.remove();
   }, []);
 
-  const pad = <View style={contentStyle}>{children}</View>;
+  const pad = (
+    <View
+      testID={testID !== undefined ? `${testID}-pad` : undefined}
+      style={[styles.pad, contentStyle]}
+    >
+      {children}
+    </View>
+  );
   const radius = StyleSheet.flatten(style)?.borderRadius;
   const wrapStyle = [styles.shadow, style];
 
@@ -112,4 +119,5 @@ const styles = StyleSheet.create({
     elevation: BUBBLE_SHADOW_ELEVATION,
   },
   clip: { overflow: 'hidden' },
+  pad: { zIndex: 1 },
 });

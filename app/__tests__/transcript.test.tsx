@@ -3,11 +3,14 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import {
   UserMessage,
   USER_BUBBLE_MAX_WIDTH,
   USER_BUBBLE_TEXT_END_PAD,
+  EXPANDED_BUBBLE_MAX_HEIGHT_FRACTION,
+  PROMPT_CHUNK_CHARS,
+  chunkPromptText,
 } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
 import {
@@ -707,6 +710,11 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
       tree!.root.findByProps({ testID: 'user-bubble-clip' }).props.style,
     ).overflow,
   ).toBe('hidden');
+  expect(
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'user-bubble-pad' }).props.style,
+    ).zIndex,
+  ).toBe(1);
 });
 
 test('UserMessage keeps the full prompt in the bubble Text', async () => {
@@ -799,6 +807,27 @@ test('UserMessage never ellipsizes a short prompt', async () => {
   ).toHaveLength(0);
 });
 
+const joinedText = (root: TestRenderer.ReactTestInstance): string =>
+  textOf(root)
+    .filter((s): s is string => typeof s === 'string')
+    .join('');
+
+const promptNodes = (
+  root: TestRenderer.ReactTestInstance,
+): TestRenderer.ReactTestInstance[] =>
+  root.findAll(
+    n =>
+      typeof n.props.testID === 'string' &&
+      String(n.props.testID).startsWith('user-bubble-prompt'),
+  );
+
+test('chunkPromptText splits paragraphs and long lines under the cap', () => {
+  expect(chunkPromptText('short')).toEqual(['short']);
+  expect(chunkPromptText('aaa\nbbb', 5)).toEqual(['aaa', 'bbb']);
+  expect(chunkPromptText('x'.repeat(PROMPT_CHUNK_CHARS + 1)).length).toBe(2);
+  expect(chunkPromptText('abcdefghij', 4)).toEqual(['abcd', 'efgh', 'ij']);
+});
+
 test('UserMessage folds after 1000 characters', async () => {
   const long = 'x'.repeat(1001);
   const entry: MessageEntry = {
@@ -809,12 +838,24 @@ test('UserMessage folds after 1000 characters', async () => {
   await act(async () => {
     tree = TestRenderer.create(<UserMessage entry={entry} />);
   });
-  expect(textOf(tree!.root)).toContain(`${'x'.repeat(1000)}…`);
+  expect(joinedText(tree!.root)).toContain(`${'x'.repeat(1000)}…`);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'user-bubble-scroll'),
+  ).toHaveLength(0);
   const fold = tree!.root.findByProps({ testID: 'user-bubble-fold' });
   await act(async () => {
     fold.props.onPress();
   });
-  expect(textOf(tree!.root)).toContain(long);
+  expect(joinedText(tree!.root)).toContain(long);
+  expect(promptNodes(tree!.root).length).toBeGreaterThan(1);
+  const scroll = tree!.root.findByProps({ testID: 'user-bubble-scroll' });
+  expect(scroll.props.nestedScrollEnabled).toBe(true);
+  const maxHeight = Math.round(
+    Dimensions.get('window').height * EXPANDED_BUBBLE_MAX_HEIGHT_FRACTION,
+  );
+  expect(
+    flatStyle(scroll.props.style).some(s => s.maxHeight === maxHeight),
+  ).toBe(true);
 });
 
 test('AssistantMessage shows Worked for on a completed turn', async () => {

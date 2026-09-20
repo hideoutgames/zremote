@@ -2,9 +2,18 @@
 // the "Show more" fold at 1000 characters. Short messages are never
 // ellipsized. Message-row shape follows Agents Kit beui/message +
 // prompt-kit/message (both MIT) — a plain bubble; no avatar chrome.
+// Expanded prompts are chunked into multiple Text nodes so a single CALayer
+// cannot exceed iOS's max texture size (blank glyphs, tall empty frost).
 
 import React, { useLayoutEffect, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import * as ContextMenu from '../menus/context-menu';
 import Animated, {
   Easing,
@@ -25,6 +34,10 @@ export const FOLD_CHARS = 1000;
 export const USER_BUBBLE_TEXT_END_PAD = 3;
 /** Cap vs the full transcript row, not the shrink-wrapped bubble. */
 export const USER_BUBBLE_MAX_WIDTH = '82%';
+/** Soft cap per Text node so expanded prompts stay under the iOS layer limit. */
+export const PROMPT_CHUNK_CHARS = 800;
+/** Expanded bubble body vs the window — keeps the frost from becoming a slab. */
+export const EXPANDED_BUBBLE_MAX_HEIGHT_FRACTION = 0.55;
 
 const textOf = (entry: MessageEntry): string =>
   entry.parts
@@ -33,6 +46,46 @@ const textOf = (entry: MessageEntry): string =>
     )
     .map(p => p.text)
     .join('\n');
+
+export const chunkPromptText = (
+  text: string,
+  maxChars: number = PROMPT_CHUNK_CHARS,
+): string[] => {
+  if (maxChars <= 0) return [text];
+  if (text.length <= maxChars) return [text];
+  const chunks: string[] = [];
+  let current = '';
+  const flush = () => {
+    if (current === '') return;
+    chunks.push(current);
+    current = '';
+  };
+  const takeHard = (piece: string) => {
+    for (let offset = 0; offset < piece.length; offset += maxChars) {
+      const slice = piece.slice(offset, offset + maxChars);
+      if (offset + maxChars < piece.length) {
+        chunks.push(slice);
+      } else {
+        current = slice;
+      }
+    }
+  };
+  for (const line of text.split('\n')) {
+    const joined = current === '' ? line : `${current}\n${line}`;
+    if (joined.length <= maxChars) {
+      current = joined;
+      continue;
+    }
+    flush();
+    if (line.length <= maxChars) {
+      current = line;
+    } else {
+      takeHard(line);
+    }
+  }
+  flush();
+  return chunks.length > 0 ? chunks : [''];
+};
 
 const promptBody = (kind: PromptBadgeKind | null, shown: string): ReactNode => {
   if (kind === null) return shown;
@@ -76,6 +129,7 @@ export const UserMessage = React.memo(function UserMessageInner({
 }) {
   'use no memo';
   const theme = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
   const { kind, text: visible } = stripPlanPrefix(text);
@@ -84,6 +138,16 @@ export const UserMessage = React.memo(function UserMessageInner({
   const shown =
     expanded || !foldable ? visible : `${visible.slice(0, FOLD_CHARS)}…`;
   const showBubble = visible !== '' || kind !== null;
+  const chunks = chunkPromptText(shown);
+  const prompts = chunks.map((chunk, i) => (
+    <Text
+      key={i}
+      testID={i === 0 ? 'user-bubble-prompt' : `user-bubble-prompt-${i}`}
+      style={[styles.text, { color: theme.userBubbleText }]}
+    >
+      {i === 0 ? promptBody(kind, chunk) : chunk}
+    </Text>
+  ));
 
   useLayoutEffect(() => {
     if (animateEnter) onEntered?.(entry.id);
@@ -132,9 +196,21 @@ export const UserMessage = React.memo(function UserMessageInner({
                   contentStyle={styles.bubblePad}
                   tintColor={theme.userBubbleBackground}
                 >
-                  <Text style={[styles.text, { color: theme.userBubbleText }]}>
-                    {promptBody(kind, shown)}
-                  </Text>
+                  {expanded ? (
+                    <ScrollView
+                      testID="user-bubble-scroll"
+                      nestedScrollEnabled
+                      style={{
+                        maxHeight: Math.round(
+                          windowHeight * EXPANDED_BUBBLE_MAX_HEIGHT_FRACTION,
+                        ),
+                      }}
+                    >
+                      {prompts}
+                    </ScrollView>
+                  ) : (
+                    prompts
+                  )}
                   {foldable ? (
                     <Pressable
                       testID="user-bubble-fold"
