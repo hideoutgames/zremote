@@ -6,6 +6,7 @@ import { PreviewRail } from '../src/components/agentsKit/PreviewRail';
 import {
   RAIL_ITEM_SIZE,
   railItemSize,
+  railProgressAtY,
   type RailItem,
 } from '../src/components/agentsKit/messagePreview';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
@@ -81,6 +82,7 @@ const renderRail = async (
 
 beforeEach(() => {
   mocked.selectionAsync.mockClear();
+  mocked.prepareSelectionAsync.mockClear();
   uiPrefsStore.setState({ hapticsEnabled: true });
 });
 
@@ -112,7 +114,7 @@ test('overlay passes touches through; only the track is hittable', async () => {
   const tree = await renderRail();
   expect(
     tree.root.findByProps({ testID: 'preview-rail' }).props.pointerEvents,
-  ).toBe('none');
+  ).toBe('box-none');
   expect(
     tree.root.findByProps({ testID: 'preview-rail-track' }).props.pointerEvents,
   ).toBe('auto');
@@ -193,6 +195,7 @@ test('a stationary tap on the rail selects without a haptic', async () => {
   });
   expect(onItemSelect).toHaveBeenCalledTimes(1);
   expect(onItemSelect).toHaveBeenCalledWith(items[0], { animated: true });
+  expect(mocked.prepareSelectionAsync).toHaveBeenCalledTimes(1);
   expect(mocked.selectionAsync).not.toHaveBeenCalled();
   expect(
     tree.root.findAll(n => n.props.testID === 'preview-rail-preview').length,
@@ -221,6 +224,7 @@ test('dragging across ticks selects the next item and ticks once', async () => {
     animated: false,
   });
   expect(onItemSelect).toHaveBeenCalledTimes(2);
+  expect(mocked.prepareSelectionAsync).toHaveBeenCalledTimes(1);
   expect(mocked.selectionAsync).toHaveBeenCalledTimes(1);
 
   await act(async () => {
@@ -228,13 +232,42 @@ test('dragging across ticks selects the next item and ticks once', async () => {
   });
 });
 
-test('pageY maps to a tick when locationY is missing', async () => {
+test('dragging inside a tick keeps scrubbing with progress', async () => {
+  const onItemSelect = jest.fn();
+  const tree = await renderRail(onItemSelect);
+  const track = tree.root.findByProps({ testID: 'preview-rail-track' });
+  const itemSize = railItemSize(items.length, RAIL_HEIGHT);
+  const y0 = stackTop() + itemSize * 0.2;
+  const y1 = stackTop() + itemSize * 0.7;
+
+  await act(async () => {
+    track.props.onResponderGrant(touch(y0));
+    track.props.onResponderMove(touch(y1));
+  });
+  expect(onItemSelect).toHaveBeenNthCalledWith(1, items[0], {
+    animated: true,
+  });
+  expect(onItemSelect).toHaveBeenNthCalledWith(2, items[0], {
+    animated: false,
+    progress: railProgressAtY(y1, items.length, itemSize, stackTop()),
+  });
+  expect(onItemSelect).toHaveBeenCalledTimes(2);
+  expect(mocked.selectionAsync).not.toHaveBeenCalled();
+
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('locationY wins over a window pageY', async () => {
   const onItemSelect = jest.fn();
   const tree = await renderRail(onItemSelect);
   const track = tree.root.findByProps({ testID: 'preview-rail-track' });
 
   await act(async () => {
-    track.props.onResponderGrant({ nativeEvent: { pageY: yForIndex(1) } });
+    track.props.onResponderGrant({
+      nativeEvent: { locationY: yForIndex(1), pageY: 800 },
+    });
   });
   expect(onItemSelect).toHaveBeenCalledWith(items[1], { animated: true });
 

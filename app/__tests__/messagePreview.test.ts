@@ -10,6 +10,7 @@ import {
   pickActiveRailId,
   railIndexAtY,
   railItemSize,
+  railProgressAtY,
   railYFromPage,
   tickScale,
   truncateMessageText,
@@ -148,10 +149,23 @@ test('railIndexAtY maps Y onto a clamped tick index', () => {
   expect(railIndexAtY(10, 4, 0, 0)).toBe(0);
 });
 
-test('railYFromPage prefers window coordinates once the track is measured', () => {
+test('railProgressAtY maps Y onto clamped 0..1 stack progress', () => {
+  expect(railProgressAtY(0, 4, 14, 0)).toBe(0);
+  expect(railProgressAtY(28, 4, 14, 0)).toBe(0.5);
+  expect(railProgressAtY(56, 4, 14, 0)).toBe(1);
+  expect(railProgressAtY(1000, 4, 14, 0)).toBe(1);
+  expect(railProgressAtY(-8, 4, 14, 0)).toBe(0);
+  expect(railProgressAtY(34, 4, 14, 20)).toBe(14 / 56);
+  expect(railProgressAtY(10, 0, 14, 0)).toBe(0);
+  expect(railProgressAtY(10, 4, 0, 0)).toBe(0);
+});
+
+test('railYFromPage prefers locationY and only uses measured pageY', () => {
   expect(railYFromPage(undefined, 40, null)).toBe(40);
-  expect(railYFromPage(40, 99, null)).toBe(40);
-  expect(railYFromPage(160, 40, 120)).toBe(40);
+  expect(railYFromPage(800, 40, null)).toBe(40);
+  expect(railYFromPage(160, undefined, 120)).toBe(40);
+  expect(railYFromPage(160, undefined, null)).toBe(0);
+  expect(railYFromPage(undefined, undefined, null)).toBe(0);
 });
 
 test('tickScale is a four-step pyramid', () => {
