@@ -61,7 +61,7 @@ import {
   renameChat,
 } from '../zeron/runtime/workspaceActions';
 import type { SessionController } from '../zeron/runtime/sessionController';
-import { edgeFetchBytes } from '../zeron/transport/edgeHttp';
+import { edgeFetchBytes, EdgeHttpError } from '../zeron/transport/edgeHttp';
 import { blobUrl } from '../zeron/transport/edge';
 import {
   catalogStore,
@@ -364,12 +364,22 @@ function ActiveSessionScreen({
 
   const openReasoning = useCallback((text: string) => setReasoning(text), []);
 
-  const onFetchOutput = useCallback(
-    (partId: string) => {
-      if (runtime === null) return;
-      edgeFetchBytes(blobUrl(runtime.cfg, chatId, partId), auth).catch(e =>
-        log.warn(`blob fetch failed: ${e}`),
-      );
+  const onFetchBlob = useCallback(
+    async (partId: string): Promise<string> => {
+      if (runtime === null) throw new Error('no runtime');
+      try {
+        const { bytes } = await edgeFetchBytes(
+          blobUrl(runtime.cfg, chatId, partId),
+          auth,
+          {},
+          runtime.fetchImpl,
+        );
+        return new TextDecoder().decode(bytes);
+      } catch (e) {
+        const status = e instanceof EdgeHttpError ? e.status : 'error';
+        log.warn(`blob fetch failed (${status})`);
+        throw e;
+      }
     },
     [runtime, auth, chatId],
   );
@@ -387,7 +397,7 @@ function ActiveSessionScreen({
         <AssistantMessage
           entry={item}
           onOpenReasoning={openReasoning}
-          onFetchOutput={onFetchOutput}
+          onFetchBlob={onFetchBlob}
           onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
           onOpenFileDiff={file => setFileDiff(file)}
           commands={session.commands}
@@ -398,7 +408,7 @@ function ActiveSessionScreen({
       ),
     [
       openReasoning,
-      onFetchOutput,
+      onFetchBlob,
       chatId,
       onUserMessageEntered,
       session.commands,

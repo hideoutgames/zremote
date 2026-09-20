@@ -65,6 +65,9 @@ export class AppRuntime {
   get cfg(): EdgeConfig {
     return this.deps.cfg;
   }
+  get fetchImpl(): FetchImpl | undefined {
+    return this.deps.fetchImpl;
+  }
   readonly registry: RegistryClient;
   private readonly deps: AppRuntimeDeps;
   private relays = new Map<string, DeviceRelayClient>();

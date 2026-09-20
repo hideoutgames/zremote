@@ -2,7 +2,7 @@
 // redactUrl token stripping.
 
 import { edgeFetch, edgeFetchJson, EdgeHttpError } from '../edgeHttp';
-import { redactUrl } from '../edge';
+import { blobUrl, redactUrl } from '../edge';
 import { staticTokenSource, type TokenSource } from '../tokenSource';
 import { fakeFetch } from '../../testing/fakeWs';
 
@@ -58,6 +58,17 @@ describe('edgeFetch', () => {
     await expect(
       edgeFetchJson('https://e.test/x', staticTokenSource('t'), {}, fetchImpl),
     ).rejects.toThrow(EdgeHttpError);
+  });
+});
+
+describe('blobUrl', () => {
+  test('encodes part ids including .diff and hash fragments', () => {
+    expect(blobUrl({ baseUrl: 'https://e.test' }, 'c1', 'p1.diff')).toBe(
+      'https://e.test/blob/c1/p1.diff',
+    );
+    expect(blobUrl({ baseUrl: 'https://e.test' }, 'c1', 'm1#c1')).toBe(
+      'https://e.test/blob/c1/m1%23c1',
+    );
   });
 });
 
