@@ -93,6 +93,125 @@ test('detectPlanArtifact reads Cursor createPlan input', () => {
   expect(isPlanToolPart(entry.parts[0])).toBe(true);
 });
 
+test('detectPlanArtifact reads createPlan arguments.plan', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: {
+        kind: 'unknown',
+        name: 'CreatePlan',
+        arguments: { title: 'Args plan', plan: '# From arguments' },
+      },
+      resolved: true,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Args plan',
+    markdown: '# From arguments',
+    toolId: 't1',
+  });
+  expect(isPlanToolPart(entry.parts[0])).toBe(true);
+});
+
+test('detectPlanArtifact reads MCP createPlan', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: {
+        kind: 'mcp',
+        server: 'cursor',
+        tool: 'createPlan',
+        input: { name: 'MCP plan', plan: 'Do the thing.' },
+      },
+      resolved: true,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'MCP plan',
+    markdown: 'Do the thing.',
+    toolId: 't1',
+  });
+  expect(isPlanToolPart(entry.parts[0])).toBe(true);
+});
+
+test('detectPlanArtifact yields a card for name-only sanitized createPlan', () => {
+  const part = {
+    kind: 'tool' as const,
+    id: 't1',
+    call: { kind: 'unknown' as const, name: 'createPlan' },
+    resolved: true,
+  };
+  const entry = assistant([part]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Plan',
+    markdown: '',
+    toolId: 't1',
+  });
+  expect(isPlanToolPart(part)).toBe(true);
+});
+
+test('detectPlanArtifact uses following text when createPlan has no body', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: { kind: 'unknown', name: 'createPlan' },
+      resolved: true,
+    },
+    {
+      kind: 'text',
+      id: 'txt',
+      text: '# Signing fix\n\nUse one cert.',
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Signing fix',
+    markdown: '# Signing fix\n\nUse one cert.',
+    toolId: 't1',
+  });
+});
+
+test('empty input does not hide top-level plan fields', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: {
+        kind: 'unknown',
+        name: 'createPlan',
+        input: {},
+        plan: '# Top level',
+        title: 'Top',
+      },
+      resolved: true,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Top',
+    markdown: '# Top level',
+    toolId: 't1',
+  });
+});
+
+test('detectPlanArtifact stringifies a nested plan object', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: {
+        kind: 'unknown',
+        name: 'createPlan',
+        args: { name: 'Nested', plan: { steps: ['a'] } },
+      },
+      resolved: true,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)?.name).toBe('Nested');
+  expect(detectPlanArtifact(entry)?.markdown).toContain('"steps"');
+});
+
 test('detectPlanArtifact uses Claude EnterPlanMode + following text', () => {
   const entry = assistant([
     {
