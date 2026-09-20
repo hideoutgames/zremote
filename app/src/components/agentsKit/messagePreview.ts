@@ -120,6 +120,22 @@ export function railItemSize(
   return railHeight / count;
 }
 
+/** Map a Y offset on the rail column to a tick index. `stackTop` is the
+ *  empty padding above a short (uncompressed) stack. */
+export function railIndexAtY(
+  y: number,
+  count: number,
+  itemSize: number,
+  stackTop: number,
+): number {
+  if (count <= 0) return 0;
+  if (itemSize <= 0) return 0;
+  const index = Math.floor((y - stackTop) / itemSize);
+  if (index < 0) return 0;
+  if (index > count - 1) return count - 1;
+  return index;
+}
+
 export function pickActiveRailId(opts: {
   itemIds: string[];
   offset: number;

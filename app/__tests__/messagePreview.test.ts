@@ -8,6 +8,7 @@ import {
   entryPreviewText,
   getMessagePreview,
   pickActiveRailId,
+  railIndexAtY,
   railItemSize,
   tickScale,
   truncateMessageText,
@@ -131,6 +132,19 @@ test('pickActiveRailId pins first/last near the edges', () => {
 test('railItemSize compresses only when ticks would overflow', () => {
   expect(railItemSize(4, 200)).toBe(14);
   expect(railItemSize(20, 140)).toBe(7);
+});
+
+test('railIndexAtY maps Y onto a clamped tick index', () => {
+  expect(railIndexAtY(0, 4, 14, 0)).toBe(0);
+  expect(railIndexAtY(13.9, 4, 14, 0)).toBe(0);
+  expect(railIndexAtY(14, 4, 14, 0)).toBe(1);
+  expect(railIndexAtY(41, 4, 14, 0)).toBe(2);
+  expect(railIndexAtY(1000, 4, 14, 0)).toBe(3);
+  expect(railIndexAtY(-8, 4, 14, 0)).toBe(0);
+  expect(railIndexAtY(20, 4, 14, 20)).toBe(0);
+  expect(railIndexAtY(34, 4, 14, 20)).toBe(1);
+  expect(railIndexAtY(0, 0, 14, 0)).toBe(0);
+  expect(railIndexAtY(10, 4, 0, 0)).toBe(0);
 });
 
 test('tickScale is a four-step pyramid', () => {

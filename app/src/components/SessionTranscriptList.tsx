@@ -155,6 +155,13 @@ export const SessionTranscriptList = forwardRef<
   const wasWorkingRef = useRef(working);
   const followingRef = useRef(following);
   followingRef.current = following;
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
+  const pendingRailJumpRef = useRef<{
+    index: number;
+    animated: boolean;
+  } | null>(null);
+  const railJumpRafRef = useRef<number | null>(null);
   const viewableIdsRef = useRef<string[]>([]);
   const atEndRef = useRef(false);
   const composerInsetRef = useRef(0);
@@ -473,12 +480,78 @@ export const SessionTranscriptList = forwardRef<
     [blankSpace],
   );
 
+  const performRailJump = useCallback((index: number, animated: boolean) => {
+    const jump = listRef.current?.scrollToIndex({
+      index,
+      animated,
+      viewPosition: 0.5,
+    });
+    jump?.catch(() => {
+      requestAnimationFrame(() => {
+        const retry = listRef.current?.scrollToIndex({
+          index,
+          animated: false,
+          viewPosition: 0.5,
+        });
+        retry?.catch(() => {
+          const count = entriesRef.current.length;
+          const max = Math.max(
+            0,
+            contentHeightRef.current - listHeightRef.current,
+          );
+          const offset =
+            count <= 1 ? 0 : (index / Math.max(1, count - 1)) * max;
+          listRef.current?.scrollToOffset({ offset, animated: false });
+        });
+      });
+    });
+  }, []);
+
+  const flushPendingRailJump = useCallback(() => {
+    const pending = pendingRailJumpRef.current;
+    if (!pending || followingRef.current) return;
+    if (!pending.animated) {
+      if (railJumpRafRef.current != null) return;
+      railJumpRafRef.current = requestAnimationFrame(() => {
+        railJumpRafRef.current = null;
+        const next = pendingRailJumpRef.current;
+        if (!next || followingRef.current) return;
+        pendingRailJumpRef.current = null;
+        performRailJump(next.index, next.animated);
+      });
+      return;
+    }
+    pendingRailJumpRef.current = null;
+    performRailJump(pending.index, pending.animated);
+  }, [performRailJump]);
+
+  useEffect(() => {
+    if (following) return;
+    flushPendingRailJump();
+  }, [following, flushPendingRailJump]);
+
+  useEffect(
+    () => () => {
+      if (railJumpRafRef.current != null) {
+        cancelAnimationFrame(railJumpRafRef.current);
+        railJumpRafRef.current = null;
+      }
+    },
+    [],
+  );
+
   const scrollToRailItem = useCallback(
-    (item: RailItem) => {
+    (item: RailItem, opts?: { animated?: boolean }) => {
+      const animated = opts?.animated !== false && reduceMotion !== true;
       const last = railItems[railItems.length - 1]?.id === item.id;
       if (last) {
+        pendingRailJumpRef.current = null;
+        if (railJumpRafRef.current != null) {
+          cancelAnimationFrame(railJumpRafRef.current);
+          railJumpRafRef.current = null;
+        }
         followEnd({
-          animated: reduceMotion !== true,
+          animated,
           closeKeyboard: false,
         }).catch(() => {});
         return;
@@ -486,17 +559,15 @@ export const SessionTranscriptList = forwardRef<
       const index = entries.findIndex(entry => entry.id === item.id);
       if (index < 0) return;
       hasOverflowedRef.current = true;
-      setFollowing(false);
-      const jump = listRef.current?.scrollToIndex({
-        index,
-        animated: reduceMotion !== true,
-        viewPosition: 0.5,
-      });
-      jump?.catch(() => {
-        // FlashList rejects if the row has not been measured yet.
-      });
+      const wasFollowing = followingRef.current;
+      if (wasFollowing) {
+        followingRef.current = false;
+        setFollowing(false);
+      }
+      pendingRailJumpRef.current = { index, animated };
+      if (!wasFollowing) flushPendingRailJump();
     },
-    [entries, followEnd, railItems, reduceMotion],
+    [entries, flushPendingRailJump, followEnd, railItems, reduceMotion],
   );
 
   const renderScrollComponent = useCallback(

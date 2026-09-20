@@ -2,18 +2,26 @@
 // (MIT) — compact ticks, hover/pin pyramid, floating destination preview.
 // See docs/AGENTS_KIT_PROVENANCE.md.
 
-import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderEvent,
+} from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
+import { selectionTick } from '../../zeron/native/haptics';
 import { useTheme } from '../../theme';
 import { Glass } from '../Glass';
 import {
   RAIL_ITEM_SIZE,
+  railIndexAtY,
   railItemSize,
   tickScale,
   type RailItem,
@@ -21,7 +29,11 @@ import {
 
 export type { RailItem as PreviewRailItem };
 
+export type PreviewRailSelectOpts = { animated?: boolean };
+
 const RAIL_WIDTH = 28;
+/** Extra grab strip on the content side of the ticks. */
+const RAIL_HIT_EXTRA = 12;
 const TICK_WIDTH = 16;
 const TICK_HEIGHT = StyleSheet.hairlineWidth < 1 ? 1 : StyleSheet.hairlineWidth;
 const PREVIEW_WIDTH = 256;
@@ -73,7 +85,7 @@ export function PreviewRail({
   items: RailItem[];
   label: string;
   activeId: string;
-  onItemSelect: (item: RailItem) => void;
+  onItemSelect: (item: RailItem, opts?: PreviewRailSelectOpts) => void;
   top: number;
   bottom: number;
   right: number;
@@ -84,23 +96,66 @@ export function PreviewRail({
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const [pinnedId, setPinnedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPinnedId(null);
-  }, [dismissKey]);
-
-  const selectedId = items.some(item => item.id === activeId)
-    ? activeId
-    : items[0]?.id ?? '';
-  const highlightedId = pinnedId ?? selectedId;
-  const highlightedIndex = items.findIndex(item => item.id === highlightedId);
+  const [scrubbing, setScrubbing] = useState(false);
+  const lastIndexRef = useRef(-1);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const itemSize = railItemSize(items.length, railHeight);
   const stackHeight = itemSize * items.length;
   const stackTop =
     items.length * RAIL_ITEM_SIZE <= railHeight
       ? Math.max(0, (railHeight - stackHeight) / 2)
       : 0;
+  const itemSizeRef = useRef(itemSize);
+  itemSizeRef.current = itemSize;
+  const stackTopRef = useRef(stackTop);
+  stackTopRef.current = stackTop;
+  const onItemSelectRef = useRef(onItemSelect);
+  onItemSelectRef.current = onItemSelect;
+
+  useEffect(() => {
+    setPinnedId(null);
+    setScrubbing(false);
+  }, [dismissKey]);
+
+  const applyIndex = useCallback((index: number, kind: 'grant' | 'move') => {
+    const next = itemsRef.current[index];
+    if (!next) return;
+    if (kind === 'move' && lastIndexRef.current === index) return;
+    if (kind === 'move') selectionTick();
+    lastIndexRef.current = index;
+    setPinnedId(next.id);
+    onItemSelectRef.current(next, { animated: kind === 'grant' });
+  }, []);
+
+  const indexFromEvent = useCallback((e: GestureResponderEvent): number => {
+    return railIndexAtY(
+      e.nativeEvent.locationY,
+      itemsRef.current.length,
+      itemSizeRef.current,
+      stackTopRef.current,
+    );
+  }, []);
+
+  const selectA11y = useCallback(
+    (item: RailItem) => {
+      const index = itemsRef.current.findIndex(
+        candidate => candidate.id === item.id,
+      );
+      if (index >= 0) lastIndexRef.current = index;
+      setPinnedId(item.id);
+      onItemSelect(item, { animated: true });
+    },
+    [onItemSelect],
+  );
+
+  const selectedId = items.some(item => item.id === activeId)
+    ? activeId
+    : items[0]?.id ?? '';
+  const highlightedId = pinnedId ?? selectedId;
+  const highlightedIndex = items.findIndex(item => item.id === highlightedId);
   const previewItem = items.find(item => item.id === pinnedId);
+  const trackWidth = RAIL_WIDTH + RAIL_HIT_EXTRA;
 
   return (
     <View
@@ -109,7 +164,7 @@ export function PreviewRail({
       testID="preview-rail"
       accessibilityLabel={label}
     >
-      {pinnedId ? (
+      {pinnedId && !scrubbing ? (
         <Pressable
           testID="preview-rail-dismiss"
           style={StyleSheet.absoluteFill}
@@ -119,13 +174,29 @@ export function PreviewRail({
         />
       ) : null}
       <View
-        pointerEvents="box-none"
-        style={[styles.rail, { top, bottom, right, width: RAIL_WIDTH }]}
+        testID="preview-rail-track"
+        style={[styles.rail, { top, bottom, right, width: trackWidth }]}
         accessibilityRole="adjustable"
         accessibilityLabel={label}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderTerminationRequest={() => false}
+        onResponderGrant={e => {
+          setScrubbing(true);
+          applyIndex(indexFromEvent(e), 'grant');
+        }}
+        onResponderMove={e => {
+          applyIndex(indexFromEvent(e), 'move');
+        }}
+        onResponderRelease={() => {
+          setScrubbing(false);
+        }}
+        onResponderTerminate={() => {
+          setScrubbing(false);
+        }}
       >
         <View
-          pointerEvents="box-none"
+          pointerEvents="none"
           style={[styles.stack, { marginTop: stackTop }]}
         >
           {items.map((item, index) => {
@@ -138,14 +209,11 @@ export function PreviewRail({
               <Pressable
                 key={item.id}
                 testID={`preview-rail-item-${item.id}`}
-                onPress={() => {
-                  setPinnedId(item.id);
-                  onItemSelect(item);
-                }}
+                pointerEvents="none"
+                onPress={() => selectA11y(item)}
                 accessibilityRole="button"
                 accessibilityLabel={item.ariaLabel}
                 accessibilityState={{ selected: item.id === selectedId }}
-                hitSlop={4}
                 style={[styles.item, { height: itemSize }]}
               >
                 <RailTick
@@ -165,7 +233,7 @@ export function PreviewRail({
           style={[
             styles.previewWrap,
             {
-              right: right + RAIL_WIDTH + 4,
+              right: right + trackWidth + 4,
               top: Math.max(
                 top,
                 Math.min(
@@ -216,10 +284,11 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   stack: {
-    width: RAIL_WIDTH,
+    width: RAIL_WIDTH + RAIL_HIT_EXTRA,
+    alignItems: 'flex-end',
   },
   item: {
-    width: RAIL_WIDTH,
+    width: RAIL_WIDTH + RAIL_HIT_EXTRA,
     justifyContent: 'center',
     alignItems: 'flex-end',
     paddingRight: 4,
