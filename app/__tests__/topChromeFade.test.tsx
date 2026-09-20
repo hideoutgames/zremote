@@ -156,6 +156,36 @@ test('maskStopsFor keeps content visible under the composer and fades at the bot
   expect(COMPOSER_BOTTOM_FADE_BAND).toBe(44);
 });
 
+test('FadeBlur radial mode uses a dedicated top transparent-to-black strip', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<FadeBlur fade="radial" intensity={40} />);
+  });
+  const masked = tree!.root.findAll(n => n.props.maskElement != null);
+  expect(masked.length).toBe(2);
+  let top: TestRenderer.ReactTestInstance | undefined;
+  await act(async () => {
+    for (const node of masked) {
+      const maskTree = TestRenderer.create(node.props.maskElement);
+      const found = maskTree.root.findAll(
+        n => n.props.testID === 'fade-blur-radial-top',
+      );
+      if (found.length > 0) {
+        top = found[0];
+        break;
+      }
+    }
+  });
+  expect(top).toBeTruthy();
+  expect(top!.props.colors).toEqual(['transparent', 'black']);
+  expect(top!.props.start).toEqual({ x: 0.5, y: 0 });
+  expect(top!.props.end).toEqual({ x: 0.5, y: 1 });
+  expect(flattenStyle(top!.props.style).some(s => s.flex === 0.25)).toBe(true);
+  await act(async () => {
+    tree?.unmount();
+  });
+});
+
 test('FadeBlur none mode still mounts a blur', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {

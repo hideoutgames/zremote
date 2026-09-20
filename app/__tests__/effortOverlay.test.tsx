@@ -108,6 +108,8 @@ test('effort wash extends around the label and slider, not just the text', () =>
   // Inner 50% plateau (fade locations 0.25–0.75) covers the cluster.
   expect(wash.x + wash.width * 0.25).toBeCloseTo(dest.x);
   expect(wash.x + wash.width * 0.75).toBeCloseTo(dest.x + dest.width);
+  expect(wash.y + wash.height * 0.25).toBeCloseTo(dest.y - 36);
+  expect(wash.y + wash.height * 0.75).toBeCloseTo(dest.y + dest.height);
 });
 
 test('effort overlay accepts a composer anchor without crashing', async () => {
