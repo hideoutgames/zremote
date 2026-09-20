@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     color: TAB_FG,
   },
   hiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.01,
   },
   keyBarSticky: {
