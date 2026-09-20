@@ -1,6 +1,7 @@
 import {
   COMPOSE_KEYBOARD_GAP,
   composeKeyboardShift,
+  composeKeyboardShiftPx,
   composerKeyboardStickyOffset,
 } from '../src/navigation/composeKeyboardShift';
 
@@ -45,15 +46,21 @@ test('composeKeyboardShift lifts only the overlapping amount', () => {
   ).toBe(-(100 + COMPOSE_KEYBOARD_GAP));
 });
 
-test('composeKeyboardShift is a worklet-safe export', () => {
-  expect(typeof composeKeyboardShift).toBe('function');
-  expect(
-    composeKeyboardShift({
-      windowHeight: 800,
-      composerHeight: 200,
-      keyboardHeight: 0,
-    }),
-  ).toBe(0);
+test('composeKeyboardShiftPx matches the object helper with an explicit gap', () => {
+  expect(composeKeyboardShiftPx(800, 200, 0, COMPOSE_KEYBOARD_GAP)).toBe(0);
+  expect(composeKeyboardShiftPx(800, 200, 200, COMPOSE_KEYBOARD_GAP)).toBe(0);
+  expect(composeKeyboardShiftPx(800, 200, 300, COMPOSE_KEYBOARD_GAP)).toBe(
+    -COMPOSE_KEYBOARD_GAP,
+  );
+  expect(composeKeyboardShiftPx(800, 200, 400, COMPOSE_KEYBOARD_GAP)).toBe(
+    -(100 + COMPOSE_KEYBOARD_GAP),
+  );
+  expect(composeKeyboardShiftPx(800, 200, 400, 0)).toBe(-100);
+});
+
+test('composeKeyboardShiftPx is a worklet-safe export', () => {
+  expect(typeof composeKeyboardShiftPx).toBe('function');
+  expect(composeKeyboardShiftPx(800, 200, 0, COMPOSE_KEYBOARD_GAP)).toBe(0);
 });
 
 test('composerKeyboardStickyOffset eats the home inset while open', () => {
