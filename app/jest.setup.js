@@ -158,7 +158,7 @@ jest.mock('zeego/context-menu', () => ({
   Group: menuComponent('ContextGroup'),
 }));
 
-// @legendapp/list: render via FlatList; the keyboard helpers become no-ops.
+// @legendapp/list: render via FlatList (Home / Terminal).
 jest.mock('@legendapp/list/react-native', () => {
   const RN = require('react-native');
   const ReactLib = require('react');
@@ -167,33 +167,25 @@ jest.mock('@legendapp/list/react-native', () => {
   );
   return { LegendList };
 });
-jest.mock('@legendapp/list/keyboard', () => {
-  const ReactLib = require('react');
+// @shopify/flash-list: v2 throws without New Architecture; tests render via
+// FlatList and spy the imperative scroll methods used by the transcript.
+jest.mock('@shopify/flash-list', () => {
   const RN = require('react-native');
-  const scrollMessageToEnd = jest.fn(() => Promise.resolve());
-  const onComposerLayout = jest.fn();
+  const ReactLib = require('react');
+  const scrollToEnd = jest.fn();
   const scrollToIndex = jest.fn(() => Promise.resolve());
   const scrollToOffset = jest.fn();
+  const FlashList = ReactLib.forwardRef((props: object, ref: unknown) => {
+    ReactLib.useImperativeHandle(ref, () => ({
+      scrollToEnd,
+      scrollToIndex,
+      scrollToOffset,
+    }));
+    return ReactLib.createElement(RN.FlatList, props);
+  });
   return {
-    KeyboardAwareLegendList: ReactLib.forwardRef(
-      (props: object, ref: unknown) => {
-        ReactLib.useImperativeHandle(ref, () => ({
-          scrollToIndex,
-          scrollToOffset,
-        }));
-        return ReactLib.createElement(RN.FlatList, props);
-      },
-    ),
-    useKeyboardChatComposerInset: () => ({
-      contentInsetEndAdjustment: 0,
-      onComposerLayout,
-    }),
-    useKeyboardScrollToEnd: () => ({
-      freeze: false,
-      scrollMessageToEnd,
-    }),
-    __scrollMessageToEnd: scrollMessageToEnd,
-    __onComposerLayout: onComposerLayout,
+    FlashList,
+    __scrollToEnd: scrollToEnd,
     __scrollToIndex: scrollToIndex,
     __scrollToOffset: scrollToOffset,
   };

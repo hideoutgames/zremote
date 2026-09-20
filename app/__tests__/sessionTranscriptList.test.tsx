@@ -16,18 +16,14 @@ import {
 } from '../src/zeron/state/uiPrefs';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 
-const keyboardMock = jest.requireMock('@legendapp/list/keyboard') as {
-  __scrollMessageToEnd: jest.Mock;
-  __onComposerLayout: jest.Mock;
+const flashMock = jest.requireMock('@shopify/flash-list') as {
+  __scrollToEnd: jest.Mock;
   __scrollToIndex: jest.Mock;
   __scrollToOffset: jest.Mock;
 };
-const scrollMessageToEnd = keyboardMock.__scrollMessageToEnd;
-const reportComposerInset = keyboardMock.__onComposerLayout;
-const scrollToIndex = keyboardMock.__scrollToIndex;
-const scrollToOffset = keyboardMock.__scrollToOffset;
-
-const FOLLOW = { on: { dataChange: true, itemLayout: true } };
+const scrollToEnd = flashMock.__scrollToEnd;
+const scrollToIndex = flashMock.__scrollToIndex;
+const scrollToOffset = flashMock.__scrollToOffset;
 
 const entry = (id: string): MessageEntry => ({
   id,
@@ -43,15 +39,32 @@ const layoutEvent = (height: number): LayoutChangeEvent =>
     nativeEvent: { layout: { x: 0, y: 0, width: 390, height } },
   } as LayoutChangeEvent);
 
-function lastReportedHeight(): number {
-  const last = reportComposerInset.mock.calls.at(-1)?.[0] as
-    | LayoutChangeEvent
-    | undefined;
-  return last?.nativeEvent.layout.height ?? -1;
-}
-
 function listProps(tree: TestRenderer.ReactTestRenderer) {
   return tree.root.findByType(FlatList).props;
+}
+
+function followingOn(tree: TestRenderer.ReactTestRenderer) {
+  return listProps(tree).extraData === true;
+}
+
+function leaveEnd(tree: TestRenderer.ReactTestRenderer) {
+  listProps(tree).onScroll({
+    nativeEvent: {
+      contentOffset: { x: 0, y: 0 },
+      contentSize: { width: 390, height: 2000 },
+      layoutMeasurement: { width: 390, height: 844 },
+    },
+  });
+}
+
+function returnToEnd(tree: TestRenderer.ReactTestRenderer) {
+  listProps(tree).onScroll({
+    nativeEvent: {
+      contentOffset: { x: 0, y: 1156 },
+      contentSize: { width: 390, height: 2000 },
+      layoutMeasurement: { width: 390, height: 844 },
+    },
+  });
 }
 
 function Harness({
@@ -98,8 +111,7 @@ function overflowList(tree: TestRenderer.ReactTestRenderer) {
 }
 
 beforeEach(() => {
-  scrollMessageToEnd.mockClear();
-  reportComposerInset.mockClear();
+  scrollToEnd.mockClear();
   scrollToIndex.mockClear();
   scrollToOffset.mockClear();
   uiPrefsStore.setState({ composerExtraHeight: 0 });
@@ -112,12 +124,9 @@ test('scrolls to the bottom once when entries are present on mount', async () =>
       <Harness entries={[entry('m1')]} openKey="c1:1" />,
     );
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledTimes(1);
-  expect(scrollMessageToEnd).toHaveBeenCalledWith({
-    animated: false,
-    closeKeyboard: false,
-  });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(scrollToEnd).toHaveBeenCalledTimes(1);
+  expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
+  expect(followingOn(tree!)).toBe(true);
   await act(async () => {
     tree!.unmount();
   });
@@ -128,19 +137,19 @@ test('scrolls once when entries arrive after an empty open', async () => {
   await act(async () => {
     tree = TestRenderer.create(<Harness entries={[]} openKey="c1:1" />);
   });
-  expect(scrollMessageToEnd).not.toHaveBeenCalled();
+  expect(scrollToEnd).not.toHaveBeenCalled();
 
   await act(async () => {
     tree!.update(<Harness entries={[entry('m1')]} openKey="c1:1" />);
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledTimes(1);
+  expect(scrollToEnd).toHaveBeenCalledTimes(1);
 
   await act(async () => {
     tree!.update(
       <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
     );
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledTimes(1);
+  expect(scrollToEnd).toHaveBeenCalledTimes(1);
 
   await act(async () => {
     tree!.unmount();
@@ -154,12 +163,12 @@ test('scrolls again when openKey changes', async () => {
       <Harness entries={[entry('m1')]} openKey="c1:1" />,
     );
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledTimes(1);
+  expect(scrollToEnd).toHaveBeenCalledTimes(1);
 
   await act(async () => {
     tree!.update(<Harness entries={[entry('m1')]} openKey="c1:2" />);
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledTimes(2);
+  expect(scrollToEnd).toHaveBeenCalledTimes(2);
 
   await act(async () => {
     tree!.unmount();
@@ -225,17 +234,18 @@ test('scroll-up clears follow and returning to the end restores it', async () =>
       <Harness entries={[entry('m1')]} openKey="c1:1" />,
     );
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(followingOn(tree!)).toBe(true);
 
   await act(async () => {
     listProps(tree!).onScrollBeginDrag();
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
+  expect(followingOn(tree!)).toBe(false);
 
   await act(async () => {
-    listProps(tree!).onEndVisible(true);
+    leaveEnd(tree!);
+    returnToEnd(tree!);
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(followingOn(tree!)).toBe(true);
 
   await act(async () => {
     tree!.unmount();
@@ -266,12 +276,12 @@ test('noteSent on an overflowed list keeps follow on', async () => {
       />,
     );
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(followingOn(tree!)).toBe(true);
 
   await act(async () => {
     listRef.current!.noteSent(2);
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(followingOn(tree!)).toBe(true);
 
   await act(async () => {
     tree!.unmount();
@@ -302,12 +312,12 @@ test('followEnd re-enables stick-to-bottom after a scroll-up', async () => {
       />,
     );
   });
-  scrollMessageToEnd.mockClear();
+  scrollToEnd.mockClear();
 
   await act(async () => {
     listProps(tree!).onScrollBeginDrag();
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
+  expect(followingOn(tree!)).toBe(false);
 
   await act(async () => {
     await listRef.current!.followEnd({
@@ -315,11 +325,8 @@ test('followEnd re-enables stick-to-bottom after a scroll-up', async () => {
       closeKeyboard: false,
     });
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
-  expect(scrollMessageToEnd).toHaveBeenCalledWith({
-    animated: true,
-    closeKeyboard: false,
-  });
+  expect(followingOn(tree!)).toBe(true);
+  expect(scrollToEnd).toHaveBeenCalledWith({ animated: true });
 
   await act(async () => {
     tree!.unmount();
@@ -356,25 +363,21 @@ test('live extra height adds 1:1 to the transcript inset', async () => {
     listRef.current!.onComposerLayout(layoutEvent(200));
   });
   expect(heights.at(-1)).toBe(200);
-  expect(lastReportedHeight()).toBe(200);
 
   await act(async () => {
     setComposerExtraHeightLive(40);
   });
   expect(heights.at(-1)).toBe(240);
-  expect(lastReportedHeight()).toBe(240);
 
   await act(async () => {
     listRef.current!.onComposerLayout(layoutEvent(200));
   });
   expect(heights.at(-1)).toBe(240);
-  expect(lastReportedHeight()).toBe(240);
 
   await act(async () => {
     listRef.current!.onComposerLayout(layoutEvent(292));
   });
   expect(heights.at(-1)).toBe(292);
-  expect(lastReportedHeight()).toBe(292);
 
   await act(async () => {
     tree!.unmount();
@@ -502,8 +505,8 @@ test('last rail tick follows the live edge', async () => {
     overflowList(tree!);
     listProps(tree!).onScrollBeginDrag();
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
-  scrollMessageToEnd.mockClear();
+  expect(followingOn(tree!)).toBe(false);
+  scrollToEnd.mockClear();
 
   await act(async () => {
     tree!.root
@@ -514,11 +517,8 @@ test('last rail tick follows the live edge', async () => {
       )[0]
       .props.onPress();
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledWith({
-    animated: true,
-    closeKeyboard: false,
-  });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(scrollToEnd).toHaveBeenCalledWith({ animated: true });
+  expect(followingOn(tree!)).toBe(true);
   expect(scrollToIndex).not.toHaveBeenCalled();
 
   await act(async () => {
@@ -536,7 +536,7 @@ test('a non-last rail tick jumps to that message and clears follow', async () =>
   await act(async () => {
     overflowList(tree!);
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toEqual(FOLLOW);
+  expect(followingOn(tree!)).toBe(true);
 
   await act(async () => {
     tree!.root
@@ -552,7 +552,7 @@ test('a non-last rail tick jumps to that message and clears follow', async () =>
     animated: true,
     viewPosition: 0.5,
   });
-  expect(listProps(tree!).maintainScrollAtEnd).toBeUndefined();
+  expect(followingOn(tree!)).toBe(false);
 
   await act(async () => {
     tree!.unmount();
@@ -624,7 +624,7 @@ test('width change while following re-anchors to the end', async () => {
       <Harness entries={[entry('m1')]} openKey="c1:1" />,
     );
   });
-  scrollMessageToEnd.mockClear();
+  scrollToEnd.mockClear();
   await act(async () => {
     tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
       nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 844 } },
@@ -635,10 +635,7 @@ test('width change while following re-anchors to the end', async () => {
       nativeEvent: { layout: { x: 0, y: 0, width: 800, height: 844 } },
     });
   });
-  expect(scrollMessageToEnd).toHaveBeenCalledWith({
-    animated: false,
-    closeKeyboard: false,
-  });
+  expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
   await act(async () => {
     tree!.unmount();
   });
@@ -662,7 +659,7 @@ test('width change while not following restores the saved offset', async () => {
       },
     });
   });
-  scrollMessageToEnd.mockClear();
+  scrollToEnd.mockClear();
   scrollToOffset.mockClear();
   await act(async () => {
     tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
@@ -674,7 +671,7 @@ test('width change while not following restores the saved offset', async () => {
       requestAnimationFrame(() => resolve());
     });
   });
-  expect(scrollMessageToEnd).not.toHaveBeenCalled();
+  expect(scrollToEnd).not.toHaveBeenCalled();
   expect(scrollToOffset).toHaveBeenCalledWith({
     offset: 320,
     animated: false,

@@ -1,7 +1,6 @@
-// Isolated transcript list. KeyboardAwareLegendList is AnimatedLegendList +
-// KeyboardChatScrollView SharedValues; keeping those hooks out of the giant
-// ActiveSessionScreen (runtime, Sets) stops React Compiler + worklets 0.10.x
-// from serializing that memo cache into a Release throw.
+// Isolated transcript list. FlashList + KeyboardChatScrollView SharedValues
+// stay out of the giant ActiveSessionScreen (runtime, Sets) so React Compiler
+// + worklets 0.10.x cannot serialize that memo cache into a Release throw.
 
 import React, {
   forwardRef,
@@ -13,21 +12,17 @@ import React, {
   useState,
 } from 'react';
 import {
-  Platform,
   StyleSheet,
   Text,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ScrollViewProps,
 } from 'react-native';
-import { type LegendListRef } from '@legendapp/list/react-native';
-import {
-  KeyboardAwareLegendList,
-  useKeyboardChatComposerInset,
-  useKeyboardScrollToEnd,
-} from '@legendapp/list/keyboard';
-import { useReducedMotion } from 'react-native-reanimated';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import { KeyboardController } from 'react-native-keyboard-controller';
+import { useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
@@ -45,14 +40,16 @@ import {
   pickActiveRailId,
   type RailItem,
 } from './agentsKit/messagePreview';
+import { TranscriptChatScrollView } from './TranscriptChatScrollView';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 const RAIL_PADDING_RIGHT = 40;
 export const RAIL_RIGHT = 4;
-/** Remount LegendList after a sidebar-sized width jump so hit testing
+/** Remount FlashList after a sidebar-sized width jump so hit testing
  *  picks up the new column. Smaller layout ticks only re-anchor. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
 const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
+const END_THRESHOLD = 1;
 
 export const WORKING_STATUS_ID = '__working-status__';
 
@@ -96,9 +93,9 @@ export const SessionTranscriptList = forwardRef<
   {
     entries,
     renderEntry,
-    composerRef,
+    composerRef: _composerRef,
     contentMaxWidth,
-    windowWidth,
+    windowWidth: _windowWidth,
     windowHeight,
     insetsTop,
     insetsBottom,
@@ -114,7 +111,9 @@ export const SessionTranscriptList = forwardRef<
   'use no memo';
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
-  const listRef = useRef<LegendListRef>(null);
+  const listRef = useRef<FlashListRef<TranscriptRow>>(null);
+  const chatScrollRef =
+    useRef<React.ComponentRef<typeof TranscriptChatScrollView>>(null);
   const [following, setFollowing] = useState(false);
   const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
   const [contentHeight, setContentHeight] = useState(0);
@@ -140,13 +139,18 @@ export const SessionTranscriptList = forwardRef<
   const followingRef = useRef(following);
   followingRef.current = following;
   const viewableIdsRef = useRef<string[]>([]);
-
-  const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
-    useKeyboardChatComposerInset(listRef, composerRef);
-  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
+  const atEndRef = useRef(false);
+  const extraContentPadding = useSharedValue(0);
+  const blankSpace = useSharedValue(0);
+  const freeze = useSharedValue(false);
 
   const windowHeightRef = useRef(windowHeight);
   windowHeightRef.current = windowHeight;
+  const listHeightRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  const anchorIndexRef = useRef<number | undefined>(undefined);
+  anchorIndexRef.current = anchorIndex;
+  const anchorContentHeightRef = useRef(0);
   const extraHeightRef = useRef(0);
   extraHeightRef.current = clampComposerExtraHeight(
     uiPrefsStore.getState().composerExtraHeight,
@@ -156,8 +160,8 @@ export const SessionTranscriptList = forwardRef<
   const lastMeasuredRef = useRef<number | null>(null);
   const onComposerHeightRef = useRef(onComposerHeight);
   onComposerHeightRef.current = onComposerHeight;
-  const reportComposerInsetRef = useRef(reportComposerInset);
-  reportComposerInsetRef.current = reportComposerInset;
+  const onShowScrollDownRef = useRef(onShowScrollDown);
+  onShowScrollDownRef.current = onShowScrollDown;
 
   const data = useMemo((): TranscriptRow[] => {
     const rows: TranscriptRow[] = entries.map(entry => ({
@@ -198,20 +202,36 @@ export const SessionTranscriptList = forwardRef<
         viewableIds,
       });
 
-  const publishInset = useCallback((extraHeight: number) => {
-    const base = baseHeightRef.current;
-    if (base === null) return;
-    const extra = clampComposerExtraHeight(
-      extraHeight,
-      composerExtraMax(windowHeightRef.current),
-    );
-    const inset = composerListInset(base, extra);
-    setComposerInset(inset);
-    onComposerHeightRef.current(inset);
-    reportComposerInsetRef.current({
-      nativeEvent: { layout: { x: 0, y: 0, width: 0, height: inset } },
-    } as LayoutChangeEvent);
-  }, []);
+  const publishInset = useCallback(
+    (extraHeight: number) => {
+      const base = baseHeightRef.current;
+      if (base === null) return;
+      const extra = clampComposerExtraHeight(
+        extraHeight,
+        composerExtraMax(windowHeightRef.current),
+      );
+      const inset = composerListInset(base, extra);
+      setComposerInset(inset);
+      extraContentPadding.value = inset;
+      onComposerHeightRef.current(inset);
+    },
+    [extraContentPadding],
+  );
+
+  const scrollMessageToEnd = useCallback(
+    async (opts: { animated: boolean; closeKeyboard: boolean }) => {
+      freeze.set(true);
+      const dismissPromise = opts.closeKeyboard
+        ? KeyboardController.dismiss()
+        : Promise.resolve();
+      const scrollOpts = { animated: opts.animated };
+      chatScrollRef.current?.scrollToEnd?.(scrollOpts);
+      listRef.current?.scrollToEnd(scrollOpts);
+      await dismissPromise;
+      freeze.set(false);
+    },
+    [freeze],
+  );
 
   useEffect(
     () =>
@@ -271,15 +291,10 @@ export const SessionTranscriptList = forwardRef<
         );
         return;
       }
-      const list = listRef.current as
-        | (LegendListRef & {
-            scrollToOffset?: (opts: {
-              offset: number;
-              animated?: boolean;
-            }) => void;
-          })
-        | null;
-      list?.scrollToOffset?.({ offset: pending.offset, animated: false });
+      listRef.current?.scrollToOffset({
+        offset: pending.offset,
+        animated: false,
+      });
     };
     requestAnimationFrame(restore);
   }, [listHitKey, listWidth, scrollMessageToEnd]);
@@ -330,6 +345,9 @@ export const SessionTranscriptList = forwardRef<
       followEnd,
       noteSent: (entryCount: number) => {
         setAnchorIndex(entryCount);
+        anchorContentHeightRef.current = contentHeightRef.current;
+        const listH = listHeightRef.current || windowHeightRef.current;
+        blankSpace.value = Math.max(0, listH - ANCHOR_MAX_SIZE);
         if (hasOverflowedRef.current) {
           setFollowing(true);
         } else {
@@ -338,7 +356,7 @@ export const SessionTranscriptList = forwardRef<
       },
       onComposerLayout,
     }),
-    [scrollMessageToEnd, followEnd, onComposerLayout],
+    [blankSpace, scrollMessageToEnd, followEnd, onComposerLayout],
   );
 
   const renderItem = useCallback(
@@ -365,6 +383,13 @@ export const SessionTranscriptList = forwardRef<
     },
   ).current;
 
+  const applyEndVisible = useCallback((atEnd: boolean) => {
+    if (atEnd === atEndRef.current) return;
+    atEndRef.current = atEnd;
+    onShowScrollDownRef.current(!atEnd);
+    if (atEnd && hasOverflowedRef.current) setFollowing(true);
+  }, []);
+
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } =
@@ -375,8 +400,29 @@ export const SessionTranscriptList = forwardRef<
         contentHeight: contentSize.height,
       });
       savedOffsetRef.current = contentOffset.y;
+      const distance =
+        contentSize.height - contentOffset.y - layoutMeasurement.height;
+      applyEndVisible(distance <= END_THRESHOLD);
     },
-    [],
+    [applyEndVisible],
+  );
+
+  const updateBlankSpace = useCallback(
+    (height: number) => {
+      if (anchorIndexRef.current == null) {
+        blankSpace.value = 0;
+        return;
+      }
+      const listH = listHeightRef.current || windowHeightRef.current;
+      const growth = Math.max(0, height - anchorContentHeightRef.current);
+      const next = Math.max(0, listH - ANCHOR_MAX_SIZE - growth);
+      blankSpace.value = next;
+      if (next <= 0 && !hasOverflowedRef.current) {
+        hasOverflowedRef.current = true;
+        setFollowing(true);
+      }
+    },
+    [blankSpace],
   );
 
   const scrollToRailItem = useCallback(
@@ -399,10 +445,34 @@ export const SessionTranscriptList = forwardRef<
         viewPosition: 0.5,
       });
       jump?.catch(() => {
-        // LegendList rejects if the row has not been measured yet.
+        // FlashList rejects if the row has not been measured yet.
       });
     },
     [entries, followEnd, railItems, reduceMotion],
+  );
+
+  const renderScrollComponent = useCallback(
+    (props: ScrollViewProps) => (
+      <TranscriptChatScrollView
+        {...props}
+        ref={chatScrollRef}
+        extraContentPadding={extraContentPadding}
+        blankSpace={blankSpace}
+        freeze={freeze}
+        offset={insetsBottom}
+        onEndVisible={applyEndVisible}
+      />
+    ),
+    [applyEndVisible, blankSpace, extraContentPadding, freeze, insetsBottom],
+  );
+
+  const maintainVisibleContentPosition = useMemo(
+    () => ({
+      startRenderingFromBottom: true,
+      autoscrollToBottomThreshold: following ? END_THRESHOLD : undefined,
+      animateAutoScrollToBottom: reduceMotion !== true,
+    }),
+    [following, reduceMotion],
   );
 
   return (
@@ -411,6 +481,7 @@ export const SessionTranscriptList = forwardRef<
       style={styles.fill}
       onLayout={event => {
         const { width, height } = event.nativeEvent.layout;
+        listHeightRef.current = height;
         setListHeight(prev => (prev === height ? prev : height));
         setListWidth(prev => (prev === width ? prev : width));
       }}
@@ -421,55 +492,22 @@ export const SessionTranscriptList = forwardRef<
         bottomInset={composerInset}
         bottomBand={TOP_CHROME_FADE_BAND}
       >
-        <KeyboardAwareLegendList
+        <FlashList
           key={listHitKey}
           ref={listRef}
           style={styles.fill}
           data={data}
+          extraData={following}
           keyExtractor={(item: TranscriptRow) =>
             item.kind === 'working' ? WORKING_STATUS_ID : item.entry.id
           }
+          getItemType={(item: TranscriptRow) =>
+            item.kind === 'working' ? 'working' : item.entry.role
+          }
           renderItem={renderItem}
-          applyWorkaroundForContentInsetHitTestBug
-          maintainVisibleContentPosition={
-            Platform.OS !== 'android'
-              ? undefined
-              : anchorIndex != null && !following
-          }
-          keyboardLiftBehavior="whenAtEnd"
-          keyboardOffset={insetsBottom}
-          contentInsetEndAdjustment={contentInsetEndAdjustment}
-          freeze={freeze}
-          anchoredEndSpace={
-            anchorIndex != null
-              ? {
-                  anchorIndex,
-                  anchorMaxSize: ANCHOR_MAX_SIZE,
-                  anchorOffset: insetsTop + 56,
-                  onSizeChanged: (size: number) => {
-                    if (size <= 0 && !hasOverflowedRef.current) {
-                      hasOverflowedRef.current = true;
-                      setFollowing(true);
-                    }
-                  },
-                }
-              : undefined
-          }
-          maintainScrollAtEnd={
-            following
-              ? { on: { dataChange: true, itemLayout: true } }
-              : undefined
-          }
-          maintainScrollAtEndThreshold={1}
-          estimatedItemSize={64}
-          estimatedListSize={{
-            width: listWidth || windowWidth,
-            height: listHeight || windowHeight,
-          }}
-          onEndVisible={(v: boolean) => {
-            onShowScrollDown(!v);
-            if (v && hasOverflowedRef.current) setFollowing(true);
-          }}
+          renderScrollComponent={renderScrollComponent}
+          maintainVisibleContentPosition={maintainVisibleContentPosition}
+          drawDistance={windowHeight}
           onScrollBeginDrag={() => {
             if (hasOverflowedRef.current) setFollowing(false);
             setDismissKey(key => key + 1);
@@ -478,7 +516,16 @@ export const SessionTranscriptList = forwardRef<
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={VIEWABILITY}
           onContentSizeChange={(_w: number, height: number) => {
+            const grew = height > contentHeightRef.current;
+            contentHeightRef.current = height;
             setContentHeight(prev => (prev === height ? prev : height));
+            updateBlankSpace(height);
+            if (grew && followingRef.current) {
+              scrollMessageToEnd({
+                animated: false,
+                closeKeyboard: false,
+              }).catch(() => {});
+            }
           }}
           contentContainerStyle={[
             styles.listContent,
