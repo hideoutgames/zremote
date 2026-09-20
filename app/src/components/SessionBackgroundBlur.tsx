@@ -11,7 +11,8 @@ import { useNewThreadComposerBackground } from '../zeron/state/uiPrefs';
 import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 
 export const COMPACT_WALLPAPER_BLUR = 80;
-export const REGULAR_THREADS_INTENSITY = 42;
+export const COMPACT_THREADS_INTENSITY = 120;
+export const REGULAR_THREADS_INTENSITY = 90;
 export const REGULAR_CHAT_INTENSITY = 36;
 export const REGULAR_CHAT_COLUMN_EDGE = 0.1;
 export const REGULAR_CHAT_VIGNETTE_EDGE = 0.08;
@@ -31,7 +32,11 @@ export const wallpaperBlurFor = (
   column = false,
 ): WallpaperBlurSpec => {
   if (width < REGULAR_MIN_WIDTH) {
-    return { intensity: COMPACT_WALLPAPER_BLUR, fade: 'none' };
+    return {
+      intensity:
+        kind === 'threads' ? COMPACT_THREADS_INTENSITY : COMPACT_WALLPAPER_BLUR,
+      fade: 'none',
+    };
   }
   if (kind === 'threads') {
     return {

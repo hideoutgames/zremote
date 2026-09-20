@@ -1,18 +1,72 @@
 // Chrome dissolve: masked blur sitting under floating header / composer /
-// New thread chrome so list content fades as it scrolls under. No light/dark
-// color wash — Reduce Transparency drops the blur and leaves the band empty.
-// ContentEdgeMask is a viewport alpha mask on the scrolling content itself.
+// New thread chrome so list content fades as it scrolls under. Optional
+// black wash (wallpaper on Home) — Reduce Transparency drops both the
+// blur and the wash. ContentEdgeMask is a viewport alpha mask on the
+// scrolling content itself.
 
-import React, { useState } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  AccessibilityInfo,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
+import type { BlurTint } from 'expo-blur';
 import { FadeBlur } from './FadeBlur';
 
 export const TOP_CHROME_FADE_BAND = 56;
-export const THREADS_BOTTOM_FADE_BAND = 28;
-/** Strong blur under chrome so wallpaper remains, without a color wash. */
+/** Strong blur under chrome so wallpaper remains. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
+/** Black edge wash when a session wallpaper is set on Home. */
+export const CHROME_FADE_WASH_DARK = 'rgba(0,0,0,0.78)';
+
+function ChromeFadeWash({
+  edge,
+  fadeHold,
+  wash,
+}: {
+  edge: 'top' | 'bottom';
+  fadeHold: number;
+  wash: string;
+}) {
+  const [reduceTransparency, setReduceTransparency] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceTransparencyEnabled()
+      .then(setReduceTransparency)
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceTransparencyChanged',
+      setReduceTransparency,
+    );
+    return () => sub.remove();
+  }, []);
+  if (reduceTransparency) return null;
+  const hold = Math.min(0.85, Math.max(0, fadeHold));
+  const colors =
+    edge === 'top'
+      ? ([wash, wash, 'transparent'] as const)
+      : hold > 0
+      ? (['transparent', wash, wash] as const)
+      : (['transparent', wash] as const);
+  const locations =
+    edge === 'top'
+      ? ([0, Math.max(hold, 0.001), 1] as const)
+      : hold > 0
+      ? ([0, Math.max(0, Math.min(0.999, 1 - hold)), 1] as const)
+      : ([0, 1] as const);
+  return (
+    <LinearGradient
+      testID="chrome-fade-wash"
+      pointerEvents="none"
+      colors={[...colors] as [string, string, ...string[]]}
+      locations={[...locations] as [number, number, ...number[]]}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
 
 export function ChromeFade({
   edge,
@@ -20,6 +74,8 @@ export function ChromeFade({
   fadeBand,
   style,
   testID,
+  wash,
+  tint,
 }: {
   edge: 'top' | 'bottom';
   /** Opaque plateau covering chrome (header or composer). */
@@ -27,10 +83,10 @@ export function ChromeFade({
   fadeBand?: number;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  wash?: string;
+  tint?: BlurTint;
 }) {
-  const band =
-    fadeBand ??
-    (edge === 'top' ? TOP_CHROME_FADE_BAND : THREADS_BOTTOM_FADE_BAND);
+  const band = fadeBand ?? TOP_CHROME_FADE_BAND;
   const height = Math.max(inset, 0) + band;
   const fadeHold = height <= 0 ? 0.12 : Math.max(inset, 0) / height;
   return (
@@ -50,8 +106,12 @@ export function ChromeFade({
         fade={edge === 'top' ? 'down' : 'up'}
         fadeHold={fadeHold}
         intensity={TOP_CHROME_BLUR_INTENSITY}
+        tint={tint}
         style={StyleSheet.absoluteFill}
       />
+      {wash !== undefined ? (
+        <ChromeFadeWash edge={edge} fadeHold={fadeHold} wash={wash} />
+      ) : null}
     </View>
   );
 }
@@ -59,11 +119,23 @@ export function ChromeFade({
 export function TopChromeFade({
   inset,
   style,
+  wash,
+  tint,
 }: {
   inset: number;
   style?: StyleProp<ViewStyle>;
+  wash?: string;
+  tint?: BlurTint;
 }) {
-  return <ChromeFade edge="top" inset={inset} style={style} />;
+  return (
+    <ChromeFade
+      edge="top"
+      inset={inset}
+      style={style}
+      wash={wash}
+      tint={tint}
+    />
+  );
 }
 
 /** Build 0–1 gradient stops for a viewport content mask. */
