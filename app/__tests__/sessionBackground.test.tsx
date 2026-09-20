@@ -293,18 +293,12 @@ test('session chrome follows the content theme when wallpaper is set', async () 
     expect(
       mounted.root.findAll(n => n.props.tint === 'systemThinMaterialDark'),
     ).toHaveLength(0);
-    const empty = mounted.root.findAll(n => {
-      const c = n.props.children;
-      return typeof c === 'string' && c.includes('Nothing here yet');
-    })[0];
-    expect(empty).toBeDefined();
-    if (empty === undefined) return;
-    const emptyStyle = Array.isArray(empty.props.style)
-      ? empty.props.style.flat()
-      : [empty.props.style];
     expect(
-      emptyStyle.some(s => s?.color === Theme.lightTheme.textSecondary),
-    ).toBe(true);
+      mounted.root.findAll(n => {
+        const c = n.props.children;
+        return typeof c === 'string' && c.includes('Nothing here yet');
+      }),
+    ).toHaveLength(0);
     expect(mounted.root.findAllByType(Text).length).toBeGreaterThan(0);
   } finally {
     themeSpy.mockRestore();

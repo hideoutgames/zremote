@@ -18,7 +18,6 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -203,11 +202,7 @@ export function AdaptiveShell({
             />
           </AppErrorBoundary>
         ) : (
-          <View style={styles.emptyDetail}>
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              {t('session.empty')}
-            </Text>
-          </View>
+          <View style={styles.emptyDetail} />
         )}
       </View>
 
@@ -266,7 +261,7 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
   },
   detail: { flex: 1 },
-  emptyDetail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyDetail: { flex: 1 },
   inspector: { borderLeftWidth: StyleSheet.hairlineWidth },
   tabs: {
     flexDirection: 'row',
@@ -278,6 +273,5 @@ const styles = StyleSheet.create({
   tab: { minHeight: 44, justifyContent: 'center' },
   tabLabel: {},
   tabDisabled: { opacity: 0.5 },
-  emptyText: {},
   hovered: { opacity: 0.7 },
 });

@@ -72,7 +72,6 @@ const en = {
   'session.titleMenu': 'Session actions',
   'session.copyId': 'Copy ID',
   'session.back': 'Back',
-  'session.empty': 'Nothing here yet — send a message to start.',
   'session.messagePlaceholder': 'Message',
   'session.steerPlaceholder': 'Steer the run…',
   'session.stop': 'Stop',

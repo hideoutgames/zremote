@@ -355,9 +355,6 @@ test('session header is a plain title matching Threads, with no glass pill or su
 test('compose session is a blank chat with the composer', async () => {
   const tree = await render(<SessionScreen onBack={() => {}} />);
   expect(texts(tree.root)).not.toContain('New thread');
-  expect(texts(tree.root)).not.toContain(
-    'Nothing here yet — send a message to start.',
-  );
   expect(
     tree.root.findAll(n => n.props.testID === 'session-title-pill').length,
   ).toBe(0);

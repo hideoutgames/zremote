@@ -5,7 +5,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Dimensions, Modal, StyleSheet, Text } from 'react-native';
+import { Dimensions, Modal, StyleSheet } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import {
@@ -34,13 +34,6 @@ const render = async (requestedChat: string | null = null) => {
   });
   return tree!;
 };
-
-const texts = (root: TestRenderer.ReactTestInstance): string[] =>
-  root.findAllByType(Text).flatMap(n => {
-    const c = n.props.children;
-    if (typeof c === 'string') return [c];
-    return Array.isArray(c) ? c.filter(x => typeof x === 'string') : [];
-  });
 
 const panel = (root: TestRenderer.ReactTestInstance) =>
   root.findAll(
@@ -127,9 +120,6 @@ test('regular width launches into the new-thread composer', async () => {
   expect(
     tree.root.findAll(n => n.props.testID === 'session-title-pill').length,
   ).toBe(0);
-  expect(texts(tree.root)).not.toContain(
-    'Nothing here yet — send a message to start.',
-  );
   await act(async () => {
     tree.unmount();
   });

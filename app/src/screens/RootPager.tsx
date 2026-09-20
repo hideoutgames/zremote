@@ -49,9 +49,9 @@ export function RootPager({
     setActivePage(SESSION_PAGE);
     pagerRef.current?.setPage?.(SESSION_PAGE);
   }, []);
+  // Slide first, then freeze / unmount. Eager HOME would Freeze the session
+  // (and drop compose) while the reverse pager animation is still on screen.
   const goHome = useCallback(() => {
-    setComposing(false);
-    setActivePage(HOME_PAGE);
     pagerRef.current?.setPage?.(HOME_PAGE);
     KeyboardController.dismiss();
   }, []);
@@ -88,7 +88,10 @@ export function RootPager({
   const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
     const { position } = event.nativeEvent;
     setActivePage(position);
-    if (position === HOME_PAGE) KeyboardController.dismiss();
+    if (position === HOME_PAGE) {
+      setComposing(false);
+      KeyboardController.dismiss();
+    }
   }, []);
 
   const onPageScrollStateChanged = useCallback(
