@@ -1,8 +1,16 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { PreviewRail } from '../src/components/agentsKit/PreviewRail';
-import type { RailItem } from '../src/components/agentsKit/messagePreview';
+import {
+  RAIL_ITEM_SIZE,
+  railItemSize,
+  type RailItem,
+} from '../src/components/agentsKit/messagePreview';
+import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
+
+const mocked = Haptics as jest.Mocked<typeof Haptics>;
 
 const items: RailItem[] = [
   {
@@ -18,8 +26,28 @@ const items: RailItem[] = [
   },
 ];
 
+const RAIL_HEIGHT = 400;
+
+const stackTop = (): number => {
+  const itemSize = railItemSize(items.length, RAIL_HEIGHT);
+  const stackHeight = itemSize * items.length;
+  return items.length * RAIL_ITEM_SIZE <= RAIL_HEIGHT
+    ? Math.max(0, (RAIL_HEIGHT - stackHeight) / 2)
+    : 0;
+};
+
+const yForIndex = (index: number): number => {
+  const itemSize = railItemSize(items.length, RAIL_HEIGHT);
+  return stackTop() + index * itemSize + itemSize / 2;
+};
+
+const touch = (locationY: number) => ({ nativeEvent: { locationY } });
+
 const renderRail = async (
-  onItemSelect: (item: RailItem) => void = () => {},
+  onItemSelect: (
+    item: RailItem,
+    opts?: { animated?: boolean },
+  ) => void = () => {},
   extra: { dismissKey?: number } = {},
 ) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
@@ -33,13 +61,18 @@ const renderRail = async (
         top={40}
         bottom={80}
         right={4}
-        railHeight={400}
+        railHeight={RAIL_HEIGHT}
         dismissKey={extra.dismissKey}
       />,
     );
   });
   return tree!;
 };
+
+beforeEach(() => {
+  mocked.selectionAsync.mockClear();
+  uiPrefsStore.setState({ hapticsEnabled: true });
+});
 
 test('renders a tick per item', async () => {
   const tree = await renderRail();
@@ -81,11 +114,12 @@ test('pressing a tick selects it and shows the preview card', async () => {
       )[0]
       .props.onPress();
   });
-  expect(onItemSelect).toHaveBeenCalledWith(items[0]);
+  expect(onItemSelect).toHaveBeenCalledWith(items[0], { animated: true });
   const preview = tree.root.findByProps({ testID: 'preview-rail-preview' });
   const labels = preview.findAllByType(Text).map(n => n.props.children);
   expect(labels).toContain('What should the first release include?');
   expect(labels).toContain('Start with the smallest workflow.');
+  expect(mocked.selectionAsync).not.toHaveBeenCalled();
 
   await act(async () => {
     tree.unmount();
@@ -119,6 +153,59 @@ test('pressing outside clears the pinned preview', async () => {
   expect(
     tree.root.findAll(n => n.props.testID === 'preview-rail-preview'),
   ).toHaveLength(0);
+
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('a stationary tap on the rail selects without a haptic', async () => {
+  const onItemSelect = jest.fn();
+  const tree = await renderRail(onItemSelect);
+  const track = tree.root.findByProps({ testID: 'preview-rail-track' });
+
+  await act(async () => {
+    track.props.onResponderGrant(touch(yForIndex(0)));
+  });
+  expect(onItemSelect).toHaveBeenCalledTimes(1);
+  expect(onItemSelect).toHaveBeenCalledWith(items[0], { animated: true });
+  expect(mocked.selectionAsync).not.toHaveBeenCalled();
+  expect(
+    tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss'),
+  ).toHaveLength(0);
+
+  await act(async () => {
+    track.props.onResponderRelease(touch(yForIndex(0)));
+  });
+  expect(mocked.selectionAsync).not.toHaveBeenCalled();
+  expect(
+    tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss').length,
+  ).toBeGreaterThan(0);
+
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('dragging across ticks selects the next item and ticks once', async () => {
+  const onItemSelect = jest.fn();
+  const tree = await renderRail(onItemSelect);
+  const track = tree.root.findByProps({ testID: 'preview-rail-track' });
+
+  await act(async () => {
+    track.props.onResponderGrant(touch(yForIndex(0)));
+    track.props.onResponderMove(touch(yForIndex(1)));
+    track.props.onResponderMove(touch(yForIndex(1)));
+    track.props.onResponderRelease(touch(yForIndex(1)));
+  });
+  expect(onItemSelect).toHaveBeenNthCalledWith(1, items[0], {
+    animated: true,
+  });
+  expect(onItemSelect).toHaveBeenNthCalledWith(2, items[1], {
+    animated: false,
+  });
+  expect(onItemSelect).toHaveBeenCalledTimes(2);
+  expect(mocked.selectionAsync).toHaveBeenCalledTimes(1);
 
   await act(async () => {
     tree.unmount();

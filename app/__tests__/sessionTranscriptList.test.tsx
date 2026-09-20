@@ -140,7 +140,8 @@ function overflowList(tree: TestRenderer.ReactTestRenderer) {
 
 beforeEach(() => {
   scrollToEnd.mockClear();
-  scrollToIndex.mockClear();
+  scrollToIndex.mockReset();
+  scrollToIndex.mockImplementation(() => Promise.resolve());
   scrollToOffset.mockClear();
   if (isComposerResizeActive()) endComposerResize();
   setComposerExtraHeightLive(0);
@@ -674,7 +675,7 @@ test('last rail tick follows the live edge', async () => {
   });
 });
 
-test('a non-last rail tick jumps to that message and clears follow', async () => {
+test('a non-last rail tick jumps after follow-output is off', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
@@ -686,6 +687,12 @@ test('a non-last rail tick jumps to that message and clears follow', async () =>
   });
   expect(followingOn(tree!)).toBe(true);
 
+  let followingAtJump: boolean | undefined;
+  scrollToIndex.mockImplementation(() => {
+    followingAtJump = followingOn(tree!);
+    return Promise.resolve();
+  });
+
   await act(async () => {
     tree!.root
       .findAll(
@@ -695,12 +702,64 @@ test('a non-last rail tick jumps to that message and clears follow', async () =>
       )[0]
       .props.onPress();
   });
+  expect(followingOn(tree!)).toBe(false);
+  expect(followingAtJump).toBe(false);
   expect(scrollToIndex).toHaveBeenCalledWith({
     index: 0,
     animated: true,
     viewPosition: 0.5,
   });
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('dragging the rail scrubs without animation once follow is off', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), entry('m2'), entry('m3'), entry('m4')]}
+        openKey="c1:1"
+      />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+    listProps(tree!).onScrollBeginDrag();
+  });
   expect(followingOn(tree!)).toBe(false);
+  scrollToIndex.mockClear();
+
+  const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
+  const railHeight = 844 - (47 + 96);
+  const itemSize = 14;
+  const stackTop = (railHeight - itemSize * 4) / 2;
+  const touch = (index: number) => ({
+    nativeEvent: { locationY: stackTop + index * itemSize + itemSize / 2 },
+  });
+
+  await act(async () => {
+    track.props.onResponderGrant(touch(0));
+  });
+  expect(scrollToIndex).toHaveBeenCalledWith({
+    index: 0,
+    animated: true,
+    viewPosition: 0.5,
+  });
+  scrollToIndex.mockClear();
+
+  await act(async () => {
+    track.props.onResponderMove(touch(1));
+    track.props.onResponderMove(touch(2));
+  });
+  expect(scrollToIndex).toHaveBeenCalledTimes(1);
+  expect(scrollToIndex).toHaveBeenCalledWith({
+    index: 2,
+    animated: false,
+    viewPosition: 0.5,
+  });
 
   await act(async () => {
     tree!.unmount();
