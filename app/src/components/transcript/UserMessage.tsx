@@ -23,6 +23,8 @@ import { messageCopyContent } from './MessageCopyMenu';
 export const FOLD_CHARS = 1000;
 /** Extra end pad so glyph ink that overshoots advance width is not clipped. */
 export const USER_BUBBLE_TEXT_END_PAD = 3;
+/** Cap vs the full transcript row, not the shrink-wrapped bubble. */
+export const USER_BUBBLE_MAX_WIDTH = '82%';
 
 const textOf = (entry: MessageEntry): string =>
   entry.parts
@@ -88,84 +90,97 @@ export const UserMessage = React.memo(function UserMessageInner({
   }, [animateEnter, entry.id, onEntered]);
 
   return (
-    <View style={styles.row}>
-      <ContextMenu.Root>
-        <ContextMenu.Trigger>
-          <EnteringStack animate={animateEnter}>
-            {images.length > 0 ? (
-              <View style={styles.attachmentRow}>
-                {images.map(p =>
-                  p.kind === 'image' ? (
-                    <View
-                      key={p.id}
-                      style={[
-                        styles.attachmentChip,
-                        {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.border,
-                        },
-                      ]}
-                    >
-                      <Icon
-                        name="photo"
-                        size={13}
-                        color={theme.textSecondary}
-                      />
-                      <Text
-                        style={[styles.attachmentName, { color: theme.text }]}
-                        numberOfLines={1}
+    <View testID="user-message" style={styles.row}>
+      <View testID="user-bubble-cap" style={styles.cap}>
+        <ContextMenu.Root>
+          <ContextMenu.Trigger>
+            <EnteringStack animate={animateEnter}>
+              {images.length > 0 ? (
+                <View style={styles.attachmentRow}>
+                  {images.map(p =>
+                    p.kind === 'image' ? (
+                      <View
+                        key={p.id}
+                        style={[
+                          styles.attachmentChip,
+                          {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.border,
+                          },
+                        ]}
                       >
-                        {p.name}
+                        <Icon
+                          name="photo"
+                          size={13}
+                          color={theme.textSecondary}
+                        />
+                        <Text
+                          style={[styles.attachmentName, { color: theme.text }]}
+                          numberOfLines={1}
+                        >
+                          {p.name}
+                        </Text>
+                      </View>
+                    ) : null,
+                  )}
+                </View>
+              ) : null}
+              {showBubble ? (
+                <FrostedBubble
+                  testID="user-bubble"
+                  style={styles.bubble}
+                  contentStyle={styles.bubblePad}
+                  tintColor={theme.userBubbleBackground}
+                >
+                  <Text style={[styles.text, { color: theme.userBubbleText }]}>
+                    {promptBody(kind, shown)}
+                  </Text>
+                  {foldable ? (
+                    <Pressable
+                      testID="user-bubble-fold"
+                      onPress={() => setExpanded(e => !e)}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        expanded ? t('session.showLess') : t('session.showMore')
+                      }
+                      accessibilityState={{ expanded }}
+                    >
+                      <Text
+                        style={[styles.fold, { color: theme.textSecondary }]}
+                      >
+                        {expanded
+                          ? t('session.showLess')
+                          : t('session.showMore')}
                       </Text>
-                    </View>
-                  ) : null,
-                )}
-              </View>
-            ) : null}
-            {showBubble ? (
-              <FrostedBubble
-                testID="user-bubble"
-                style={styles.bubble}
-                contentStyle={styles.bubblePad}
-                tintColor={theme.userBubbleBackground}
-              >
-                <Text style={[styles.text, { color: theme.userBubbleText }]}>
-                  {promptBody(kind, shown)}
-                </Text>
-                {foldable ? (
-                  <Pressable
-                    testID="user-bubble-fold"
-                    onPress={() => setExpanded(e => !e)}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      expanded ? t('session.showLess') : t('session.showMore')
-                    }
-                    accessibilityState={{ expanded }}
-                  >
-                    <Text style={[styles.fold, { color: theme.textSecondary }]}>
-                      {expanded ? t('session.showLess') : t('session.showMore')}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </FrostedBubble>
-            ) : null}
-          </EnteringStack>
-        </ContextMenu.Trigger>
-        {messageCopyContent(visible)}
-      </ContextMenu.Root>
+                    </Pressable>
+                  ) : null}
+                </FrostedBubble>
+              ) : null}
+            </EnteringStack>
+          </ContextMenu.Trigger>
+          {messageCopyContent(visible)}
+        </ContextMenu.Root>
+      </View>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   row: {
+    alignSelf: 'stretch',
+    width: '100%',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  // Percentage maxWidth must resolve against the row, not the bubble. A
+  // shrink-wrapped parent makes 82% mean "82% of the text", which the
+  // frosted clip then hides (Copy still has the full string).
+  cap: {
+    maxWidth: USER_BUBBLE_MAX_WIDTH,
+  },
   stack: {
-    alignSelf: 'flex-end',
     alignItems: 'flex-end',
   },
   attachmentRow: {
@@ -187,8 +202,7 @@ const styles = StyleSheet.create({
   },
   attachmentName: { fontSize: 12 },
   bubble: {
-    alignSelf: 'flex-end',
-    maxWidth: '82%',
+    maxWidth: '100%',
     borderRadius: 20,
   },
   bubblePad: {
@@ -199,7 +213,6 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     lineHeight: 21,
-    flexShrink: 0,
     paddingEnd: USER_BUBBLE_TEXT_END_PAD,
   },
   fold: { fontSize: 13, fontWeight: '500', marginTop: 4 },
