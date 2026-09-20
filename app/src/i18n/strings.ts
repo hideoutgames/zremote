@@ -380,7 +380,6 @@ const en = {
   'picker.appliesNext': 'Next message',
   'picker.agent': 'Agent',
   'picker.default': 'default',
-  'picker.pinMax': 'Max 10 Pinned models.',
 
   // Checkout selector
   'checkout.label': 'Checkout',

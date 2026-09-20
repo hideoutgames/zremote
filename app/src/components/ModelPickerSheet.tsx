@@ -41,10 +41,7 @@ import {
   useModelSettingsMap,
   usePinnedModels,
 } from '../zeron/state/uiPrefs';
-import {
-  MAX_PINNED_MODELS,
-  pinnedMenuModels,
-} from '../zeron/state/pinnedModels';
+import { pinnedMenuModels } from '../zeron/state/pinnedModels';
 import {
   modelRowKey,
   rememberedModelOptions,
@@ -134,7 +131,6 @@ function ModelRow({
   providerName?: string;
   pin: {
     pinned: boolean;
-    disablePin: boolean;
     onToggle: () => void;
   };
 }) {
@@ -226,19 +222,10 @@ function ModelRow({
             </Pressable>
           </ContextMenu.Trigger>
           <ContextMenu.Content>
-            <ContextMenu.Item
-              key="pin"
-              disabled={pin.disablePin}
-              onSelect={pin.onToggle}
-            >
+            <ContextMenu.Item key="pin" onSelect={pin.onToggle}>
               <ContextMenu.ItemTitle>
                 {pin.pinned ? t('session.unpin') : t('session.pin')}
               </ContextMenu.ItemTitle>
-              {pin.disablePin ? (
-                <ContextMenu.ItemSubtitle>
-                  {t('picker.pinMax')}
-                </ContextMenu.ItemSubtitle>
-              ) : null}
               <ContextMenu.ItemIcon
                 ios={{ name: pin.pinned ? 'pin.slash' : 'pin' }}
               />
@@ -375,7 +362,6 @@ export function ModelPickerSheet({
       harnessId !== undefined
         ? { harness: harnessId, model: config?.model ?? '' }
         : undefined,
-      MAX_PINNED_MODELS,
       locked,
     ).filter(m => {
       if (q === '') return true;
@@ -488,11 +474,10 @@ export function ModelPickerSheet({
       const pinned = pinnedSet.has(modelRowKey(harness, modelId));
       return {
         pinned,
-        disablePin: pinnedModels.length >= MAX_PINNED_MODELS && !pinned,
         onToggle: () => togglePinnedModel({ harness, model: modelId }),
       };
     },
-    [pinnedSet, pinnedModels.length],
+    [pinnedSet],
   );
 
   const header = (

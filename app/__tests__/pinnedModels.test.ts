@@ -1,6 +1,6 @@
 import {
-  MAX_PINNED_MODELS,
   composerMenuModels,
+  groupMenuModelsByProvider,
   isPinnedModel,
   pinnedMenuModels,
   togglePinnedModelList,
@@ -28,7 +28,7 @@ const catalog = [
   },
 ];
 
-test('togglePinnedModelList prepends, unpins, and caps at 10', () => {
+test('togglePinnedModelList prepends, unpins, and has no cap', () => {
   const once = togglePinnedModelList([], { harness: 'a', model: '1' });
   expect(once).toEqual([{ harness: 'a', model: '1' }]);
   const twice = togglePinnedModelList(once, { harness: 'b', model: '2' });
@@ -38,18 +38,21 @@ test('togglePinnedModelList prepends, unpins, and caps at 10', () => {
   const unpinned = togglePinnedModelList(twice, { harness: 'a', model: '1' });
   expect(unpinned).toEqual([{ harness: 'b', model: '2' }]);
 
-  const filled = Array.from({ length: MAX_PINNED_MODELS }, (_, i) => ({
+  const filled = Array.from({ length: 10 }, (_, i) => ({
     harness: 'h',
     model: String(i),
   }));
-  expect(togglePinnedModelList(filled, { harness: 'h', model: 'new' })).toEqual(
-    filled,
-  );
+  const eleventh = togglePinnedModelList(filled, {
+    harness: 'h',
+    model: 'new',
+  });
+  expect(eleventh).toHaveLength(11);
+  expect(eleventh[0]).toEqual({ harness: 'h', model: 'new' });
   const afterUnpin = togglePinnedModelList(filled, {
     harness: 'h',
     model: '0',
   });
-  expect(afterUnpin).toHaveLength(MAX_PINNED_MODELS - 1);
+  expect(afterUnpin).toHaveLength(9);
   expect(isPinnedModel(afterUnpin, { harness: 'h', model: '0' })).toBe(false);
 });
 
@@ -62,7 +65,6 @@ test('pinnedMenuModels preserves pin order and drops missing catalog entries', (
     ],
     catalog,
     undefined,
-    10,
     false,
   );
   expect(items.map(i => i.model)).toEqual(['gpt-5', 'opus']);
@@ -77,13 +79,12 @@ test('pinnedMenuModels lockHarness drops other providers and does not pad', () =
     ],
     catalog,
     { harness: 'cursor', model: 'composer' },
-    10,
     true,
   );
   expect(items).toEqual([]);
 });
 
-test('pinnedMenuModels slices to 10 and does not inject current', () => {
+test('pinnedMenuModels returns every catalog pin and does not inject current', () => {
   const extraCatalog = [
     ...catalog,
     ...Array.from({ length: 8 }, (_, i) => ({
@@ -101,10 +102,9 @@ test('pinnedMenuModels slices to 10 and does not inject current', () => {
     pins,
     extraCatalog,
     { harness: 'claude-code', model: 'not-pinned' },
-    10,
     false,
   );
-  expect(items).toHaveLength(10);
+  expect(items).toHaveLength(extraCatalog.length);
   expect(items[0]?.model).toBe('sonnet');
   expect(items.some(i => i.model === 'not-pinned')).toBe(false);
 });
@@ -140,4 +140,26 @@ test('composerMenuModels prefers pins and falls back to recents', () => {
     true,
   );
   expect(locked.every(i => i.harness === 'cursor')).toBe(true);
+});
+
+test('groupMenuModelsByProvider keeps pin order and splits by provider', () => {
+  const groups = groupMenuModelsByProvider([
+    { harness: 'codex', model: 'gpt-5', label: 'GPT-5', harnessName: 'Codex' },
+    {
+      harness: 'claude-code',
+      model: 'sonnet',
+      label: 'Sonnet',
+      harnessName: 'Claude',
+    },
+    { harness: 'codex', model: 'gpt', label: 'GPT', harnessName: 'Codex' },
+    {
+      harness: 'claude-code',
+      model: 'opus',
+      label: 'Opus',
+      harnessName: 'Claude',
+    },
+  ]);
+  expect(groups.map(g => g.label)).toEqual(['Codex', 'Claude']);
+  expect(groups[0]?.items.map(i => i.model)).toEqual(['gpt-5', 'gpt']);
+  expect(groups[1]?.items.map(i => i.model)).toEqual(['sonnet', 'opus']);
 });

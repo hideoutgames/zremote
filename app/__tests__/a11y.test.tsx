@@ -28,7 +28,6 @@ import {
 } from '../src/zeron/state/catalogStore';
 import type { UserInputQuestion } from '../src/zeron/protocol/types';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
-import { MAX_PINNED_MODELS } from '../src/zeron/state/pinnedModels';
 
 const services: AppServices = {
   auth: null as never,
@@ -176,7 +175,7 @@ const composerProps = {
   onSendBlocked: () => {},
 };
 
-test('composer model menu shows provider subtitle on pinned items', async () => {
+test('session model menu shows pinned items without provider labels', async () => {
   const mounted = await render(
     <Composer
       {...composerProps}
@@ -193,8 +192,52 @@ test('composer model menu shows provider subtitle on pinned items', async () => 
   expect(
     mounted.root.findAll(n => n.props.children === 'GPT').length,
   ).toBeGreaterThan(0);
+  expect(mounted.root.findAll(n => n.props.testID === 'DropdownGroup')).toEqual(
+    [],
+  );
+  expect(mounted.root.findAll(n => n.props.children === 'Codex')).toEqual([]);
+});
+
+test('compose model menu groups pinned items by provider', async () => {
+  const mounted = await render(
+    <Composer
+      {...composerProps}
+      mode="compose"
+      recentItems={[
+        {
+          harness: 'codex',
+          model: 'gpt',
+          label: 'GPT',
+          harnessName: 'Codex',
+        },
+        {
+          harness: 'claude-code',
+          model: 'sonnet',
+          label: 'Sonnet',
+          harnessName: 'Claude',
+        },
+        {
+          harness: 'codex',
+          model: 'gpt-5',
+          label: 'GPT-5',
+          harnessName: 'Codex',
+        },
+      ]}
+    />,
+  );
+  const groups = mounted.root.findAll(n => n.props.testID === 'DropdownGroup');
+  expect(groups).toHaveLength(2);
   expect(
     mounted.root.findAll(n => n.props.children === 'Codex').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Claude').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'GPT').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Sonnet').length,
   ).toBeGreaterThan(0);
 });
 
@@ -619,12 +662,12 @@ test('model picker: pinned category shows provider name', async () => {
   expect(labels.some(l => l.label === 'GPT')).toBe(true);
 });
 
-test('model picker: pin is disabled at 10 with max subtitle', async () => {
+test('model picker: pin stays enabled with many existing pins', async () => {
   catalogStore.setState({ byDevice: { h1: pickerCatalog() } });
   uiPrefsStore.setState({
     pinnedModels: [
       { harness: 'claude-code', model: 'sonnet' },
-      ...Array.from({ length: MAX_PINNED_MODELS - 1 }, (_, i) => ({
+      ...Array.from({ length: 10 }, (_, i) => ({
         harness: 'gone',
         model: `m${i}`,
       })),
@@ -639,14 +682,14 @@ test('model picker: pin is disabled at 10 with max subtitle', async () => {
       lockHarness={false}
     />,
   );
-  const disabled = mounted.root.findAll(
-    n => n.props.testID === 'ContextItem' && n.props.disabled === true,
-  );
-  expect(disabled.length).toBeGreaterThan(0);
   expect(
-    mounted.root.findAll(n => n.props.children === 'Max 10 Pinned models.')
-      .length,
-  ).toBeGreaterThan(0);
+    mounted.root.findAll(
+      n => n.props.testID === 'ContextItem' && n.props.disabled === true,
+    ),
+  ).toEqual([]);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'Max 10 Pinned models.'),
+  ).toEqual([]);
   const unpin = mounted.root.findAll(
     n =>
       n.props.testID === 'ContextItem' &&
@@ -654,6 +697,13 @@ test('model picker: pin is disabled at 10 with max subtitle', async () => {
   );
   expect(unpin.length).toBeGreaterThan(0);
   expect(unpin.every(n => n.props.disabled !== true)).toBe(true);
+  const pin = mounted.root.findAll(
+    n =>
+      n.props.testID === 'ContextItem' &&
+      n.findAll(c => c.props.children === 'Pin').length > 0,
+  );
+  expect(pin.length).toBeGreaterThan(0);
+  expect(pin.every(n => n.props.disabled !== true)).toBe(true);
 });
 
 test('queue panel: send now and delete are icon-only labelled buttons', async () => {
