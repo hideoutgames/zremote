@@ -226,18 +226,21 @@ test('compose model menu groups pinned items by provider', async () => {
     />,
   );
   const groups = mounted.root.findAll(n => n.props.testID === 'DropdownGroup');
-  expect(groups).toHaveLength(2);
+  const labeled = (name: string) =>
+    groups.filter(g => g.findAll(c => c.props.children === name).length > 0);
+  const codex = labeled('Codex')[0];
+  const claude = labeled('Claude')[0];
+  expect(codex).toBeDefined();
+  expect(claude).toBeDefined();
+  expect(codex.findAll(c => c.props.children === 'GPT').length).toBeGreaterThan(
+    0,
+  );
   expect(
-    mounted.root.findAll(n => n.props.children === 'Codex').length,
+    codex.findAll(c => c.props.children === 'GPT-5').length,
   ).toBeGreaterThan(0);
+  expect(codex.findAll(c => c.props.children === 'Sonnet')).toEqual([]);
   expect(
-    mounted.root.findAll(n => n.props.children === 'Claude').length,
-  ).toBeGreaterThan(0);
-  expect(
-    mounted.root.findAll(n => n.props.children === 'GPT').length,
-  ).toBeGreaterThan(0);
-  expect(
-    mounted.root.findAll(n => n.props.children === 'Sonnet').length,
+    claude.findAll(c => c.props.children === 'Sonnet').length,
   ).toBeGreaterThan(0);
 });
 
