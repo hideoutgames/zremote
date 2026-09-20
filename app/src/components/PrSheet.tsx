@@ -16,7 +16,7 @@ import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import * as Clipboard from 'expo-clipboard';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { useStore } from 'zustand';
-import { markdownStyleFor } from '../markdownStyle';
+import { markdownMd4cFlags, markdownStyleFor } from '../markdownStyle';
 import { ChangesScreen } from '../screens/ChangesScreen';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useCheckoutGitHistory } from '../hooks/useCheckoutGitHistory';
@@ -287,6 +287,7 @@ function OverviewTab({
           <EnrichedMarkdownText
             markdown={body}
             markdownStyle={markdownStyleFor(theme)}
+            md4cFlags={markdownMd4cFlags}
             flavor="github"
           />
         ) : null}

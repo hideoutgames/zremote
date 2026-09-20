@@ -754,7 +754,13 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
       <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
     );
   });
+  const row = tree!.root.findByProps({ testID: 'assistant-message' });
+  expect(flatStyle(row.props.style).some(s => s.width === '100%')).toBe(true);
+  expect(flatStyle(row.props.style).some(s => s.alignSelf === 'stretch')).toBe(
+    true,
+  );
   const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
+  expect(row.findByProps({ testID: 'assistant-bubble' })).toBeTruthy();
   const style = Array.isArray(bubble.props.style)
     ? bubble.props.style.flat()
     : [bubble.props.style];
@@ -762,6 +768,7 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(style.some(s => s?.maxWidth === '82%' || s?.maxWidth === '88%')).toBe(
     false,
   );
+  expect(style.some(s => s?.width === '100%')).toBe(false);
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
