@@ -29,6 +29,7 @@ import {
   COMPOSER_BOTTOM_FADE_BAND,
 } from '../src/components/TopChromeFade';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
+import { railProgressAtY } from '../src/components/agentsKit/messagePreview';
 
 const flashMock = jest.requireMock('@shopify/flash-list') as {
   __scrollToEnd: jest.Mock;
@@ -837,6 +838,8 @@ test('dragging the rail scrubs without animation once follow is off', async () =
     nativeEvent: { locationY: yFor(index), pageY: yFor(index) },
   });
   const maxOffset = 2000 - 844;
+  const progressAt = (index: number) =>
+    (index * itemSize + itemSize / 2) / (itemSize * 4);
 
   await act(async () => {
     track.props.onResponderGrant(touch(0));
@@ -856,17 +859,106 @@ test('dragging the rail scrubs without animation once follow is off', async () =
   await act(async () => {
     track.props.onResponderMove(touch(1));
     track.props.onResponderMove(touch(2));
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => resolve());
+    });
   });
-  expect(scrollToIndex).toHaveBeenCalledTimes(1);
-  expect(scrollToIndex).toHaveBeenCalledWith({
-    index: 2,
-    animated: false,
-    viewPosition: 0.5,
-  });
+  expect(scrollToIndex).not.toHaveBeenCalled();
   expect(scrollToOffset).toHaveBeenCalledWith({
-    offset: (2 / 3) * maxOffset,
+    offset: progressAt(2) * maxOffset,
     animated: false,
   });
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('dragging inside a tick still scrolls proportionally', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), entry('m2'), entry('m3'), entry('m4')]}
+        openKey="c1:1"
+      />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+    listProps(tree!).onScrollBeginDrag();
+  });
+  const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
+  const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
+  const itemSize = 14;
+  const stackTop = (railHeight - itemSize * 4) / 2;
+  const maxOffset = 2000 - 844;
+  const y0 = stackTop + itemSize * 0.2;
+  const y1 = stackTop + itemSize * 0.8;
+  const touchAt = (y: number) => ({
+    nativeEvent: { locationY: y, pageY: y },
+  });
+
+  await act(async () => {
+    track.props.onResponderGrant(touchAt(y0));
+  });
+  scrollToIndex.mockClear();
+  scrollToOffset.mockClear();
+
+  await act(async () => {
+    track.props.onResponderMove(touchAt(y1));
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  expect(scrollToIndex).not.toHaveBeenCalled();
+  expect(scrollToOffset).toHaveBeenCalledWith({
+    offset: railProgressAtY(y1, 4, itemSize, stackTop) * maxOffset,
+    animated: false,
+  });
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('dragging onto the last tick follows the live edge', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), entry('m2'), entry('m3'), entry('m4')]}
+        openKey="c1:1"
+      />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+    listProps(tree!).onScrollBeginDrag();
+  });
+  expect(followingOn(tree!)).toBe(false);
+  const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
+  const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
+  const itemSize = 14;
+  const stackTop = (railHeight - itemSize * 4) / 2;
+  const yFor = (index: number) => stackTop + index * itemSize + itemSize / 2;
+  const touch = (index: number) => ({
+    nativeEvent: { locationY: yFor(index), pageY: yFor(index) },
+  });
+
+  await act(async () => {
+    track.props.onResponderGrant(touch(0));
+  });
+  scrollToEnd.mockClear();
+  scrollToIndex.mockClear();
+  scrollToOffset.mockClear();
+
+  await act(async () => {
+    track.props.onResponderMove(touch(3));
+  });
+  expect(followingOn(tree!)).toBe(true);
+  expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
+  expect(scrollToIndex).not.toHaveBeenCalled();
 
   await act(async () => {
     tree!.unmount();

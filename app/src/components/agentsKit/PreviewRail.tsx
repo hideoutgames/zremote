@@ -16,13 +16,14 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { selectionTick } from '../../zeron/native/haptics';
+import { prepareSelection, selectionTick } from '../../zeron/native/haptics';
 import { useTheme } from '../../theme';
 import { Glass } from '../Glass';
 import {
   RAIL_ITEM_SIZE,
   railIndexAtY,
   railItemSize,
+  railProgressAtY,
   railYFromPage,
   tickScale,
   type RailItem,
@@ -30,7 +31,12 @@ import {
 
 export type { RailItem as PreviewRailItem };
 
-export type PreviewRailSelectOpts = { animated?: boolean };
+export type PreviewRailSelectOpts = {
+  animated?: boolean;
+  /** 0..1 stack progress during a drag scrub. Taps omit this so the list
+   *  can jump to the message (`scrollToIndex`). */
+  progress?: number;
+};
 
 const RAIL_WIDTH = 28;
 /** Extra grab strip on the content side of the ticks. */
@@ -131,24 +137,49 @@ export function PreviewRail({
     });
   }, []);
 
-  const applyIndex = useCallback((index: number, kind: 'grant' | 'move') => {
-    const next = itemsRef.current[index];
-    if (!next) return;
-    if (kind === 'move' && lastIndexRef.current === index) return;
-    if (kind === 'move') selectionTick();
-    lastIndexRef.current = index;
-    setPinnedId(next.id);
-    onItemSelectRef.current(next, { animated: kind === 'grant' });
-  }, []);
-
-  const indexFromEvent = useCallback((e: GestureResponderEvent): number => {
-    return railIndexAtY(
-      yFromEvent(e, railPageYRef.current),
-      itemsRef.current.length,
-      itemSizeRef.current,
-      stackTopRef.current,
-    );
-  }, []);
+  const applyTouch = useCallback(
+    (e: GestureResponderEvent, kind: 'grant' | 'move') => {
+      const y = yFromEvent(e, railPageYRef.current);
+      const count = itemsRef.current.length;
+      const index = railIndexAtY(
+        y,
+        count,
+        itemSizeRef.current,
+        stackTopRef.current,
+      );
+      const next = itemsRef.current[index];
+      if (!next) return;
+      if (kind === 'grant') {
+        prepareSelection();
+        lastIndexRef.current = index;
+        setPinnedId(next.id);
+        onItemSelectRef.current(next, { animated: true });
+        return;
+      }
+      const last = index === count - 1;
+      if (last && lastIndexRef.current === index) return;
+      const crossed = lastIndexRef.current !== index;
+      if (crossed) {
+        selectionTick();
+        lastIndexRef.current = index;
+        setPinnedId(next.id);
+      }
+      if (last) {
+        onItemSelectRef.current(next, { animated: false });
+        return;
+      }
+      onItemSelectRef.current(next, {
+        animated: false,
+        progress: railProgressAtY(
+          y,
+          count,
+          itemSizeRef.current,
+          stackTopRef.current,
+        ),
+      });
+    },
+    [],
+  );
 
   const selectA11y = useCallback(
     (item: RailItem) => {
@@ -171,8 +202,9 @@ export function PreviewRail({
   const trackWidth = RAIL_WIDTH + RAIL_HIT_EXTRA;
 
   return (
+    // box-none: transcript pans pass through; the 40pt track stays hittable.
     <View
-      pointerEvents="none"
+      pointerEvents="box-none"
       style={styles.overlay}
       testID="preview-rail"
       accessibilityLabel={label}
@@ -190,10 +222,10 @@ export function PreviewRail({
         onResponderTerminationRequest={() => false}
         onResponderGrant={e => {
           syncRailOrigin();
-          applyIndex(indexFromEvent(e), 'grant');
+          applyTouch(e, 'grant');
         }}
         onResponderMove={e => {
-          applyIndex(indexFromEvent(e), 'move');
+          applyTouch(e, 'move');
         }}
       >
         <View
