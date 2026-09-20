@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { Icon } from './Icon';
 import { useTheme } from '../theme';
@@ -29,9 +29,7 @@ export function AttachmentMenu({
           style={[styles.btn, { backgroundColor: theme.inputBackground }]}
           accessibilityLabel={t('composer.attach')}
         >
-          <View style={styles.iconClip} collapsable={false}>
-            <Icon name="plus" size={18} color={theme.text} />
-          </View>
+          <Icon name="plus" size={18} color={theme.text} />
         </Pressable>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
@@ -78,13 +76,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  iconClip: {
-    width: 18,
-    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

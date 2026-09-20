@@ -534,7 +534,7 @@ test('New thread is a circular icon control with no visible text', async () => {
   )[0];
   expect(btn).toBeDefined();
   expect(btn.props.accessibilityLabel).toBe('New thread');
-  const icons = btn.findAll(n => n.props.symbolName === 'square.and.pencil');
+  const icons = btn.findAll(n => n.props.name === 'square.and.pencil');
   expect(icons.length).toBeGreaterThan(0);
   expect(texts(mounted.root)).not.toContain('New thread');
 });

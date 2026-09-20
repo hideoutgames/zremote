@@ -1,12 +1,11 @@
 import React, { type ComponentProps } from 'react';
 import {
-  StyleSheet,
   View,
   type ColorValue,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { SymbolView } from 'react-native-nitro-symbols';
+import { SymbolView } from 'expo-symbols';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { theme } from '../theme';
@@ -100,11 +99,6 @@ type IconProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Extra clip around `pointSize` so wide SF glyphs (folder, sidebar.left)
- *  are not cropped, and a keyboard-nudged hosting view still paints inside
- *  the box instead of going blank. */
-export const ICON_OPTICAL_PAD = 4;
-
 export function Icon({
   name,
   size = 20,
@@ -112,22 +106,13 @@ export function Icon({
   style,
 }: IconProps) {
   const mdiName = (SF_TO_MDI[name] ?? 'help-circle-outline') as MdiName;
-  const box = size + ICON_OPTICAL_PAD * 2;
   return (
-    <View
-      collapsable={false}
-      style={[
-        styles.clip,
-        { width: box, height: box, margin: -ICON_OPTICAL_PAD },
-        style,
-      ]}
-    >
+    <View collapsable={false} style={[{ width: size, height: size }, style]}>
       <SymbolView
-        key={name}
-        symbolName={name}
+        name={name}
+        size={size}
         tintColor={color}
-        pointSize={size}
-        style={{ width: box, height: box }}
+        resizeMode="scaleAspectFit"
         fallback={
           <MaterialDesignIcons
             name={mdiName}
@@ -139,11 +124,3 @@ export function Icon({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  clip: {
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
