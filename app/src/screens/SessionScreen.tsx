@@ -119,7 +119,10 @@ import { ThreadUsageSheet } from '../components/ThreadUsageSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
-import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
+import {
+  ScrollToBottomButton,
+  SCROLL_TO_BOTTOM_SIZE,
+} from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
 import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
@@ -964,16 +967,18 @@ function ActiveSessionScreen({
         pointerEvents="box-none"
       >
         <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
-          {showScrollDown ? (
-            <ScrollToBottomButton
-              onPress={() =>
-                transcriptRef.current?.followEnd({
-                  animated: true,
-                  closeKeyboard: false,
-                })
-              }
-            />
-          ) : null}
+          <View style={styles.scrollDownSlot} pointerEvents="box-none">
+            {showScrollDown ? (
+              <ScrollToBottomButton
+                onPress={() =>
+                  transcriptRef.current?.followEnd({
+                    animated: true,
+                    closeKeyboard: false,
+                  })
+                }
+              />
+            ) : null}
+          </View>
         </KeyboardStickyView>
       </ComposerStickyBottom>
 
@@ -1300,6 +1305,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+  },
+  scrollDownSlot: {
+    width: SCROLL_TO_BOTTOM_SIZE,
+    height: SCROLL_TO_BOTTOM_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   composeDismiss: {
     ...StyleSheet.absoluteFill,

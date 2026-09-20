@@ -63,8 +63,8 @@ jest.mock('expo-image', () => ({
 jest.mock('@react-native-masked-view/masked-view', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const MaskedView = ({ children }) =>
-    React.createElement(View, null, children);
+  const MaskedView = ({ children, maskElement, ...rest }) =>
+    React.createElement(View, { ...rest, maskElement }, maskElement, children);
   MaskedView.default = MaskedView;
   return {
     __esModule: true,

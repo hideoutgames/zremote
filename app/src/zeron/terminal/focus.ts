@@ -1,6 +1,8 @@
 // Soft-keyboard first-responder for the hidden terminal TextInput.
 // TrueSheet presentation and list gestures often steal focus after the
 // first attempt; retry until onFocus or the delay list is exhausted.
+// Key-bar taps re-assert focus even while already focused, and keep the
+// retry list armed so a blur that lands after onPress still recovers.
 
 export const TERMINAL_FOCUS_RETRY_MS = [50, 200, 400] as const;
 
@@ -24,8 +26,7 @@ export function createTerminalFocus(getTarget: () => Focusable | null): {
   };
 
   const attempt = (i: number): void => {
-    if (focused) return;
-    getTarget()?.focus();
+    if (!focused) getTarget()?.focus();
     const delay = TERMINAL_FOCUS_RETRY_MS[i];
     if (delay === undefined) return;
     timer = setTimeout(() => attempt(i + 1), delay);
@@ -33,8 +34,12 @@ export function createTerminalFocus(getTarget: () => Focusable | null): {
 
   return {
     focusInput: () => {
-      if (focused) return;
       clear();
+      if (focused) {
+        getTarget()?.focus();
+        timer = setTimeout(() => attempt(0), 0);
+        return;
+      }
       attempt(0);
     },
     onFocus: () => {

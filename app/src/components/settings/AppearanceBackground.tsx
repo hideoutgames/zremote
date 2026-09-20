@@ -1,9 +1,17 @@
-// Settings → Appearance: session wallpaper picker + effect chips. Copy
-// tracks desktop Settings → Appearance for the picker/effects; the image
-// now fills the window behind Home, chats, and compose.
+// Settings → Appearance: session wallpaper picker + effect segments.
+// Bundled defaults sit in a horizontal thumbnail strip; custom photos
+// still copy into the managed Documents folder.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Icon } from '../Icon';
@@ -12,9 +20,11 @@ import {
   COLOR_SCHEME_PREFERENCES,
   useTheme,
   type ColorSchemePreference,
+  type Theme,
 } from '../../theme';
 import { t, type StringKey } from '../../i18n/strings';
 import {
+  applyPresetBackground,
   installNewThreadComposerBackground,
   removeNewThreadComposerBackground,
   setColorSchemePreference,
@@ -25,14 +35,21 @@ import {
   useNewThreadComposerBackground,
   useSessionBackgroundBlur,
 } from '../../zeron/state/uiPrefs';
+import { DEFAULT_BACKGROUNDS } from '../../zeron/state/defaultBackgrounds';
 import {
   NEW_THREAD_BACKGROUND_EFFECTS,
-  backgroundFileExists,
+  isPresetBackground,
+  isWallpaperAvailable,
   type NewThreadBackgroundEffect,
+  type NewThreadComposerBackground,
 } from '../../zeron/state/newThreadBackground';
 import { createLog } from '../../zeron/log';
 
 const log = createLog();
+
+const TILE_W = 72;
+const TILE_H = 96;
+const TILE_RADIUS = 12;
 
 const THEME_LABEL: Record<ColorSchemePreference, StringKey> = {
   system: 'settings.theme.system',
@@ -86,37 +103,43 @@ const chooseBackground = async (): Promise<void> => {
   }
 };
 
-function EffectChip({
+function tileRing(theme: Theme, selected: boolean): { borderColor: string } {
+  return { borderColor: selected ? theme.accent : 'transparent' };
+}
+
+function EffectSegment({
   effect,
   selected,
+  last,
   onPress,
 }: {
   effect: NewThreadBackgroundEffect;
   selected: boolean;
+  last: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={4}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={t(EFFECT_LABEL[effect])}
       testID={`settings-background-effect-${effect}`}
       style={[
-        styles.chip,
-        {
-          backgroundColor: selected ? theme.accent : theme.cardBackground,
-          borderColor: selected ? theme.accent : theme.border,
-        },
+        styles.segment,
+        last ? null : { borderRightColor: theme.border },
+        last ? null : styles.segmentJoin,
+        { backgroundColor: selected ? theme.accent : 'transparent' },
       ]}
     >
       <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.65}
         style={[
-          styles.chipLabel,
-          { color: theme.text },
-          selected ? styles.chipLabelOn : null,
+          styles.segmentLabel,
+          { color: selected ? '#FFFFFF' : theme.text },
         ]}
       >
         {t(EFFECT_LABEL[effect])}
@@ -148,6 +171,19 @@ export function ThemePage() {
   );
 }
 
+function wallpaperCaption(
+  background: NewThreadComposerBackground | undefined,
+  available: boolean,
+): string {
+  if (background === undefined) return t('settings.backgroundEmpty');
+  if (!available) {
+    return `${t('settings.backgroundUnavailable')}\n${t(
+      'settings.backgroundUnavailableHint',
+    )}`;
+  }
+  return t('settings.backgroundFrostHint');
+}
+
 export function AppearanceBackground({
   onOpenTheme,
 }: {
@@ -166,7 +202,7 @@ export function AppearanceBackground({
       return;
     }
     let cancelled = false;
-    backgroundFileExists(background.uri)
+    isWallpaperAvailable(background)
       .then(ok => {
         if (!cancelled) setAvailable(ok);
       })
@@ -182,64 +218,29 @@ export function AppearanceBackground({
     chooseBackground().catch(e => log.warn(`background pick: ${e}`));
   }, []);
 
-  const onRemove = useCallback(() => {
+  const onNone = useCallback(() => {
     removeNewThreadComposerBackground().catch(e =>
       log.warn(`background remove: ${e}`),
     );
   }, []);
 
-  const subtitle =
-    background === undefined
-      ? t('settings.backgroundEmpty')
-      : available
-      ? `${background.name}\n${t('settings.backgroundFrostHint')}`
-      : `${t('settings.backgroundUnavailable')}\n${t(
-          'settings.backgroundUnavailableHint',
-        )}`;
+  const onPreset = useCallback((id: string) => {
+    applyPresetBackground(id).catch(e => log.warn(`background preset: ${e}`));
+  }, []);
 
-  const trailing =
-    background === undefined ? (
-      <Pressable
-        onPress={onChoose}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t('settings.backgroundChoose')}
-        testID="settings-background-choose"
-      >
-        <Text style={[styles.action, { color: theme.accent }]}>
-          {t('settings.backgroundChoose')}
-        </Text>
-      </Pressable>
-    ) : (
-      <View style={styles.actions}>
-        <Pressable
-          onPress={onChoose}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.backgroundReplace')}
-          testID="settings-background-replace"
-        >
-          <Text style={[styles.action, { color: theme.accent }]}>
-            {t('settings.backgroundReplace')}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={onRemove}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.backgroundRemove')}
-          testID="settings-background-remove"
-        >
-          <Text style={[styles.action, { color: theme.danger }]}>
-            {t('settings.backgroundRemove')}
-          </Text>
-        </Pressable>
-      </View>
-    );
+  const wallpaperOn = background !== undefined && available;
+  const noneSelected = !wallpaperOn;
+  const presetId =
+    wallpaperOn && isPresetBackground(background) ? background.id : undefined;
+  const customSelected =
+    wallpaperOn && !isPresetBackground(background) ? background : undefined;
 
   return (
     <>
-      <SettingsGroup header={t('settings.appearance')}>
+      <SettingsGroup
+        header={t('settings.appearance')}
+        footer={wallpaperCaption(background, available)}
+      >
         <SettingsRow
           title={t('settings.theme')}
           value={t(THEME_LABEL[colorScheme])}
@@ -250,26 +251,93 @@ export function AppearanceBackground({
             THEME_LABEL[colorScheme],
           )}`}
         />
-        <SettingsRow
-          title={t('settings.background')}
-          subtitle={subtitle}
-          titleNumberOfLines={2}
-          leading={
-            background !== undefined && available ? (
-              <Image
-                source={{ uri: background.uri }}
-                style={styles.thumb}
-                contentFit="cover"
-                testID="settings-background-thumb"
-              />
-            ) : (
-              <Icon name="photo" size={22} color={theme.textSecondary} />
-            )
-          }
-          trailing={trailing}
-          testID="settings-background"
-          accessibilityLabel={t('settings.background')}
-        />
+        <View style={styles.pickerBlock} testID="settings-background">
+          <Text style={[styles.pickerTitle, { color: theme.text }]}>
+            {t('settings.background')}
+          </Text>
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pickerRow}
+            testID="settings-background-slider"
+          >
+            <Pressable
+              onPress={onNone}
+              accessibilityRole="button"
+              accessibilityState={{ selected: noneSelected }}
+              accessibilityLabel={t('settings.backgroundNone')}
+              testID="settings-background-none"
+              style={[styles.tileHit, tileRing(theme, noneSelected)]}
+            >
+              <View
+                style={[
+                  styles.tile,
+                  { backgroundColor: theme.inputBackground },
+                ]}
+              >
+                <Icon
+                  name="slash.circle"
+                  size={22}
+                  color={theme.textSecondary}
+                />
+              </View>
+            </Pressable>
+            {DEFAULT_BACKGROUNDS.map((item, index) => {
+              const selected = presetId === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => onPreset(item.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={t('settings.backgroundPreset').replace(
+                    '{n}',
+                    String(index + 1),
+                  )}
+                  testID={`settings-background-preset-${item.id}`}
+                  style={[styles.tileHit, tileRing(theme, selected)]}
+                >
+                  <Image
+                    source={item.source}
+                    style={styles.tile}
+                    contentFit="cover"
+                  />
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={onChoose}
+              accessibilityRole="button"
+              accessibilityState={{ selected: customSelected !== undefined }}
+              accessibilityLabel={t('settings.backgroundCustom')}
+              testID="settings-background-custom"
+              style={[
+                styles.tileHit,
+                tileRing(theme, customSelected !== undefined),
+              ]}
+            >
+              {customSelected !== undefined ? (
+                <Image
+                  source={{ uri: customSelected.uri }}
+                  style={styles.tile}
+                  contentFit="cover"
+                  testID="settings-background-thumb"
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.tile,
+                    styles.customEmpty,
+                    { borderColor: theme.border },
+                  ]}
+                >
+                  <Icon name="plus" size={22} color={theme.accent} />
+                </View>
+              )}
+            </Pressable>
+          </ScrollView>
+        </View>
       </SettingsGroup>
       <SettingsGroup footer={t('settings.sessionBackgroundBlurHint')}>
         <SettingsRow
@@ -284,7 +352,7 @@ export function AppearanceBackground({
           }
         />
       </SettingsGroup>
-      {background !== undefined && available ? (
+      {wallpaperOn ? (
         <SettingsGroup>
           <View style={styles.effectBlock} testID="settings-background-effects">
             <Text style={[styles.effectTitle, { color: theme.text }]}>
@@ -293,12 +361,16 @@ export function AppearanceBackground({
             <Text style={[styles.effectHint, { color: theme.textSecondary }]}>
               {t(EFFECT_HINT[effect])}
             </Text>
-            <View style={styles.chips}>
-              {NEW_THREAD_BACKGROUND_EFFECTS.map(item => (
-                <EffectChip
+            <View
+              style={[styles.segments, { borderColor: theme.border }]}
+              testID="settings-background-effect-segments"
+            >
+              {NEW_THREAD_BACKGROUND_EFFECTS.map((item, index) => (
+                <EffectSegment
                   key={item}
                   effect={item}
                   selected={item === effect}
+                  last={index === NEW_THREAD_BACKGROUND_EFFECTS.length - 1}
                   onPress={() => setNewThreadBackgroundEffect(item)}
                 />
               ))}
@@ -311,14 +383,42 @@ export function AppearanceBackground({
 }
 
 const styles = StyleSheet.create({
-  thumb: {
-    width: 29,
-    height: 29,
-    borderRadius: 6,
-    overflow: 'hidden',
+  pickerBlock: {
+    paddingTop: 12,
+    paddingBottom: 14,
+    gap: 10,
   },
-  actions: { gap: 8, alignItems: 'flex-end' },
-  action: { fontSize: 15, fontWeight: '500' },
+  pickerTitle: {
+    fontSize: 17,
+    paddingHorizontal: 16,
+  },
+  pickerRow: {
+    paddingHorizontal: 14,
+    gap: 8,
+    alignItems: 'center',
+  },
+  tileHit: {
+    width: TILE_W + 6,
+    height: TILE_H + 6,
+    borderRadius: TILE_RADIUS + 4,
+    borderWidth: 2,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tile: {
+    width: TILE_W,
+    height: TILE_H,
+    borderRadius: TILE_RADIUS,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customEmpty: {
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+  },
   effectBlock: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -326,20 +426,27 @@ const styles = StyleSheet.create({
   },
   effectTitle: { fontSize: 17 },
   effectHint: { fontSize: 13, lineHeight: 18 },
-  chips: {
+  segments: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'flex-end',
-  },
-  chip: {
+    alignItems: 'stretch',
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 32,
-    justifyContent: 'center',
+    overflow: 'hidden',
+    minHeight: 36,
   },
-  chipLabel: { fontSize: 13, fontWeight: '600' },
-  chipLabelOn: { color: '#FFFFFF' },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 2,
+  },
+  segmentJoin: {
+    borderRightWidth: StyleSheet.hairlineWidth,
+  },
+  segmentLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });

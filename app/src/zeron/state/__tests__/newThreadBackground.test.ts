@@ -1,12 +1,14 @@
 import {
   bindBackgroundFs,
   copyBackgroundFile,
+  parseNewThreadComposerBackground,
   retireManagedBackground,
   unbindBackgroundFs,
   validateBackgroundSource,
   wallpaperScreenFill,
   type BackgroundFs,
 } from '../newThreadBackground';
+import { DEFAULT_BACKGROUNDS } from '../defaultBackgrounds';
 import { MAX_ATTACHMENT_BYTES } from '../../attachments/validate';
 
 class MemoryBackgroundFs implements BackgroundFs {
@@ -101,4 +103,37 @@ test('copyBackgroundFile writes a managed unique file then retires the previous'
 test('wallpaperScreenFill is transparent only when artwork is set', () => {
   expect(wallpaperScreenFill('#000000', false)).toBe('#000000');
   expect(wallpaperScreenFill('#FFFFFF', true)).toBe('transparent');
+});
+
+test('parseNewThreadComposerBackground accepts legacy custom and presets', () => {
+  expect(
+    parseNewThreadComposerBackground({
+      uri: 'file:///docs/x.png',
+      name: 'x.png',
+    }),
+  ).toEqual({ kind: 'custom', uri: 'file:///docs/x.png', name: 'x.png' });
+  expect(
+    parseNewThreadComposerBackground({ kind: 'preset', id: 'emma' }),
+  ).toEqual({ kind: 'preset', id: 'emma' });
+  expect(
+    parseNewThreadComposerBackground({ kind: 'preset', id: '' }),
+  ).toBeUndefined();
+  expect(parseNewThreadComposerBackground({ kind: 'preset' })).toBeUndefined();
+});
+
+test('retireManagedBackground ignores presets and only deletes managed files', async () => {
+  const fs = new MemoryBackgroundFs();
+  fs.files.set('/docs/new-thread-backgrounds/keep.png', 'x');
+  await retireManagedBackground(
+    fs,
+    { kind: 'preset', id: 'emma' },
+    '/docs/new-thread-backgrounds/next.png',
+  );
+  expect(fs.files.size).toBe(1);
+});
+
+test('bundled default backgrounds have unique ids', () => {
+  const ids = DEFAULT_BACKGROUNDS.map(item => item.id);
+  expect(ids).toHaveLength(10);
+  expect(new Set(ids).size).toBe(10);
 });

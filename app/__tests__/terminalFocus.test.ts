@@ -24,13 +24,26 @@ test('focusInput retries until onFocus and then stops', () => {
   expect(ctl.isFocused()).toBe(true);
 });
 
-test('focusInput is a no-op while already focused', () => {
+test('focusInput re-calls focus while already focused', () => {
   const focus = jest.fn();
   const ctl = createTerminalFocus(() => ({ focus }));
   ctl.onFocus();
   ctl.focusInput();
-  jest.advanceTimersByTime(1000);
-  expect(focus).not.toHaveBeenCalled();
+  expect(focus).toHaveBeenCalledTimes(1);
+  ctl.dispose();
+});
+
+test('post-press blur still retries', () => {
+  const focus = jest.fn();
+  const ctl = createTerminalFocus(() => ({ focus }));
+  ctl.onFocus();
+  ctl.focusInput();
+  expect(focus).toHaveBeenCalledTimes(1);
+  ctl.onBlur();
+  expect(ctl.isFocused()).toBe(false);
+  jest.advanceTimersByTime(0);
+  expect(focus).toHaveBeenCalledTimes(2);
+  ctl.dispose();
 });
 
 test('blur allows a later focusInput to retry', () => {
