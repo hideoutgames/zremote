@@ -381,6 +381,23 @@ test('session header is a plain title matching Threads, with no glass pill or su
   expect(triggerStyle.some(s => s?.borderRadius === 18)).toBe(false);
   expect(triggerStyle.some(s => s?.paddingHorizontal === 12)).toBe(false);
   expect(triggerStyle.some(s => s?.height === 44)).toBe(true);
+  expect(triggerStyle.some(s => s?.width === '100%')).toBe(false);
+  expect(triggerStyle.some(s => s?.maxWidth === '100%')).toBe(true);
+
+  const headerCenter = tree.root.findAll(n => {
+    const s = Array.isArray(n.props.style)
+      ? n.props.style.flat()
+      : [n.props.style];
+    return s.some(
+      x => x?.position === 'absolute' && x?.left === 56 && x?.right === 56,
+    );
+  })[0];
+  expect(headerCenter).toBeDefined();
+  const centerStyle = Array.isArray(headerCenter.props.style)
+    ? headerCenter.props.style.flat()
+    : [headerCenter.props.style];
+  expect(centerStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  expect(centerStyle.some(s => s?.alignItems === 'stretch')).toBe(false);
 });
 
 test('compose session is a blank chat with the composer', async () => {

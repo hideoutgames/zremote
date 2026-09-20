@@ -3,14 +3,18 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   UserMessage,
   USER_BUBBLE_MAX_WIDTH,
   USER_BUBBLE_TEXT_END_PAD,
 } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
-import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubble';
+import {
+  BUBBLE_BLUR_INTENSITY,
+  BUBBLE_SHADOW_ELEVATION,
+  BUBBLE_SHADOW_OPACITY,
+} from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
 import { PlanBadge } from '../src/components/PlanBadge';
@@ -625,6 +629,14 @@ const flatStyle = (style: unknown): Record<string, unknown>[] => {
   return [];
 };
 
+const shadowedHost = (
+  node: TestRenderer.ReactTestInstance,
+): TestRenderer.ReactTestInstance =>
+  node.findAll(n => {
+    const opacity = StyleSheet.flatten(n.props.style)?.shadowOpacity;
+    return typeof opacity === 'number';
+  })[0] ?? node;
+
 test('UserMessage shows the sent text inside a bubble sized to content', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -648,6 +660,15 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+  const bubbleFlat = StyleSheet.flatten(shadowedHost(bubble).props.style);
+  expect(bubbleFlat.overflow).not.toBe('hidden');
+  expect(bubbleFlat.shadowOpacity).toBe(BUBBLE_SHADOW_OPACITY);
+  expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
+  expect(
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'user-bubble-clip' }).props.style,
+    ).overflow,
+  ).toBe('hidden');
 });
 
 test('UserMessage keeps the full prompt in the bubble Text', async () => {
@@ -706,6 +727,15 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+  const bubbleFlat = StyleSheet.flatten(shadowedHost(bubble).props.style);
+  expect(bubbleFlat.overflow).not.toBe('hidden');
+  expect(bubbleFlat.shadowOpacity).toBe(BUBBLE_SHADOW_OPACITY);
+  expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
+  expect(
+    StyleSheet.flatten(
+      tree!.root.findByProps({ testID: 'assistant-bubble-clip' }).props.style,
+    ).overflow,
+  ).toBe('hidden');
 });
 
 test('UserMessage never ellipsizes a short prompt', async () => {

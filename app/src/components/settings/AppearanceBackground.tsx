@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -28,9 +29,11 @@ import {
   removeNewThreadComposerBackground,
   setColorSchemePreference,
   setNewThreadBackgroundEffect,
+  setSessionBackgroundBlur,
   useColorSchemePreference,
   useNewThreadBackgroundEffect,
   useNewThreadComposerBackground,
+  useSessionBackgroundBlur,
 } from '../../zeron/state/uiPrefs';
 import { DEFAULT_BACKGROUNDS } from '../../zeron/state/defaultBackgrounds';
 import {
@@ -190,6 +193,7 @@ export function AppearanceBackground({
   const colorScheme = useColorSchemePreference();
   const background = useNewThreadComposerBackground();
   const effect = useNewThreadBackgroundEffect();
+  const sessionBlur = useSessionBackgroundBlur();
   const [available, setAvailable] = useState(true);
 
   useEffect(() => {
@@ -334,6 +338,19 @@ export function AppearanceBackground({
             </Pressable>
           </ScrollView>
         </View>
+      </SettingsGroup>
+      <SettingsGroup footer={t('settings.sessionBackgroundBlurHint')}>
+        <SettingsRow
+          title={t('settings.sessionBackgroundBlur')}
+          trailing={
+            <Switch
+              value={sessionBlur}
+              onValueChange={setSessionBackgroundBlur}
+              accessibilityLabel={t('settings.sessionBackgroundBlur')}
+              testID="settings-session-background-blur"
+            />
+          }
+        />
       </SettingsGroup>
       {wallpaperOn ? (
         <SettingsGroup>

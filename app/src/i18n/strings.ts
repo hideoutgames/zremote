@@ -272,6 +272,9 @@ const en = {
   'settings.theme.dark': 'Dark',
   'settings.theme.light': 'Light',
   'settings.background': 'Background',
+  'settings.sessionBackgroundBlur': 'Session Background Blur',
+  'settings.sessionBackgroundBlurHint':
+    'Blurs the wallpaper in open sessions. New threads stay sharp.',
   'settings.backgroundEmpty':
     'Add an image behind threads, chats, and new threads.',
   'settings.backgroundFrostHint': 'Softened automatically on frosted themes.',

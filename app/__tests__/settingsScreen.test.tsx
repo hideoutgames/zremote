@@ -87,6 +87,7 @@ beforeEach(() => {
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',
     colorScheme: 'system',
+    sessionBackgroundBlur: false,
   });
 });
 
@@ -135,6 +136,10 @@ test('appearance group offers a wallpaper slider and hides effects until set', a
   );
   expect(text).not.toContain('Choose image');
   expect(text).not.toContain('Replace image');
+  expect(text).toContain('Session Background Blur');
+  expect(text).toContain(
+    'Blurs the wallpaper in open sessions. New threads stay sharp.',
+  );
   expect(
     mounted.root.findAll(
       n =>
@@ -284,6 +289,20 @@ test('theme row defaults to System and choosing Dark updates the store', async (
     dark.props.onPress();
   });
   expect(uiPrefsStore.getState().colorScheme).toBe('dark');
+});
+
+test('session background blur switch defaults off and turns on', async () => {
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const sw = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-session-background-blur' &&
+      typeof n.props.onValueChange === 'function',
+  )[0];
+  expect(sw.props.value).toBe(false);
+  await act(async () => {
+    sw.props.onValueChange(true);
+  });
+  expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(true);
 });
 
 test('enabling haptics plays a confirmation impact', async () => {

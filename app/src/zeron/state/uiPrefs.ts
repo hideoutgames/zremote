@@ -64,6 +64,8 @@ export interface UiPrefs {
   newThreadBackgroundEffect: NewThreadBackgroundEffect;
   /** Settings → Appearance theme: follow the OS, or force dark / light. */
   colorScheme: ColorSchemePreference;
+  /** Frost the wallpaper in open sessions (not compose). Off keeps it sharp. */
+  sessionBackgroundBlur: boolean;
 }
 
 export interface ComposeDefaults {
@@ -93,6 +95,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   modelSettingsByKey: {},
   newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
   colorScheme: 'system',
+  sessionBackgroundBlur: false,
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -382,6 +385,14 @@ export const setColorSchemePreference = (
 
 export const useColorSchemePreference = (): ColorSchemePreference =>
   useStore(uiPrefsStore, s => s.colorScheme);
+
+export const setSessionBackgroundBlur = (v: boolean): Promise<void> => {
+  uiPrefsStore.setState({ sessionBackgroundBlur: v });
+  return saveAsync();
+};
+
+export const useSessionBackgroundBlur = (): boolean =>
+  useStore(uiPrefsStore, s => s.sessionBackgroundBlur);
 
 export const setNewThreadBackgroundEffect = (
   v: NewThreadBackgroundEffect,
