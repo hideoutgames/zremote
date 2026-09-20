@@ -9,6 +9,7 @@ import React, { type ReactNode } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { useTheme } from '../theme';
 import { MenuDismissShield } from './menus/MenuDismissShield';
 
@@ -35,7 +36,11 @@ export function SessionSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const cap = Math.max(240, Math.round(windowHeight - insets.top));
+  const keyboardHeight = useKeyboardState(s => s.height);
+  const cap = Math.max(
+    240,
+    Math.round(windowHeight - insets.top - (keyboardHeight || 0)),
+  );
 
   return (
     <TrueSheet
