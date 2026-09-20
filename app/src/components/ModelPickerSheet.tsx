@@ -40,10 +40,8 @@ import {
   useModelSettingsMap,
 } from '../zeron/state/uiPrefs';
 import {
-  effortLevelsForModel,
   modelRowKey,
   rememberedModelOptions,
-  rememberedReasoning,
   revalidateSelection,
 } from './modelPicker';
 import type { RunPhase } from '../zeron/state/sessionStores';
@@ -54,7 +52,12 @@ import { FastMenuButton } from './FastMenuButton';
 import { ComposerMenuChip } from './ComposerMenuChip';
 import { EffortOverlay } from './EffortOverlay';
 import { capitalizeLevel } from './effortSliderMath';
-import { fastOptionForModel, isFastEnabled } from './fastMode';
+import {
+  applyEffortLevel,
+  applyFastChoice,
+  resolveModelTraits,
+  selectionForModel,
+} from './modelTraits';
 import { MenuDismissShield } from './menus/MenuDismissShield';
 import { useDismissibleNativeModal } from '../hooks/useDismissibleNativeModal';
 import { GlassControl } from './Glass';
@@ -306,10 +309,7 @@ export function ModelPickerSheet({
   const pickModel = useCallback(
     (harness: string, model: Model, extra?: Partial<ChatConfig>) => {
       if (locked && harness !== harnessId) return;
-      const levels = effortLevelsForModel(
-        model,
-        harnesses.find(h => h.id === harness)?.reasoningLevels,
-      );
+      const siblings = modelsFor(deviceId, harness);
       const stored = modelSettings[modelRowKey(harness, model.id)];
       const selectedLive =
         harness === harnessId && config?.model === model.id
@@ -318,22 +318,22 @@ export function ModelPickerSheet({
               modelOptions: config?.modelOptions,
             }
           : undefined;
-      const fastOption = fastOptionForModel(model);
-      const reasoning =
-        extra?.reasoning ??
-        rememberedReasoning(stored, levels, selectedLive?.reasoning);
-      const modelOptions =
-        extra?.modelOptions ??
-        rememberedModelOptions(stored, fastOption, selectedLive?.modelOptions);
+      const picked = selectionForModel(
+        model,
+        siblings,
+        harnesses.find(h => h.id === harness)?.reasoningLevels,
+        stored,
+        selectedLive,
+      );
       apply({
         harness,
         model: model.id,
-        reasoning,
-        modelOptions,
+        reasoning: picked.reasoning,
+        modelOptions: picked.modelOptions,
         ...extra,
       });
     },
-    [apply, locked, harnessId, harnesses, config, modelSettings],
+    [apply, locked, harnessId, harnesses, config, modelSettings, deviceId],
   );
 
   const header = (
@@ -413,18 +413,25 @@ export function ModelPickerSheet({
           </Text>
           {models.map((m, i) => {
             const selected = m.id === config?.model && h.id === harnessId;
-            const levels = effortLevelsForModel(m, h.reasoningLevels);
-            const effortSupported = levels.length > 0;
             const stored = modelSettings[modelRowKey(h.id, m.id)];
-            const effortValue = rememberedReasoning(
-              stored,
-              levels,
-              selected ? config?.reasoning : undefined,
+            const traits = resolveModelTraits(
+              m,
+              models,
+              h.reasoningLevels,
+              selected
+                ? {
+                    reasoning: config?.reasoning,
+                    modelOptions: config?.modelOptions,
+                  }
+                : {
+                    reasoning: stored?.reasoning,
+                    modelOptions: stored?.modelOptions,
+                  },
             );
-            const fastOption = fastOptionForModel(m);
+            const effortSupported = (traits.effort?.levels.length ?? 0) > 0;
             const rowOptions = rememberedModelOptions(
               stored,
-              fastOption,
+              m.options,
               selected ? config?.modelOptions : undefined,
             );
             const key = modelRowKey(h.id, m.id);
@@ -436,8 +443,8 @@ export function ModelPickerSheet({
                 unavailable={selected && !health.modelOk}
                 effortSupported={effortSupported}
                 effortLabel={
-                  effortSupported && effortValue !== undefined
-                    ? capitalizeLevel(effortValue)
+                  effortSupported && traits.effort?.value !== undefined
+                    ? capitalizeLevel(traits.effort.value)
                     : undefined
                 }
                 onSelect={() => pickModel(h.id, m)}
@@ -446,26 +453,30 @@ export function ModelPickerSheet({
                   setEffort({
                     harness: h.id,
                     model: m.id,
-                    levels,
+                    levels: traits.effort?.levels ?? [],
                   });
                 }}
-                fastSupported={fastOption !== undefined}
-                fastOption={fastOption}
-                fastEnabled={isFastEnabled(rowOptions, fastOption)}
-                fastChoice={
-                  fastOption === undefined
-                    ? undefined
-                    : typeof rowOptions[fastOption.id] === 'string'
-                    ? (rowOptions[fastOption.id] as string)
-                    : fastOption.defaultChoice
-                }
+                fastSupported={traits.fast !== undefined}
+                fastOption={traits.fast?.option}
+                fastEnabled={traits.fast?.enabled ?? false}
+                fastChoice={traits.fast?.choice}
                 onSelectFast={choiceId => {
-                  if (fastOption === undefined) return;
-                  pickModel(h.id, m, {
-                    modelOptions: {
-                      ...rowOptions,
-                      [fastOption.id]: choiceId,
+                  const patch = applyFastChoice(
+                    traits,
+                    choiceId,
+                    {
+                      model: m.id,
+                      reasoning: selected
+                        ? config?.reasoning
+                        : stored?.reasoning,
+                      modelOptions: rowOptions,
                     },
+                    models,
+                  );
+                  pickModel(h.id, m, {
+                    model: patch.model,
+                    reasoning: patch.reasoning,
+                    modelOptions: patch.modelOptions,
                   });
                 }}
                 last={i === models.length - 1}
@@ -487,16 +498,32 @@ export function ModelPickerSheet({
   );
 
   const effortLevels = effort?.levels ?? [];
-  const effortValue =
+  const effortModel =
     effort === undefined
       ? undefined
-      : rememberedReasoning(
-          modelSettings[modelRowKey(effort.harness, effort.model)],
-          effortLevels,
-          config?.harness === effort.harness && config.model === effort.model
-            ? config.reasoning
-            : undefined,
+      : modelsFor(deviceId, effort.harness).find(m => m.id === effort.model);
+  const effortTraits =
+    effort === undefined
+      ? undefined
+      : resolveModelTraits(
+          effortModel,
+          modelsFor(deviceId, effort.harness),
+          harnesses.find(h => h.id === effort.harness)?.reasoningLevels,
+          config?.harness === effort.harness
+            ? {
+                reasoning: config?.reasoning,
+                modelOptions: config?.modelOptions,
+              }
+            : {
+                reasoning:
+                  modelSettings[modelRowKey(effort.harness, effort.model)]
+                    ?.reasoning,
+                modelOptions:
+                  modelSettings[modelRowKey(effort.harness, effort.model)]
+                    ?.modelOptions,
+              },
         );
+  const effortValue = effortTraits?.effort?.value;
 
   const overlay =
     effort !== undefined ? (
@@ -504,13 +531,32 @@ export function ModelPickerSheet({
         embedded
         levels={effortLevels}
         value={effortValue}
-        onChange={level =>
+        onChange={level => {
+          const siblings = modelsFor(deviceId, effort.harness);
+          const patch = applyEffortLevel(
+            effortTraits ?? {},
+            level,
+            {
+              model: effort.model,
+              reasoning: config?.reasoning,
+              modelOptions: config?.modelOptions ?? {},
+            },
+            siblings,
+          );
           apply({
             harness: effort.harness,
-            model: effort.model,
-            reasoning: level,
-          })
-        }
+            model: patch.model ?? effort.model,
+            reasoning: patch.reasoning,
+            modelOptions: patch.modelOptions,
+          });
+          if (patch.model !== undefined && patch.model !== effort.model) {
+            setEffort({
+              harness: effort.harness,
+              model: patch.model,
+              levels: effort.levels,
+            });
+          }
+        }}
         onDismiss={() => setEffort(undefined)}
       />
     ) : null;

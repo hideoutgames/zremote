@@ -29,15 +29,19 @@ import {
 } from './EffortOverlay';
 import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import { ModelPickerSheet } from './ModelPickerSheet';
-import { fastOptionForModel, isFastEnabled } from './fastMode';
 import { capitalizeLevel } from './effortSliderMath';
+import {
+  applyEffortLevel,
+  applyFastChoice,
+  resolveModelTraits,
+  selectionForModel,
+} from './modelTraits';
 import { useRuntime } from '../app/runtimeContext';
 import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
 import { createThreadFromCompose } from '../zeron/runtime/createThreadFromCompose';
 import {
   catalogStore,
   modelsFor,
-  reasoningLevelsFor,
   selectableHarnesses,
 } from '../zeron/state/catalogStore';
 import {
@@ -233,16 +237,21 @@ export function ComposeComposer({
     deviceId === '' || harness === ''
       ? undefined
       : modelsFor(deviceId, harness).find(m => m.id === model);
-  const effortLevels =
-    deviceId === '' || harness === ''
-      ? []
-      : reasoningLevelsFor(deviceId, harness, model);
-  const fastOption = fastOptionForModel(currentModel);
-  const fastEnabled = isFastEnabled(modelOptions, fastOption);
+  const harnessModels =
+    deviceId === '' || harness === '' ? [] : modelsFor(deviceId, harness);
+  const traits = resolveModelTraits(
+    currentModel,
+    harnessModels,
+    harnesses.find(h => h.id === harness)?.reasoningLevels,
+    { model, reasoning, modelOptions },
+  );
+  const effortLevels = traits.effort?.levels ?? [];
+  const fastOption = traits.fast?.option;
+  const fastEnabled = traits.fast?.enabled ?? false;
   const modelLabel =
     currentModel?.label ?? (model === '' ? t('picker.default') : model);
   const effortLabel = capitalizeLevel(
-    reasoning ?? effortLevels[0] ?? t('picker.effort'),
+    traits.effort?.value ?? t('picker.effort'),
   );
   const harnessDesc = catalog?.harnesses.find(h => h.id === harness);
   const recentItems = useMemo(
@@ -459,31 +468,32 @@ export function ComposeComposer({
         harnessId={harness === '' ? undefined : harness}
         recentItems={recentItems}
         onPickRecentModel={(h, m) => {
+          const catalogModel = modelsFor(deviceId, h).find(row => row.id === m);
           const stored = modelSettingsFor(h, m);
+          const picked = selectionForModel(
+            catalogModel,
+            modelsFor(deviceId, h),
+            harnesses.find(row => row.id === h)?.reasoningLevels,
+            stored,
+          );
           setHarness(h);
           setModel(m);
-          setReasoning(stored?.reasoning);
-          setModelOptions(stored?.modelOptions ?? {});
+          setReasoning(picked.reasoning);
+          setModelOptions(picked.modelOptions);
           persist({
             harness: h,
             model: m,
-            reasoning: stored?.reasoning,
-            modelOptions: stored?.modelOptions ?? {},
+            reasoning: picked.reasoning,
+            modelOptions: picked.modelOptions,
           });
         }}
         onOpenMoreModels={() => setPickerOpen(true)}
         effortLabel={effortLabel}
         effortSupported={effortLevels.length > 0}
-        fastSupported={fastOption !== undefined}
+        fastSupported={traits.fast !== undefined}
         fastOption={fastOption}
         fastEnabled={fastEnabled}
-        fastChoice={
-          fastOption === undefined
-            ? undefined
-            : typeof modelOptions[fastOption.id] === 'string'
-            ? (modelOptions[fastOption.id] as string)
-            : fastOption.defaultChoice
-        }
+        fastChoice={traits.fast?.choice}
         effortOpen={effortOpen}
         onOpenEffort={origin => {
           Keyboard.dismiss();
@@ -499,15 +509,26 @@ export function ComposeComposer({
           });
         }}
         onSelectFast={choice => {
-          if (fastOption === undefined) return;
-          const next = {
-            ...modelOptions,
-            [fastOption.id]: choice,
-          };
-          setModelOptions(next);
-          persist({ modelOptions: next });
-          if (harness !== '' && model !== '')
-            rememberModelSettings(harness, model, { modelOptions: next });
+          const patch = applyFastChoice(
+            traits,
+            choice,
+            { model, reasoning, modelOptions },
+            harnessModels,
+          );
+          if (patch.model !== undefined) setModel(patch.model);
+          setReasoning(patch.reasoning);
+          setModelOptions(patch.modelOptions);
+          persist({
+            ...(patch.model !== undefined ? { model: patch.model } : {}),
+            reasoning: patch.reasoning,
+            modelOptions: patch.modelOptions,
+          });
+          const nextModel = patch.model ?? model;
+          if (harness !== '' && nextModel !== '')
+            rememberModelSettings(harness, nextModel, {
+              reasoning: patch.reasoning,
+              modelOptions: patch.modelOptions,
+            });
         }}
         checkout={checkout}
         dictation={dictation}
@@ -539,14 +560,30 @@ export function ComposeComposer({
   const overlay = effortOpen ? (
     <EffortOverlay
       levels={effortLevels}
-      value={reasoning}
+      value={traits.effort?.value}
       origin={effortOrigin}
       anchor={effortAnchor}
       onChange={level => {
-        setReasoning(level);
-        persist({ reasoning: level });
-        if (harness !== '' && model !== '')
-          rememberModelSettings(harness, model, { reasoning: level });
+        const patch = applyEffortLevel(
+          traits,
+          level,
+          { model, reasoning, modelOptions },
+          harnessModels,
+        );
+        if (patch.model !== undefined) setModel(patch.model);
+        setReasoning(patch.reasoning);
+        setModelOptions(patch.modelOptions);
+        persist({
+          ...(patch.model !== undefined ? { model: patch.model } : {}),
+          reasoning: patch.reasoning,
+          modelOptions: patch.modelOptions,
+        });
+        const nextModel = patch.model ?? model;
+        if (harness !== '' && nextModel !== '')
+          rememberModelSettings(harness, nextModel, {
+            reasoning: patch.reasoning,
+            modelOptions: patch.modelOptions,
+          });
       }}
       onDismiss={() => {
         setEffortOpen(false);

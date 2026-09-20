@@ -23,19 +23,21 @@ export const rememberedReasoning = (
   return levels[0];
 };
 
-/** Fast (and only Fast) options remembered for this model — never leak
- * another model's modelOptions keys across a pick. */
+/** Options advertised by the current catalog model — never leak another
+ * model's modelOptions keys across a pick. */
 export const rememberedModelOptions = (
   stored: ModelSettings | undefined,
-  fastOption: { id: string; defaultChoice: string } | undefined,
+  options: readonly { id: string; defaultChoice: string }[] | undefined,
   live?: Record<string, unknown>,
 ): Record<string, unknown> => {
-  if (fastOption === undefined) return {};
+  if (options === undefined || options.length === 0) return {};
   const source = live ?? stored?.modelOptions;
-  const raw = source?.[fastOption.id];
-  return {
-    [fastOption.id]: typeof raw === 'string' ? raw : fastOption.defaultChoice,
-  };
+  const out: Record<string, unknown> = {};
+  for (const option of options) {
+    const raw = source?.[option.id];
+    out[option.id] = typeof raw === 'string' ? raw : option.defaultChoice;
+  }
+  return out;
 };
 
 /** A model's own ladder when non-empty, else the harness's advertised list. */

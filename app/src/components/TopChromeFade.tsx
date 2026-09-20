@@ -19,8 +19,10 @@ import type { BlurTint } from 'expo-blur';
 import { FadeBlur } from './FadeBlur';
 
 export const TOP_CHROME_FADE_BAND = 56;
-/** Dissolve above the composer — shorter than the top chrome band. */
-export const COMPOSER_BOTTOM_FADE_BAND = 16;
+/** Chat transcript top dissolve — half the session/header chrome band. */
+export const CHAT_TOP_FADE_BAND = TOP_CHROME_FADE_BAND / 2;
+/** Gradual content mask above the composer. Overlay blur is not used here. */
+export const COMPOSER_BOTTOM_FADE_BAND = 88;
 /** Strong blur under chrome so wallpaper remains. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
 /** Black edge wash when a session wallpaper is set on Home. */
@@ -160,15 +162,23 @@ export const maskStopsFor = (
     };
   }
   const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+  const bottomStart = clamp01(1 - (bottomInset + bottomBand) / height);
+  const bottomEnd = clamp01(1 - bottomInset / height);
+  const bottomSpan = Math.max(0, bottomEnd - bottomStart);
   const raw = [
     { loc: 0, color: 'transparent' },
     { loc: clamp01(topInset / height), color: 'transparent' },
     { loc: clamp01((topInset + topBand) / height), color: 'black' },
+    { loc: bottomStart, color: 'black' },
     {
-      loc: clamp01(1 - (bottomInset + bottomBand) / height),
-      color: 'black',
+      loc: bottomStart + bottomSpan * 0.35,
+      color: 'rgba(0,0,0,0.7)',
     },
-    { loc: clamp01(1 - bottomInset / height), color: 'transparent' },
+    {
+      loc: bottomStart + bottomSpan * 0.7,
+      color: 'rgba(0,0,0,0.28)',
+    },
+    { loc: bottomEnd, color: 'transparent' },
     { loc: 1, color: 'transparent' },
   ];
   const colors: string[] = [];
