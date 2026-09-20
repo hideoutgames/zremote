@@ -681,6 +681,10 @@ test('threads title uses white type when wallpaper is set, even in light theme',
       mounted.root.findAll(n => n.props.testID === 'bottom-chrome-fade').length,
     ).toBeGreaterThan(0);
   } finally {
+    await act(async () => {
+      tree?.unmount();
+    });
+    tree = undefined;
     themeSpy.mockRestore();
     uiPrefsStore.setState({ newThreadComposerBackground: undefined });
   }

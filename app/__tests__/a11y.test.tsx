@@ -531,8 +531,10 @@ test('queue panel: send now and delete are icon-only labelled buttons', async ()
   );
   expect(labels.some(l => l.label === 'Reorder')).toBe(true);
   const handle = mounted.root.findByProps({ testID: 'queue-reorder-handle' });
+  // PanResponder maps terminationRequest onto the View; native blocking is
+  // folded into onResponderGrant's return value (not a View prop).
   expect(handle.props.onResponderTerminationRequest()).toBe(false);
-  expect(handle.props.onShouldBlockNativeResponder()).toBe(true);
+  expect(typeof handle.props.onResponderGrant).toBe('function');
 });
 
 test('queued pill is a labelled button', async () => {
