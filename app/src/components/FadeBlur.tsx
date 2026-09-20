@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
   StyleSheet,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -36,6 +37,30 @@ function GradientMask({
       end={end}
       style={StyleSheet.absoluteFill}
     />
+  );
+}
+
+/** Dedicated top/bottom strips so the first transparent stop is not a
+ *  CAGradientLayer location-0 (iOS masks often drop that, hard-cutting the
+ *  top). Plateau is the middle 50%, matching EDGE_LOCATIONS. */
+function VerticalEdgeMask() {
+  return (
+    <View style={styles.maskFill}>
+      <LinearGradient
+        testID="fade-blur-radial-top"
+        colors={['transparent', 'black']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.maskEdge}
+      />
+      <View style={styles.maskPlateau} />
+      <LinearGradient
+        colors={['black', 'transparent']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.maskEdge}
+      />
+    </View>
   );
 }
 
@@ -116,13 +141,15 @@ export function FadeBlur({
         pointerEvents="none"
         style={style}
         maskElement={
-          <GradientMask start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} />
+          <View style={styles.maskFill}>
+            <GradientMask start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} />
+          </View>
         }
       >
         <MaskedView
           pointerEvents="none"
           style={StyleSheet.absoluteFill}
-          maskElement={<GradientMask />}
+          maskElement={<VerticalEdgeMask />}
         >
           {blur}
         </MaskedView>
@@ -165,3 +192,9 @@ export function FadeBlur({
     </MaskedView>
   );
 }
+
+const styles = StyleSheet.create({
+  maskFill: { flex: 1 },
+  maskEdge: { flex: 0.25 },
+  maskPlateau: { flex: 0.5, backgroundColor: 'black' },
+});
