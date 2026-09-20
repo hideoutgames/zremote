@@ -46,6 +46,9 @@ Needs a Mac build, a device, or a host in the right state:
   `zeron-split-view`) — written, never compiled here.
 - Dictation (`SpeechAnalyzer` path is a marked TODO; `SFSpeechRecognizer`
   on-device-only path written).
+- Local Voice Model (Whisper Tiny/Base + optional cleanup) — JS pipeline,
+  settings, and model manager land; native whisper.rn/llama.rn (or Nitro
+  fallbacks) need a Mac spike before artifacts are pinned.
 - Composer/attachment UI surfaces, Border Beam, effort-slider haptics,
   shimmer — device rendering.
 - Transcript rendering, theme, reduced-motion/transparency runtime,

@@ -48,6 +48,29 @@ surfaces and has never been compiled. First build happens on a Mac.
 - Settings → Dictation shows the model state for `uiPrefs.dictationLocale`
   and offers "Download offline model" when downloadable.
 
+### Local Voice Model (Whisper + optional cleanup)
+
+Settings → Voice Input can switch from Apple Dictation to an opt-in **Voice
+Model** mode. Model weights are managed by `zeron/voice/manager.ts` (device
+local, not CRDT, not `uiPrefs` paths). JS ports:
+
+- `zeron/native/voiceCapture.ts` — record WAV/PCM, release the mic, delete
+  the temp file.
+- `zeron/native/transcription.ts` — file transcription adapter.
+- `zeron/native/cleanup.ts` — optional cleanup adapter (`supportsCustomPrompt`).
+
+**Mac spike (not done in this environment):** compile `whisper.rn` +
+`llama.rn` together against Expo 57 / RN 0.86 / Nitro static linking. Reject
+them if they require `ios.useFrameworks`. Fallback is first-party Nitro
+modules wrapping whisper.cpp / llama.cpp, same pattern as `zeron-dictation`.
+Do not set `productionPinned: true` or fill SHA-256 until a device build
+transcribes, unloads, and passes the cleanup fixture suite. Candidate
+catalog entries (Whisper Tiny/Base, Qwen2.5-0.5B-Instruct GGUF) stay
+unpinned so the UI cannot mark a partial/unverified file installed.
+
+Cleanup licenses: Whisper MIT; Qwen2.5 Apache-2.0. Microphone audio and
+cleanup inference stay on-device. Never log transcripts, prompts, or audio.
+
 ### Live Activities
 
 - `src/liveActivity/SessionActivity.tsx` — the `'widget'` component:

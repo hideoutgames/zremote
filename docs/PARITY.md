@@ -16,7 +16,7 @@ relative to the pinned clone `../_ref/zeron`; `node app/scripts/check-parity-pat
 - `blocked` — concrete blocker named in the row.
 - `not-started` — not implemented.
 
-Row counts: **verified 44 · implemented-unverified 25 ·
+Row counts: **verified 44 · implemented-unverified 26 ·
 requires-host-edge-change 6 · blocked 7 · not-started 15**
 
 ## Transport / sync substrate
@@ -79,6 +79,7 @@ requires-host-edge-change 6 · blocked 7 · not-started 15**
 | Draft persistence per chat                                                           | `crates/ui/src/composer.rs`                 | —                                              | `state/draftStore.ts` + `uiPrefs.json`               | verified                  | draftStore tests                                                                               |
 | Attachment strip UI                                                                  | `crates/ui/src/composer.rs`                 | —                                              | Composer attachment strip                            | implemented-unverified    | device render                                                                                  |
 | Dictation (on-device only)                                                           | — (new)                                     | —                                              | `VoicePill` + `modules/zeron-dictation`              | implemented-unverified    | Mac compile + device mic; `SpeechAnalyzer` (iOS 26) path is a marked TODO                      |
+| Local Voice Model (Whisper + optional cleanup)                                       | — (new)                                     | —                                              | `zeron/voice/*`, Settings Voice Input, Composer pipeline | implemented-unverified    | JS unit tests; Mac compile of whisper.rn/llama.rn (or Nitro fallbacks) + device inference required before pinning artifacts |
 | Border Beam                                                                          | fork design                                 | —                                              | `components/BorderBeam.tsx`                          | implemented-unverified    | Skia/Reanimated need a device                                                                  |
 | Transcript projection/parts                                                          | `crates/engine/src/chat2_host.rs`           | doc `entries`                                  | `doc/sessionDoc.ts`, transcript store                | verified                  | `transcript.test.tsx`, e2e entries                                                             |
 | Cursor `createPlan` PlanCard                                                         | `crates/harness/src/cursor/mod.rs` catch-all → `Unknown`; `crates/doc/src/parts.rs` `sanitize_tool_call` drops `Unknown.input` | session doc tool part `{kind:"unknown",name:"createPlan"}` | `transcript/detectPlan.ts` PlanCard (name-only host shape still shows a card) | verified                  | `planAndChanges.test.ts`, `transcript.test.tsx`, `liveActivityAccent.test.ts`; full markdown `blocked` on stock host sanitize |

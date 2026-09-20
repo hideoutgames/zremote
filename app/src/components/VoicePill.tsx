@@ -36,6 +36,8 @@ export function VoicePill({
   active,
   supported,
   processing = false,
+  processingStage,
+  processingCancelable = false,
   levelTick = 0,
   onToggle,
   onCancel,
@@ -43,6 +45,8 @@ export function VoicePill({
   active: boolean;
   supported: boolean;
   processing?: boolean;
+  processingStage?: 'transcribing' | 'cleaning';
+  processingCancelable?: boolean;
   levelTick?: number;
   onToggle: () => void;
   onCancel: () => void;
@@ -161,21 +165,34 @@ export function VoicePill({
               cancelledRef.current = false;
               return;
             }
-            if (processing) return;
+            if (processing) {
+              if (processingCancelable) onToggle();
+              return;
+            }
             if (supported) onToggle();
           }}
-          disabled={!supported || processing}
+          disabled={!supported || (processing && !processingCancelable)}
           hitSlop={{ top: 6, bottom: 6, right: 6, left: 0 }}
           accessibilityRole="button"
           accessibilityLabel={
             processing
-              ? t('composer.dictationProcessing')
+              ? processingCancelable
+                ? `${t('composer.voiceCancelProcessing')}. ${
+                    processingStage === 'cleaning'
+                      ? t('composer.voiceCleaning')
+                      : t('composer.voiceTranscribing')
+                  }`
+                : processingStage === 'transcribing'
+                ? t('composer.voiceTranscribing')
+                : processingStage === 'cleaning'
+                ? t('composer.voiceCleaning')
+                : t('composer.dictationProcessing')
               : active
               ? t('composer.stopDictation')
               : t('composer.dictate')
           }
           accessibilityState={{
-            disabled: !supported || processing,
+            disabled: !supported || (processing && !processingCancelable),
             busy: active || processing,
           }}
           accessibilityHint={

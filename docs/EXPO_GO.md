@@ -62,6 +62,8 @@ Windows).
   registration is skipped: Expo Go's device token is the wrong APNs topic.
 - **Dictation** — `zeron-dictation` needs Nitro; resolves to
   `dictationUnavailable`.
+- **Local Voice Model** — capture/transcription/cleanup ports resolve to
+  unavailable stubs; no model files download automatically.
 - **Liquid Glass** — `@callstack/liquid-glass` → `expo-glass-effect`
   `GlassView` (iOS 26 only; otherwise the opaque fallback).
 - **Sheets/menus** — TrueSheet → a pageSheet-style `Modal`; Zeego menus →

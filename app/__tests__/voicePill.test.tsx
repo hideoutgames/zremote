@@ -10,6 +10,8 @@ import { VOICE_PILL_PROCESS_MS } from '../src/components/voicePillMath';
 import { resetDrafts, setDraftText } from '../src/zeron/state/draftStore';
 import { resetSessionStores } from '../src/zeron/state/sessionStores';
 import type { DictationPort } from '../src/zeron/native/dictation';
+import { setVoiceInputMode } from '../src/zeron/state/uiPrefs';
+import type { LocalVoiceRuntime } from '../src/zeron/voice';
 
 const renderPill = async (
   props: Partial<React.ComponentProps<typeof VoicePill>> = {},
@@ -124,7 +126,7 @@ const supportedPort = (): DictationPort => ({
 
 const renderComposer = async (
   dictation: DictationPort,
-  extra: Partial<typeof composerProps> = {},
+  extra: Partial<React.ComponentProps<typeof Composer>> = {},
 ) => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -147,6 +149,7 @@ const sendButton = (root: TestRenderer.ReactTestInstance) =>
 
 beforeEach(() => {
   resetDrafts();
+  setVoiceInputMode('dictation');
 });
 
 afterEach(() => {
@@ -292,6 +295,60 @@ test('cancelling dictation uncovers send without a processing lock', async () =>
     sendButton(tree.root).props.onPress();
   });
   expect(onSend).toHaveBeenCalledTimes(1);
+  act(() => {
+    tree.unmount();
+  });
+  jest.useRealTimers();
+});
+
+test('disabled voice input hides the microphone control', async () => {
+  setVoiceInputMode('disabled');
+  const tree = await renderComposer(supportedPort());
+  expect(tree.root.findAllByType(VoicePill)).toHaveLength(0);
+  act(() => {
+    tree.unmount();
+  });
+});
+
+test('voice model processing spinner lasts until transcription finishes', async () => {
+  jest.useFakeTimers();
+  setVoiceInputMode('voiceModel');
+  let finish: (v: { text: string }) => void = () => {};
+  const runtime: LocalVoiceRuntime = {
+    capture: {
+      start: async () => {},
+      stop: async () => ({ uri: 'file://rec.wav', durationMs: 500 }),
+      cancel: async () => {},
+    },
+    transcription: {
+      isAvailable: async () => true,
+      transcribe: () =>
+        new Promise(resolve => {
+          finish = resolve;
+        }),
+      unload: async () => {},
+      abort: async () => {},
+    },
+    transcriptionPath: '/models/tiny.bin',
+  };
+  const tree = await renderComposer(supportedPort(), {
+    voiceRuntime: runtime,
+  });
+  await act(async () => {
+    voiceButton(tree.root).props.onToggle();
+  });
+  await act(async () => {
+    voiceButton(tree.root).props.onToggle();
+  });
+  expect(voiceButton(tree.root).props.processing).toBe(true);
+  await act(async () => {
+    jest.advanceTimersByTime(VOICE_PILL_PROCESS_MS);
+  });
+  expect(voiceButton(tree.root).props.processing).toBe(true);
+  await act(async () => {
+    finish({ text: 'hello' });
+  });
+  expect(voiceButton(tree.root).props.processing).toBe(false);
   act(() => {
     tree.unmount();
   });
