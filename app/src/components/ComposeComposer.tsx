@@ -215,10 +215,12 @@ export function ComposeComposer({
   }, [harness, harnesses, persist]);
 
   useEffect(() => {
-    if (runtime === null || deviceId === '' || harness === '') return;
-    if (modelsFor(deviceId, harness).length === 0)
-      loadModels(runtime, deviceId, harness).catch(() => {});
-  }, [runtime, deviceId, harness, catalogTick]);
+    if (runtime === null || deviceId === '') return;
+    for (const h of harnesses) {
+      if (modelsFor(deviceId, h.id).length === 0)
+        loadModels(runtime, deviceId, h.id).catch(() => {});
+    }
+  }, [runtime, deviceId, harnesses, catalogTick]);
 
   const catalogModels = useMemo(() => {
     if (deviceId === '') return [];

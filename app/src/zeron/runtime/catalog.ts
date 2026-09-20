@@ -60,6 +60,8 @@ export const loadModels = async (
         ...(catalogModels(deviceId) ?? {}),
         [harness]: models,
       },
+      // Catalog memos (composer menu, picker sheet) key on loadedAt.
+      loadedAt: Date.now(),
     });
     return models;
   } catch {

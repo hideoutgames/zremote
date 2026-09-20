@@ -129,7 +129,10 @@ test('composerMenuModels prefers pins and falls back to recents', () => {
   );
   expect(recents[0]?.model).toBe('composer');
   expect(recents.map(i => i.model)).toContain('gpt-5');
-  expect(recents.every(i => i.harnessName === undefined)).toBe(true);
+  expect(recents.find(i => i.model === 'gpt-5')?.harnessName).toBe('Codex');
+  expect(recents.find(i => i.model === 'composer')?.harnessName).toBe(
+    'Cursor',
+  );
   expect(recents.length).toBeLessThanOrEqual(3);
 
   const locked = composerMenuModels(
@@ -140,6 +143,20 @@ test('composerMenuModels prefers pins and falls back to recents', () => {
     true,
   );
   expect(locked.every(i => i.harness === 'cursor')).toBe(true);
+});
+
+test('composerMenuModels lockHarness shows same-provider pins only', () => {
+  const items = composerMenuModels(
+    [
+      { harness: 'codex', model: 'gpt-5' },
+      { harness: 'claude-code', model: 'sonnet' },
+    ],
+    [{ harness: 'claude-code', model: 'opus' }],
+    catalog,
+    { harness: 'claude-code', model: 'opus' },
+    true,
+  );
+  expect(items.map(i => i.model)).toEqual(['sonnet']);
 });
 
 test('groupMenuModelsByProvider keeps pin order and splits by provider', () => {

@@ -8,6 +8,7 @@ export const Item = Menu.Item;
 export const ItemTitle = Menu.ItemTitle;
 export const ItemSubtitle = Menu.ItemSubtitle;
 export const ItemIcon = Menu.ItemIcon;
+export const ItemImage = Menu.ItemImage;
 export const CheckboxItem = Menu.CheckboxItem;
 export const ItemIndicator = Menu.ItemIndicator;
 export const Group = Menu.Group;

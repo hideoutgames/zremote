@@ -105,6 +105,19 @@ describe('catalogStore', () => {
     );
   });
 
+  it('loadModels bumps loadedAt so catalogTick consumers refresh', async () => {
+    setDeviceCatalog('dev1', {
+      harnesses: [harness({ id: 'mock' })],
+      loadedAt: 1,
+    });
+    await loadModels(
+      fakeRuntime({ [METHODS.LIST_MODELS]: [model('m1')] }),
+      'dev1',
+      'mock',
+    );
+    expect(catalogStore.getState().byDevice.dev1.loadedAt).toBeGreaterThan(1);
+  });
+
   it('reasoningLevelsFor: model list wins, else harness list, else unsupported', () => {
     setDeviceCatalog('dev1', {
       harnesses: [

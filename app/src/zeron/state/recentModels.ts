@@ -8,7 +8,7 @@ export interface RecentModel {
 
 export interface CatalogModelRef extends RecentModel {
   label: string;
-  /** Provider display name — set on pinned composer-menu items only. */
+  /** Provider display name from the host catalog. */
   harnessName?: string;
 }
 
@@ -56,6 +56,7 @@ export const recentMenuModels = (
       harness: hit.harness,
       model: hit.model,
       label: hit.label,
+      harnessName: hit.harnessName,
     });
   };
 

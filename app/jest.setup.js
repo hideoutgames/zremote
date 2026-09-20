@@ -143,6 +143,7 @@ jest.mock('zeego/dropdown-menu', () => ({
   ItemTitle: menuText,
   ItemSubtitle: menuText,
   ItemIcon: () => null,
+  ItemImage: menuComponent('DropdownItemImage'),
   Group: menuComponent('DropdownGroup'),
   Separator: () => null,
   CheckboxItem: menuComponent('DropdownCheckbox'),

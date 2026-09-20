@@ -4,10 +4,25 @@ import {
 } from '../src/zeron/state/recentModels';
 
 const catalog = [
-  { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
-  { harness: 'claude-code', model: 'opus', label: 'Opus' },
-  { harness: 'codex', model: 'gpt-5', label: 'GPT-5' },
-  { harness: 'cursor', model: 'composer', label: 'Composer' },
+  {
+    harness: 'claude-code',
+    model: 'sonnet',
+    label: 'Sonnet',
+    harnessName: 'Claude',
+  },
+  {
+    harness: 'claude-code',
+    model: 'opus',
+    label: 'Opus',
+    harnessName: 'Claude',
+  },
+  { harness: 'codex', model: 'gpt-5', label: 'GPT-5', harnessName: 'Codex' },
+  {
+    harness: 'cursor',
+    model: 'composer',
+    label: 'Composer',
+    harnessName: 'Cursor',
+  },
 ];
 
 test('rememberRecentModel prepends and dedupes', () => {
@@ -67,4 +82,16 @@ test('recentMenuModels ignores recents missing from the catalog', () => {
   );
   expect(items).toHaveLength(3);
   expect(items.every(i => i.harness !== 'gone')).toBe(true);
+});
+
+test('recentMenuModels preserves catalog harnessName', () => {
+  const items = recentMenuModels(
+    [{ harness: 'codex', model: 'gpt-5' }],
+    catalog,
+    { harness: 'cursor', model: 'composer' },
+    3,
+    false,
+  );
+  expect(items.find(i => i.model === 'gpt-5')?.harnessName).toBe('Codex');
+  expect(items.find(i => i.model === 'composer')?.harnessName).toBe('Cursor');
 });

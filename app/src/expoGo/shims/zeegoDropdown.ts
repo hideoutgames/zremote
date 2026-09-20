@@ -8,6 +8,7 @@ export const {
   Item,
   ItemTitle,
   ItemIcon,
+  ItemImage,
   ItemSubtitle,
   Group,
   Separator,

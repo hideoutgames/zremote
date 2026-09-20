@@ -7,10 +7,32 @@ import { Pressable } from 'react-native';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { ComposerMenuChip } from './ComposerMenuChip';
 import { HarnessMark } from './HarnessMark';
+import { imageForHarness } from './harnessBrand';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { groupMenuModelsByProvider } from '../zeron/state/pinnedModels';
+
+const modelMenuItem = (
+  item: CatalogModelRef,
+  onPick: (harness: string, model: string) => void,
+) => {
+  const source = imageForHarness(item.harness);
+  return (
+    <DropdownMenu.Item
+      key={`${item.harness}:${item.model}`}
+      onSelect={() => onPick(item.harness, item.model)}
+    >
+      {source !== undefined ? (
+        <DropdownMenu.ItemImage
+          source={source}
+          ios={{ style: { renderingMode: 'template' } }}
+        />
+      ) : null}
+      <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
+    </DropdownMenu.Item>
+  );
+};
 
 export function ModelMenuButton({
   harnessId,
@@ -55,26 +77,10 @@ export function ModelMenuButton({
           ? groups.map(group => (
               <DropdownMenu.Group key={group.harness}>
                 <DropdownMenu.Label>{group.label}</DropdownMenu.Label>
-                {group.items.map(item => (
-                  <DropdownMenu.Item
-                    key={`${item.harness}:${item.model}`}
-                    onSelect={() => onPick(item.harness, item.model)}
-                  >
-                    <DropdownMenu.ItemTitle>
-                      {item.label}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                ))}
+                {group.items.map(item => modelMenuItem(item, onPick))}
               </DropdownMenu.Group>
             ))
-          : items.map(item => (
-              <DropdownMenu.Item
-                key={`${item.harness}:${item.model}`}
-                onSelect={() => onPick(item.harness, item.model)}
-              >
-                <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-            ))}
+          : items.map(item => modelMenuItem(item, onPick))}
         <DropdownMenu.Item key="more" onSelect={onMore}>
           <DropdownMenu.ItemTitle>{t('picker.more')}</DropdownMenu.ItemTitle>
         </DropdownMenu.Item>
