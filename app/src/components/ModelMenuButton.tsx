@@ -1,5 +1,6 @@
 // Composer model chip: harness brand mark + model label + chevron. Tap opens a
-// Liquid Glass dropdown of up to 3 recent/catalog models plus More.
+// Liquid Glass dropdown of pinned models (up to 10) or recents (up to 3), plus
+// More.
 
 import React from 'react';
 import { Pressable } from 'react-native';
@@ -49,6 +50,11 @@ export function ModelMenuButton({
             onSelect={() => onPick(item.harness, item.model)}
           >
             <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
+            {item.harnessName !== undefined && item.harnessName !== '' ? (
+              <DropdownMenu.ItemSubtitle>
+                {item.harnessName}
+              </DropdownMenu.ItemSubtitle>
+            ) : null}
           </DropdownMenu.Item>
         ))}
         <DropdownMenu.Item key="more" onSelect={onMore}>

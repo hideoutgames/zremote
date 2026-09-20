@@ -6,6 +6,7 @@ export const Trigger = Menu.Trigger;
 export const Content = Menu.Content;
 export const Item = Menu.Item;
 export const ItemTitle = Menu.ItemTitle;
+export const ItemSubtitle = Menu.ItemSubtitle;
 export const ItemIcon = Menu.ItemIcon;
 export const CheckboxItem = Menu.CheckboxItem;
 export const ItemIndicator = Menu.ItemIndicator;

@@ -49,12 +49,13 @@ import {
   setDraftPendingWorktree,
   useDraft,
 } from '../zeron/state/draftStore';
-import { recentMenuModels } from '../zeron/state/recentModels';
+import { composerMenuModels } from '../zeron/state/pinnedModels';
 import {
   modelSettingsFor,
   rememberModelSettings,
   setComposeDefaults,
   useComposeDefaults,
+  usePinnedModels,
   useRecentModels,
   type ComposeDefaults,
 } from '../zeron/state/uiPrefs';
@@ -94,6 +95,7 @@ export function ComposeComposer({
   const spaces = useStore(workspaceStore, s => s.spaces);
   const saved = useComposeDefaults();
   const recents = useRecentModels();
+  const pinnedModels = usePinnedModels();
   const draft = useDraft(COMPOSE_DRAFT_ID);
 
   const [deviceId, setDeviceId] = useState(
@@ -212,10 +214,20 @@ export function ComposeComposer({
 
   const catalogModels = useMemo(() => {
     if (deviceId === '') return [];
-    const out: { harness: string; model: string; label: string }[] = [];
+    const out: {
+      harness: string;
+      model: string;
+      label: string;
+      harnessName: string;
+    }[] = [];
     for (const h of selectableHarnesses(deviceId)) {
       for (const m of modelsFor(deviceId, h.id)) {
-        out.push({ harness: h.id, model: m.id, label: m.label });
+        out.push({
+          harness: h.id,
+          model: m.id,
+          label: m.label,
+          harnessName: h.name,
+        });
       }
     }
     return out;
@@ -256,14 +268,14 @@ export function ComposeComposer({
   const harnessDesc = catalog?.harnesses.find(h => h.id === harness);
   const recentItems = useMemo(
     () =>
-      recentMenuModels(
+      composerMenuModels(
+        pinnedModels,
         recents,
         catalogModels,
         harness !== '' && model !== '' ? { harness, model } : undefined,
-        3,
         false,
       ),
-    [recents, catalogModels, harness, model],
+    [pinnedModels, recents, catalogModels, harness, model],
   );
 
   const composeChat: Chat = useMemo(

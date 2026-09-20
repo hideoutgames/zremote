@@ -8,6 +8,8 @@ export interface RecentModel {
 
 export interface CatalogModelRef extends RecentModel {
   label: string;
+  /** Provider display name — set on pinned composer-menu items only. */
+  harnessName?: string;
 }
 
 const same = (a: RecentModel, b: RecentModel): boolean =>
@@ -50,7 +52,11 @@ export const recentMenuModels = (
     const k = keyOf(hit);
     if (seen.has(k)) return;
     seen.add(k);
-    out.push(hit);
+    out.push({
+      harness: hit.harness,
+      model: hit.model,
+      label: hit.label,
+    });
   };
 
   add(current);
