@@ -195,8 +195,7 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
     ? list.props.contentContainerStyle.flat()
     : [list.props.contentContainerStyle];
   const paddingTop = listPad.find(s => s?.paddingTop != null)?.paddingTop as
-    | number
-    | undefined;
+    number | undefined;
   expect(paddingTop).toBeGreaterThan(TOP_CHROME_FADE_BAND);
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
   const search = searchInput(mounted.root);
@@ -681,6 +680,14 @@ test('threads title uses white type when wallpaper is set, even in light theme',
     expect(homeTitleStyle.some(s => s?.color === Theme.darkTheme.text)).toBe(
       true,
     );
+    const settings = mounted.root.findAll(
+      n => n.props.name === 'gearshape' && n.props.tintColor != null,
+    )[0];
+    expect(settings.props.tintColor).toBe(Theme.darkTheme.text);
+    expect(
+      mounted.root.findAll(n => n.props.tint === 'systemThinMaterialDark')
+        .length,
+    ).toBeGreaterThan(0);
     expect(washesOf(mounted.root)).toHaveLength(0);
     expect(
       mounted.root.findAll(n => n.props.testID === 'content-edge-mask').length,
