@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   Keyboard,
   type LayoutChangeEvent,
@@ -73,6 +74,8 @@ import {
   useComposerExtraHeight,
   setComposerExtraHeight,
   setComposerExtraHeightLive,
+  useCleanupPromptOverride,
+  useVoiceInputMode,
 } from '../zeron/state/uiPrefs';
 import {
   beginComposerResize,
@@ -96,6 +99,16 @@ import {
   VOICE_PILL_TRAILING_GAP,
 } from './voicePillMath';
 import { shouldDismissKeyboardOnSwipe } from '../navigation/keyboardDismissGesture';
+import {
+  isVoiceBusy,
+  isVoiceProcessing,
+  LocalVoiceSession,
+  restoreVoiceRange,
+  type LocalVoiceRuntime,
+  type VoiceNotice,
+  type VoicePipelineStage,
+} from '../zeron/voice';
+import { DEFAULT_CLEANUP_PROMPT } from '../zeron/voice/prompt';
 
 // Input grows to ~6 lines on compact width, ~9 lines on iPad (fontSize 17 /
 // lineHeight 22 → 22*6+16 = 148, 22*9+16 = 214).
@@ -154,6 +167,7 @@ export interface ComposerProps {
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
   dictation: DictationPort;
+  voiceRuntime?: LocalVoiceRuntime;
   onSend: (text: string) => boolean | void | Promise<boolean | void>;
   onSteer: (text: string) => void;
   onQueue: (text: string) => void;
@@ -198,6 +212,7 @@ export const Composer = React.memo(function ({
   onFocusChange,
   checkout,
   dictation,
+  voiceRuntime,
   onSend,
   onSteer,
   onQueue,
@@ -297,13 +312,22 @@ export const Composer = React.memo(function ({
     prefersSteer,
   );
 
-  // ── Dictation ─────────────────────────────────────────────────────────
+  // ── Voice input (Dictation or local Voice Model) ──────────────────────
+  const voiceInputMode = useVoiceInputMode();
+  const cleanupPromptOverride = useCleanupPromptOverride();
   const [dictationSupported, setDictationSupported] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
+  const [voiceStage, setVoiceStage] = useState<VoicePipelineStage>('idle');
+  const [voiceNotice, setVoiceNotice] = useState<VoiceNotice | null>(null);
   const baseRef = useRef('');
   const selRef = useRef(0);
+  const draftTextRef = useRef(draft.text);
+  draftTextRef.current = draft.text;
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
+  const voiceSessionRef = useRef<LocalVoiceSession | null>(null);
   const processingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearProcessingCooldown = useCallback(() => {
     if (processingTimer.current !== null) {
@@ -386,6 +410,10 @@ export const Composer = React.memo(function ({
   }, [chatId]);
 
   useEffect(() => {
+    if (voiceInputMode !== 'dictation') {
+      setDictationSupported(false);
+      return;
+    }
     let mounted = true;
     dictation
       .isSupported()
@@ -396,23 +424,88 @@ export const Composer = React.memo(function ({
     return () => {
       mounted = false;
     };
-  }, [dictation]);
+  }, [dictation, voiceInputMode]);
 
-  // Stop dictation on background / unmount (never leak the mic).
+  useEffect(() => {
+    if (voiceInputMode !== 'voiceModel') {
+      voiceSessionRef.current?.invalidate();
+      voiceSessionRef.current = null;
+      setVoiceStage('idle');
+      return;
+    }
+    const voiceSession = new LocalVoiceSession({
+      chatId,
+      getDraft: () => draftTextRef.current,
+      setDraft: text => setDraftText(chatIdRef.current, text),
+      getSelection: () => selRef.current,
+      capture: voiceRuntime?.capture ?? {
+        start: () => Promise.reject(new Error('unavailable')),
+        stop: () => Promise.reject(new Error('unavailable')),
+        cancel: () => Promise.resolve(),
+      },
+      transcription: voiceRuntime?.transcription ?? {
+        isAvailable: () => Promise.resolve(false),
+        transcribe: () => Promise.reject(new Error('unavailable')),
+        unload: () => Promise.resolve(),
+        abort: () => Promise.resolve(),
+      },
+      cleanup: voiceRuntime?.cleanup,
+      transcriptionPath: voiceRuntime?.transcriptionPath ?? '',
+      cleanupPath: voiceRuntime?.cleanupPath,
+      cleanupPrompt: cleanupPromptOverride ?? DEFAULT_CLEANUP_PROMPT,
+      onStage: setVoiceStage,
+      onNotice: setVoiceNotice,
+      deleteAudio: voiceRuntime?.deleteAudio,
+    });
+    voiceSessionRef.current = voiceSession;
+    return () => voiceSession.invalidate();
+  }, [chatId, voiceInputMode, voiceRuntime, cleanupPromptOverride]);
+
+  // Stop capture on background / unmount (never leak the mic).
   useEffect(() => {
     const sub = AppState.addEventListener('change', s => {
       if (s !== 'active' && dictating) {
         dictation.stop().catch(() => {});
         setDictating(false);
       }
+      if (s !== 'active' && voiceInputMode === 'voiceModel') {
+        voiceSessionRef.current?.invalidate();
+      }
     });
     return () => {
       sub.remove();
       if (dictating) dictation.stop().catch(() => {});
+      voiceSessionRef.current?.invalidate();
     };
-  }, [dictation, dictating]);
+  }, [dictation, dictating, voiceInputMode]);
+
+  const localVoiceBusy =
+    voiceInputMode === 'voiceModel' && isVoiceBusy(voiceStage);
+  const localVoiceProcessing =
+    voiceInputMode === 'voiceModel' && isVoiceProcessing(voiceStage);
 
   const toggleDictation = useCallback(() => {
+    if (voiceInputMode === 'voiceModel') {
+      const localSession = voiceSessionRef.current;
+      if (localSession === null) return;
+      if (voiceStage === 'recording') {
+        localSession.stop().catch(() => {});
+        return;
+      }
+      if (isVoiceProcessing(voiceStage)) {
+        localSession.cancelProcessing().catch(() => {});
+        return;
+      }
+      localSession.start().then(result => {
+        if (result === 'missingModel') {
+          Alert.alert(
+            t('composer.voiceMissingModelTitle'),
+            t('composer.voiceMissingModel'),
+          );
+        }
+      });
+      return;
+    }
     if (processing) return;
     if (dictating) {
       dictation.stop().catch(() => {});
@@ -428,16 +521,52 @@ export const Composer = React.memo(function ({
       )
       .then(() => setDictating(true))
       .catch(() => setDictating(false));
-  }, [dictating, dictation, draft.text, processing, beginProcessingCooldown]);
+  }, [
+    dictating,
+    dictation,
+    draft.text,
+    processing,
+    beginProcessingCooldown,
+    voiceInputMode,
+    voiceStage,
+  ]);
 
   const cancelDictation = useCallback(() => {
+    if (voiceInputMode === 'voiceModel') {
+      voiceSessionRef.current?.cancelRecording().catch(() => {});
+      return;
+    }
     dictation.cancel().catch(() => {});
     setDraftText(chatId, baseRef.current);
     setDictating(false);
     clearProcessingCooldown();
-  }, [dictation, chatId, clearProcessingCooldown]);
+  }, [dictation, chatId, clearProcessingCooldown, voiceInputMode]);
+
+  const restoreVoiceText = useCallback(() => {
+    if (voiceNotice?.kind !== 'restore') return;
+    if (
+      voiceNotice.raw === undefined ||
+      voiceNotice.cleaned === undefined ||
+      voiceNotice.start === undefined ||
+      voiceNotice.end === undefined
+    ) {
+      setVoiceNotice(null);
+      return;
+    }
+    const next = restoreVoiceRange(
+      draftTextRef.current,
+      voiceNotice.start,
+      voiceNotice.end,
+      voiceNotice.cleaned,
+      voiceNotice.raw,
+    );
+    if (next !== undefined) setDraftText(chatId, next);
+    setVoiceNotice(null);
+  }, [voiceNotice, chatId]);
 
   const submit = useCallback(() => {
+    if (dictating || processing || localVoiceBusy) return;
+    setVoiceNotice(null);
     const text = withPlanPrefixIf(planMode, draft.text.trim());
     if (hasAttachments) {
       // Routes per sendPlan; 'blocked' surfaces onSendBlocked — the draft
@@ -494,6 +623,9 @@ export const Composer = React.memo(function ({
     onSendAttachments,
     onSendBlocked,
     chatId,
+    dictating,
+    processing,
+    localVoiceBusy,
   ]);
 
   // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
@@ -507,7 +639,7 @@ export const Composer = React.memo(function ({
   const sendArmed =
     right === 'send' &&
     (action.primary === 'send' || live === 'queue' || live === 'steer');
-  const coverSend = dictating || processing;
+  const coverSend = dictating || processing || localVoiceBusy;
   // Constant pad: KeyboardStickyView interpolates insets.bottom so this
   // layout height does not snap on isVisible and overshoot the home indicator.
   const homeInset = insets.bottom + 8;
@@ -714,14 +846,36 @@ export const Composer = React.memo(function ({
                   </ScrollView>
                 </ChipRowMask>
                 <View style={styles.trailingCluster} collapsable={false}>
-                  <VoicePill
-                    active={dictating}
-                    supported={dictationSupported}
-                    processing={processing}
-                    levelTick={voiceTick}
-                    onToggle={toggleDictation}
-                    onCancel={cancelDictation}
-                  />
+                  {voiceInputMode !== 'disabled' ? (
+                    <VoicePill
+                      active={
+                        voiceInputMode === 'voiceModel'
+                          ? voiceStage === 'recording'
+                          : dictating
+                      }
+                      supported={
+                        voiceInputMode === 'voiceModel'
+                          ? true
+                          : dictationSupported
+                      }
+                      processing={
+                        voiceInputMode === 'voiceModel'
+                          ? localVoiceProcessing
+                          : processing
+                      }
+                      processingStage={
+                        voiceStage === 'transcribing'
+                          ? 'transcribing'
+                          : voiceStage === 'cleaning'
+                          ? 'cleaning'
+                          : undefined
+                      }
+                      processingCancelable={voiceInputMode === 'voiceModel'}
+                      levelTick={voiceTick}
+                      onToggle={toggleDictation}
+                      onCancel={cancelDictation}
+                    />
+                  ) : null}
                   <Pressable
                     onPress={
                       coverSend
@@ -825,6 +979,35 @@ export const Composer = React.memo(function ({
       (phase === 'working' || phase === 'awaitingInput') ? (
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
           {t('session.workingHint')}
+        </Text>
+      ) : null}
+      {voiceNotice?.kind === 'cleanupFailed' ? (
+        <Text
+          style={[styles.hint, { color: theme.textSecondary }]}
+          accessibilityLiveRegion="polite"
+        >
+          {t('composer.voiceCleanupFailed')}
+        </Text>
+      ) : null}
+      {voiceNotice?.kind === 'restore' ? (
+        <Pressable
+          onPress={restoreVoiceText}
+          accessibilityRole="button"
+          accessibilityLabel={t('composer.voiceRestore')}
+          testID="composer-restore-voice"
+          hitSlop={6}
+        >
+          <Text style={[styles.hint, { color: theme.accent }]}>
+            {t('composer.voiceRestore')}
+          </Text>
+        </Pressable>
+      ) : null}
+      {voiceNotice?.kind === 'transcribeFailed' ? (
+        <Text
+          style={[styles.hint, { color: theme.textSecondary }]}
+          accessibilityLiveRegion="polite"
+        >
+          {t('composer.voiceTranscribeFailed')}
         </Text>
       ) : null}
 

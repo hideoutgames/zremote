@@ -25,6 +25,7 @@ import {
   type ColorSchemePreference,
 } from '../../theme';
 import { syncComposerExtraHeightSV } from '../../components/composerExtraHeight';
+import { parseVoiceInputMode, type VoiceInputMode } from '../voice/types';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
@@ -37,8 +38,16 @@ export interface UiPrefs {
   notificationsEnabled: boolean;
   /** Composer / system haptics (effort slider, run-finished). Off → no-op. */
   hapticsEnabled: boolean;
-  /** BCP-47 locale for the dictation model (Settings → Dictation). */
+  /** BCP-47 locale for the dictation model (Settings → Voice Input). */
   dictationLocale: string;
+  /** Voice Input mode. Default Dictation; Voice Model is opt-in. */
+  voiceInputMode: VoiceInputMode;
+  /** Selected local transcription catalog id, or null until chosen. */
+  voiceModelId: string | null;
+  /** Selected cleanup catalog id, or null when cleanup is Disabled. */
+  cleanupModelId: string | null;
+  /** Account-scoped cleanup prompt override. Null uses the default. */
+  cleanupPromptOverride: string | null;
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
    * Loro init fails, relay mode is selected regardless. */
   forceRelayMode: boolean;
@@ -85,6 +94,10 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   notificationsEnabled: true,
   hapticsEnabled: true,
   dictationLocale: 'en-US',
+  voiceInputMode: 'dictation',
+  voiceModelId: null,
+  cleanupModelId: null,
+  cleanupPromptOverride: null,
   forceRelayMode: false,
   sidebarCollapsed: false,
   planModeByChat: {},
@@ -130,6 +143,14 @@ export const bindUiPrefs = async (
       ...patch,
       colorScheme:
         parseColorSchemePreference(patch.colorScheme) ?? s.colorScheme,
+      voiceInputMode:
+        parseVoiceInputMode(patch.voiceInputMode) ?? s.voiceInputMode,
+      voiceModelId: parsePrefId(patch.voiceModelId, s.voiceModelId),
+      cleanupModelId: parsePrefId(patch.cleanupModelId, s.cleanupModelId),
+      cleanupPromptOverride: parsePrefId(
+        patch.cleanupPromptOverride,
+        s.cleanupPromptOverride,
+      ),
       modelSettingsByKey: {
         ...s.modelSettingsByKey,
         ...(patch.modelSettingsByKey ?? {}),
@@ -231,6 +252,47 @@ export const setDictationLocale = (v: string): void => {
 
 export const useDictationLocale = (): string =>
   useStore(uiPrefsStore, s => s.dictationLocale);
+
+const parsePrefId = (
+  value: unknown,
+  fallback: string | null,
+): string | null => {
+  if (value === undefined) return fallback;
+  if (value === null) return null;
+  return typeof value === 'string' ? value : fallback;
+};
+
+export const setVoiceInputMode = (v: VoiceInputMode): Promise<void> => {
+  uiPrefsStore.setState({ voiceInputMode: v });
+  return saveAsync();
+};
+
+export const useVoiceInputMode = (): VoiceInputMode =>
+  useStore(uiPrefsStore, s => s.voiceInputMode);
+
+export const setVoiceModelId = (v: string | null): Promise<void> => {
+  uiPrefsStore.setState({ voiceModelId: v });
+  return saveAsync();
+};
+
+export const useVoiceModelId = (): string | null =>
+  useStore(uiPrefsStore, s => s.voiceModelId);
+
+export const setCleanupModelId = (v: string | null): Promise<void> => {
+  uiPrefsStore.setState({ cleanupModelId: v });
+  return saveAsync();
+};
+
+export const useCleanupModelId = (): string | null =>
+  useStore(uiPrefsStore, s => s.cleanupModelId);
+
+export const setCleanupPromptOverride = (v: string | null): Promise<void> => {
+  uiPrefsStore.setState({ cleanupPromptOverride: v });
+  return saveAsync();
+};
+
+export const useCleanupPromptOverride = (): string | null =>
+  useStore(uiPrefsStore, s => s.cleanupPromptOverride);
 
 export const setForceRelayMode = (v: boolean): void => {
   uiPrefsStore.setState({ forceRelayMode: v });

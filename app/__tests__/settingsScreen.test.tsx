@@ -11,6 +11,10 @@ import { authStore } from '../src/zeron/state/authStore';
 import { demoModeStore } from '../src/demo/demoMode';
 import { uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import {
+  setCleanupModelId,
+  setVoiceInputMode,
+} from '../src/zeron/state/uiPrefs';
+import {
   AppServicesContext,
   type AppServices,
 } from '../src/app/runtimeContext';
@@ -88,6 +92,10 @@ beforeEach(() => {
     newThreadBackgroundEffect: 'none',
     colorScheme: 'system',
     sessionBackgroundBlur: false,
+    voiceInputMode: 'dictation',
+    voiceModelId: null,
+    cleanupModelId: null,
+    cleanupPromptOverride: null,
   });
 });
 
@@ -319,4 +327,126 @@ test('enabling haptics plays a confirmation impact', async () => {
   });
   expect(uiPrefsStore.getState().hapticsEnabled).toBe(true);
   expect(mockedHaptics.impactAsync).toHaveBeenCalledTimes(1);
+});
+
+test('fresh prefs keep Dictation and hide Voice Model rows', async () => {
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const text = allText(mounted.root);
+  expect(text).toContain('Voice Input');
+  expect(text).toContain('Dictation');
+  expect(text).toContain('Language');
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-voice-model').length,
+  ).toBe(0);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-cleanup-model')
+      .length,
+  ).toBe(0);
+});
+
+test('Voice Model mode shows model pickers and hides Language', async () => {
+  setVoiceInputMode('voiceModel');
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const text = allText(mounted.root);
+  expect(text).toContain('Voice Model');
+  expect(text).toContain('Cleanup Model');
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-dictation-language')
+      .length,
+  ).toBe(0);
+  expect(
+    mounted.root.findAll(
+      n => n.props.testID === 'settings-cleanup-instructions',
+    ).length,
+  ).toBe(0);
+});
+
+test('Disabled mode hides voice-specific rows', async () => {
+  setVoiceInputMode('disabled');
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  expect(
+    mounted.root.findAll(
+      n =>
+        n.props.testID === 'settings-voice-input' &&
+        typeof n.props.onPress === 'function',
+    ).length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-dictation-language')
+      .length,
+  ).toBe(0);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'settings-voice-model').length,
+  ).toBe(0);
+});
+
+test('cleanup instructions save, cancel, and restore default', async () => {
+  setVoiceInputMode('voiceModel');
+  setCleanupModelId('qwen25-0.5b-instruct');
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const row = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-cleanup-instructions' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    row.props.onPress();
+  });
+  const input = mounted.root.findAll(
+    n => n.props.testID === 'settings-cleanup-prompt',
+  )[0];
+  await act(async () => {
+    input.props.onChangeText('keep filler');
+  });
+  const cancel = mounted.root.findAll(
+    n => n.props.testID === 'settings-cleanup-cancel',
+  )[0];
+  await act(async () => {
+    cancel.props.onPress();
+  });
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBeNull();
+
+  const row2 = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-cleanup-instructions' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    row2.props.onPress();
+  });
+  const input2 = mounted.root.findAll(
+    n => n.props.testID === 'settings-cleanup-prompt',
+  )[0];
+  await act(async () => {
+    input2.props.onChangeText('keep filler');
+  });
+  const save = mounted.root.findAll(
+    n => n.props.testID === 'settings-cleanup-save',
+  )[0];
+  await act(async () => {
+    save.props.onPress();
+  });
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBe('keep filler');
+
+  const row3 = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-cleanup-instructions' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    row3.props.onPress();
+  });
+  const restore = mounted.root.findAll(
+    n => n.props.testID === 'settings-cleanup-restore',
+  )[0];
+  await act(async () => {
+    restore.props.onPress();
+  });
+  const save2 = mounted.root.findAll(
+    n => n.props.testID === 'settings-cleanup-save',
+  )[0];
+  await act(async () => {
+    save2.props.onPress();
+  });
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBeNull();
 });

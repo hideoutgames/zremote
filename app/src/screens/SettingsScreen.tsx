@@ -39,12 +39,15 @@ import {
   setLiveActivitiesEnabled,
   setLiveActivityShowHost,
   setNotificationsEnabled,
+  useCleanupModelId,
   useDictationLocale,
   useForceRelayMode,
   useHapticsEnabled,
   useLiveActivitiesEnabled,
   useLiveActivityShowHost,
   useNotificationsEnabled,
+  useVoiceInputMode,
+  useVoiceModelId,
 } from '../zeron/state/uiPrefs';
 import {
   dictationUnavailable,
@@ -55,11 +58,29 @@ import {
   AppearanceBackground,
   ThemePage,
 } from '../components/settings/AppearanceBackground';
+import {
+  VoiceInputPage,
+  voiceInputModeLabel,
+} from '../components/settings/VoiceInputPage';
+import {
+  VoiceModelPicker,
+  selectedModelLabel,
+} from '../components/settings/VoiceModelPicker';
+import { CleanupPromptEditor } from '../components/settings/CleanupPromptEditor';
+import { catalogEntry } from '../zeron/voice/catalog';
 
 const log = createLog();
 
 const PRESENCE_TTL_MS = 45_000;
 const PRESENCE_TICK_MS = 5_000;
+
+type SettingsPage =
+  | 'root'
+  | 'theme'
+  | 'voiceInput'
+  | 'voiceModel'
+  | 'cleanupModel'
+  | 'cleanupPrompt';
 
 const useNow = (intervalMs: number): number => {
   const [now, setNow] = useState(() => Date.now());
@@ -258,18 +279,26 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const presence = useStore(workspaceStore, s => s.presence);
   const now = useNow(PRESENCE_TICK_MS);
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
-  const [themeOpen, setThemeOpen] = useState(false);
+  const [page, setPage] = useState<SettingsPage>('root');
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
   const notificationsEnabled = useNotificationsEnabled();
   const hapticsEnabled = useHapticsEnabled();
   const forceRelayMode = useForceRelayMode();
   const dictationLocale = useDictationLocale();
+  const voiceInputMode = useVoiceInputMode();
+  const voiceModelId = useVoiceModelId();
+  const cleanupModelId = useCleanupModelId();
+  const cleanupEngine = catalogEntry(cleanupModelId);
   const [dictationModelState, setDictationModelState] = useState<
     DictationModelState | undefined
   >(undefined);
 
   useEffect(() => {
+    if (voiceInputMode !== 'dictation') {
+      setDictationModelState(undefined);
+      return;
+    }
     let mounted = true;
     resolveDictationPort()
       .then(port =>
@@ -288,7 +317,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     return () => {
       mounted = false;
     };
-  }, [dictationLocale]);
+  }, [dictationLocale, voiceInputMode]);
 
   const downloadDictationModel = useCallback(() => {
     resolveDictationPort()
@@ -341,10 +370,21 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     ? t('settings.demoAccount')
     : user?.email ?? user?.id ?? '';
 
-  const dictationFooter =
-    dictationModelState === undefined
-      ? t('settings.dictationUnavailable')
-      : dictationStateLabel(dictationModelState);
+  const subpageOpen = agentsFor !== undefined || page !== 'root';
+  const pageTitle =
+    agentsFor !== undefined
+      ? agentsFor.name
+      : page === 'theme'
+      ? t('settings.theme')
+      : page === 'voiceInput'
+      ? t('settings.voiceInput')
+      : page === 'voiceModel'
+      ? t('settings.voiceModel')
+      : page === 'cleanupModel'
+      ? t('settings.cleanupModel')
+      : page === 'cleanupPrompt'
+      ? t('settings.cleanupInstructions')
+      : t('settings.title');
 
   return (
     <View
@@ -352,11 +392,11 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {agentsFor !== undefined || themeOpen ? (
+          {subpageOpen ? (
             <Pressable
               onPress={() => {
                 if (agentsFor !== undefined) setAgentsFor(undefined);
-                else setThemeOpen(false);
+                else setPage('root');
               }}
               hitSlop={8}
               accessibilityRole="button"
@@ -371,11 +411,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           ) : null}
         </View>
         <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-          {agentsFor !== undefined
-            ? agentsFor.name
-            : themeOpen
-            ? t('settings.theme')
-            : t('settings.title')}
+          {pageTitle}
         </Text>
         <View style={styles.headerRight}>
           <Pressable
@@ -400,8 +436,16 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         >
           {agentsFor !== undefined ? (
             <AgentsPage device={agentsFor} />
-          ) : themeOpen ? (
+          ) : page === 'theme' ? (
             <ThemePage />
+          ) : page === 'voiceInput' ? (
+            <VoiceInputPage />
+          ) : page === 'voiceModel' ? (
+            <VoiceModelPicker kind="transcription" />
+          ) : page === 'cleanupModel' ? (
+            <VoiceModelPicker kind="cleanup" />
+          ) : page === 'cleanupPrompt' ? (
+            <CleanupPromptEditor onClose={() => setPage('root')} />
           ) : (
             <>
               <SettingsGroup header={t('settings.account')}>
@@ -494,7 +538,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 />
               </SettingsGroup>
 
-              <AppearanceBackground onOpenTheme={() => setThemeOpen(true)} />
+              <AppearanceBackground onOpenTheme={() => setPage('theme')} />
 
               <SettingsGroup
                 header={t('settings.liveActivities')}
@@ -539,29 +583,79 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
               </SettingsGroup>
 
               <SettingsGroup
-                header={t('settings.dictation')}
-                footer={dictationFooter}
+                header={t('settings.voiceInput')}
+                footer={
+                  voiceInputMode === 'dictation'
+                    ? dictationModelState === undefined
+                      ? t('settings.dictationUnavailable')
+                      : dictationStateLabel(dictationModelState)
+                    : undefined
+                }
               >
                 <SettingsRow
-                  title={t('settings.dictationLanguage')}
-                  value={dictationLocale}
-                  trailing={
-                    dictationModelState === 'downloadable' ? (
-                      <Pressable
-                        onPress={downloadDictationModel}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('settings.dictationDownload')}
-                      >
-                        <Icon
-                          name="arrow.down.circle"
-                          size={22}
-                          color={theme.accent}
-                        />
-                      </Pressable>
-                    ) : undefined
-                  }
+                  title={t('settings.voiceInput')}
+                  value={voiceInputModeLabel(voiceInputMode)}
+                  showChevron
+                  onPress={() => setPage('voiceInput')}
+                  testID="settings-voice-input"
+                  accessibilityLabel={`${t(
+                    'settings.voiceInput',
+                  )}, ${voiceInputModeLabel(voiceInputMode)}`}
                 />
+                {voiceInputMode === 'dictation' ? (
+                  <SettingsRow
+                    title={t('settings.dictationLanguage')}
+                    value={dictationLocale}
+                    trailing={
+                      dictationModelState === 'downloadable' ? (
+                        <Pressable
+                          onPress={downloadDictationModel}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('settings.dictationDownload')}
+                        >
+                          <Icon
+                            name="arrow.down.circle"
+                            size={22}
+                            color={theme.accent}
+                          />
+                        </Pressable>
+                      ) : undefined
+                    }
+                    testID="settings-dictation-language"
+                  />
+                ) : null}
+                {voiceInputMode === 'voiceModel' ? (
+                  <SettingsRow
+                    title={t('settings.voiceModel')}
+                    value={
+                      voiceModelId === null
+                        ? t('settings.voiceRequired')
+                        : selectedModelLabel(voiceModelId)
+                    }
+                    showChevron
+                    onPress={() => setPage('voiceModel')}
+                    testID="settings-voice-model"
+                  />
+                ) : null}
+                {voiceInputMode === 'voiceModel' ? (
+                  <SettingsRow
+                    title={t('settings.cleanupModel')}
+                    value={selectedModelLabel(cleanupModelId)}
+                    showChevron
+                    onPress={() => setPage('cleanupModel')}
+                    testID="settings-cleanup-model"
+                  />
+                ) : null}
+                {voiceInputMode === 'voiceModel' &&
+                cleanupEngine?.capabilities.supportsCustomPrompt === true ? (
+                  <SettingsRow
+                    title={t('settings.cleanupInstructions')}
+                    showChevron
+                    onPress={() => setPage('cleanupPrompt')}
+                    testID="settings-cleanup-instructions"
+                  />
+                ) : null}
               </SettingsGroup>
             </>
           )}

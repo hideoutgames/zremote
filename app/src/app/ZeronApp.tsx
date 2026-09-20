@@ -45,6 +45,7 @@ import { AppErrorBoundary } from './AppErrorBoundary';
 import { MenuDismissShield } from '../components/menus/MenuDismissShield';
 import { bindBackgroundFs } from '../zeron/state/newThreadBackground';
 import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
+import { bindExpoVoiceModelManager } from '../zeron/native/expoVoiceModels';
 import { bindRunFinishedHaptic } from '../notifications/runFinishedHaptic';
 import { bindWorkedDuration } from '../zeron/state/workedDuration';
 
@@ -93,6 +94,7 @@ export function ZeronApp() {
 
   useEffect(() => {
     bindBackgroundFs(expoBackgroundFs);
+    bindExpoVoiceModelManager();
   }, []);
 
   useEffect(() => {

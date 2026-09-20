@@ -57,6 +57,7 @@ import {
   useComposeDefaults,
   usePinnedModels,
   useRecentModels,
+  useVoiceInputMode,
   type ComposeDefaults,
 } from '../zeron/state/uiPrefs';
 import { workspaceStore } from '../zeron/state/workspaceStore';
@@ -75,6 +76,7 @@ import {
 } from '../zeron/protocol/types';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { t } from '../i18n/strings';
+import { useLocalVoiceRuntime } from '../hooks/useLocalVoiceRuntime';
 
 export function ComposeComposer({
   onCreated,
@@ -128,10 +130,16 @@ export function ComposeComposer({
   );
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
+  const voiceInputMode = useVoiceInputMode();
+  const voiceRuntime = useLocalVoiceRuntime(voiceInputMode === 'voiceModel');
   const composerRef = useRef<View>(null);
   const wrapRef = useRef<View>(null);
 
   useEffect(() => {
+    if (voiceInputMode !== 'dictation') {
+      setDictation(dictationUnavailable);
+      return;
+    }
     let mounted = true;
     resolveDictationPort().then(port => {
       if (mounted) setDictation(port);
@@ -139,7 +147,7 @@ export function ComposeComposer({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [voiceInputMode]);
 
   // Saved compose defaults / "new in this space" can land after mount.
   useEffect(() => {
@@ -544,6 +552,7 @@ export function ComposeComposer({
         }}
         checkout={checkout}
         dictation={dictation}
+        voiceRuntime={voiceRuntime}
         onSend={onSend}
         onSteer={() => {}}
         onQueue={() => {}}
