@@ -1,6 +1,7 @@
-// Compact Home ↔ Session pager: back must keep chat/compose mounted until
-// PagerView reports Home. Freeze is a Jest passthrough, so this asserts
-// composing teardown (and that a real session stays mounted after settle).
+// Compact Home ↔ Session pager: back must keep chat/compose mounted through
+// the reverse slide. pager-view v8 fires onPageSelected at animation start;
+// Freeze is a Jest passthrough, so this asserts composing teardown timing
+// (and that a real session stays mounted after the hold releases).
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
@@ -10,6 +11,7 @@ import {
   type AppServices,
 } from '../src/app/runtimeContext';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
+import { PAGER_SLIDE_MS } from '../src/navigation/pagerTransition';
 
 const services: AppServices = {
   auth: null as never,
@@ -45,7 +47,7 @@ const pressBack = async (root: TestRenderer.ReactTestInstance) => {
   });
 };
 
-const settleHome = async (root: TestRenderer.ReactTestInstance) => {
+const selectHome = async (root: TestRenderer.ReactTestInstance) => {
   const pager = root.findAll(
     n => typeof n.props.onPageSelected === 'function',
   )[0];
@@ -55,7 +57,14 @@ const settleHome = async (root: TestRenderer.ReactTestInstance) => {
   });
 };
 
+const advanceSlide = async () => {
+  await act(async () => {
+    jest.advanceTimersByTime(PAGER_SLIDE_MS);
+  });
+};
+
 beforeEach(() => {
+  jest.useFakeTimers();
   workspaceStore.setState({
     devices: [],
     spaces: [],
@@ -67,7 +76,11 @@ beforeEach(() => {
   });
 });
 
-test('compose stays mounted until the pager settles on Home', async () => {
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+test('compose stays mounted through immediate Home select until the slide timeout', async () => {
   const tree = await render();
   const btn = tree.root.findAll(n => n.props.testID === 'home-new-thread')[0];
   expect(btn).toBeDefined();
@@ -79,7 +92,10 @@ test('compose stays mounted until the pager settles on Home', async () => {
   await pressBack(tree.root);
   expect(count(tree.root, 'compose-composer')).toBeGreaterThan(0);
 
-  await settleHome(tree.root);
+  await selectHome(tree.root);
+  expect(count(tree.root, 'compose-composer')).toBeGreaterThan(0);
+
+  await advanceSlide();
   expect(count(tree.root, 'compose-composer')).toBe(0);
 
   await act(async () => {
@@ -87,7 +103,7 @@ test('compose stays mounted until the pager settles on Home', async () => {
   });
 });
 
-test('open session stays mounted through back and after Home settles', async () => {
+test('open session stays mounted through back, Home select, and after the hold', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -116,8 +132,34 @@ test('open session stays mounted through back and after Home settles', async () 
   await pressBack(tree.root);
   expect(count(tree.root, 'session-composer')).toBeGreaterThan(0);
 
-  await settleHome(tree.root);
+  await selectHome(tree.root);
   expect(count(tree.root, 'session-composer')).toBeGreaterThan(0);
+
+  await advanceSlide();
+  expect(count(tree.root, 'session-composer')).toBeGreaterThan(0);
+
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('reopening compose during the hold cancels teardown', async () => {
+  const tree = await render();
+  const btn = tree.root.findAll(n => n.props.testID === 'home-new-thread')[0];
+  await act(async () => {
+    btn.props.onPress();
+  });
+  await pressBack(tree.root);
+  await selectHome(tree.root);
+  expect(count(tree.root, 'compose-composer')).toBeGreaterThan(0);
+
+  await act(async () => {
+    btn.props.onPress();
+  });
+  expect(count(tree.root, 'compose-composer')).toBeGreaterThan(0);
+
+  await advanceSlide();
+  expect(count(tree.root, 'compose-composer')).toBeGreaterThan(0);
 
   await act(async () => {
     tree.unmount();
