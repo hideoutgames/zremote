@@ -75,6 +75,7 @@ const SF_TO_MDI: Record<string, string> = {
   lock: 'lock-outline',
   minus: 'minus-thick',
   'plus.forwardslash.minus': 'plus-minus',
+  'slash.circle': 'circle-off-outline',
   'person.2': 'account-multiple-outline',
   'sidebar.left': 'page-layout-sidebar-left',
   'sidebar.right': 'page-layout-sidebar-right',

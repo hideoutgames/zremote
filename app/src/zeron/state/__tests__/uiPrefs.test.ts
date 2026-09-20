@@ -1,4 +1,5 @@
 import {
+  applyPresetBackground,
   rememberModelSettings,
   modelSettingsFor,
   setComposerExtraHeight,
@@ -15,6 +16,7 @@ import {
 import {
   bindBackgroundFs,
   unbindBackgroundFs,
+  customBackgroundUri,
   type BackgroundFs,
 } from '../newThreadBackground';
 import { memDocDisk } from '../../native/memDocDisk';
@@ -43,7 +45,7 @@ beforeEach(() => {
     modelSettingsByKey: {},
     composerExtraHeight: 0,
     newThreadComposerBackground: undefined,
-    newThreadBackgroundEffect: 'none',
+    newThreadBackgroundEffect: 'dither',
     colorScheme: 'system',
     pinnedModels: [],
   });
@@ -52,6 +54,10 @@ beforeEach(() => {
 afterEach(() => {
   unbindBackgroundFs();
   unbindUiPrefs();
+});
+
+test('newThreadBackgroundEffect defaults to dither', () => {
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('rememberModelSettings merges per model and does not clobber siblings', () => {
@@ -97,8 +103,11 @@ test('installNewThreadComposerBackground copies then replaces the pointer', asyn
   });
   expect(first.ok).toBe(true);
   const stored = uiPrefsStore.getState().newThreadComposerBackground;
-  expect(stored?.name).toBe('one.png');
-  expect(stored?.uri).toContain('/new-thread-backgrounds/');
+  expect(stored?.kind).toBe('custom');
+  expect(customBackgroundUri(stored)).toContain('/new-thread-backgrounds/');
+  expect(
+    stored !== undefined && stored.kind !== 'preset' ? stored.name : undefined,
+  ).toBe('one.png');
   expect(fs.files.size).toBe(1);
 
   const second = await installNewThreadComposerBackground({
@@ -108,15 +117,18 @@ test('installNewThreadComposerBackground copies then replaces the pointer', asyn
     size: 20,
   });
   expect(second.ok).toBe(true);
-  expect(uiPrefsStore.getState().newThreadComposerBackground?.name).toBe(
-    'two.jpg',
-  );
+  const replaced = uiPrefsStore.getState().newThreadComposerBackground;
+  expect(
+    replaced !== undefined && replaced.kind !== 'preset'
+      ? replaced.name
+      : undefined,
+  ).toBe('two.jpg');
   expect(fs.files.size).toBe(1);
 
   setNewThreadBackgroundEffect('ascii');
   await removeNewThreadComposerBackground();
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
   expect(fs.files.size).toBe(0);
 });
 
@@ -140,6 +152,60 @@ test('install before bindUiPrefs is flushed once persist is bound', async () => 
   ).toBe('early.png');
 });
 
+test('applyPresetBackground stores a preset and retires the managed custom file', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const installed = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/one.png',
+    name: 'one.png',
+    mimeType: 'image/png',
+    size: 20,
+  });
+  expect(installed.ok).toBe(true);
+  expect(fs.files.size).toBe(1);
+
+  const applied = await applyPresetBackground('emma');
+  expect(applied).toBe(true);
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(fs.files.size).toBe(0);
+
+  expect(await applyPresetBackground('not-a-pack-id')).toBe(false);
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+});
+
+test('bindUiPrefs keeps a known preset without checking the documents folder', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: { kind: 'preset', id: 'emma' },
+    newThreadBackgroundEffect: 'dither',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('bindUiPrefs drops an unknown preset id', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: { kind: 'preset', id: 'missing-art' },
+    newThreadBackgroundEffect: 'ascii',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
 test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
   const fs = new MemoryBackgroundFs();
   bindBackgroundFs(fs);
@@ -153,7 +219,7 @@ test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
   });
   await bindUiPrefs(disk, 'org', 'user');
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
@@ -166,7 +232,7 @@ test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
   });
   unbindUiPrefs();
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('colorScheme defaults to system and persists', async () => {

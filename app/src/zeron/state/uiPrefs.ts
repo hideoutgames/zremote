@@ -7,10 +7,13 @@ import type { DocDisk } from '../native/docDisk';
 import { rememberRecentModel, type RecentModel } from './recentModels';
 import { togglePinnedModelList } from './pinnedModels';
 import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
+import { defaultBackgroundById } from './defaultBackgrounds';
 import {
-  backgroundFileExists,
   copyBackgroundFile,
+  DEFAULT_BACKGROUND_EFFECT,
   getBackgroundFs,
+  isWallpaperAvailable,
+  parseNewThreadComposerBackground,
   retireManagedBackground,
   type BackgroundInstallResult,
   type BackgroundSource,
@@ -88,7 +91,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   pinnedChatIds: [],
   pinnedModels: [],
   modelSettingsByKey: {},
-  newThreadBackgroundEffect: 'none',
+  newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
   colorScheme: 'system',
 }));
 
@@ -101,7 +104,7 @@ const WALLPAPER_UNSET: Pick<
   'newThreadComposerBackground' | 'newThreadBackgroundEffect'
 > = {
   newThreadComposerBackground: undefined,
-  newThreadBackgroundEffect: 'none',
+  newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
 };
 
 export const bindUiPrefs = async (
@@ -136,9 +139,16 @@ export const bindUiPrefs = async (
       newThreadBackgroundEffect: pendingWallpaper.effect,
     });
   }
-  const background = uiPrefsStore.getState().newThreadComposerBackground;
-  if (background !== undefined) {
-    const ok = await backgroundFileExists(background.uri);
+  const background = parseNewThreadComposerBackground(
+    uiPrefsStore.getState().newThreadComposerBackground,
+  );
+  if (background === undefined) {
+    if (uiPrefsStore.getState().newThreadComposerBackground !== undefined) {
+      uiPrefsStore.setState(WALLPAPER_UNSET);
+    }
+  } else {
+    uiPrefsStore.setState({ newThreadComposerBackground: background });
+    const ok = await isWallpaperAvailable(background);
     if (!ok) {
       uiPrefsStore.setState(WALLPAPER_UNSET);
     }
@@ -378,6 +388,26 @@ export const setNewThreadBackgroundEffect = (
 ): void => {
   uiPrefsStore.setState({ newThreadBackgroundEffect: v });
   save();
+};
+
+export const applyPresetBackground = async (id: string): Promise<boolean> => {
+  if (defaultBackgroundById(id) === undefined) return false;
+  const previous = uiPrefsStore.getState().newThreadComposerBackground;
+  if (previous?.kind === 'preset' && previous.id === id) return true;
+  uiPrefsStore.setState({
+    newThreadComposerBackground: { kind: 'preset', id },
+  });
+  try {
+    await saveAsync();
+  } catch {
+    uiPrefsStore.setState({ newThreadComposerBackground: previous });
+    return false;
+  }
+  const fs = getBackgroundFs();
+  if (fs !== undefined) {
+    await retireManagedBackground(fs, previous, '');
+  }
+  return true;
 };
 
 export const installNewThreadComposerBackground = async (
