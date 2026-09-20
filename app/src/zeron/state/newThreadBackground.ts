@@ -17,6 +17,8 @@ export type NewThreadBackgroundEffect =
 export const NEW_THREAD_BACKGROUND_EFFECTS: readonly NewThreadBackgroundEffect[] =
   ['none', 'dither', 'ascii', 'halftone', 'scanlines'];
 
+export const DEFAULT_BACKGROUND_EFFECT: NewThreadBackgroundEffect = 'dither';
+
 export type CustomNewThreadBackground = {
   kind?: 'custom';
   uri: string;

@@ -10,6 +10,7 @@ import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
 import { defaultBackgroundById } from './defaultBackgrounds';
 import {
   copyBackgroundFile,
+  DEFAULT_BACKGROUND_EFFECT,
   getBackgroundFs,
   isWallpaperAvailable,
   parseNewThreadComposerBackground,
@@ -90,7 +91,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   pinnedChatIds: [],
   pinnedModels: [],
   modelSettingsByKey: {},
-  newThreadBackgroundEffect: 'none',
+  newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
   colorScheme: 'system',
 }));
 
@@ -103,7 +104,7 @@ const WALLPAPER_UNSET: Pick<
   'newThreadComposerBackground' | 'newThreadBackgroundEffect'
 > = {
   newThreadComposerBackground: undefined,
-  newThreadBackgroundEffect: 'none',
+  newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
 };
 
 export const bindUiPrefs = async (

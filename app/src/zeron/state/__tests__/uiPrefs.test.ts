@@ -45,7 +45,7 @@ beforeEach(() => {
     modelSettingsByKey: {},
     composerExtraHeight: 0,
     newThreadComposerBackground: undefined,
-    newThreadBackgroundEffect: 'none',
+    newThreadBackgroundEffect: 'dither',
     colorScheme: 'system',
     pinnedModels: [],
   });
@@ -54,6 +54,10 @@ beforeEach(() => {
 afterEach(() => {
   unbindBackgroundFs();
   unbindUiPrefs();
+});
+
+test('newThreadBackgroundEffect defaults to dither', () => {
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('rememberModelSettings merges per model and does not clobber siblings', () => {
@@ -124,7 +128,7 @@ test('installNewThreadComposerBackground copies then replaces the pointer', asyn
   setNewThreadBackgroundEffect('ascii');
   await removeNewThreadComposerBackground();
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
   expect(fs.files.size).toBe(0);
 });
 
@@ -199,7 +203,7 @@ test('bindUiPrefs drops an unknown preset id', async () => {
   });
   await bindUiPrefs(disk, 'org', 'user');
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
@@ -215,7 +219,7 @@ test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
   });
   await bindUiPrefs(disk, 'org', 'user');
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
@@ -228,7 +232,7 @@ test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
   });
   unbindUiPrefs();
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
-  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
 test('colorScheme defaults to system and persists', async () => {
