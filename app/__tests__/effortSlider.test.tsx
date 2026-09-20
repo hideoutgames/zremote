@@ -24,6 +24,7 @@ const touch = (locationX: number) => ({ nativeEvent: { locationX } });
 
 beforeEach(() => {
   mocked.selectionAsync.mockClear();
+  mocked.prepareSelectionAsync.mockClear();
   uiPrefsStore.setState({ hapticsEnabled: true });
 });
 
@@ -53,6 +54,7 @@ test('crossing a stop ticks selection haptics once and reports the new level', a
   });
   expect(onChange).toHaveBeenCalledTimes(1);
   expect(onChange).toHaveBeenCalledWith('high');
+  expect(mocked.prepareSelectionAsync).toHaveBeenCalled();
   expect(mocked.selectionAsync).toHaveBeenCalledTimes(1);
 });
 

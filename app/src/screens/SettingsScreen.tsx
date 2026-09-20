@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useStore } from 'zustand';
+import * as Haptics from 'expo-haptics';
 import { workspaceStore } from '../zeron/state/workspaceStore';
 import { authStore } from '../zeron/state/authStore';
 import { catalogStore } from '../zeron/state/catalogStore';
@@ -36,6 +37,7 @@ import { useTheme } from '../theme';
 import { useDemoMode } from '../demo/demoMode';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
+import { impact } from '../zeron/native/haptics';
 import {
   setForceRelayMode,
   setHapticsEnabled,
@@ -520,13 +522,19 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                 />
               </SettingsGroup>
 
-              <SettingsGroup header={t('settings.haptics')}>
+              <SettingsGroup
+                header={t('settings.haptics')}
+                footer={t('settings.hapticsHint')}
+              >
                 <SettingsRow
                   title={t('settings.haptics')}
                   trailing={
                     <Switch
                       value={hapticsEnabled}
-                      onValueChange={setHapticsEnabled}
+                      onValueChange={v => {
+                        setHapticsEnabled(v);
+                        if (v) impact(Haptics.ImpactFeedbackStyle.Medium);
+                      }}
                       accessibilityLabel={t('settings.haptics')}
                     />
                   }

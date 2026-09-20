@@ -114,6 +114,8 @@ class HybridDictation: HybridDictationSpec {
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.record, mode: .measurement,
                               options: [.duckOthers])
+      // Recording otherwise mutes UIFeedbackGenerator / Core Haptics.
+      try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
       try session.setActive(true, options: .notifyOthersOnDeactivation)
 
       let req = SFSpeechAudioBufferRecognitionRequest()
@@ -176,7 +178,10 @@ class HybridDictation: HybridDictationSpec {
     if let o = routeObserver {
       NotificationCenter.default.removeObserver(o)
     }
-    try? AVAudioSession.sharedInstance()
-      .setActive(false, options: .notifyOthersOnDeactivation)
+    let session = AVAudioSession.sharedInstance()
+    // Leave .record behind — that category keeps suppressing haptics
+    // after the recognizer stops.
+    try? session.setCategory(.ambient, mode: .default)
+    try? session.setActive(false, options: .notifyOthersOnDeactivation)
   }
 }

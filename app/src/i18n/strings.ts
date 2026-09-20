@@ -233,6 +233,8 @@ const en = {
   'settings.notificationsHint':
     'Notify when a run finishes or the agent needs input.',
   'settings.haptics': 'Haptics',
+  'settings.hapticsHint':
+    'Plays on the effort slider and when a run finishes while the app is open.',
   'notify.runCompleted': 'Run completed',
   'notify.runFailed': 'Run failed',
   'notify.needsInput': 'The agent needs your input',

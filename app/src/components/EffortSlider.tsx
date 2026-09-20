@@ -10,7 +10,7 @@ import {
   withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { selectionTick } from '../zeron/native/haptics';
+import { prepareSelection, selectionTick } from '../zeron/native/haptics';
 import { detentForValue } from './modelPicker';
 import { EffortTrackAnim } from './EffortTrackAnim';
 import {
@@ -115,6 +115,7 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
       onMoveShouldSetResponder={() => true}
       onResponderGrant={e => {
         pressed.current = true;
+        prepareSelection();
         onTouch(e, false);
       }}
       onResponderMove={e => onTouch(e, false)}
