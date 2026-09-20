@@ -3,13 +3,18 @@ import {
   applyPlanPrefix,
   BUILD_PREFIX,
   IMPLEMENT_PLAN_TEXT,
+  PLAN_END_MARKER,
+  PLAN_PREFIX,
+  PLAN_START_MARKER,
   stripPlanPrefix,
   withBuildPrefixIf,
   withPlanPrefixIf,
 } from '../src/components/planMode';
 import {
   detectPlanArtifact,
+  extractMarkedPlan,
   isPlanToolPart,
+  stripPlanMarkers,
 } from '../src/components/transcript/detectPlan';
 import {
   fileKindIcon,
@@ -22,9 +27,11 @@ test('applyPlanPrefix is idempotent and skips empty', () => {
   expect(applyPlanPrefix('')).toBe('');
   expect(applyPlanPrefix('  ')).toBe('');
   const once = applyPlanPrefix('ship it');
-  expect(
-    once.startsWith('/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING:'),
-  ).toBe(true);
+  expect(once.startsWith(PLAN_PREFIX)).toBe(true);
+  expect(once.startsWith('/plan')).toBe(false);
+  expect(once).toContain('Do not use a plan tool');
+  expect(once).toContain(PLAN_START_MARKER);
+  expect(once).toContain(PLAN_END_MARKER);
   expect(applyPlanPrefix(once)).toBe(once);
   expect(withPlanPrefixIf(false, 'x')).toBe('x');
   expect(withPlanPrefixIf(true, 'x')).toBe(applyPlanPrefix('x'));
@@ -37,6 +44,12 @@ test('stripPlanPrefix recovers the user text', () => {
     kind: 'plan',
     text: 'fix the cert',
   });
+});
+
+test('stripPlanPrefix recovers a legacy /plan prefix', () => {
+  expect(
+    stripPlanPrefix('/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it'),
+  ).toEqual({ kind: 'plan', text: 'ship it' });
 });
 
 test('applyBuildPrefix is idempotent and skips empty', () => {
@@ -228,6 +241,113 @@ test('detectPlanArtifact uses Claude EnterPlanMode + following text', () => {
   ]);
   expect(detectPlanArtifact(entry)?.name).toBe('Composer grabber');
   expect(detectPlanArtifact(entry)?.markdown).toContain('drag handle');
+});
+
+test('EnterPlanMode ignores preamble text before the tool', () => {
+  const entry = assistant([
+    {
+      kind: 'text',
+      id: 'pre',
+      text: 'Switching to plan mode.',
+    },
+    {
+      kind: 'tool',
+      id: 't0',
+      call: { kind: 'unknown', name: 'EnterPlanMode' },
+      resolved: true,
+    },
+    {
+      kind: 'text',
+      id: 'txt',
+      text: '# Composer grabber\n\nAdd a drag handle.',
+    },
+  ]);
+  expect(detectPlanArtifact(entry)?.name).toBe('Composer grabber');
+  expect(detectPlanArtifact(entry)?.markdown).not.toContain('Switching');
+});
+
+test('overview is not treated as the plan body', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: {
+        kind: 'unknown',
+        name: 'createPlan',
+        input: {
+          name: 'Signing fix',
+          overview: 'A short summary, not the plan.',
+        },
+      },
+      resolved: true,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Signing fix',
+    markdown: '',
+    toolId: 't1',
+  });
+});
+
+test('marked plan wins over overview and sanitized createPlan', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: {
+        kind: 'unknown',
+        name: 'createPlan',
+        input: {
+          name: 'Wrong title',
+          overview: 'Not the plan.',
+        },
+      },
+      resolved: true,
+    },
+    {
+      kind: 'text',
+      id: 'txt',
+      text: `${PLAN_START_MARKER}\n# Signing fix\n\nUse one cert.\n${PLAN_END_MARKER}`,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Signing fix',
+    markdown: '# Signing fix\n\nUse one cert.',
+  });
+});
+
+test('detectPlanArtifact reads a marked plan with no tool call', () => {
+  const entry = assistant([
+    {
+      kind: 'text',
+      id: 'txt',
+      text: `Here is the plan.\n${PLAN_START_MARKER}\n# Codex login\n\nShip the login.\n${PLAN_END_MARKER}`,
+    },
+  ]);
+  expect(detectPlanArtifact(entry)).toEqual({
+    name: 'Codex login',
+    markdown: '# Codex login\n\nShip the login.',
+  });
+});
+
+test('extractMarkedPlan accepts a partial body while streaming', () => {
+  expect(
+    extractMarkedPlan(`${PLAN_START_MARKER}\n# Partial\n\nStill writing`),
+  ).toEqual({
+    name: 'Partial',
+    markdown: '# Partial\n\nStill writing',
+  });
+});
+
+test('stripPlanMarkers drops the marked block from transcript text', () => {
+  expect(
+    stripPlanMarkers(
+      `Intro.\n${PLAN_START_MARKER}\n# Title\nbody\n${PLAN_END_MARKER}\nOutro.`,
+    ),
+  ).toBe('Intro.\n\nOutro.');
+  expect(stripPlanMarkers(`Keep this.\n${PLAN_START_MARKER}\n# Title`)).toBe(
+    'Keep this.',
+  );
 });
 
 test('turnChanges is unique paths with summed stats', () => {

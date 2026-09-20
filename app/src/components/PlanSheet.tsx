@@ -1,6 +1,8 @@
 // TrueSheet needs a real detent height — `minHeight: '100%'` on the fill
 // wrapper (same pattern as GlassSheet / SessionSheet) so the plan ScrollView
-// does not collapse to 0 on iPhone.
+// does not collapse to 0 on iPhone. The Implement Plan CTA lives in normal
+// column flow (not overlay) so TrueSheet cannot clip it against the home
+// indicator.
 
 import React, { useRef } from 'react';
 import {
@@ -67,12 +69,12 @@ export function PlanSheet({
           <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
             {name}
           </Text>
-          <View style={styles.closeButton} />
+          <View style={styles.headerSpacer} />
         </View>
         <ScrollView
           testID="plan-sheet-scroll"
           style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {markdown.trim() !== '' ? (
@@ -84,8 +86,8 @@ export function PlanSheet({
           ) : null}
         </ScrollView>
         <View
-          style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}
-          pointerEvents="box-none"
+          testID="plan-sheet-footer"
+          style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}
         >
           <Pressable
             onPress={onImplement}
@@ -122,6 +124,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerSpacer: { width: CLOSE, height: CLOSE },
   title: {
     flex: 1,
     fontSize: 20,
@@ -129,11 +132,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   scroll: { paddingHorizontal: 20, flex: 1, minHeight: 0 },
+  scrollContent: { paddingBottom: 16 },
   footer: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   cta: {
     height: 52,

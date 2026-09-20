@@ -14,6 +14,11 @@ import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubbl
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
 import { PlanBadge } from '../src/components/PlanBadge';
+import {
+  applyPlanPrefix,
+  PLAN_END_MARKER,
+  PLAN_START_MARKER,
+} from '../src/components/planMode';
 import * as ContextMenu from 'zeego/context-menu';
 import type { MessageEntry, MessagePart } from '../src/zeron/protocol/types';
 
@@ -111,7 +116,7 @@ test('UserMessage strips the plan prefix and shows a Plan badge', async () => {
       {
         kind: 'text',
         id: 't0',
-        text: '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it',
+        text: applyPlanPrefix('ship it'),
       },
     ],
   };
@@ -125,6 +130,11 @@ test('UserMessage strips the plan prefix and shows a Plan badge', async () => {
   expect(texts.some(s => typeof s === 'string' && s.includes('/plan'))).toBe(
     false,
   );
+  expect(
+    texts.some(
+      s => typeof s === 'string' && s.includes('PLEASE CREATE A PLAN'),
+    ),
+  ).toBe(false);
 });
 
 test('UserMessage strips the build prefix and shows a Build badge', async () => {
@@ -157,7 +167,7 @@ test('UserMessage inlines the Plan badge inside the prompt Text', async () => {
       {
         kind: 'text',
         id: 't0',
-        text: '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it',
+        text: applyPlanPrefix('ship it'),
       },
     ],
   };
@@ -195,7 +205,7 @@ test('UserMessage keeps row padding when a Plan badge is present', async () => {
       {
         kind: 'text',
         id: 't0',
-        text: '/plan PLEASE CREATE A PLAN BEFORE IMPLEMENTING: ship it',
+        text: applyPlanPrefix('ship it'),
       },
     ],
   };
@@ -284,6 +294,41 @@ test('AssistantMessage shows a Plan card for name-only createPlan', async () => 
   expect(texts).toContain('Plan');
   expect(texts.some(s => s === 'Tool' || s === 'createPlan')).toBe(false);
   expect(tree!.root.findAllByType(PlanBadge).length).toBe(1);
+});
+
+test('AssistantMessage strips marked plan text and shows a Plan card', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: `Here is the plan.\n${PLAN_START_MARKER}\n# Resize composer\n\nDrag the grabber.\n${PLAN_END_MARKER}`,
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {}}
+        onOpenPlan={() => {}}
+      />,
+    );
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Resize composer');
+  expect(
+    tree!.root.findAll(
+      n =>
+        typeof n.props.markdown === 'string' &&
+        n.props.markdown.includes(PLAN_START_MARKER),
+    ),
+  ).toHaveLength(0);
+  expect(
+    tree!.root.findByProps({ markdown: 'Here is the plan.' }),
+  ).toBeTruthy();
 });
 
 test('AssistantMessage groups the tool parts into one rail', async () => {

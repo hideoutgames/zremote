@@ -21,7 +21,11 @@ import {
 import { TaskRows } from '../agentsKit/TaskRows';
 import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
-import { detectPlanArtifact, isPlanToolPart } from './detectPlan';
+import {
+  detectPlanArtifact,
+  isPlanToolPart,
+  stripPlanMarkers,
+} from './detectPlan';
 import { isSubagentSpawn, subagentView } from './detectSubagent';
 import { isCompleteAssistant, turnChanges } from './turnChanges';
 import type { TurnChange } from './turnChanges';
@@ -103,9 +107,9 @@ const PartView = ({
   const theme = useTheme();
   switch (part.kind) {
     case 'text': {
-      if (part.text === '') return null;
-      const source =
-        streaming && isLastText ? mendMarkdown(part.text) : part.text;
+      const visible = stripPlanMarkers(part.text);
+      if (visible === '') return null;
+      const source = streaming && isLastText ? mendMarkdown(visible) : visible;
       return (
         <MarkdownWithCopy
           markdown={source}
