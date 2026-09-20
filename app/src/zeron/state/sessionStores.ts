@@ -4,6 +4,7 @@
 // documented at the function.
 
 import { useStore } from 'zustand';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { effectiveStatus } from '../protocol/entities';
 import type {
@@ -236,7 +237,7 @@ const sameOpenInput = (
 export const useOpenInputRequest = (
   chatId: string,
 ): OpenInputRequest | undefined =>
-  useStore(
+  useStoreWithEqualityFn<StoreApi<SessionState>, OpenInputRequest | undefined>(
     getSessionStore(chatId),
     s => openInputRequest(s.entries),
     sameOpenInput,
