@@ -156,7 +156,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       archived: false,
       cwd: demoPaths.zremote,
       branch: 'demo/replay',
-      config: { harness: 'claude', model: 'sonnet', modelOptions: {} },
+      config: { harness: 'claude-code', model: 'sonnet', modelOptions: {} },
       lastMessagePreview: 'Streaming a simulated reply…',
       lastMessageAt: nowMs - 10_000,
       createdAt: BASE_MS - 2 * 86_400_000,
@@ -175,7 +175,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       archived: false,
       cwd: demoPaths.zremote,
       branch: 'main',
-      config: { harness: 'claude', model: 'opus', modelOptions: {} },
+      config: { harness: 'claude-code', model: 'opus', modelOptions: {} },
       lastMessagePreview: 'Which approach should I take?',
       lastMessageAt: nowMs - 3_600_000,
       createdAt: BASE_MS - 3 * 86_400_000,
@@ -213,7 +213,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       archived: false,
       cwd: demoPaths.zeron,
       branch: 'main',
-      config: { harness: 'claude', model: 'sonnet', modelOptions: {} },
+      config: { harness: 'cursor', model: 'composer-2.5', modelOptions: {} },
       lastMessagePreview: 'The Explorer found three call sites.',
       lastMessageAt: nowMs - 50 * 3_600_000,
       createdAt: BASE_MS - 6 * 86_400_000,
@@ -251,7 +251,7 @@ export const demoRegistryRows = (nowMs: number): Row[] => [
       archived: false,
       cwd: demoPaths.zeron,
       branch: 'fix/reconnect-backoff',
-      config: { harness: 'claude', model: 'sonnet', modelOptions: {} },
+      config: { harness: 'claude-code', model: 'sonnet', modelOptions: {} },
       lastMessagePreview: 'The run failed: simulated engine error.',
       lastMessageAt: nowMs - 8 * 3_600_000,
       createdAt: BASE_MS - 7 * 86_400_000,
@@ -664,11 +664,11 @@ export const demoQueues = (nowMs: number): Record<string, QueuedMessage[]> => ({
 
 export const demoHarnesses = (): HarnessDescriptor[] => [
   {
-    id: 'claude',
+    id: 'claude-code',
     name: 'Claude Code',
     supportsSteering: true,
-    steeringMode: 'turn-boundary',
-    reasoningLevels: ['low', 'medium', 'high'],
+    steeringMode: 'step-boundary',
+    reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
     installed: true,
     enabled: true,
   },
@@ -676,28 +676,257 @@ export const demoHarnesses = (): HarnessDescriptor[] => [
     id: 'codex',
     name: 'Codex',
     supportsSteering: true,
-    steeringMode: 'turn-boundary',
-    reasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+    steeringMode: 'step-boundary',
+    reasoningLevels: [
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra',
+    ],
     installed: true,
     enabled: true,
   },
-  { id: 'mock', name: 'Mock', installed: true, enabled: true },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: [],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'devin',
+    name: 'Devin',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: [],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'grok',
+    name: 'Grok',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: ['low', 'medium', 'high'],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'hermes',
+    name: 'Hermes',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: [],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'pi',
+    name: 'Pi',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'antigravity',
+    name: 'Antigravity',
+    supportsSteering: true,
+    steeringMode: 'turn-boundary',
+    reasoningLevels: [],
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 'mock',
+    name: 'Mock',
+    supportsSteering: true,
+    steeringMode: 'step-boundary',
+    reasoningLevels: ['medium'],
+    installed: true,
+    enabled: true,
+  },
+];
+
+const toggleOption = (id: string, label: string): Model['options'][number] => ({
+  id,
+  label,
+  choices: [
+    { id: 'off', label: 'Off' },
+    { id: 'on', label: 'On' },
+  ],
+  defaultChoice: 'off',
+});
+
+const serviceTierOption = (): Model['options'][number] => ({
+  id: 'serviceTier',
+  label: 'Service Tier',
+  choices: [
+    { id: 'default', label: 'Standard' },
+    { id: 'fast', label: 'Fast' },
+  ],
+  defaultChoice: 'default',
+});
+
+const CLAUDE_LADDER = ['low', 'medium', 'high'] as const;
+const CODEX_LADDER = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
+
+const claudeModels = (): Model[] => [
+  {
+    id: 'sonnet',
+    label: 'Claude Sonnet',
+    reasoningLevels: [...CLAUDE_LADDER],
+    options: [],
+  },
+  {
+    id: 'opus',
+    label: 'Claude Opus',
+    reasoningLevels: [...CLAUDE_LADDER],
+    options: [toggleOption('fastMode', 'Fast Mode')],
+  },
+  {
+    id: 'haiku',
+    label: 'Claude Haiku',
+    reasoningLevels: [],
+    options: [toggleOption('thinking', 'Thinking')],
+  },
+];
+
+const codexModels = (): Model[] => [
+  {
+    id: 'gpt-5',
+    label: 'GPT-5',
+    reasoningLevels: [...CODEX_LADDER],
+    options: [serviceTierOption()],
+  },
+  {
+    id: 'gpt-5-codex',
+    label: 'GPT-5 Codex',
+    reasoningLevels: [...CODEX_LADDER],
+    options: [serviceTierOption()],
+  },
+  {
+    id: 'gpt-daybreak-blue-latest',
+    label: 'Daybreak Blue',
+    reasoningLevels: [...CODEX_LADDER, 'max', 'ultra'],
+    options: [],
+  },
 ];
 
 export const demoModels = (harness?: string): Model[] => {
   switch (harness) {
+    case 'claude':
+    case 'claude-code':
+      return claudeModels();
     case 'codex':
+      return codexModels();
+    case 'cursor':
       return [
         {
-          id: 'gpt-5',
-          label: 'GPT-5',
-          reasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+          id: 'composer-2.5',
+          label: 'Composer 2.5',
+          reasoningLevels: [],
+          options: [
+            {
+              id: 'effort',
+              label: 'Effort',
+              choices: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+                { id: 'high', label: 'High' },
+              ],
+              defaultChoice: 'medium',
+            },
+            {
+              id: 'fast',
+              label: 'Fast',
+              choices: [
+                { id: 'false', label: 'Off' },
+                { id: 'true', label: 'On' },
+              ],
+              defaultChoice: 'false',
+            },
+          ],
+        },
+      ];
+    case 'devin':
+      return [
+        {
+          id: 'gpt-6-astra-medium',
+          label: 'GPT-6 Astra Medium',
+          reasoningLevels: [],
           options: [],
         },
         {
-          id: 'gpt-5-codex',
-          label: 'GPT-5 Codex',
-          reasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+          id: 'gpt-6-astra-high',
+          label: 'GPT-6 Astra High',
+          reasoningLevels: [],
+          options: [],
+        },
+        {
+          id: 'gpt-6-astra-high-fast',
+          label: 'GPT-6 Astra High Fast',
+          reasoningLevels: [],
+          options: [],
+        },
+      ];
+    case 'grok':
+      return [
+        {
+          id: 'grok-4',
+          label: 'Grok 4',
+          reasoningLevels: ['low', 'medium', 'high'],
+          options: [],
+        },
+      ];
+    case 'hermes':
+      return [
+        {
+          id: 'hermes',
+          label: 'Hermes',
+          reasoningLevels: [],
+          options: [],
+        },
+      ];
+    case 'pi':
+      return [
+        {
+          id: 'pi-3.1',
+          label: 'Pi 3.1',
+          reasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+          options: [],
+        },
+      ];
+    case 'opencode':
+      return [
+        {
+          id: 'opencode-sonnet',
+          label: 'Sonnet',
+          reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          options: [],
+        },
+      ];
+    case 'antigravity':
+      return [
+        {
+          id: 'gemini-high',
+          label: 'Gemini High',
+          reasoningLevels: ['low', 'high'],
           options: [],
         },
       ];
@@ -706,36 +935,12 @@ export const demoModels = (harness?: string): Model[] => {
         {
           id: 'mock-1',
           label: 'Mock model',
-          reasoningLevels: ['low'],
+          reasoningLevels: ['medium'],
           options: [],
         },
       ];
-    case 'claude':
     default:
-      return [
-        {
-          id: 'sonnet',
-          label: 'Claude Sonnet',
-          reasoningLevels: ['low', 'medium', 'high'],
-          options: [
-            {
-              id: 'fast',
-              label: 'Fast mode',
-              choices: [
-                { id: 'off', label: 'Off' },
-                { id: 'on', label: 'On' },
-              ],
-              defaultChoice: 'off',
-            },
-          ],
-        },
-        {
-          id: 'opus',
-          label: 'Claude Opus',
-          reasoningLevels: ['low', 'medium', 'high'],
-          options: [],
-        },
-      ];
+      return claudeModels();
   }
 };
 

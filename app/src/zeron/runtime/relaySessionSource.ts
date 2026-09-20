@@ -342,6 +342,8 @@ export class RelaySessionSource {
           chatId: this.chatId,
           ...(update.contextUsage !== undefined
             ? { contextUsage: update.contextUsage }
+            : s.meta.contextUsage !== undefined
+            ? { contextUsage: s.meta.contextUsage }
             : {}),
         },
         pendingSends,

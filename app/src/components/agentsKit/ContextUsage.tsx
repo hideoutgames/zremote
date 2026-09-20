@@ -13,9 +13,9 @@ import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import { GlassSheet } from '../GlassSheet';
 import {
-  CONTEXT_DANGER_RATIO,
   contextRemaining,
   contextUsageRatio,
+  contextUsageTone,
   formatCompactTokens,
   formatContextPercent,
   resolveContextUsage,
@@ -114,7 +114,7 @@ function ContextUsageSheet({
   trackColor,
   onDismiss,
 }: {
-  tokens: number;
+  tokens: number | null;
   maxTokens: number;
   ratio: number;
   color: string;
@@ -122,10 +122,11 @@ function ContextUsageSheet({
   onDismiss: () => void;
 }) {
   const theme = useTheme();
-  const percent = formatContextPercent(ratio);
-  const used = formatCompactTokens(tokens);
+  const percent =
+    tokens == null
+      ? t('composer.context.percentUnknown')
+      : formatContextPercent(ratio);
   const total = formatCompactTokens(maxTokens);
-  const remaining = formatCompactTokens(contextRemaining(tokens, maxTokens));
   return (
     <GlassSheet title={t('composer.context')} onDismiss={onDismiss}>
       <View style={styles.sheetBody}>
@@ -143,14 +144,30 @@ function ContextUsageSheet({
             {percent}
           </Text>
         </View>
-        <Text style={[styles.used, { color: theme.text }]}>
-          {t('composer.context.used')
-            .replace('{used}', used)
-            .replace('{total}', total)}
-        </Text>
-        <Text style={[styles.remaining, { color: theme.textSecondary }]}>
-          {t('composer.context.remaining').replace('{count}', remaining)}
-        </Text>
+        {tokens == null ? (
+          <>
+            <Text style={[styles.used, { color: theme.text }]}>
+              {t('composer.context.capacity').replace('{total}', total)}
+            </Text>
+            <Text style={[styles.remaining, { color: theme.textSecondary }]}>
+              {t('composer.context.waiting')}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.used, { color: theme.text }]}>
+              {t('composer.context.used')
+                .replace('{used}', formatCompactTokens(tokens))
+                .replace('{total}', total)}
+            </Text>
+            <Text style={[styles.remaining, { color: theme.textSecondary }]}>
+              {t('composer.context.remaining').replace(
+                '{count}',
+                formatCompactTokens(contextRemaining(tokens, maxTokens)),
+              )}
+            </Text>
+          </>
+        )}
       </View>
     </GlassSheet>
   );
@@ -165,20 +182,33 @@ export const ContextUsageChip = React.memo(function ({
   const [open, setOpen] = useState(false);
   const resolved = resolveContextUsage(usage);
   if (resolved === undefined) return null;
-  const ratio = contextUsageRatio(resolved.tokens, resolved.window);
+  const ratio =
+    resolved.tokens == null
+      ? 0
+      : contextUsageRatio(resolved.tokens, resolved.window);
   const trackColor =
     theme.scheme === 'dark' ? theme.textSecondary : theme.sendInactive;
-  const color = ratio > CONTEXT_DANGER_RATIO ? theme.danger : theme.text;
-  const percent = formatContextPercent(ratio);
+  const tone = contextUsageTone(resolved.tokens, resolved.window);
+  const color =
+    tone === 'danger'
+      ? theme.danger
+      : tone === 'warn'
+      ? theme.planBadge
+      : theme.text;
+  const percent =
+    resolved.tokens == null
+      ? t('composer.context.percentUnknown')
+      : formatContextPercent(ratio);
   return (
     <>
       <Pressable
         hitSlop={4}
         accessibilityRole="button"
-        accessibilityLabel={t('composer.context.a11y').replace(
-          '{percent}',
-          percent,
-        )}
+        accessibilityLabel={
+          resolved.tokens == null
+            ? t('composer.context.a11yUnknown')
+            : t('composer.context.a11y').replace('{percent}', percent)
+        }
         testID="context-usage-chip"
         onPress={() => setOpen(true)}
         style={styles.chipHit}
