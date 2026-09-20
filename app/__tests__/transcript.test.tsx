@@ -4,7 +4,10 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
-import { UserMessage } from '../src/components/transcript/UserMessage';
+import {
+  UserMessage,
+  USER_BUBBLE_TEXT_END_PAD,
+} from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
 import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
@@ -310,6 +313,24 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+});
+
+test('UserMessage text keeps trailing optical pad so glyphs are not clipped', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={userEntry} />);
+  });
+  const prompt = tree!.root.findAllByType(Text).find(n => {
+    const c = n.props.children;
+    return c === 'hello from the phone';
+  });
+  expect(prompt).toBeDefined();
+  const style = Array.isArray(prompt!.props.style)
+    ? prompt!.props.style.flat()
+    : [prompt!.props.style];
+  expect(style.some(s => s?.paddingEnd === USER_BUBBLE_TEXT_END_PAD)).toBe(
+    true,
+  );
 });
 
 test('AssistantMessage wraps text in a chat bubble', async () => {
