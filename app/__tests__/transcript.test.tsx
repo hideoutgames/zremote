@@ -14,6 +14,7 @@ import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubbl
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
 import { PlanBadge } from '../src/components/PlanBadge';
+import { PlanCard } from '../src/components/transcript/PlanCard';
 import {
   applyPlanPrefix,
   PLAN_END_MARKER,
@@ -264,8 +265,18 @@ test('AssistantMessage shows a plan card and turn changes', async () => {
   });
   const texts = textOf(tree!.root);
   expect(texts).toContain('Resize composer');
+  expect(texts).toContain('Ready to review');
   expect(texts).toContain('Changes');
   expect(texts).toContain('Composer.tsx');
+  const testIds: string[] = [];
+  tree!.root.findAll(n => {
+    if (typeof n.props.testID === 'string') testIds.push(n.props.testID);
+    return false;
+  });
+  expect(testIds.indexOf('plan-card')).toBeGreaterThanOrEqual(0);
+  expect(testIds.indexOf('plan-card')).toBeLessThan(
+    testIds.indexOf('tool-group'),
+  );
 });
 
 test('AssistantMessage shows a Plan card for name-only createPlan', async () => {
@@ -293,7 +304,47 @@ test('AssistantMessage shows a Plan card for name-only createPlan', async () => 
   const texts = textOf(tree!.root);
   expect(texts).toContain('Plan');
   expect(texts.some(s => s === 'Tool' || s === 'createPlan')).toBe(false);
-  expect(tree!.root.findAllByType(PlanBadge).length).toBe(1);
+  expect(tree!.root.findAllByType(PlanBadge).length).toBe(0);
+  expect(tree!.root.findAllByType(PlanCard).length).toBe(1);
+});
+
+test('AssistantMessage hides following text that is the plan body', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 'p1',
+        call: { kind: 'unknown', name: 'createPlan' },
+        resolved: true,
+      },
+      {
+        kind: 'text',
+        id: 'txt',
+        text: '# Signing fix\n\nUse one cert.',
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {}}
+        onOpenPlan={() => {}}
+      />,
+    );
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Signing fix');
+  expect(texts).toContain('Ready to review');
+  expect(
+    tree!.root.findAll(
+      n =>
+        typeof n.props.markdown === 'string' &&
+        n.props.markdown.includes('Use one cert.'),
+    ),
+  ).toHaveLength(0);
 });
 
 test('AssistantMessage strips marked plan text and shows a Plan card', async () => {
@@ -319,6 +370,7 @@ test('AssistantMessage strips marked plan text and shows a Plan card', async () 
   });
   const texts = textOf(tree!.root);
   expect(texts).toContain('Resize composer');
+  expect(texts).toContain('Ready to review');
   expect(
     tree!.root.findAll(
       n =>
@@ -329,6 +381,7 @@ test('AssistantMessage strips marked plan text and shows a Plan card', async () 
   expect(
     tree!.root.findByProps({ markdown: 'Here is the plan.' }),
   ).toBeTruthy();
+  expect(tree!.root.findAllByType(PlanCard).length).toBe(1);
 });
 
 test('AssistantMessage groups the tool parts into one rail', async () => {

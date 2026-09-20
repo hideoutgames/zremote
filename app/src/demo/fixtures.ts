@@ -581,6 +581,28 @@ const toolsTranscript = (nowMs: number): Record<string, unknown>[] => [
     ],
     nowMs - 50 * 3_600_000 + 60_000,
   ),
+  userEntry('t-u2', 'Plan the header refactor.', nowMs - 48 * 3_600_000),
+  assistantEntry(
+    't-a2',
+    [
+      {
+        kind: 'tool',
+        id: 't-plan',
+        call: {
+          kind: 'unknown',
+          name: 'createPlan',
+          input: {
+            name: 'Header refactor',
+            plan: '# Header refactor\n\n1. Extract shared styles.\n2. Keep the rail sticky.',
+          },
+        },
+        isError: false,
+        resolved: true,
+      },
+      textPart('Plan is ready for review.'),
+    ],
+    nowMs - 48 * 3_600_000 + 45_000,
+  ),
 ];
 
 const offlineTranscript = (nowMs: number): Record<string, unknown>[] => [

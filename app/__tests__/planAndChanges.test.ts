@@ -13,7 +13,11 @@ import {
 import {
   detectPlanArtifact,
   extractMarkedPlan,
+  isHiddenPlanToolPart,
+  isPlanCardPart,
   isPlanToolPart,
+  consumedPlanTextIds,
+  planCardAnchorId,
   stripPlanMarkers,
 } from '../src/components/transcript/detectPlan';
 import {
@@ -264,6 +268,72 @@ test('EnterPlanMode ignores preamble text before the tool', () => {
   ]);
   expect(detectPlanArtifact(entry)?.name).toBe('Composer grabber');
   expect(detectPlanArtifact(entry)?.markdown).not.toContain('Switching');
+});
+
+test('consumedPlanTextIds hides following text for empty createPlan', () => {
+  const entry = assistant([
+    {
+      kind: 'tool',
+      id: 't1',
+      call: { kind: 'unknown', name: 'createPlan' },
+      resolved: true,
+    },
+    {
+      kind: 'text',
+      id: 'txt',
+      text: '# Signing fix\n\nUse one cert.',
+    },
+  ]);
+  expect([...consumedPlanTextIds(entry)]).toEqual(['txt']);
+  expect(planCardAnchorId(entry)).toBe('t1');
+  expect(isPlanCardPart(entry.parts[0])).toBe(true);
+});
+
+test('consumedPlanTextIds hides EnterPlanMode body but keeps preamble', () => {
+  const entry = assistant([
+    {
+      kind: 'text',
+      id: 'pre',
+      text: 'Switching to plan mode.',
+    },
+    {
+      kind: 'tool',
+      id: 't0',
+      call: { kind: 'unknown', name: 'EnterPlanMode' },
+      resolved: true,
+    },
+    {
+      kind: 'text',
+      id: 'txt',
+      text: '# Composer grabber\n\nAdd a drag handle.',
+    },
+  ]);
+  expect([...consumedPlanTextIds(entry)]).toEqual(['txt']);
+  expect(planCardAnchorId(entry)).toBe('t0');
+});
+
+test('marked plan does not consume surrounding text', () => {
+  const entry = assistant([
+    {
+      kind: 'text',
+      id: 'txt',
+      text: `Here is the plan.\n${PLAN_START_MARKER}\n# Codex login\n\nShip the login.\n${PLAN_END_MARKER}`,
+    },
+  ]);
+  expect([...consumedPlanTextIds(entry)]).toEqual([]);
+  expect(planCardAnchorId(entry)).toBe('txt');
+});
+
+test('ExitPlanMode is hidden and is not a plan card', () => {
+  const part = {
+    kind: 'tool' as const,
+    id: 't-exit',
+    call: { kind: 'unknown' as const, name: 'ExitPlanMode' },
+    resolved: true,
+  };
+  expect(isHiddenPlanToolPart(part)).toBe(true);
+  expect(isPlanCardPart(part)).toBe(false);
+  expect(isPlanToolPart(part)).toBe(true);
 });
 
 test('overview is not treated as the plan body', () => {
