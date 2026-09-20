@@ -8,6 +8,7 @@ import {
   TOP_CHROME_FADE_BAND,
   COMPOSER_BOTTOM_FADE_BAND,
   CHROME_FADE_WASH_DARK,
+  CHAT_TOP_FADE_BAND,
 } from '../src/components/TopChromeFade';
 import { FadeBlur } from '../src/components/FadeBlur';
 
@@ -115,12 +116,19 @@ test('wash paints a black gradient over the fade', async () => {
   });
 });
 
-test('maskStopsFor hides the composer plateau and fades above it', () => {
-  const stops = maskStopsFor(400, 80, 56, 120, COMPOSER_BOTTOM_FADE_BAND);
+test('CHAT_TOP_FADE_BAND is half the session header chrome band', () => {
+  expect(CHAT_TOP_FADE_BAND).toBe(TOP_CHROME_FADE_BAND / 2);
+  expect(CHAT_TOP_FADE_BAND).toBe(28);
+});
+
+test('maskStopsFor hides the composer plateau and eases out above it', () => {
+  const stops = maskStopsFor(400, 80, 28, 120, COMPOSER_BOTTOM_FADE_BAND);
   expect(stops.locations[0]).toBe(0);
   expect(stops.locations[stops.locations.length - 1]).toBe(1);
   expect(stops.colors[0]).toBe('transparent');
   expect(stops.colors[stops.colors.length - 1]).toBe('transparent');
+  expect(stops.colors.some(c => c.startsWith('rgba(0,0,0,'))).toBe(true);
+  expect(COMPOSER_BOTTOM_FADE_BAND).toBeGreaterThan(TOP_CHROME_FADE_BAND);
 });
 
 test('FadeBlur none mode still mounts a blur', async () => {

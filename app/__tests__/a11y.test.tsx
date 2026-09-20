@@ -291,7 +291,7 @@ test('compose composer: desktop, project, checkout, and branch sit above the inp
   expect(checkout[0].props.nestedScrollEnabled).toBe(true);
 });
 
-test('compact session composer has no surround blur; chrome fade sits under it', async () => {
+test('compact session composer has no surround blur', async () => {
   const spy = jest.spyOn(Dimensions, 'get').mockReturnValue({
     width: 390,
     height: 844,

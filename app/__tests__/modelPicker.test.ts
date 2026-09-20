@@ -24,17 +24,33 @@ test('rememberedReasoning keeps a valid live/stored level', () => {
 
 test("rememberedModelOptions never leaks another model's keys", () => {
   expect(
-    rememberedModelOptions(
-      { modelOptions: { fast: 'on', other: 'x' } },
+    rememberedModelOptions({ modelOptions: { fast: 'on', other: 'x' } }, [
       { id: 'fast', defaultChoice: 'off' },
-    ),
+    ]),
   ).toEqual({ fast: 'on' });
   expect(
-    rememberedModelOptions(undefined, { id: 'fast', defaultChoice: 'off' }),
+    rememberedModelOptions(undefined, [{ id: 'fast', defaultChoice: 'off' }]),
   ).toEqual({ fast: 'off' });
   expect(
     rememberedModelOptions({ modelOptions: { fast: 'on' } }, undefined),
   ).toEqual({});
+});
+
+test('rememberedModelOptions keeps every advertised option for this model', () => {
+  expect(
+    rememberedModelOptions(
+      { modelOptions: { fast: 'true', effort: 'high', gone: 'x' } },
+      [
+        { id: 'effort', defaultChoice: 'medium' },
+        { id: 'fast', defaultChoice: 'false' },
+        { id: 'optimize_for', defaultChoice: 'balanced' },
+      ],
+    ),
+  ).toEqual({
+    effort: 'high',
+    fast: 'true',
+    optimize_for: 'balanced',
+  });
 });
 
 test('effortLevelsForModel prefers the model ladder', () => {

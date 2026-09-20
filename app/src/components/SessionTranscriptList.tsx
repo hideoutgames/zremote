@@ -28,7 +28,11 @@ import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
 import { transcriptHorizontalPadding } from '../navigation/layout';
 import { useTheme } from '../theme';
-import { ContentEdgeMask, COMPOSER_BOTTOM_FADE_BAND } from './TopChromeFade';
+import {
+  ContentEdgeMask,
+  CHAT_TOP_FADE_BAND,
+  COMPOSER_BOTTOM_FADE_BAND,
+} from './TopChromeFade';
 import {
   clampComposerExtraHeight,
   composerBaseHeightSV,
@@ -576,6 +580,7 @@ export const SessionTranscriptList = forwardRef<
     >
       <ContentEdgeMask
         topInset={insetsTop + 58}
+        topBand={CHAT_TOP_FADE_BAND}
         bottomInset={composerInset}
         bottomBand={COMPOSER_BOTTOM_FADE_BAND}
       >

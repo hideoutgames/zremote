@@ -100,21 +100,18 @@ const zIndexOf = (node: TestRenderer.ReactTestInstance): number => {
   return typeof z === 'number' ? z : 0;
 };
 
-test('compose session stays sharp: chrome fade, no list or chat blur', async () => {
+test('compose session stays sharp: no overlay fade, no list or chat blur', async () => {
   const mounted = await render(<SessionScreen onBack={() => {}} />);
   expect(count(mounted.root, 'new-thread-background')).toBe(0);
   expect(count(mounted.root, 'chat-background-blur')).toBe(0);
   expect(count(mounted.root, 'session-background-blur')).toBe(0);
   expect(count(mounted.root, 'composer-surround-blur')).toBe(0);
-  expect(count(mounted.root, 'top-chrome-fade')).toBeGreaterThan(0);
-  const fade = mounted.root.findByProps({ testID: 'top-chrome-fade' });
+  expect(count(mounted.root, 'top-chrome-fade')).toBe(0);
   const center = mounted.root.findByProps({ testID: 'compose-center' });
   const dismiss = mounted.root.findByProps({ testID: 'compose-dismiss' });
-  expect(fade.props.pointerEvents).toBe('none');
   expect(center.props.pointerEvents).toBe('box-none');
   expect(center.props.onStartShouldSetResponder).toBeUndefined();
   expect(typeof dismiss.props.onStartShouldSetResponder).toBe('function');
-  expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(fade));
   expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(dismiss));
   const centerStyle = Array.isArray(center.props.style)
     ? center.props.style.flat()
@@ -139,7 +136,7 @@ test('active session keeps a content mask and no top overlay fade', async () => 
   expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
   expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
   expect(count(mounted.root, 'top-chrome-fade')).toBe(0);
-  expect(count(mounted.root, 'bottom-chrome-fade')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'bottom-chrome-fade')).toBe(0);
 });
 
 test('composer dim is absent until the keyboard is visible', async () => {
@@ -162,7 +159,7 @@ test('composer dim is absent until the keyboard is visible', async () => {
   expect(count(mounted.root, 'composer-focus-dim')).toBe(0);
 });
 
-test('focused composer dim sits above the bottom chrome fade', async () => {
+test('focused composer dim mounts without a bottom chrome fade overlay', async () => {
   workspaceStore.setState({
     chats: [
       {
@@ -183,9 +180,8 @@ test('focused composer dim sits above the bottom chrome fade', async () => {
   await act(async () => {
     input.props.onFocus();
   });
-  const dim = mounted.root.findByProps({ testID: 'composer-focus-dim' });
-  const fade = mounted.root.findByProps({ testID: 'bottom-chrome-fade' });
-  expect(zIndexOf(dim)).toBeGreaterThan(zIndexOf(fade));
+  expect(count(mounted.root, 'composer-focus-dim')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'bottom-chrome-fade')).toBe(0);
   mocked.mockImplementation((selector: (s: { height: number }) => unknown) =>
     selector({ height: 0 }),
   );

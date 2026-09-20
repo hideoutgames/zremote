@@ -66,17 +66,17 @@ import { blobUrl } from '../zeron/transport/edge';
 import {
   catalogStore,
   modelsFor,
-  reasoningLevelsFor,
   selectableHarnesses,
 } from '../zeron/state/catalogStore';
 import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
 import { recentMenuModels } from '../zeron/state/recentModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
-import { fastOptionForModel, isFastEnabled } from '../components/fastMode';
 import {
-  rememberedModelOptions,
-  rememberedReasoning,
-} from '../components/modelPicker';
+  applyEffortLevel,
+  applyFastChoice,
+  resolveModelTraits,
+  selectionForModel,
+} from '../components/modelTraits';
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
@@ -131,14 +131,7 @@ import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { createLog } from '../zeron/log';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
-import {
-  TopChromeFade,
-  COMPOSER_BOTTOM_FADE_BAND,
-} from '../components/TopChromeFade';
-import {
-  ComposerChromeFade,
-  ComposerStickyBottom,
-} from '../components/ComposerChromeAnim';
+import { ComposerStickyBottom } from '../components/ComposerChromeAnim';
 import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
@@ -215,7 +208,6 @@ function ComposeSessionScreen({
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardState(s => s.height);
-  const [headerH, setHeaderH] = useState(0);
   const [composerH, setComposerH] = useState(0);
   const dismissPan = useKeyboardDismissPan();
   const wallpaper = useNewThreadComposerBackground() !== undefined;
@@ -231,7 +223,6 @@ function ComposeSessionScreen({
         { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
       ]}
     >
-      <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
       {/* Pan lives here, not on compose-center, so checkout chips can scroll. */}
       <View
         testID="compose-dismiss"
@@ -252,7 +243,6 @@ function ComposeSessionScreen({
       </View>
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
-        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
         <View style={styles.headerRow} pointerEvents="box-none">
@@ -349,7 +339,6 @@ function ActiveSessionScreen({
   }, [runtime, hostDeviceId, catalog]);
   const harness = catalog?.harnesses.find(h => h.id === chat?.config?.harness);
 
-  const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [reasoning, setReasoning] = useState<string | null>(null);
   const composerRef = useRef<View>(null);
@@ -639,26 +628,39 @@ function ActiveSessionScreen({
       ),
     [recents, catalogModels, currentHarness, currentModelId],
   );
-  const effortLevels =
-    hostDeviceId === undefined || chat?.config?.harness === undefined
-      ? []
-      : reasoningLevelsFor(
-          hostDeviceId,
-          chat.config.harness,
-          chat.config.model,
-        );
   const currentModel =
     hostDeviceId === undefined || chat?.config?.harness === undefined
       ? undefined
       : modelsFor(hostDeviceId, chat.config.harness).find(
           m => m.id === chat.config?.model,
         );
-  const fastOption = fastOptionForModel(currentModel);
-  const fastEnabled = isFastEnabled(chat?.config?.modelOptions, fastOption);
+  const harnessModels =
+    hostDeviceId === undefined || chat?.config?.harness === undefined
+      ? []
+      : modelsFor(hostDeviceId, chat.config.harness);
+  const harnessLevels =
+    hostDeviceId === undefined || chat?.config?.harness === undefined
+      ? undefined
+      : selectableHarnesses(hostDeviceId).find(
+          h => h.id === chat.config?.harness,
+        )?.reasoningLevels;
+  const traits = resolveModelTraits(
+    currentModel,
+    harnessModels,
+    harnessLevels,
+    {
+      model: chat?.config?.model,
+      reasoning: chat?.config?.reasoning,
+      modelOptions: chat?.config?.modelOptions,
+    },
+  );
+  const effortLevels = traits.effort?.levels ?? [];
+  const fastOption = traits.fast?.option;
+  const fastEnabled = traits.fast?.enabled ?? false;
   const modelLabel =
     currentModel?.label ?? chat?.config?.model ?? t('picker.default');
   const effortLabel = capitalizeLevel(
-    chat?.config?.reasoning ?? effortLevels[0] ?? t('picker.effort'),
+    traits.effort?.value ?? t('picker.effort'),
   );
 
   useEffect(() => {
@@ -715,16 +717,11 @@ function ActiveSessionScreen({
         windowHeight={windowHeight}
         insetsTop={insets.top}
         insetsBottom={insets.bottom}
-        onComposerHeight={setComposerHeight}
+        onComposerHeight={() => {}}
         onShowScrollDown={setShowScrollDown}
         working={agentWorking}
         chatId={chatId}
         startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
-      />
-
-      <ComposerChromeFade
-        inset={composerHeight}
-        fadeBand={COMPOSER_BOTTOM_FADE_BAND}
       />
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
@@ -1016,23 +1013,29 @@ function ActiveSessionScreen({
               const catalogModel = modelsFor(chat.deviceId, h).find(
                 catalogRow => catalogRow.id === m,
               );
-              const levels = reasoningLevelsFor(chat.deviceId, h, m);
+              const siblings = modelsFor(chat.deviceId, h);
               const stored = modelSettingsFor(h, m);
               const same =
                 h === chat.config?.harness && m === chat.config?.model;
+              const live = same
+                ? {
+                    reasoning: chat.config?.reasoning,
+                    modelOptions: chat.config?.modelOptions,
+                  }
+                : undefined;
+              const picked = selectionForModel(
+                catalogModel,
+                siblings,
+                selectableHarnesses(chat.deviceId).find(hRow => hRow.id === h)
+                  ?.reasoningLevels,
+                stored,
+                live,
+              );
               setChatConfig(runtime, chat.id, {
                 harness: h,
                 model: m,
-                modelOptions: rememberedModelOptions(
-                  stored,
-                  fastOptionForModel(catalogModel),
-                  same ? chat.config?.modelOptions : undefined,
-                ),
-                reasoning: rememberedReasoning(
-                  stored,
-                  levels,
-                  same ? chat.config?.reasoning : undefined,
-                ),
+                modelOptions: picked.modelOptions,
+                reasoning: picked.reasoning,
                 sandbox: FULL_ACCESS_SANDBOX,
               });
               rememberModelPick({ harness: h, model: m });
@@ -1040,17 +1043,10 @@ function ActiveSessionScreen({
             onOpenMoreModels={() => setPickerOpen(true)}
             effortLabel={effortLabel}
             effortSupported={effortLevels.length > 0}
-            fastSupported={fastOption !== undefined}
+            fastSupported={traits.fast !== undefined}
             fastOption={fastOption}
             fastEnabled={fastEnabled}
-            fastChoice={
-              fastOption === undefined
-                ? undefined
-                : typeof chat?.config?.modelOptions?.[fastOption.id] ===
-                  'string'
-                ? (chat.config.modelOptions[fastOption.id] as string)
-                : fastOption.defaultChoice
-            }
+            fastChoice={traits.fast?.choice}
             effortOpen={effortOpen}
             onOpenEffort={origin => {
               Keyboard.dismiss();
@@ -1066,28 +1062,31 @@ function ActiveSessionScreen({
               });
             }}
             onSelectFast={choice => {
-              if (
-                runtime === null ||
-                chat === undefined ||
-                fastOption === undefined
-              )
-                return;
+              if (runtime === null || chat === undefined) return;
+              const patch = applyFastChoice(
+                traits,
+                choice,
+                {
+                  model: chat.config?.model,
+                  reasoning: chat.config?.reasoning,
+                  modelOptions: chat.config?.modelOptions,
+                },
+                harnessModels,
+              );
               setChatConfig(runtime, chat.id, {
                 harness: chat.config?.harness ?? '',
-                model: chat.config?.model,
-                reasoning: chat.config?.reasoning,
+                model: patch.model,
+                reasoning: patch.reasoning,
                 sandbox: FULL_ACCESS_SANDBOX,
-                modelOptions: {
-                  ...(chat.config?.modelOptions ?? {}),
-                  [fastOption.id]: choice,
-                },
+                modelOptions: patch.modelOptions,
               });
               if (
                 chat.config?.harness !== undefined &&
-                chat.config.model !== undefined
+                patch.model !== undefined
               )
-                rememberModelSettings(chat.config.harness, chat.config.model, {
-                  modelOptions: { [fastOption.id]: choice },
+                rememberModelSettings(chat.config.harness, patch.model, {
+                  reasoning: patch.reasoning,
+                  modelOptions: patch.modelOptions,
                 });
             }}
             onFocusChange={setComposerFocused}
@@ -1107,24 +1106,32 @@ function ActiveSessionScreen({
       {effortOpen ? (
         <EffortOverlay
           levels={effortLevels}
-          value={chat?.config?.reasoning}
+          value={traits.effort?.value}
           origin={effortOrigin}
           anchor={effortAnchor}
           onChange={level => {
             if (runtime === null || chat === undefined) return;
+            const patch = applyEffortLevel(
+              traits,
+              level,
+              {
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                modelOptions: chat.config?.modelOptions,
+              },
+              harnessModels,
+            );
             setChatConfig(runtime, chat.id, {
               harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              modelOptions: chat.config?.modelOptions ?? {},
-              reasoning: level,
+              model: patch.model,
+              modelOptions: patch.modelOptions,
+              reasoning: patch.reasoning,
               sandbox: FULL_ACCESS_SANDBOX,
             });
-            if (
-              chat.config?.harness !== undefined &&
-              chat.config.model !== undefined
-            )
-              rememberModelSettings(chat.config.harness, chat.config.model, {
-                reasoning: level,
+            if (chat.config?.harness !== undefined && patch.model !== undefined)
+              rememberModelSettings(chat.config.harness, patch.model, {
+                reasoning: patch.reasoning,
+                modelOptions: patch.modelOptions,
               });
           }}
           onDismiss={() => {
