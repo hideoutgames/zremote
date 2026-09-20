@@ -1,5 +1,5 @@
 // SessionScreen — the fork's ChatScreen shape driven by the synchronized
-// session store: KeyboardAwareLegendList transcript, glass composer, scroll
+// session store: FlashList + KeyboardChatScrollView transcript, glass composer, scroll
 // chevron, reasoning sheet, failed-send banner.
 
 import React, {

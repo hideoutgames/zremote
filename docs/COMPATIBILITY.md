@@ -61,6 +61,8 @@ templates. Their only deliberate customisations are:
 
 `react-native-keyboard-controller` is intentionally pinned to **1.21.12** (JS) over Expo Go's bundled 1.21.9 native: 1.21.9's KeyboardChatScrollView emits `contentOffset {0,0}` on first `animatedProps` evaluation, which feedback-loops the JS thread when a streaming chat opens (fixed upstream in 1.21.12; the fix is pure JS, no `ios/` changes). `expo install --check` flags the version mismatch — that is expected.
 
+The in-thread transcript list is **`@shopify/flash-list` 2.0.2** (Expo SDK 57 pin, FlashList v2, JS-only on New Architecture — no config plugin, no `ios.useFrameworks`). `SessionTranscriptList` uses FlashList with `KeyboardChatScrollView` as `renderScrollComponent`. Home threads and Terminal stay on `@legendapp/list`.
+
 Decision: move to **Expo Continuous Native Generation** with `app.config.ts`
 and config plugins. Each customisation above is encoded as a plugin (the
 bootsplash Expo plugin, a local `withPodfileMods` plugin for SDWebImage,

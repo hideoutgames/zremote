@@ -39,7 +39,7 @@ export const columnSideGutter = (
   return Math.max(0, (containerWidth - cap) / 2);
 };
 
-/** LegendList honors padding on `contentContainerStyle`; maxWidth does not
+/** FlashList honors padding on `contentContainerStyle`; maxWidth does not
  *  shrink virtualized rows. `railReserve` is extra right padding only when
  *  the centered gutter is too small for the preview rail. */
 export const transcriptHorizontalPadding = (
