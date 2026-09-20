@@ -1,6 +1,6 @@
 // Grabber extra-height caps and the 1:1 transcript inset.
 // Layout must grow by exactly extraHeight (not iOS TextInput minHeight).
-// Transcript inset, fade, and rail follow the measured composer box
+// Transcript inset and rail follow the measured composer box
 // (onLayout), not the live extra-height store write.
 
 import { makeMutable, type SharedValue } from 'react-native-reanimated';
@@ -45,7 +45,7 @@ const mutableNumber = (initial: number): SharedValue<number> => {
 export const composerExtraHeightSV = mutableNumber(0);
 /** Measured sticky-stack height with extraHeight stripped out. */
 export const composerBaseHeightSV = mutableNumber(0);
-/** Measured sticky-stack height (onLayout). Source of truth for list/fade. */
+/** Measured sticky-stack height (onLayout). Source of truth for list inset. */
 export const composerInsetSV = mutableNumber(0);
 
 export const syncComposerExtraHeightSV = (v: number): void => {

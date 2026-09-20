@@ -21,7 +21,10 @@ import {
   type ScrollViewProps,
 } from 'react-native';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { KeyboardController } from 'react-native-keyboard-controller';
+import {
+  KeyboardController,
+  useKeyboardState,
+} from 'react-native-keyboard-controller';
 import { useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
@@ -32,6 +35,7 @@ import {
   ContentEdgeMask,
   CHAT_TOP_FADE_BAND,
   COMPOSER_BOTTOM_FADE_BAND,
+  composerMaskBottomInset,
 } from './TopChromeFade';
 import {
   clampComposerExtraHeight,
@@ -132,6 +136,7 @@ export const SessionTranscriptList = forwardRef<
   'use no memo';
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
+  const keyboardHeight = useKeyboardState(s => s.height);
   const listRef = useRef<FlashListRef<TranscriptRow>>(null);
   const chatScrollRef =
     useRef<React.ComponentRef<typeof TranscriptChatScrollView>>(null);
@@ -596,7 +601,7 @@ export const SessionTranscriptList = forwardRef<
       <ContentEdgeMask
         topInset={insetsTop + 58}
         topBand={CHAT_TOP_FADE_BAND}
-        bottomInset={composerInset}
+        bottomInset={composerMaskBottomInset(keyboardHeight, insetsBottom)}
         bottomBand={COMPOSER_BOTTOM_FADE_BAND}
       >
         <FlashList

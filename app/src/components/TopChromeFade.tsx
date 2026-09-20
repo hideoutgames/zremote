@@ -21,12 +21,21 @@ import { FadeBlur } from './FadeBlur';
 export const TOP_CHROME_FADE_BAND = 56;
 /** Chat transcript top dissolve — half the session/header chrome band. */
 export const CHAT_TOP_FADE_BAND = TOP_CHROME_FADE_BAND / 2;
-/** Gradual content mask above the composer. Overlay blur is not used here. */
+/** Fixed fade under the composer glass. Overlay blur is not used here. */
 export const COMPOSER_BOTTOM_FADE_BAND = 44;
+/** Extra pad below the glass; matches Composer `homeInset`. */
+export const COMPOSER_BELOW_PAD = 8;
 /** Strong blur under chrome so wallpaper remains. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
 /** Black edge wash when a session wallpaper is set on Home. */
 export const CHROME_FADE_WASH_DARK = 'rgba(0,0,0,0.78)';
+
+/** Distance from the screen bottom to the bottom of the composer glass. */
+export const composerMaskBottomInset = (
+  keyboardHeight: number,
+  insetsBottom: number,
+): number =>
+  (keyboardHeight > 0 ? keyboardHeight : insetsBottom) + COMPOSER_BELOW_PAD;
 
 function ChromeFadeWash({
   edge,
