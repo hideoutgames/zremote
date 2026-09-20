@@ -33,6 +33,8 @@ import {
   type FailedSend,
   type RunPhase,
 } from '../state/sessionStores';
+import { ProjectCoalesce } from '../state/projectCoalesce';
+import { shareSessionProjection } from '../state/shareProjection';
 import {
   draftFor,
   restoreFailedSend,
@@ -121,6 +123,7 @@ export class SessionController {
   private refCount = 0;
   private unsub: (() => void) | undefined;
   private persistTimer: unknown;
+  private readonly coalesce: ProjectCoalesce;
   /** messageId → commandId for run/steer sends (failedSend bookkeeping). */
   private commandByMessage = new Map<string, string>();
   /** Staged-attachment ids whose in-flight upload must abort between
@@ -131,6 +134,9 @@ export class SessionController {
     this.chatId = chatId;
     this.deps = deps;
     this.mode = deps.sessionMode ?? 'doc';
+    this.coalesce = new ProjectCoalesce(deps.clock, () =>
+      this.applyProjection(),
+    );
     if (this.mode === 'relay') {
       this.relay = new RelaySessionSource(chatId, {
         deviceId: deps.deviceId,
@@ -242,7 +248,7 @@ export class SessionController {
             return false;
           }
           this.cursor = Math.max(this.cursor, seq);
-          this.project();
+          this.coalesce.schedule();
           return true;
         },
         applyRow: (bytes, seq) => {
@@ -252,7 +258,7 @@ export class SessionController {
             /* malformed row — cursor still advances (skip-not-fail) */
           }
           this.cursor = Math.max(this.cursor, seq);
-          this.project();
+          this.coalesce.schedule();
         },
         advanceCursor: seq => {
           this.cursor = Math.max(this.cursor, seq);
@@ -305,11 +311,16 @@ export class SessionController {
 
   /** Re-derive store state from the doc; reconcile pending/failed sends. */
   project(): void {
+    this.coalesce.flush();
+  }
+
+  private applyProjection(): void {
     if (this.relay !== undefined) return;
-    const proj = this.doc.project();
-    if (proj === undefined) return;
+    const raw = this.doc.project();
+    if (raw === undefined) return;
     const store = getSessionStore(this.chatId);
     const s = store.getState();
+    const proj = shareSessionProjection(s, raw);
     const entryIds = new Set(proj.entries.map(e => e.id));
     const pendingSends = s.pendingSends.filter(p => !entryIds.has(p.messageId));
     const failedSends = [...s.failedSends];
@@ -333,8 +344,16 @@ export class SessionController {
       commands: proj.commands,
       queue: proj.queue,
       meta: proj.meta,
-      pendingSends: stillPending,
-      failedSends,
+      pendingSends:
+        stillPending.length === s.pendingSends.length &&
+        stillPending.every((p, i) => p === s.pendingSends[i])
+          ? s.pendingSends
+          : stillPending,
+      failedSends:
+        failedSends.length === s.failedSends.length &&
+        failedSends.every((f, i) => f === s.failedSends[i])
+          ? s.failedSends
+          : failedSends,
       hostDeviceId: this.deps.chatMeta().hostDeviceId,
     });
     for (const f of failedSends) {
@@ -380,6 +399,7 @@ export class SessionController {
 
   stop(): void {
     this.startWork = undefined;
+    this.coalesce.dispose();
     if (this.relay !== undefined) {
       this.relay.stop();
       this.started = false;
@@ -401,7 +421,7 @@ export class SessionController {
   // ── Command plane ────────────────────────────────────────────────────
 
   private basedOn(): string | undefined {
-    return this.doc.project()?.entries.at(-1)?.id;
+    return getSessionStore(this.chatId).getState().entries.at(-1)?.id;
   }
 
   private send(payload: SessionCommandPayload, basedOnTurnId?: string): string {

@@ -20,7 +20,7 @@ import { Icon } from './Icon';
 import { Glass } from './Glass';
 import { SESSION_SHEET_GRABBER_INSET } from './SessionSheet';
 import { useTheme } from '../theme';
-import { markdownStyleFor } from '../markdownStyle';
+import { markdownMd4cFlags, markdownStyleFor } from '../markdownStyle';
 import { t } from '../i18n/strings';
 
 export function PlanSheet({
@@ -81,6 +81,7 @@ export function PlanSheet({
             <EnrichedMarkdownText
               markdown={markdown}
               markdownStyle={mdStyle}
+              md4cFlags={markdownMd4cFlags}
               flavor="github"
             />
           ) : null}
