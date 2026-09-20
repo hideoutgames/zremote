@@ -1,9 +1,11 @@
 // Adaptive navigation shell (JS — the UISplitViewController-backed container
 // in modules/zeron-split-view is written but unverified, so this is what
 // ships). Compact width keeps the Home↔Session pager; regular width (≥700pt)
-// splits into Sidebar | Detail. The right inspector column is gone —
-// History / Files / Terminal open from the session overflow as 75%
-// SessionSheets (same chrome as View details).
+// splits into Sidebar | Detail. Collapse animates the sidebar with
+// translateX (UI-thread); the session inset is a one-shot marginLeft so Yoga
+// does not relayout FlashList / BlurView / Liquid Glass every frame. The
+// right inspector column is gone — History / Files / Terminal open from the
+// session overflow as 75% SessionSheets (same chrome as View details).
 //
 // selectedChatId, sidebar collapse, inspector tab and drafts all live in this
 // component (or the stores), so they survive size-class changes and rotation.
@@ -11,7 +13,7 @@
 // compact pager path. `useNativeSplitView` is intentionally false — flip only
 // after the Mac verification checklist in docs/NATIVE_MODULES.md passes.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -48,23 +50,6 @@ import { t } from '../i18n/strings';
 export const USE_NATIVE_SPLIT_VIEW = false;
 export const SIDEBAR_ANIM_MS = 280;
 
-function useDeferredComposerMaxWidth(
-  next: number | undefined,
-): number | undefined {
-  const [width, setWidth] = useState(next);
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      setWidth(next);
-      return;
-    }
-    const id = setTimeout(() => setWidth(next), SIDEBAR_ANIM_MS);
-    return () => clearTimeout(id);
-  }, [next]);
-  return width;
-}
-
 function InFlowSidebar({
   visible,
   width,
@@ -79,6 +64,10 @@ function InFlowSidebar({
   'use no memo';
   const reduceMotion = useReducedMotion();
   const collapse = useSharedValue(visible ? 0 : 1);
+  const widthSv = useSharedValue(width);
+  useEffect(() => {
+    widthSv.value = width;
+  }, [width, widthSv]);
   useEffect(() => {
     const target = visible ? 0 : 1;
     collapse.value = reduceMotion
@@ -88,12 +77,14 @@ function InFlowSidebar({
           easing: Easing.out(Easing.cubic),
         });
   }, [visible, reduceMotion, collapse]);
+  // Translate only — animating `width` in the flex row relayouts the session
+  // (FlashList, BlurView, Liquid Glass) every frame.
   const anim = useAnimatedStyle(() => ({
-    width: (1 - collapse.value) * width,
+    transform: [{ translateX: -collapse.value * widthSv.value }],
   }));
   return (
     <Animated.View
-      style={[styles.sidebarColumn, anim]}
+      style={[styles.sidebarColumn, { width }, anim]}
       pointerEvents={visible ? 'auto' : 'none'}
       accessibilityState={{ expanded: visible }}
       accessibilityLabel={t('sidebar.toggle')}
@@ -135,7 +126,6 @@ export function AdaptiveShell({
 
   const prefs: LayoutPrefs = { sidebarCollapsed, inspectorOpen: false };
   const layout = layoutFor(width, prefs);
-  const composerMaxWidth = useDeferredComposerMaxWidth(layout.composerMaxWidth);
 
   useEffect(() => {
     if (layout.mode === 'compact') return;
@@ -182,7 +172,15 @@ export function AdaptiveShell({
         />
       </InFlowSidebar>
 
-      <View style={styles.detail}>
+      <View
+        testID="sessionDetail"
+        style={[
+          styles.detail,
+          {
+            marginLeft: layout.sidebarVisible ? layout.sidebarWidth : 0,
+          },
+        ]}
+      >
         {composing ? (
           <AppErrorBoundary resetKey="compose">
             <SessionScreen
@@ -190,7 +188,7 @@ export function AdaptiveShell({
               onCreated={openSession}
               leadingIcon="sidebar.left"
               contentMaxWidth={layout.measureCap}
-              composerMaxWidth={composerMaxWidth}
+              composerMaxWidth={layout.composerMaxWidth}
             />
           </AppErrorBoundary>
         ) : chatId !== null ? (
@@ -201,7 +199,7 @@ export function AdaptiveShell({
               onBack={toggleSidebar}
               leadingIcon="sidebar.left"
               contentMaxWidth={layout.measureCap}
-              composerMaxWidth={composerMaxWidth}
+              composerMaxWidth={layout.composerMaxWidth}
             />
           </AppErrorBoundary>
         ) : (
@@ -256,7 +254,12 @@ export function InspectorToggle({
 const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row' },
   sidebarColumn: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
     overflow: 'hidden',
+    zIndex: 2,
   },
   sidebarInner: {
     flex: 1,

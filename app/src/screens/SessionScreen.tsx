@@ -49,7 +49,6 @@ import {
   useChatPinned,
   useNewThreadComposerBackground,
   useRecentModels,
-  useSidebarCollapsed,
 } from '../zeron/state/uiPrefs';
 import {
   sessionTitle,
@@ -254,7 +253,10 @@ function ComposeSessionScreen({
         <View style={styles.headerRow} pointerEvents="box-none">
           <GlassControl
             interactive
-            onPress={onBack}
+            onPress={() => {
+              KeyboardController.dismiss();
+              onBack();
+            }}
             accessibilityRole="button"
             accessibilityLabel={
               leadingIcon !== undefined
@@ -547,7 +549,6 @@ function ActiveSessionScreen({
   const [composerFocused, setComposerFocused] = useState(false);
   const keyboardHeight = useKeyboardState(s => s.height);
   const keyboardWasVisible = useRef(false);
-  const sidebarCollapsed = useSidebarCollapsed();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
@@ -586,10 +587,6 @@ function ActiveSessionScreen({
     keyboardWasVisible.current = false;
     setComposerFocused(false);
   }, [keyboardHeight]);
-
-  useEffect(() => {
-    setComposerFocused(false);
-  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (toolSheet !== null) return;

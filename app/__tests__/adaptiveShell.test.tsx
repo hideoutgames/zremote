@@ -5,7 +5,8 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Modal, StyleSheet, Text } from 'react-native';
+import { Dimensions, Modal, StyleSheet, Text } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import {
   AppServicesContext,
@@ -13,6 +14,7 @@ import {
 } from '../src/app/runtimeContext';
 import { setSidebarCollapsed, uiPrefsStore } from '../src/zeron/state/uiPrefs';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
+import { layoutFor } from '../src/navigation/layout';
 
 const services: AppServices = {
   auth: null as never,
@@ -65,26 +67,42 @@ afterEach(() => {
 test('sidebar panel renders expanded; collapse flips pref + state', async () => {
   // Requires regular width (≥700pt): the test env window is 750pt.
   const tree = await render();
+  const expandedWidth = layoutFor(Dimensions.get('window').width, {
+    sidebarCollapsed: false,
+    inspectorOpen: false,
+  }).sidebarWidth;
   let found = panel(tree.root);
   expect(found).toHaveLength(1);
   expect(found[0].props.accessibilityState.expanded).toBe(true);
   expect(found[0].props.pointerEvents).toBe('auto');
-  const style = Array.isArray(found[0].props.style)
-    ? found[0].props.style.flat()
-    : [found[0].props.style];
-  expect(style.some(s => s?.overflow === 'hidden')).toBe(true);
-  expect(style.some(s => s?.position === 'absolute')).toBe(false);
+  const style = StyleSheet.flatten(found[0].props.style);
+  expect(style.overflow).toBe('hidden');
+  expect(style.position).toBe('absolute');
+  const detail = StyleSheet.flatten(
+    tree.root.findByProps({ testID: 'sessionDetail' }).props.style,
+  );
+  expect(detail.marginLeft).toBe(expandedWidth);
 
   act(() => setSidebarCollapsed(true));
   expect(uiPrefsStore.getState().sidebarCollapsed).toBe(true);
   found = panel(tree.root);
   expect(found[0].props.accessibilityState.expanded).toBe(false);
   expect(found[0].props.pointerEvents).toBe('none');
+  expect(
+    StyleSheet.flatten(
+      tree.root.findByProps({ testID: 'sessionDetail' }).props.style,
+    ).marginLeft,
+  ).toBe(0);
 
   act(() => setSidebarCollapsed(false));
   found = panel(tree.root);
   expect(found[0].props.accessibilityState.expanded).toBe(true);
   expect(found[0].props.pointerEvents).toBe('auto');
+  expect(
+    StyleSheet.flatten(
+      tree.root.findByProps({ testID: 'sessionDetail' }).props.style,
+    ).marginLeft,
+  ).toBe(expandedWidth);
   await act(async () => {
     tree.unmount();
   });
@@ -156,6 +174,26 @@ test('sidebar inner fills the column with no horizontal padding', async () => {
   ) as TestRenderer.ReactTestInstance;
   const style = StyleSheet.flatten(inner.props.style);
   expect(style.paddingHorizontal).toBeUndefined();
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('compose sidebar toggle dismisses the keyboard', async () => {
+  const tree = await render(null);
+  const dismiss = KeyboardController.dismiss as jest.Mock;
+  dismiss.mockClear();
+  const toggle = tree.root.findAll(
+    n =>
+      n.props.accessibilityLabel === 'Toggle sidebar' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  expect(toggle).toBeDefined();
+  act(() => {
+    toggle.props.onPress();
+  });
+  expect(dismiss).toHaveBeenCalled();
+  expect(uiPrefsStore.getState().sidebarCollapsed).toBe(true);
   await act(async () => {
     tree.unmount();
   });
