@@ -195,7 +195,8 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
     ? list.props.contentContainerStyle.flat()
     : [list.props.contentContainerStyle];
   const paddingTop = listPad.find(s => s?.paddingTop != null)?.paddingTop as
-    number | undefined;
+    | number
+    | undefined;
   expect(paddingTop).toBeGreaterThan(TOP_CHROME_FADE_BAND);
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
   const search = searchInput(mounted.root);

@@ -115,8 +115,8 @@ const statusCopy = (line: ThreadStatusLine): string => {
       return line.tone === 'merged'
         ? t('pr.merged')
         : line.tone === 'draft'
-          ? t('pr.draft')
-          : t('pr.open');
+        ? t('pr.draft')
+        : t('pr.open');
   }
 };
 
@@ -588,8 +588,8 @@ export function HomeScreen({
   const bottomPad = searching
     ? insets.bottom + 12
     : bottomH !== 0
-      ? bottomH + 12
-      : insets.bottom + 76;
+    ? bottomH + 12
+    : insets.bottom + 76;
   const chromeH = headerH !== 0 ? headerH : insets.top + 64;
 
   return (
