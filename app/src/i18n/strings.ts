@@ -345,6 +345,7 @@ const en = {
   'session.details.updated': 'Last Updated',
   'session.implementPlan': 'Implement Plan',
   'session.changesCount': 'Changes {count}',
+  'session.planReady': 'Ready to review',
   'session.planUntitled': 'Plan',
   'session.diffUnavailable': 'Unavailable',
 

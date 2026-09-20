@@ -228,16 +228,86 @@ export const detectPlanArtifact = (
   return undefined;
 };
 
-/** True when this tool part is shown as a PlanCard (or is ExitPlanMode) —
- * hide the raw unknown-tool chip. CreatePlan-class parts always hide
- * because `detectPlanArtifact` always emits a card for them. */
-export const isPlanToolPart = (part: MessagePart): boolean => {
+/** Tools that render as a PlanCard in document order (createPlan, EnterPlanMode,
+ * ACP/cursor plan chips with a body). */
+export const isPlanCardPart = (part: MessagePart): boolean => {
   if (part.kind !== 'tool') return false;
   const call = rec(part.call);
   const name = toolName(call);
   if (isPlanToolName(name) || isEnterPlanMode(name)) return true;
-  if (/exitplanmode/i.test(name)) return true;
   if (part.id === 'acp-plan' || part.id === 'cursor-plan')
     return planFromCall(call, part.id, false) !== undefined;
   return false;
+};
+
+/** ExitPlanMode (and similar) — hide the raw chip, no card. */
+export const isHiddenPlanToolPart = (part: MessagePart): boolean => {
+  if (part.kind !== 'tool') return false;
+  return /exitplanmode/i.test(toolName(rec(part.call)));
+};
+
+/** True when this tool part is shown as a PlanCard (or is ExitPlanMode) —
+ * hide the raw unknown-tool chip. CreatePlan-class parts always hide
+ * because `detectPlanArtifact` always emits a card for them. */
+export const isPlanToolPart = (part: MessagePart): boolean =>
+  isPlanCardPart(part) || isHiddenPlanToolPart(part);
+
+/** Text parts consumed as the plan body (empty createPlan / EnterPlanMode
+ * following text). Marked plans are not consumed — `stripPlanMarkers` keeps
+ * surrounding copy and the card is the opener. */
+export const consumedPlanTextIds = (
+  entry: MessageEntry,
+): ReadonlySet<string> => {
+  const ids = new Set<string>();
+  if (extractMarkedPlan(joinTexts(entry.parts)) !== undefined) return ids;
+
+  let seenEnter = false;
+  let createPlanWithBody = false;
+  let emptyCreatePlan = false;
+  const afterEnterIds: string[] = [];
+  const allTextIds: string[] = [];
+
+  for (const part of entry.parts) {
+    if (part.kind === 'text' && part.text.trim()) {
+      allTextIds.push(part.id);
+      if (seenEnter) afterEnterIds.push(part.id);
+    }
+    if (part.kind !== 'tool') continue;
+    const call = rec(part.call);
+    const name = toolName(call);
+    if (isEnterPlanMode(name)) {
+      seenEnter = true;
+      continue;
+    }
+    if (isCreatePlanPart(call, part.id)) {
+      const found = planFromCall(call, part.id, isPlanToolName(name));
+      if (found !== undefined) {
+        if (found.markdown.trim() !== '') createPlanWithBody = true;
+        else if (isPlanToolName(name)) emptyCreatePlan = true;
+      }
+    }
+  }
+
+  if (seenEnter) {
+    for (const id of afterEnterIds) ids.add(id);
+    return ids;
+  }
+  if (emptyCreatePlan && !createPlanWithBody) {
+    for (const id of allTextIds) ids.add(id);
+  }
+  return ids;
+};
+
+/** Part that hosts the single in-transcript PlanCard: the first plan-card
+ * tool, or the text part that contains the marked-plan start. */
+export const planCardAnchorId = (entry: MessageEntry): string | undefined => {
+  if (detectPlanArtifact(entry) === undefined) return undefined;
+  for (const part of entry.parts) {
+    if (isPlanCardPart(part)) return part.id;
+  }
+  for (const part of entry.parts) {
+    if (part.kind === 'text' && part.text.includes(PLAN_START_MARKER))
+      return part.id;
+  }
+  return undefined;
 };
