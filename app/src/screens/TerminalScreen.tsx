@@ -18,7 +18,10 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import {
+  KeyboardStickyView,
+  useKeyboardState,
+} from 'react-native-keyboard-controller';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
@@ -126,6 +129,11 @@ const KEY_BYTES: Record<string, number[]> = {
   ctrlc: [0x03],
 };
 
+/** Extra bottom gap while the software keyboard is up so the key bar
+ *  is not clipped into the keyboard (sheet safe-area often collapses). */
+export const KEY_BAR_KEYBOARD_LIFT = 12;
+const KEY_BAR_MARGIN_BOTTOM = 8;
+
 const KEY_BAR: {
   key: string;
   label: string;
@@ -147,6 +155,7 @@ const shellLabel = (path: string): string =>
 export function TerminalScreen({ chatId }: { chatId: string }) {
   const runtime = useRuntime();
   const chat = useChat(chatId);
+  const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width } = useWindowDimensions();
   const [viewport, setViewport] = useState(() => ({
     cols: Math.max(20, Math.floor((width - 16) / CHAR_W)),
@@ -478,13 +487,21 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         accessibilityLabel={t('terminal.input')}
       />
 
-      <KeyboardStickyView offset={{ opened: 0 }} style={styles.keyBarSticky}>
+      <KeyboardStickyView
+        testID="terminal-key-bar"
+        offset={{ opened: 0 }}
+        style={[
+          styles.keyBarSticky,
+          keyboardVisible
+            ? { marginBottom: KEY_BAR_MARGIN_BOTTOM + KEY_BAR_KEYBOARD_LIFT }
+            : null,
+        ]}
+      >
         <ScrollView
           horizontal
           keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.keyBar}
-          testID="terminal-key-bar"
         >
           {KEY_BAR.map(spec => {
             const selected = spec.key === 'ctrl' && ctrl;
@@ -593,6 +610,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#161616',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#333',
+    marginBottom: KEY_BAR_MARGIN_BOTTOM,
   },
   keyBar: {
     flexDirection: 'row',
