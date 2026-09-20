@@ -57,8 +57,8 @@ import {
   type StagedAttachment,
 } from '../zeron/state/draftStore';
 import {
-  openInputRequest,
-  useSessionState,
+  useOpenInputRequest,
+  useContextUsage,
   type RoomState,
   type RunPhase,
 } from '../zeron/state/sessionStores';
@@ -282,10 +282,9 @@ export const Composer = React.memo(function ({
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
   const [preview, setPreview] = useState<StagedAttachment | null>(null);
-  const session = useSessionState(chatId);
+  const question = useOpenInputRequest(chatId);
+  const contextUsage = useContextUsage(chatId);
   const prefersSteer = useLiveActionPrefersSteer();
-
-  const question = openInputRequest(session.entries);
   const hasAttachments = draft.attachments.length > 0;
   const hasText = draft.text.trim().length > 0;
   const canQueue = queueSupported(capabilities);
@@ -710,7 +709,7 @@ export const Composer = React.memo(function ({
                       />
                     ) : null}
                     <View style={styles.chipSpacer} />
-                    <ContextUsageChip usage={session.meta.contextUsage} />
+                    <ContextUsageChip usage={contextUsage} />
                   </ScrollView>
                 </ChipRowMask>
                 <View style={styles.trailingCluster} collapsable={false}>

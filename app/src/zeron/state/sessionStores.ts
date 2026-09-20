@@ -8,6 +8,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import { effectiveStatus } from '../protocol/entities';
 import type {
   Chat,
+  ContextUsage,
   MessageEntry,
   QueuedMessage,
   SessionCommandEntry,
@@ -211,6 +212,35 @@ export const runPhase = (
 
 export const useSessionState = (chatId: string): SessionState =>
   useStore(getSessionStore(chatId));
+
+export const useSessionCommands = (chatId: string): SessionCommandEntry[] =>
+  useStore(getSessionStore(chatId), s => s.commands);
+
+export const useSessionQueueLength = (chatId: string): number =>
+  useStore(getSessionStore(chatId), s => s.queue.length);
+
+export const useContextUsage = (chatId: string): ContextUsage | undefined =>
+  useStore(getSessionStore(chatId), s => s.meta.contextUsage);
+
+const sameOpenInput = (
+  a: OpenInputRequest | undefined,
+  b: OpenInputRequest | undefined,
+): boolean =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.entryId === b.entryId &&
+    a.requestId === b.requestId &&
+    a.questions === b.questions);
+
+export const useOpenInputRequest = (
+  chatId: string,
+): OpenInputRequest | undefined =>
+  useStore(
+    getSessionStore(chatId),
+    s => openInputRequest(s.entries),
+    sameOpenInput,
+  );
 
 export const useRunPhase = (
   chatId: string,
