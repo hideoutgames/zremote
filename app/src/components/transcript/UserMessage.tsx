@@ -15,7 +15,7 @@ import type { MessageEntry } from '../../zeron/protocol/types';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
-import { stripPlanPrefix } from '../planMode';
+import { stripPlanPrefix, type PromptBadgeKind } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
 import { FrostedBubble } from './FrostedBubble';
 import { messageCopyContent } from './MessageCopyMenu';
@@ -31,6 +31,13 @@ const textOf = (entry: MessageEntry): string =>
     )
     .map(p => p.text)
     .join('\n');
+
+const promptBody = (kind: PromptBadgeKind | null, shown: string): ReactNode => {
+  if (kind === null) return shown;
+  const badge = <PlanBadge key="badge" kind={kind} variant="inline" />;
+  if (shown === '') return badge;
+  return [badge, ' ', shown];
+};
 
 function EnteringStack({
   animate,
@@ -123,11 +130,7 @@ export const UserMessage = React.memo(function UserMessageInner({
                 tintColor={theme.userBubbleBackground}
               >
                 <Text style={[styles.text, { color: theme.userBubbleText }]}>
-                  {kind !== null ? (
-                    <PlanBadge kind={kind} variant="inline" />
-                  ) : null}
-                  {kind !== null && shown !== '' ? ' ' : null}
-                  {shown !== '' ? shown : null}
+                  {promptBody(kind, shown)}
                 </Text>
                 {foldable ? (
                   <Pressable
