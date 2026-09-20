@@ -136,15 +136,33 @@ export function railIndexAtY(
   return index;
 }
 
-/** Convert a window `pageY` into track-local Y. Unmeasured origin keeps
- *  `pageY` as-is so tests can pass track-local coordinates. */
+/** Map a Y offset on the rail column to 0..1 stack progress (scrollbar). */
+export function railProgressAtY(
+  y: number,
+  count: number,
+  itemSize: number,
+  stackTop: number,
+): number {
+  if (count <= 0 || itemSize <= 0) return 0;
+  const span = count * itemSize;
+  const progress = (y - stackTop) / span;
+  if (progress <= 0) return 0;
+  if (progress >= 1) return 1;
+  return progress;
+}
+
+/** Convert a touch into track-local Y. `locationY` is the source of truth
+ *  (same as EffortSlider). Window `pageY` minus a measured origin is the
+ *  fallback when locationY is missing. Unmeasured pageY must not be treated
+ *  as track-local — that maps first touches to the live edge. */
 export function railYFromPage(
   pageY: number | undefined,
-  locationY: number,
+  locationY: number | undefined,
   originY: number | null,
 ): number {
-  if (typeof pageY !== 'number') return locationY;
-  if (originY == null) return pageY;
+  if (typeof locationY === 'number') return locationY;
+  if (typeof pageY !== 'number') return 0;
+  if (originY == null) return 0;
   return pageY - originY;
 }
 

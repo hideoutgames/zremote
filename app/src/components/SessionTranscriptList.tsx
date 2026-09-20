@@ -44,7 +44,10 @@ import {
   seedComposerInset,
 } from './composerExtraHeight';
 import { WorkingStatusBubble } from './WorkingStatus';
-import { PreviewRail } from './agentsKit/PreviewRail';
+import {
+  PreviewRail,
+  type PreviewRailSelectOpts,
+} from './agentsKit/PreviewRail';
 import {
   buildRailItems,
   pickActiveRailId,
@@ -159,6 +162,7 @@ export const SessionTranscriptList = forwardRef<
   const pendingRailJumpRef = useRef<{
     index: number;
     animated: boolean;
+    progress?: number;
   } | null>(null);
   const railJumpRafRef = useRef<number | null>(null);
   const viewableIdsRef = useRef<string[]>([]);
@@ -420,11 +424,26 @@ export const SessionTranscriptList = forwardRef<
     [blankSpace],
   );
 
-  const offsetForRailIndex = useCallback((index: number): number => {
-    const count = entriesRef.current.length;
-    const max = Math.max(0, contentHeightRef.current - listHeightRef.current);
-    return count <= 1 ? 0 : (index / Math.max(1, count - 1)) * max;
+  const maxRailOffset = useCallback((): number => {
+    return Math.max(0, contentHeightRef.current - listHeightRef.current);
   }, []);
+
+  const offsetForRailIndex = useCallback(
+    (index: number): number => {
+      const count = entriesRef.current.length;
+      const max = maxRailOffset();
+      return count <= 1 ? 0 : (index / Math.max(1, count - 1)) * max;
+    },
+    [maxRailOffset],
+  );
+
+  const offsetForRailProgress = useCallback(
+    (progress: number): number => {
+      const clamped = progress <= 0 ? 0 : progress >= 1 ? 1 : progress;
+      return clamped * maxRailOffset();
+    },
+    [maxRailOffset],
+  );
 
   const scrollChatToOffset = useCallback(
     (offset: number, animated: boolean) => {
@@ -462,6 +481,13 @@ export const SessionTranscriptList = forwardRef<
     [offsetForRailIndex, scrollChatToOffset],
   );
 
+  const performRailScrub = useCallback(
+    (progress: number) => {
+      scrollChatToOffset(offsetForRailProgress(progress), false);
+    },
+    [offsetForRailProgress, scrollChatToOffset],
+  );
+
   const flushPendingRailJump = useCallback(() => {
     const pending = pendingRailJumpRef.current;
     if (!pending || followingRef.current) return;
@@ -472,13 +498,17 @@ export const SessionTranscriptList = forwardRef<
         const next = pendingRailJumpRef.current;
         if (!next || followingRef.current) return;
         pendingRailJumpRef.current = null;
+        if (next.progress != null) {
+          performRailScrub(next.progress);
+          return;
+        }
         performRailJump(next.index, next.animated);
       });
       return;
     }
     pendingRailJumpRef.current = null;
     performRailJump(pending.index, pending.animated);
-  }, [performRailJump]);
+  }, [performRailJump, performRailScrub]);
 
   useEffect(() => {
     if (following) return;
@@ -496,7 +526,7 @@ export const SessionTranscriptList = forwardRef<
   );
 
   const scrollToRailItem = useCallback(
-    (item: RailItem, opts?: { animated?: boolean }) => {
+    (item: RailItem, opts?: PreviewRailSelectOpts) => {
       const animated = opts?.animated !== false && reduceMotion !== true;
       const last = railItems[railItems.length - 1]?.id === item.id;
       if (last) {
@@ -519,7 +549,11 @@ export const SessionTranscriptList = forwardRef<
         followingRef.current = false;
         setFollowing(false);
       }
-      pendingRailJumpRef.current = { index, animated };
+      pendingRailJumpRef.current = {
+        index,
+        animated,
+        progress: animated ? undefined : opts?.progress,
+      };
       if (!wasFollowing) flushPendingRailJump();
     },
     [entries, flushPendingRailJump, followEnd, railItems, reduceMotion],
