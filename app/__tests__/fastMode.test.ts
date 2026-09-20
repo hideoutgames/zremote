@@ -36,7 +36,9 @@ test('findFastOption accepts host id aliases', () => {
 
 test('findFastOption maps Codex serviceTier when a fast choice exists', () => {
   expect(findFastOption([serviceTier()])?.id).toBe('serviceTier');
-  expect(findFastOption([serviceTier('service-tier')])?.id).toBe('service-tier');
+  expect(findFastOption([serviceTier('service-tier')])?.id).toBe(
+    'service-tier',
+  );
   expect(
     findFastOption([
       {

@@ -172,13 +172,11 @@ test('Hermes empty ladder has neither Effort nor Fast', () => {
 
 test('OpenCode harness ladder fills in when the model lists none', () => {
   const sonnet = model('opencode-sonnet');
-  const traits = resolveModelTraits(sonnet, [sonnet], [
-    'low',
-    'medium',
-    'high',
-    'xhigh',
-    'max',
-  ]);
+  const traits = resolveModelTraits(
+    sonnet,
+    [sonnet],
+    ['low', 'medium', 'high', 'xhigh', 'max'],
+  );
   expect(traits.effort?.kind).toBe('reasoning');
   expect(traits.effort?.levels).toEqual([
     'low',
