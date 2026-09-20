@@ -259,7 +259,7 @@ const en = {
   'settings.voiceDownloading': 'Downloading',
   'settings.voiceVerifying': 'Verifying…',
   'settings.voiceRetry': 'Retry',
-  'settings.voiceDelete': 'Delete Download',
+  'settings.voiceDelete': 'Delete',
   'settings.voiceDeleteTitle': 'Delete this model?',
   'settings.voiceDeleteSelected':
     'This model is currently selected. Deleting it does not switch Voice Input modes.',
