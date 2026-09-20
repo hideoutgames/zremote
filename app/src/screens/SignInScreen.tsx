@@ -1,11 +1,12 @@
 // Sign-in: WorkOS redirect stays the registered HTTPS URI; AuthSession
 // listens on zeron:// so the sheet actually presents. The edge 302-hops
 // to that scheme. PKCE throughout. If the hop is missing or the sheet is
-// dismissed, paste the Copy-code page value to complete. Demo remains
-// under Advanced.
+// dismissed, paste the Copy-code page value (or the callback URL) to
+// complete. Demo remains under Advanced.
 
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   httpsAuthCallbackUrl,
@@ -25,6 +26,11 @@ import { createLog } from '../zeron/log';
 const log = createLog();
 
 const PKCE_ENABLED = true;
+/** Keep Continue visible above the keyboard, not only the TextInput. */
+const PASTE_KEYBOARD_BOTTOM_OFFSET = 64;
+
+const pasteFromCallback = (code: string, state: string): string =>
+  `${state}.${code}`;
 
 export function SignInScreen() {
   const theme = useTheme();
@@ -56,11 +62,22 @@ export function SignInScreen() {
           setShowPaste(true);
           return;
         }
-        await auth.completeSignIn({
-          code: link.code,
-          state: link.state ?? '',
-        });
-        return;
+        try {
+          await auth.completeSignIn({
+            code: link.code,
+            state: link.state ?? '',
+          });
+          return;
+        } catch (e) {
+          const name = e instanceof Error ? e.name : 'Error';
+          log.warn(`sign-in failed (${name})`);
+          setError(t('signIn.error.generic'));
+          if (link.state !== undefined) {
+            setPaste(pasteFromCallback(link.code, link.state));
+          }
+          setShowPaste(true);
+          return;
+        }
       }
       if (result.type !== 'cancel') {
         setError(t('signIn.error.generic'));
@@ -92,14 +109,18 @@ export function SignInScreen() {
   }, [auth, paste]);
 
   return (
-    <View
-      style={[
+    <KeyboardAwareScrollView
+      style={[styles.scroll, { backgroundColor: theme.background }]}
+      contentContainerStyle={[
         styles.root,
         {
-          backgroundColor: theme.background,
           paddingTop: insets.top + 24,
+          paddingBottom: 24 + insets.bottom,
         },
       ]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      bottomOffset={PASTE_KEYBOARD_BOTTOM_OFFSET}
     >
       <Text style={[styles.title, { color: theme.text }]}>
         {t('signIn.title')}
@@ -143,6 +164,8 @@ export function SignInScreen() {
             autoCorrect={false}
             autoComplete="off"
             editable={!busy}
+            returnKeyType="go"
+            onSubmitEditing={completePaste}
             style={[
               styles.pasteInput,
               { color: theme.text, borderColor: theme.border },
@@ -177,9 +200,6 @@ export function SignInScreen() {
       </Pressable>
       {advanced ? (
         <View style={styles.advancedBox}>
-          <Text style={[styles.edge, { color: theme.textSecondary }]}>
-            {`${t('signIn.edgeUrl')}: ${edgeUrl}`}
-          </Text>
           <GlassControl
             interactive
             onPress={enterDemo}
@@ -197,16 +217,17 @@ export function SignInScreen() {
           </Text>
         </View>
       ) : null}
-    </View>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
   root: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
     gap: 14,
   },
   title: { fontSize: 26, fontWeight: '700' },
@@ -240,7 +261,6 @@ const styles = StyleSheet.create({
   },
   advancedText: { fontSize: 13 },
   advancedBox: { alignItems: 'center', gap: 10, marginTop: 4 },
-  edge: { fontSize: 12, fontFamily: 'Menlo' },
   demoButton: {
     borderRadius: 16,
     paddingHorizontal: 20,

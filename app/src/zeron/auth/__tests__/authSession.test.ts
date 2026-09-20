@@ -187,6 +187,24 @@ describe('authKit', () => {
     });
   });
 
+  test('parsePastedCode reads zeron:// and https callback URLs', () => {
+    expect(
+      parsePastedCode('zeron://auth/callback?code=thecode&state=zr1.abc'),
+    ).toEqual({
+      state: 'zr1.abc',
+      code: 'thecode',
+    });
+    expect(
+      parsePastedCode(
+        '  https://edge.test/auth/cli/callback?code=c&state=st  ',
+      ),
+    ).toEqual({ state: 'st', code: 'c' });
+    expect(
+      parsePastedCode('zeron://auth/callback?error=access_denied'),
+    ).toBeUndefined();
+    expect(parsePastedCode('zeron://auth/callback?code=c')).toBeUndefined();
+  });
+
   test('RFC 7636 appendix B PKCE vector', async () => {
     const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
     const sha256 = async (b: Uint8Array) =>
@@ -279,6 +297,61 @@ describe('AuthSession sign-in', () => {
     });
     const next = await session.completePastedCode(`${state}.pastedcode`);
     expect(next.state).toBe('signedIn');
+  });
+
+  test('completePastedCode accepts a zeron:// callback URL', async () => {
+    const { fetchImpl } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    const next = await session.completePastedCode(
+      `zeron://auth/callback?code=pastedcode&state=${encodeURIComponent(state)}`,
+    );
+    expect(next.state).toBe('signedIn');
+  });
+
+  test('failed exchange keeps pending so paste can retry', async () => {
+    let n = 0;
+    const { fetchImpl } = authFetch({
+      exchange: () => {
+        n += 1;
+        return n === 1
+          ? { status: 401, json: { error: 'fail' } }
+          : { json: signedInTokens() };
+      },
+    });
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    await expect(
+      session.completeSignIn({ code: 'c', state }),
+    ).rejects.toThrow();
+    const next = await session.completePastedCode(`${state}.c`);
+    expect(next.state).toBe('signedIn');
+  });
+
+  test('completeSignIn is a no-op once signed in', async () => {
+    const { fetchImpl, calls } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    await session.completeSignIn({ code: 'thecode', state });
+    const next = await session.completeSignIn({
+      code: 'other',
+      state: 'forged',
+    });
+    expect(next).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
+    expect(calls.filter(c => c.url.endsWith('/auth/exchange'))).toHaveLength(1);
   });
 
   test('PKCE beginSignIn adds S256 challenge and exchanges the verifier', async () => {

@@ -69,13 +69,31 @@ export const parseCallbackUrl = (url: string): CallbackResult => {
  * iPad desktop-class Safari is often Macintosh without "Mobile". */
 export const MOBILE_SIGN_IN_STATE_PREFIX = 'zr1.';
 
-/** Parse a pasted `state.code` (the edge's cli/callback page shows one) —
- * split on the FIRST '.' after an optional mobile prefix, both halves
- * non-empty. */
+/** True when the paste is a callback URL rather than `state.code`. */
+const looksLikeCallbackPaste = (text: string): boolean =>
+  text.includes('://') || (text.includes('code=') && text.includes('state='));
+
+/** Parse a pasted `state.code` (the edge Copy-code page) or a callback
+ * URL (`zeron://auth/callback?code&state` / HTTPS cli/callback). Split
+ * `state.code` on the FIRST '.' after an optional mobile prefix; both
+ * halves must be non-empty. */
 export const parsePastedCode = (
   text: string,
 ): { state: string; code: string } | undefined => {
   const trimmed = text.trim();
+  if (looksLikeCallbackPaste(trimmed)) {
+    const link = parseCallbackUrl(trimmed);
+    if (
+      link.error !== undefined ||
+      link.code === undefined ||
+      link.code === '' ||
+      link.state === undefined ||
+      link.state === ''
+    ) {
+      return undefined;
+    }
+    return { state: link.state, code: link.code };
+  }
   const prefixed = trimmed.startsWith(MOBILE_SIGN_IN_STATE_PREFIX);
   const prefix = prefixed ? MOBILE_SIGN_IN_STATE_PREFIX : '';
   const rest = trimmed.slice(prefix.length);

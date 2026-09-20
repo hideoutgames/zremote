@@ -117,10 +117,19 @@ registry routes still answer.
 pending states the iOS app prefixes with `zr1.`, are **302**-redirected to
 `zeron://auth/callback?code&state` so `ASWebAuthenticationSession` can
 complete without pasting. Patch `0004` introduced the hop as an HTML
-page; patch `0005` makes it an HTTP 302 and drops the copy-code fallback
-on that path. Desktop browsers without the prefix are unchanged. If the
-hop is missing or the sheet is dismissed, the app still offers an in-app
-paste field (`completePastedCode`) as fallback.
+page; patch `0005` makes it an HTTP 302. Patch `0006` keeps the 302 and
+puts the copy-code fallback back on the hop HTML so dismissing the sheet
+still leaves a pasteable `state.code`. Desktop browsers without the
+prefix are unchanged. If the hop is missing or the sheet is dismissed,
+the app still offers an in-app paste field (`completePastedCode`) as
+fallback.
+
+## 6. iOS AuthKit hop copy-code — `edge/src/auth-routes.ts`
+
+The 302 `Location: zeron://auth/callback?code&state` is unchanged. The
+hop HTML body again includes `#paste` (`state.code`) and a Copy button,
+matching the 0004 fallback when ASWebAuthenticationSession does not
+intercept the custom-scheme redirect.
 
 ## Deploy
 
@@ -131,6 +140,7 @@ git am <zremote>/patches/zeron-edge/0002-*.patch
 git am <zremote>/patches/zeron-edge/0003-*.patch
 git am <zremote>/patches/zeron-edge/0004-*.patch
 git am <zremote>/patches/zeron-edge/0005-*.patch
+git am <zremote>/patches/zeron-edge/0006-*.patch
 wrangler secret put APNS_P8        # PKCS8 PEM
 wrangler secret put APNS_KEY_ID
 wrangler secret put APNS_TEAM_ID

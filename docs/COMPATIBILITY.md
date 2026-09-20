@@ -124,8 +124,9 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
    actually presents. WorkOS still uses the registered HTTPS redirect
    `{edge}/auth/cli/callback` plus PKCE. The edge 302-hops iPhone/iPad
    user-agents and `zr1.`-prefixed pending states to that scheme
-   (`patches/zeron-edge/0004` + `0005`), so the paste-code page never
-   shows. HTTPS AuthSession with `preferUniversalLinks: true` is not used:
+   (`patches/zeron-edge/0004` + `0005` + `0006`). The 302 completes the
+   auth session; the hop HTML also shows `state.code` for in-app paste if
+   the sheet is dismissed. HTTPS AuthSession with `preferUniversalLinks: true` is not used:
    without verified AASA/`webcredentials` it silently returns `cancel` and
    never opens `api.workos.com`. `zeron://` Linking is the Safari-fallback
    return path if AuthSession fails to start. If the hop is missing or the

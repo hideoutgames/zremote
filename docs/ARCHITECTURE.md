@@ -168,7 +168,10 @@ PKCE (`PKCE_ENABLED`). WorkOS still redirects to the registered HTTPS URI
 HTTPS AuthSession with universal links silently cancels without verified
 AASA/`webcredentials` and never opens `api.workos.com`. The edge 302-hops
 iPhone/iPad user-agents and `zr1.`-prefixed pending states to that scheme
-(`patches/zeron-edge/0004` + `0005`), so the paste-code HTML never shows.
+(`patches/zeron-edge/0004` + `0005` + `0006`). The 302 still completes
+`ASWebAuthenticationSession`; the hop HTML also shows `state.code` so the
+in-app paste field works if the sheet is dismissed.
+
 PKCE SHA-256 is `expo-crypto`, injected at `beginSignIn`. Pending PKCE
 state is persisted in Keychain (15-minute TTL) so a Safari hop or process
 death can still `completeSignIn`. Tokens are stored under a sanitized
@@ -176,7 +179,8 @@ SecureStore key (URL `:`/`/` are illegal in Keychain keys). `zeron://`
 Linking is the Safari-fallback return path if AuthSession fails to start.
 If AuthSession does not return a callback (cancel, dismiss, missing hop),
 `SignInScreen` shows a paste field: the user copies `state.code` from the
-edge Copy-code page and `completePastedCode` runs the same exchange.
+edge hop/Copy-code page (or pastes the callback URL) and
+`completePastedCode` runs the same exchange.
 Successful exchange persists tokens in Keychain; `restore()` on next
 launch signs the user in automatically. Desktop CLI `zeron login` still
 sees the paste-code page. AASA (`IOS_APP_IDS`) remains useful for HTTPS
