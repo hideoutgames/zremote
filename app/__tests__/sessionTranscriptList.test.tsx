@@ -8,6 +8,8 @@ import {
   SessionTranscriptList,
   LIST_RESIZE_REMOUNT_DELTA,
   RAIL_RIGHT,
+  isTranscriptAtEnd,
+  listEndDistance,
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
 import type { MessageEntry } from '../src/zeron/protocol/types';
@@ -62,10 +64,10 @@ function leaveEnd(tree: TestRenderer.ReactTestRenderer) {
   });
 }
 
-function returnToEnd(tree: TestRenderer.ReactTestRenderer) {
+function returnToEnd(tree: TestRenderer.ReactTestRenderer, inset = 0) {
   listProps(tree).onScroll({
     nativeEvent: {
-      contentOffset: { x: 0, y: 1156 },
+      contentOffset: { x: 0, y: 1156 + inset },
       contentSize: { width: 390, height: 2000 },
       layoutMeasurement: { width: 390, height: 844 },
     },
@@ -98,6 +100,7 @@ function Harness({
   startedAt = 1,
   windowWidth = 390,
   contentMaxWidth,
+  onShowScrollDown = () => {},
 }: {
   entries: MessageEntry[];
   openKey: string;
@@ -105,6 +108,7 @@ function Harness({
   startedAt?: number;
   windowWidth?: number;
   contentMaxWidth?: number;
+  onShowScrollDown?: (show: boolean) => void;
 }) {
   const composerRef = useRef<View>(null);
   return (
@@ -119,7 +123,7 @@ function Harness({
       insetsTop={47}
       insetsBottom={34}
       onComposerHeight={() => {}}
-      onShowScrollDown={() => {}}
+      onShowScrollDown={onShowScrollDown}
       working={working}
       chatId="c1"
       startedAt={startedAt}
@@ -141,6 +145,17 @@ beforeEach(() => {
   if (isComposerResizeActive()) endComposerResize();
   setComposerExtraHeightLive(0);
   composerBaseHeightSV.value = 0;
+});
+
+test('listEndDistance is content minus offset minus viewport', () => {
+  expect(listEndDistance(2000, 1156, 844)).toBe(0);
+});
+
+test('isTranscriptAtEnd requires the composer inset', () => {
+  expect(isTranscriptAtEnd(0, 0)).toBe(true);
+  expect(isTranscriptAtEnd(0, 200)).toBe(false);
+  expect(isTranscriptAtEnd(-200, 200)).toBe(true);
+  expect(isTranscriptAtEnd(-198, 200)).toBe(false);
 });
 
 test('scrolls to the bottom once when entries are present on mount', async () => {
@@ -272,6 +287,62 @@ test('scroll-up clears follow and returning to the end restores it', async () =>
     returnToEnd(tree!);
   });
   expect(followingOn(tree!)).toBe(true);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('screen-flush is not at end once the composer inset is published', async () => {
+  const listRef = React.createRef<SessionTranscriptListHandle>();
+  const composerRef = React.createRef<View>();
+  const onShowScrollDown = jest.fn();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <SessionTranscriptList
+        ref={listRef}
+        openKey="c1:1"
+        entries={[entry('m1')]}
+        renderEntry={({ item }: { item: MessageEntry }) => (
+          <Text>{item.id}</Text>
+        )}
+        composerRef={composerRef}
+        windowWidth={390}
+        windowHeight={844}
+        insetsTop={47}
+        insetsBottom={34}
+        onComposerHeight={() => {}}
+        onShowScrollDown={onShowScrollDown}
+        chatId="c1"
+      />,
+    );
+  });
+
+  await act(async () => {
+    listRef.current!.onComposerLayout(layoutEvent(200));
+    returnToEnd(tree!, 200);
+  });
+  expect(followingOn(tree!)).toBe(true);
+
+  await act(async () => {
+    listProps(tree!).onScrollBeginDrag();
+    leaveEnd(tree!);
+  });
+  expect(followingOn(tree!)).toBe(false);
+  expect(onShowScrollDown).toHaveBeenCalledWith(true);
+
+  await act(async () => {
+    returnToEnd(tree!);
+  });
+  expect(followingOn(tree!)).toBe(false);
+  expect(onShowScrollDown.mock.calls.at(-1)?.[0]).toBe(true);
+
+  await act(async () => {
+    returnToEnd(tree!, 200);
+  });
+  expect(followingOn(tree!)).toBe(true);
+  expect(onShowScrollDown).toHaveBeenCalledWith(false);
 
   await act(async () => {
     tree!.unmount();
@@ -532,7 +603,7 @@ test('shows the message rail once content overflows two or more entries', async 
   expect(listProps(tree!).showsVerticalScrollIndicator).toBe(false);
   expect(listHorizontalPad(tree!)).toEqual({
     paddingLeft: 0,
-    paddingRight: 40,
+    paddingRight: 0,
   });
 
   await act(async () => {
@@ -691,7 +762,7 @@ test('message rail stays right-aligned on a wide iPad column', async () => {
   expect(positioned.length).toBeGreaterThan(0);
   expect(listHorizontalPad(tree!)).toEqual({
     paddingLeft: 0,
-    paddingRight: 40,
+    paddingRight: 0,
   });
   await act(async () => {
     tree!.unmount();

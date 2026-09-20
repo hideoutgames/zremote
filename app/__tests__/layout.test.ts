@@ -75,25 +75,17 @@ test('columnSideGutter is half the leftover width', () => {
   expect(columnSideGutter(0, 720)).toBe(0);
 });
 
-test('transcriptHorizontalPadding keeps equal gutters unless the rail needs more', () => {
+test('transcriptHorizontalPadding keeps equal gutters', () => {
   expect(transcriptHorizontalPadding(1000, 720, 0)).toEqual({
     paddingLeft: 140,
     paddingRight: 140,
-  });
-  expect(transcriptHorizontalPadding(1000, 720, 40)).toEqual({
-    paddingLeft: 140,
-    paddingRight: 140,
-  });
-  expect(transcriptHorizontalPadding(390, undefined, 40)).toEqual({
-    paddingLeft: 0,
-    paddingRight: 40,
   });
   expect(transcriptHorizontalPadding(390, undefined, 0)).toEqual({
     paddingLeft: 0,
     paddingRight: 0,
   });
-  expect(transcriptHorizontalPadding(684, 636, 40)).toEqual({
+  expect(transcriptHorizontalPadding(684, 636, 0)).toEqual({
     paddingLeft: 24,
-    paddingRight: 40,
+    paddingRight: 24,
   });
 });

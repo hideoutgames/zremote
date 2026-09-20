@@ -6,14 +6,14 @@ import React from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import type { BlurTint } from 'expo-blur';
-import { ChromeFade, TOP_CHROME_FADE_BAND } from './TopChromeFade';
+import { ChromeFade, COMPOSER_BOTTOM_FADE_BAND } from './TopChromeFade';
 import {
   composerBaseHeightSV,
   composerExtraHeightSV,
 } from './composerExtraHeight';
 
 export function ComposerChromeFade({
-  fadeBand = TOP_CHROME_FADE_BAND,
+  fadeBand = COMPOSER_BOTTOM_FADE_BAND,
   wash,
   tint,
   inset,

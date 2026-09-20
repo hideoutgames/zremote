@@ -50,7 +50,7 @@ import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
 import { useAttachments } from '../hooks/useAttachments';
 import { isImageMime } from '../zeron/attachments/validate';
-import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
 import {
   clearDraft,
@@ -213,7 +213,7 @@ export const Composer = React.memo(function ({
   onLayout,
 }: ComposerProps) {
   'use no memo';
-  const theme = useTheme();
+  const theme = useChromeTheme();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();

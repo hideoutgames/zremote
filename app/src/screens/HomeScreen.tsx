@@ -72,19 +72,17 @@ import {
   usePinnedChatIds,
 } from '../zeron/state/uiPrefs';
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
-import { useTheme, darkTheme, type Theme } from '../theme';
+import { type Theme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
 import {
-  TopChromeFade,
-  ChromeFade,
   ContentEdgeMask,
   TOP_CHROME_FADE_BAND,
-  CHROME_FADE_WASH_DARK,
 } from '../components/TopChromeFade';
 import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
-/** Extra list padding so the Threads title sits below the full chrome fade. */
+/** Extra list padding so the Threads title sits below the content mask. */
 const LIST_GAP_BELOW_CHROME = TOP_CHROME_FADE_BAND + 16;
 
 export const relativeTime = (at: number, now: number): string => {
@@ -199,12 +197,6 @@ const ThreadStatus = ({
   );
 };
 
-const useThreadsListTheme = (): Theme => {
-  const theme = useTheme();
-  const wallpaper = useNewThreadComposerBackground() !== undefined;
-  return wallpaper ? darkTheme : theme;
-};
-
 const ChatRow = React.memo(function ({
   chat,
   onOpen,
@@ -214,7 +206,7 @@ const ChatRow = React.memo(function ({
   onOpen: (id: string) => void;
   now: number;
 }) {
-  const theme = useThreadsListTheme();
+  const theme = useChromeTheme();
   const runtime = useRuntime();
   const indicator = useIndicator(chat.id);
   const session = useStore(workspaceStore, s => s.sessions[chat.id]);
@@ -424,7 +416,7 @@ export function HomeScreen({
   /** 'sidebar' tightens top-bar padding; New thread is the same on both. */
   variant?: 'screen' | 'sidebar';
 }) {
-  const theme = useThreadsListTheme();
+  const theme = useChromeTheme();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -594,8 +586,6 @@ export function HomeScreen({
     ? bottomH + 12
     : insets.bottom + 76;
   const chromeH = headerH !== 0 ? headerH : insets.top + 64;
-  const fadeWash = wallpaper ? CHROME_FADE_WASH_DARK : undefined;
-  const fadeTint = wallpaper ? 'systemThinMaterialDark' : undefined;
 
   return (
     <View
@@ -716,17 +706,6 @@ export function HomeScreen({
           renderItem={renderRow}
         />
       </ContentEdgeMask>
-
-      <TopChromeFade inset={chromeH} wash={fadeWash} tint={fadeTint} />
-      {searching ? null : (
-        <ChromeFade
-          edge="bottom"
-          inset={0}
-          fadeBand={TOP_CHROME_FADE_BAND}
-          wash={fadeWash}
-          tint={fadeTint}
-        />
-      )}
 
       <View
         style={[styles.topBar, { paddingTop: insets.top + 8 }]}

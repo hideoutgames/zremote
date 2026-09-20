@@ -123,6 +123,7 @@ import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
 import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
 import { useKeyboardDismissPan } from '../navigation/keyboardDismissGesture';
 import { FilesScreen } from './FilesScreen';
@@ -132,7 +133,7 @@ import { createLog } from '../zeron/log';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 import {
   TopChromeFade,
-  TOP_CHROME_FADE_BAND,
+  COMPOSER_BOTTOM_FADE_BAND,
 } from '../components/TopChromeFade';
 import {
   ComposerChromeFade,
@@ -210,6 +211,7 @@ function ComposeSessionScreen({
   composerMaxWidth?: number;
 }) {
   const theme = useTheme();
+  const chrome = useChromeTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardState(s => s.height);
@@ -271,7 +273,7 @@ function ComposeSessionScreen({
             <Icon
               name={(leadingIcon ?? 'chevron.left') as never}
               size={18}
-              color={theme.text}
+              color={chrome.text}
             />
           </GlassControl>
         </View>
@@ -297,6 +299,7 @@ function ActiveSessionScreen({
 }) {
   'use no memo';
   const theme = useTheme();
+  const chrome = useChromeTheme();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
@@ -723,7 +726,7 @@ function ActiveSessionScreen({
       <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
       <ComposerChromeFade
         inset={composerHeight}
-        fadeBand={TOP_CHROME_FADE_BAND}
+        fadeBand={COMPOSER_BOTTOM_FADE_BAND}
       />
 
       {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
@@ -749,7 +752,7 @@ function ActiveSessionScreen({
                       accessibilityLabel={t('session.titleMenu')}
                     >
                       <Text
-                        style={[styles.title, { color: theme.text }]}
+                        style={[styles.title, { color: chrome.text }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
@@ -759,7 +762,7 @@ function ActiveSessionScreen({
                         <Text
                           style={[
                             styles.subtitle,
-                            { color: theme.textSecondary },
+                            { color: chrome.textSecondary },
                           ]}
                           numberOfLines={1}
                           ellipsizeMode="tail"
@@ -816,7 +819,7 @@ function ActiveSessionScreen({
             <Icon
               name={(leadingIcon ?? 'chevron.left') as never}
               size={18}
-              color={theme.text}
+              color={chrome.text}
             />
           </GlassControl>
           <View style={styles.headerRight}>
@@ -828,7 +831,7 @@ function ActiveSessionScreen({
                     accessibilityRole="button"
                     accessibilityLabel={t('session.overflow')}
                   >
-                    <Icon name="ellipsis" size={18} color={theme.text} />
+                    <Icon name="ellipsis" size={18} color={chrome.text} />
                   </Pressable>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
@@ -925,13 +928,13 @@ function ActiveSessionScreen({
                 key={f.messageId}
                 style={[
                   styles.failedBanner,
-                  { backgroundColor: theme.glassFallbackBackground },
+                  { backgroundColor: chrome.glassFallbackBackground },
                 ]}
               >
                 <View
                   style={[styles.failedDot, { backgroundColor: theme.danger }]}
                 />
-                <Text style={[styles.failedText, { color: theme.text }]}>
+                <Text style={[styles.failedText, { color: chrome.text }]}>
                   {t('session.failedSend')}
                 </Text>
                 <Pressable
@@ -943,7 +946,7 @@ function ActiveSessionScreen({
                   accessibilityRole="button"
                   accessibilityLabel={t('session.restoreDraft')}
                 >
-                  <Text style={[styles.failedAction, { color: theme.text }]}>
+                  <Text style={[styles.failedAction, { color: chrome.text }]}>
                     {t('session.restoreDraft')}
                   </Text>
                 </Pressable>

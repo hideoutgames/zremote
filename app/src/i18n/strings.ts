@@ -12,7 +12,6 @@ const en = {
   'signIn.pasteFallback.placeholder': 'state.code',
   'signIn.pasteFallback.continue': 'Continue',
   'signIn.advanced': 'Advanced',
-  'signIn.edgeUrl': 'Edge URL',
   'signIn.error.generic': 'Sign-in failed. Try again.',
   'signIn.demo.button': 'Try demo mode',
   'signIn.demo.hint':

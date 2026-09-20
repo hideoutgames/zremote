@@ -6,6 +6,7 @@ import {
   maskStopsFor,
   TOP_CHROME_BLUR_INTENSITY,
   TOP_CHROME_FADE_BAND,
+  COMPOSER_BOTTOM_FADE_BAND,
   CHROME_FADE_WASH_DARK,
 } from '../src/components/TopChromeFade';
 import { FadeBlur } from '../src/components/FadeBlur';
@@ -54,12 +55,18 @@ test('ChromeFade bottom sizes the plateau to the composer inset', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = TestRenderer.create(
-      <ChromeFade edge="bottom" inset={120} fadeBand={TOP_CHROME_FADE_BAND} />,
+      <ChromeFade
+        edge="bottom"
+        inset={120}
+        fadeBand={COMPOSER_BOTTOM_FADE_BAND}
+      />,
     );
   });
   const fade = tree!.root.findByProps({ testID: 'bottom-chrome-fade' });
   const style = flattenStyle(fade.props.style);
-  expect(style.some(s => s.height === 120 + TOP_CHROME_FADE_BAND)).toBe(true);
+  expect(style.some(s => s.height === 120 + COMPOSER_BOTTOM_FADE_BAND)).toBe(
+    true,
+  );
   expect(style.some(s => s.bottom === 0)).toBe(true);
   await act(async () => {
     tree?.unmount();
@@ -109,7 +116,7 @@ test('wash paints a black gradient over the fade', async () => {
 });
 
 test('maskStopsFor hides the composer plateau and fades above it', () => {
-  const stops = maskStopsFor(400, 80, 56, 120, 56);
+  const stops = maskStopsFor(400, 80, 56, 120, COMPOSER_BOTTOM_FADE_BAND);
   expect(stops.locations[0]).toBe(0);
   expect(stops.locations[stops.locations.length - 1]).toBe(1);
   expect(stops.colors[0]).toBe('transparent');
