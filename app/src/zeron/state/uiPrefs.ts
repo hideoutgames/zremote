@@ -291,11 +291,11 @@ export const usePinnedChatIds = (): string[] =>
 export const useChatPinned = (chatId: string): boolean =>
   useStore(uiPrefsStore, s => s.pinnedChatIds.includes(chatId));
 
-export const togglePinnedModel = (pick: RecentModel): void => {
+export const togglePinnedModel = (pick: RecentModel): Promise<void> => {
   uiPrefsStore.setState(s => ({
     pinnedModels: togglePinnedModelList(s.pinnedModels, pick),
   }));
-  save();
+  return saveAsync();
 };
 
 export const usePinnedModels = (): RecentModel[] =>

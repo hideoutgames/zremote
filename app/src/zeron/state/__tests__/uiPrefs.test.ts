@@ -196,7 +196,7 @@ test('bindUiPrefs ignores an invalid colorScheme', async () => {
 test('togglePinnedModel persists and unpins', async () => {
   const disk = memDocDisk();
   await bindUiPrefs(disk, 'org', 'user');
-  togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
+  await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
   expect(uiPrefsStore.getState().pinnedModels).toEqual([
     { harness: 'claude-code', model: 'sonnet' },
   ]);
@@ -204,6 +204,6 @@ test('togglePinnedModel persists and unpins', async () => {
   expect(saved?.pinnedModels).toEqual([
     { harness: 'claude-code', model: 'sonnet' },
   ]);
-  togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
+  await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
   expect(uiPrefsStore.getState().pinnedModels).toEqual([]);
 });
