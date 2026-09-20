@@ -298,6 +298,10 @@ describe('RelaySessionSource', () => {
     });
     await flush();
     expect(texts(store().entries)).toEqual(['hi', 'world']);
+    expect(store().meta.contextUsage).toEqual({
+      tokens: 12,
+      window: 200000,
+    });
     relay.queueStreams[0].push({ items: [{ id: 'q1', text: 'later' }] });
     await flush();
     expect(store().queue.map(q => q.id)).toEqual(['q1']);

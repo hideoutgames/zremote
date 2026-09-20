@@ -208,7 +208,7 @@ test('fast mode chip is labelled when the harness supports it', async () => {
   );
 });
 
-test('context usage chip appears when the session meta has tokens', async () => {
+test('context usage chip appears when the session meta has a window', async () => {
   getSessionStore('c1').setState({
     meta: { contextUsage: { tokens: 32_000, window: 200_000 } },
   });
@@ -222,6 +222,25 @@ test('context usage chip appears when the session meta has tokens', async () => 
   expect(
     mounted.root.findAll(n => n.props.testID === 'TrueSheet').length,
   ).toBeGreaterThan(0);
+});
+
+test('context usage chip appears for window-only snapshots', async () => {
+  getSessionStore('c1').setState({
+    meta: { contextUsage: { window: 200_000 } },
+  });
+  const mounted = await render(<Composer {...composerProps} />);
+  const chip = mounted.root.findByProps({ testID: 'context-usage-chip' });
+  expect(chip.props.accessibilityLabel).toMatch(/waiting/i);
+});
+
+test('context usage chip stays hidden without a window', async () => {
+  getSessionStore('c1').setState({
+    meta: { contextUsage: { tokens: 12 } },
+  });
+  const mounted = await render(<Composer {...composerProps} />);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'context-usage-chip'),
+  ).toHaveLength(0);
 });
 
 test('compose composer: desktop, project, checkout, and branch sit above the input', async () => {

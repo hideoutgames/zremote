@@ -132,7 +132,7 @@ interface ChatSim {
   cwd: string;
   entries: Record<string, unknown>[];
   queue: QueuedMessage[];
-  contextUsage: ContextUsage;
+  contextUsage?: ContextUsage;
   transcriptWatchers: Set<StreamEnd>;
   queueWatchers: Set<StreamEnd>;
   run?: RunState;
@@ -183,6 +183,13 @@ export class DemoEdge {
       [CHAT_ERRORED]: { deviceId: HOST_LIVE, cwd: demoPaths.zeron },
       'c-archived': { deviceId: HOST_LIVE, cwd: demoPaths.zremote },
     };
+    const usageByChat: Record<string, ContextUsage | undefined> = {
+      [CHAT_WORKING]: { tokens: 32_000, window: 200_000 },
+      [CHAT_INPUT]: { tokens: 32_000, window: 200_000 },
+      'c-long': { tokens: 32_000, window: 200_000 },
+      [CHAT_OFFLINE]: { tokens: 32_000, window: 200_000 },
+      [CHAT_ERRORED]: { tokens: 32_000, window: 200_000 },
+    };
     for (const [chatId, meta] of Object.entries(chatDevice)) {
       this.chats.set(chatId, {
         chatId,
@@ -190,7 +197,7 @@ export class DemoEdge {
         cwd: meta.cwd,
         entries: transcripts[chatId] ?? [],
         queue: queues[chatId] ?? [],
-        contextUsage: { tokens: 32_000, window: 200_000 },
+        contextUsage: usageByChat[chatId],
         transcriptWatchers: new Set(),
         queueWatchers: new Set(),
         runCount: 0,

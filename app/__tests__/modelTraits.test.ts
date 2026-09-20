@@ -95,6 +95,99 @@ test('Codex advertised ladder wins over empty options', () => {
   });
 });
 
+test('Codex serviceTier Fast is independent of the effort ladder', () => {
+  const gpt = model('gpt-5', {
+    reasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+    options: [option('serviceTier', ['default', 'fast'], 'default')],
+  });
+  const traits = resolveModelTraits(gpt, [gpt], undefined, {
+    reasoning: 'high',
+    modelOptions: { serviceTier: 'fast' },
+  });
+  expect(traits.effort?.kind).toBe('reasoning');
+  expect(traits.effort?.value).toBe('high');
+  expect(traits.fast?.kind).toBe('option');
+  expect(traits.fast?.enabled).toBe(true);
+  expect(traits.fast?.option?.id).toBe('serviceTier');
+  expect(
+    applyFastChoice(
+      traits,
+      'off',
+      {
+        model: 'gpt-5',
+        reasoning: 'high',
+        modelOptions: { serviceTier: 'fast' },
+      },
+      [gpt],
+    ),
+  ).toEqual({
+    model: 'gpt-5',
+    reasoning: 'high',
+    modelOptions: { serviceTier: 'default' },
+  });
+  expect(
+    applyEffortLevel(
+      traits,
+      'low',
+      {
+        model: 'gpt-5',
+        reasoning: 'high',
+        modelOptions: { serviceTier: 'fast' },
+      },
+      [gpt],
+    ),
+  ).toEqual({
+    model: 'gpt-5',
+    reasoning: 'low',
+    modelOptions: { serviceTier: 'fast' },
+  });
+});
+
+test('Codex Daybreak-style models without serviceTier have no Fast chip', () => {
+  const daybreak = model('gpt-daybreak-blue-latest', {
+    reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+  });
+  expect(resolveModelTraits(daybreak, [daybreak], []).fast).toBeUndefined();
+});
+
+test('Grok ladder-only effort has no Fast chip', () => {
+  const grok = model('grok-4', {
+    reasoningLevels: ['low', 'medium', 'high'],
+  });
+  const traits = resolveModelTraits(grok, [grok], ['low', 'medium', 'high']);
+  expect(traits.effort).toEqual({
+    kind: 'reasoning',
+    levels: ['low', 'medium', 'high'],
+    value: 'low',
+  });
+  expect(traits.fast).toBeUndefined();
+});
+
+test('Hermes empty ladder has neither Effort nor Fast', () => {
+  const hermes = model('hermes');
+  const traits = resolveModelTraits(hermes, [hermes], []);
+  expect(traits.effort).toBeUndefined();
+  expect(traits.fast).toBeUndefined();
+});
+
+test('OpenCode harness ladder fills in when the model lists none', () => {
+  const sonnet = model('opencode-sonnet');
+  const traits = resolveModelTraits(
+    sonnet,
+    [sonnet],
+    ['low', 'medium', 'high', 'xhigh', 'max'],
+  );
+  expect(traits.effort?.kind).toBe('reasoning');
+  expect(traits.effort?.levels).toEqual([
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+    'max',
+  ]);
+  expect(traits.fast).toBeUndefined();
+});
+
 test('Claude fastMode is unchanged and independent of effort', () => {
   const sonnet = model('sonnet', {
     reasoningLevels: ['low', 'medium', 'high'],
