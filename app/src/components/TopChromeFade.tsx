@@ -22,7 +22,7 @@ export const TOP_CHROME_FADE_BAND = 56;
 /** Chat transcript top dissolve — half the session/header chrome band. */
 export const CHAT_TOP_FADE_BAND = TOP_CHROME_FADE_BAND / 2;
 /** Gradual content mask above the composer. Overlay blur is not used here. */
-export const COMPOSER_BOTTOM_FADE_BAND = 88;
+export const COMPOSER_BOTTOM_FADE_BAND = 44;
 /** Strong blur under chrome so wallpaper remains. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
 /** Black edge wash when a session wallpaper is set on Home. */
