@@ -10,6 +10,8 @@ jest.mock('react-native-reanimated', () => ({
   ...require('react-native-reanimated/mock'),
   // The upstream mock is missing this hook ("ADD ME IF NEEDED").
   useReducedMotion: () => false,
+  // Upstream `makeMutable` is identity; shared values need `.value`.
+  makeMutable: init => ({ value: init }),
 }));
 jest.mock('react-native-keyboard-controller', () =>
   require('react-native-keyboard-controller/jest'),

@@ -1,6 +1,7 @@
 import {
   rememberModelSettings,
   modelSettingsFor,
+  setComposerExtraHeight,
   setComposerExtraHeightLive,
   uiPrefsStore,
   installNewThreadComposerBackground,
@@ -69,6 +70,18 @@ test('setComposerExtraHeightLive updates extra height without requiring a remoun
   expect(uiPrefsStore.getState().composerExtraHeight).toBe(40);
   setComposerExtraHeightLive(0);
   expect(uiPrefsStore.getState().composerExtraHeight).toBe(0);
+});
+
+test('setComposerExtraHeightLive does not persist; setComposerExtraHeight does', async () => {
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  setComposerExtraHeightLive(40);
+  expect(uiPrefsStore.getState().composerExtraHeight).toBe(40);
+  const mid = await disk.loadUiPrefs('org', 'user');
+  expect(mid?.composerExtraHeight ?? 0).toBe(0);
+  await setComposerExtraHeight(40);
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.composerExtraHeight).toBe(40);
 });
 
 test('installNewThreadComposerBackground copies then replaces the pointer', async () => {

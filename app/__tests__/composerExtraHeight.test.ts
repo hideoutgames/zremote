@@ -1,10 +1,20 @@
 import {
   COMPOSER_EXTRA_MAX,
   COMPOSER_EXTRA_WINDOW_FRAC,
+  beginComposerResize,
   clampComposerExtraHeight,
+  composerExtraHeightSV,
   composerExtraMax,
   composerListInset,
+  endComposerResize,
+  isComposerResizeActive,
+  onComposerResizeEnd,
 } from '../src/components/composerExtraHeight';
+
+afterEach(() => {
+  if (isComposerResizeActive()) endComposerResize();
+  composerExtraHeightSV.value = 0;
+});
 
 test('caps are 10% below the previous 280 / 0.4 limits', () => {
   expect(COMPOSER_EXTRA_MAX).toBe(252);
@@ -26,9 +36,29 @@ test('clampComposerExtraHeight stays in [0, max]', () => {
   expect(clampComposerExtraHeight(40, 252)).toBe(40);
 });
 
+test('clampComposerExtraHeight rounds to whole points', () => {
+  expect(clampComposerExtraHeight(40.4, 252)).toBe(40);
+  expect(clampComposerExtraHeight(40.5, 252)).toBe(41);
+  expect(clampComposerExtraHeight(40.6, 252)).toBe(41);
+});
+
 test('composerListInset delta equals extraHeight', () => {
   const base = 180;
   expect(composerListInset(base, 0)).toBe(base);
   expect(composerListInset(base, 40)).toBe(220);
   expect(composerListInset(base, 40) - composerListInset(base, 0)).toBe(40);
+});
+
+test('beginComposerResize stays active until end and then notifies', () => {
+  const calls: number[] = [];
+  const stop = onComposerResizeEnd(() => calls.push(1));
+  beginComposerResize();
+  expect(isComposerResizeActive()).toBe(true);
+  expect(calls).toEqual([]);
+  endComposerResize();
+  expect(isComposerResizeActive()).toBe(false);
+  expect(calls).toEqual([1]);
+  endComposerResize();
+  expect(calls).toEqual([1]);
+  stop();
 });

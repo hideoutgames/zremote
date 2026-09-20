@@ -78,8 +78,10 @@ import {
   setComposerExtraHeightLive,
 } from '../zeron/state/uiPrefs';
 import {
+  beginComposerResize,
   clampComposerExtraHeight,
   composerExtraMax,
+  endComposerResize,
 } from './composerExtraHeight';
 import type { HarnessDescriptor, ModelOption } from '../zeron/protocol/types';
 import {
@@ -242,6 +244,7 @@ export const Composer = React.memo(function ({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        beginComposerResize();
         extraStartRef.current = extraRef.current;
       },
       onPanResponderMove: (_e, g) => {
@@ -257,6 +260,7 @@ export const Composer = React.memo(function ({
           extraMaxRef.current,
         );
         setComposerExtraHeight(next);
+        endComposerResize();
         if (
           focusedRef.current &&
           extraStartRef.current === 0 &&
@@ -264,6 +268,10 @@ export const Composer = React.memo(function ({
         ) {
           KeyboardController.dismiss();
         }
+      },
+      onPanResponderTerminate: () => {
+        setComposerExtraHeight(extraRef.current);
+        endComposerResize();
       },
     }),
   ).current;

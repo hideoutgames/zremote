@@ -31,8 +31,11 @@ import { useTheme } from '../theme';
 import { ContentEdgeMask, COMPOSER_BOTTOM_FADE_BAND } from './TopChromeFade';
 import {
   clampComposerExtraHeight,
+  composerBaseHeightSV,
   composerExtraMax,
   composerListInset,
+  isComposerResizeActive,
+  onComposerResizeEnd,
 } from './composerExtraHeight';
 import { WorkingStatusBubble } from './WorkingStatus';
 import { PreviewRail } from './agentsKit/PreviewRail';
@@ -229,11 +232,14 @@ export const SessionTranscriptList = forwardRef<
         extraHeight,
         composerExtraMax(windowHeightRef.current),
       );
+      extraHeightRef.current = extra;
+      composerBaseHeightSV.value = base;
       const inset = composerListInset(base, extra);
+      extraContentPadding.value = inset;
+      if (isComposerResizeActive()) return;
       const prev = composerInsetRef.current;
       composerInsetRef.current = inset;
       setComposerInset(inset);
-      extraContentPadding.value = inset;
       onComposerHeightRef.current(inset);
       if (followingRef.current && prev !== inset) {
         scrollToEndRef
@@ -272,6 +278,14 @@ export const SessionTranscriptList = forwardRef<
           composerExtraMax(windowHeightRef.current),
         );
         publishInset(s.composerExtraHeight);
+      }),
+    [publishInset],
+  );
+
+  useEffect(
+    () =>
+      onComposerResizeEnd(() => {
+        publishInset(uiPrefsStore.getState().composerExtraHeight);
       }),
     [publishInset],
   );
@@ -330,6 +344,7 @@ export const SessionTranscriptList = forwardRef<
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
+      if (isComposerResizeActive()) return;
       const height = event.nativeEvent.layout.height;
       const extra = extraHeightRef.current;
       const base = baseHeightRef.current;

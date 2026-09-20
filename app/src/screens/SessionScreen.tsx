@@ -133,9 +133,12 @@ import { createLog } from '../zeron/log';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 import {
   TopChromeFade,
-  ChromeFade,
   COMPOSER_BOTTOM_FADE_BAND,
 } from '../components/TopChromeFade';
+import {
+  ComposerChromeFade,
+  ComposerStickyBottom,
+} from '../components/ComposerChromeAnim';
 import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
@@ -721,8 +724,7 @@ function ActiveSessionScreen({
       />
 
       <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
-      <ChromeFade
-        edge="bottom"
+      <ComposerChromeFade
         inset={composerHeight}
         fadeBand={COMPOSER_BOTTOM_FADE_BAND}
       />
@@ -915,59 +917,63 @@ function ActiveSessionScreen({
       ) : null}
 
       {session.failedSends.length > 0 ? (
-        <KeyboardStickyView
-          offset={keyboardOffset}
-          style={[styles.failedWrap, { bottom: composerHeight + 10 }]}
+        <ComposerStickyBottom
+          extra={10}
+          style={styles.failedWrap}
           pointerEvents="box-none"
         >
-          {session.failedSends.map(f => (
-            <Glass
-              key={f.messageId}
-              style={[
-                styles.failedBanner,
-                { backgroundColor: chrome.glassFallbackBackground },
-              ]}
-            >
-              <View
-                style={[styles.failedDot, { backgroundColor: theme.danger }]}
-              />
-              <Text style={[styles.failedText, { color: chrome.text }]}>
-                {t('session.failedSend')}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  restoreFailedSend(chatId, f.text);
-                  dismissFailedSend(chatId, f.messageId);
-                }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={t('session.restoreDraft')}
+          <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
+            {session.failedSends.map(f => (
+              <Glass
+                key={f.messageId}
+                style={[
+                  styles.failedBanner,
+                  { backgroundColor: chrome.glassFallbackBackground },
+                ]}
               >
-                <Text style={[styles.failedAction, { color: chrome.text }]}>
-                  {t('session.restoreDraft')}
+                <View
+                  style={[styles.failedDot, { backgroundColor: theme.danger }]}
+                />
+                <Text style={[styles.failedText, { color: chrome.text }]}>
+                  {t('session.failedSend')}
                 </Text>
-              </Pressable>
-            </Glass>
-          ))}
-        </KeyboardStickyView>
+                <Pressable
+                  onPress={() => {
+                    restoreFailedSend(chatId, f.text);
+                    dismissFailedSend(chatId, f.messageId);
+                  }}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.restoreDraft')}
+                >
+                  <Text style={[styles.failedAction, { color: chrome.text }]}>
+                    {t('session.restoreDraft')}
+                  </Text>
+                </Pressable>
+              </Glass>
+            ))}
+          </KeyboardStickyView>
+        </ComposerStickyBottom>
       ) : null}
 
-      <KeyboardStickyView
-        offset={keyboardOffset}
-        style={[styles.scrollDown, { bottom: composerHeight + 10 }]}
+      <ComposerStickyBottom
+        extra={10}
+        style={styles.scrollDown}
         pointerEvents="box-none"
       >
-        {showScrollDown ? (
-          <ScrollToBottomButton
-            onPress={() =>
-              transcriptRef.current?.followEnd({
-                animated: true,
-                closeKeyboard: false,
-              })
-            }
-          />
-        ) : null}
-      </KeyboardStickyView>
+        <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
+          {showScrollDown ? (
+            <ScrollToBottomButton
+              onPress={() =>
+                transcriptRef.current?.followEnd({
+                  animated: true,
+                  closeKeyboard: false,
+                })
+              }
+            />
+          ) : null}
+        </KeyboardStickyView>
+      </ComposerStickyBottom>
 
       <KeyboardStickyView
         testID="session-composer"

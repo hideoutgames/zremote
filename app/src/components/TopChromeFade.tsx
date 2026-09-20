@@ -12,6 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated, { type AnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import type { BlurTint } from 'expo-blur';
@@ -78,6 +79,7 @@ export function ChromeFade({
   testID,
   wash,
   tint,
+  animatedStyle,
 }: {
   edge: 'top' | 'bottom';
   /** Opaque plateau covering chrome (header or composer). */
@@ -87,12 +89,14 @@ export function ChromeFade({
   testID?: string;
   wash?: string;
   tint?: BlurTint;
+  /** Live height (grabber pan) — last so it overrides the committed height. */
+  animatedStyle?: AnimatedStyle<ViewStyle>;
 }) {
   const band = fadeBand ?? TOP_CHROME_FADE_BAND;
   const height = Math.max(inset, 0) + band;
   const fadeHold = height <= 0 ? 0.12 : Math.max(inset, 0) / height;
   return (
-    <View
+    <Animated.View
       pointerEvents="none"
       testID={
         testID ?? (edge === 'top' ? 'top-chrome-fade' : 'bottom-chrome-fade')
@@ -102,6 +106,7 @@ export function ChromeFade({
         edge === 'top' ? styles.top : styles.bottom,
         { height },
         style,
+        animatedStyle,
       ]}
     >
       <FadeBlur
@@ -114,7 +119,7 @@ export function ChromeFade({
       {wash !== undefined ? (
         <ChromeFadeWash edge={edge} fadeHold={fadeHold} wash={wash} />
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
