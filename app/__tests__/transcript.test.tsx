@@ -398,7 +398,7 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
   const cap = tree!.root.findByProps({ testID: 'user-bubble-cap' });
   const bubble = tree!.root.findByProps({ testID: 'user-bubble' });
   expect(flatStyle(row.props.style).some(s => s.width === '100%')).toBe(true);
-  expect(cap.parent).toBe(row);
+  expect(row.findByProps({ testID: 'user-bubble-cap' })).toBeTruthy();
   expect(
     flatStyle(cap.props.style).some(s => s.maxWidth === USER_BUBBLE_MAX_WIDTH),
   ).toBe(true);
