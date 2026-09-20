@@ -13,6 +13,7 @@ import {
   mixTreatment,
   rec601Luma01,
   thumbnailSize,
+  coverFitTransform,
 } from '../backgroundEffects';
 
 test('ASCII glyphs match the desktop 5×7 bitmap table', () => {
@@ -107,6 +108,29 @@ test('thumbnail caps the long edge at 2048 and preserves aspect', () => {
   expect(thumbnailSize(1024, 768)).toEqual({ width: 1024, height: 768 });
   expect(thumbnailSize(4096, 2048)).toEqual({ width: 2048, height: 1024 });
   expect(thumbnailSize(0, 10)).toEqual({ width: 0, height: 0 });
+});
+
+test('cover-fit scales to fill dest and centers the overflow', () => {
+  expect(coverFitTransform(100, 100, 100, 100)).toEqual([
+    { translateX: 0 },
+    { translateY: 0 },
+    { scale: 1 },
+  ]);
+  expect(coverFitTransform(200, 100, 100, 100)).toEqual([
+    { translateX: -50 },
+    { translateY: 0 },
+    { scale: 1 },
+  ]);
+  expect(coverFitTransform(100, 50, 200, 200)).toEqual([
+    { translateX: -100 },
+    { translateY: 0 },
+    { scale: 4 },
+  ]);
+  expect(coverFitTransform(0, 10, 100, 100)).toEqual([
+    { translateX: 0 },
+    { translateY: 0 },
+    { scale: 1 },
+  ]);
 });
 
 test('rec.601 luma matches the shader weights', () => {
