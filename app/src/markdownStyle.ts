@@ -1,6 +1,10 @@
 import { StyleSheet } from 'react-native';
-import type { MarkdownStyle } from 'react-native-enriched-markdown';
+import type { MarkdownStyle, Md4cFlags } from 'react-native-enriched-markdown';
 import { darkTheme, lightTheme, markdownTokens, type Theme } from './theme';
+
+/** Coding-chat copy is not math. Unpaired `$` (env vars, prices, regex)
+ *  would otherwise parse as LaTeX and blank the paragraph. */
+export const markdownMd4cFlags: Md4cFlags = { latexMath: false };
 
 const { bodyFontSize, bodyLineHeight, linkColor, headings } = markdownTokens;
 

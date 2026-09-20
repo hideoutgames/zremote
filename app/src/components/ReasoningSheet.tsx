@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
-import { markdownStyleFor } from '../markdownStyle';
+import { markdownMd4cFlags, markdownStyleFor } from '../markdownStyle';
 import { t } from '../i18n/strings';
 import { GlassSheet } from './GlassSheet';
 import { useTheme } from '../theme';
@@ -27,6 +27,7 @@ export const ReasoningSheet = React.memo(function ({
         <EnrichedMarkdownText
           markdown={reasoning}
           markdownStyle={markdownStyleFor(theme)}
+          md4cFlags={markdownMd4cFlags}
           flavor="github"
         />
       </ScrollView>

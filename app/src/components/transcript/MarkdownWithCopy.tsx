@@ -1,7 +1,7 @@
 import React from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
-import { markdownStyleFor } from '../../markdownStyle';
+import { markdownMd4cFlags, markdownStyleFor } from '../../markdownStyle';
 import { useTheme } from '../../theme';
 import { CodeFenceBlock } from './CodeFenceBlock';
 import { splitMarkdownFences } from './splitMarkdownFences';
@@ -28,6 +28,8 @@ export function MarkdownWithCopy({
       <EnrichedMarkdownText
         markdown={onlyProse.text}
         markdownStyle={mdStyle}
+        containerStyle={styles.md}
+        md4cFlags={markdownMd4cFlags}
         flavor="github"
         streamingAnimation={streaming === true}
         onLinkPress={({ url }) => {
@@ -47,6 +49,8 @@ export function MarkdownWithCopy({
             key={`prose-${i}`}
             markdown={seg.text}
             markdownStyle={mdStyle}
+            containerStyle={styles.md}
+            md4cFlags={markdownMd4cFlags}
             flavor="github"
             streamingAnimation={streaming === true && i === segments.length - 1}
             onLinkPress={({ url }) => {
@@ -61,5 +65,6 @@ export function MarkdownWithCopy({
 }
 
 const styles = StyleSheet.create({
-  stack: { gap: 10 },
+  stack: { alignSelf: 'stretch', width: '100%', gap: 10 },
+  md: { alignSelf: 'stretch', width: '100%' },
 });

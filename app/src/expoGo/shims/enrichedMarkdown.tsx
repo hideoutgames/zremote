@@ -97,6 +97,8 @@ export interface EnrichedMarkdownTextProps {
   flavor?: string;
   streamingAnimation?: boolean;
   onLinkPress?: (link: { url: string }) => boolean | void;
+  md4cFlags?: { latexMath?: boolean };
+  containerStyle?: AnyStyle;
 }
 
 export const EnrichedMarkdownText = ({

@@ -248,9 +248,9 @@ export const AssistantMessage = React.memo(function ({
     .map(p => (p as { text: string }).text)
     .join('\n');
   return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger>
-        <View style={styles.row}>
+    <View testID="assistant-message" style={styles.row}>
+      <ContextMenu.Root>
+        <ContextMenu.Trigger>
           <FrostedBubble
             testID="assistant-bubble"
             style={styles.bubble}
@@ -308,19 +308,24 @@ export const AssistantMessage = React.memo(function ({
               </Text>
             ) : null}
           </FrostedBubble>
-        </View>
-      </ContextMenu.Trigger>
-      {messageCopyContent(fullText, entry.createdAt)}
-    </ContextMenu.Root>
+        </ContextMenu.Trigger>
+        {messageCopyContent(fullText, entry.createdAt)}
+      </ContextMenu.Root>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
+  // Percentage maxWidth on the bubble must resolve against the list row,
+  // not a shrink-wrapped ContextMenu trigger. Native markdown reports no
+  // intrinsic size; a 0-width parent blanks the prose.
   row: {
+    alignSelf: 'stretch',
+    width: '100%',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
-    alignItems: 'flex-start',
   },
   bubble: {
     alignSelf: 'flex-start',
