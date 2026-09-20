@@ -21,9 +21,12 @@ import {
   isHorizontalEdgeMove,
   shouldCommitEdgeBack,
 } from '../navigation/edgeBackGesture';
-
-const HOME_PAGE = 0;
-const SESSION_PAGE = 1;
+import {
+  HOME_PAGE,
+  PAGER_SLIDE_MS,
+  SESSION_PAGE,
+  shouldFreezeSession,
+} from '../navigation/pagerTransition';
 
 export function RootPager({
   requestedChat,
@@ -35,32 +38,60 @@ export function RootPager({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<PagerView>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [openGeneration, setOpenGeneration] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePage, setActivePage] = useState(HOME_PAGE);
   const [isIdle, setIsIdle] = useState(true);
+  const [holdSession, setHoldSession] = useState(false);
 
-  const goToSession = useCallback((id: string) => {
-    setComposing(false);
-    setChatId(id);
-    setOpenGeneration(n => n + 1);
-    setActivePage(SESSION_PAGE);
-    pagerRef.current?.setPage?.(SESSION_PAGE);
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
   }, []);
-  // Slide first, then freeze / unmount. Eager HOME would Freeze the session
-  // (and drop compose) while the reverse pager animation is still on screen.
+
+  const cancelSessionHold = useCallback(() => {
+    clearHoldTimer();
+    setHoldSession(false);
+  }, [clearHoldTimer]);
+
+  const releaseSessionHold = useCallback(() => {
+    clearHoldTimer();
+    setHoldSession(false);
+    setComposing(false);
+  }, [clearHoldTimer]);
+
+  const goToSession = useCallback(
+    (id: string) => {
+      cancelSessionHold();
+      setComposing(false);
+      setChatId(id);
+      setOpenGeneration(n => n + 1);
+      setActivePage(SESSION_PAGE);
+      pagerRef.current?.setPage?.(SESSION_PAGE);
+    },
+    [cancelSessionHold],
+  );
+  // pager-view v8 fires onPageSelected at SwiftUI selection change (animation
+  // start). Hold the session painted until the reverse slide can finish.
   const goHome = useCallback(() => {
+    setHoldSession(true);
     pagerRef.current?.setPage?.(HOME_PAGE);
     KeyboardController.dismiss();
-  }, []);
+    clearHoldTimer();
+    holdTimerRef.current = setTimeout(releaseSessionHold, PAGER_SLIDE_MS);
+  }, [clearHoldTimer, releaseSessionHold]);
   const enterCompose = useCallback(() => {
+    cancelSessionHold();
     setChatId(null);
     setComposing(true);
     setActivePage(SESSION_PAGE);
     pagerRef.current?.setPage?.(SESSION_PAGE);
-  }, []);
+  }, [cancelSessionHold]);
   const goHomeRef = useRef(goHome);
   goHomeRef.current = goHome;
   const edgePan = useRef(
@@ -77,6 +108,8 @@ export function RootPager({
     if (requestedChat !== null) goToSession(requestedChat);
   }, [requestedChat, goToSession]);
 
+  useEffect(() => () => clearHoldTimer(), [clearHoldTimer]);
+
   useEffect(() => {
     onSelectedChat?.(
       activePage === SESSION_PAGE && !composing
@@ -88,10 +121,7 @@ export function RootPager({
   const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
     const { position } = event.nativeEvent;
     setActivePage(position);
-    if (position === HOME_PAGE) {
-      setComposing(false);
-      KeyboardController.dismiss();
-    }
+    if (position === HOME_PAGE) KeyboardController.dismiss();
   }, []);
 
   const onPageScrollStateChanged = useCallback(
@@ -120,7 +150,7 @@ export function RootPager({
           />
         </View>
         <View key="session" style={styles.page}>
-          <Freeze freeze={isIdle && activePage !== SESSION_PAGE}>
+          <Freeze freeze={shouldFreezeSession(isIdle, holdSession, activePage)}>
             {composing ? (
               <AppErrorBoundary resetKey="compose">
                 <SessionScreen onBack={goHome} onCreated={goToSession} />
