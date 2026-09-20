@@ -3,7 +3,9 @@
 // the prefs pointer is committed. Pure + injectable fs so Jest does not
 // load expo-file-system.
 
+import { Image } from 'react-native';
 import { MAX_ATTACHMENT_BYTES } from '../attachments/validate';
+import { defaultBackgroundById } from './defaultBackgrounds';
 
 export type NewThreadBackgroundEffect =
   | 'none'
@@ -15,16 +17,79 @@ export type NewThreadBackgroundEffect =
 export const NEW_THREAD_BACKGROUND_EFFECTS: readonly NewThreadBackgroundEffect[] =
   ['none', 'dither', 'ascii', 'halftone', 'scanlines'];
 
-export interface NewThreadComposerBackground {
+export type CustomNewThreadBackground = {
+  kind?: 'custom';
   uri: string;
   name: string;
-}
+};
+
+export type PresetNewThreadBackground = {
+  kind: 'preset';
+  id: string;
+};
+
+export type NewThreadComposerBackground =
+  | PresetNewThreadBackground
+  | CustomNewThreadBackground;
 
 export type BackgroundInstallReason = 'tooLarge' | 'unsupported' | 'failed';
 
 export type BackgroundInstallResult =
-  | { ok: true; background: NewThreadComposerBackground }
+  | { ok: true; background: CustomNewThreadBackground }
   | { ok: false; reason: BackgroundInstallReason };
+
+export const isPresetBackground = (
+  bg: NewThreadComposerBackground,
+): bg is PresetNewThreadBackground => bg.kind === 'preset';
+
+export const customBackgroundUri = (
+  bg: NewThreadComposerBackground | undefined,
+): string | undefined => {
+  if (bg === undefined || isPresetBackground(bg)) return undefined;
+  return bg.uri;
+};
+
+export const parseNewThreadComposerBackground = (
+  raw: unknown,
+): NewThreadComposerBackground | undefined => {
+  if (raw === null || raw === undefined || typeof raw !== 'object') {
+    return undefined;
+  }
+  const v = raw as {
+    kind?: unknown;
+    id?: unknown;
+    uri?: unknown;
+    name?: unknown;
+  };
+  if (v.kind === 'preset') {
+    if (typeof v.id !== 'string' || v.id === '') return undefined;
+    return { kind: 'preset', id: v.id };
+  }
+  if (typeof v.uri === 'string' && v.uri !== '' && typeof v.name === 'string') {
+    return { kind: 'custom', uri: v.uri, name: v.name };
+  }
+  return undefined;
+};
+
+export const resolveBackgroundUri = (
+  bg: NewThreadComposerBackground,
+): string | undefined => {
+  if (isPresetBackground(bg)) {
+    const preset = defaultBackgroundById(bg.id);
+    if (preset === undefined) return undefined;
+    return Image.resolveAssetSource(preset.source)?.uri;
+  }
+  return bg.uri;
+};
+
+export const isWallpaperAvailable = async (
+  bg: NewThreadComposerBackground,
+): Promise<boolean> => {
+  if (isPresetBackground(bg)) {
+    return defaultBackgroundById(bg.id) !== undefined;
+  }
+  return backgroundFileExists(bg.uri);
+};
 
 export interface BackgroundSource {
   uri: string;
@@ -138,7 +203,7 @@ export const copyBackgroundFile = async (
   }
   return {
     ok: true,
-    background: { uri: destUri, name: input.name },
+    background: { kind: 'custom', uri: destUri, name: input.name },
   };
 };
 
@@ -147,10 +212,11 @@ export const retireManagedBackground = async (
   previous: NewThreadComposerBackground | undefined,
   nextUri: string,
 ): Promise<void> => {
-  if (previous === undefined) return;
-  if (previous.uri === nextUri) return;
-  if (!fs.isManagedUri(previous.uri)) return;
-  await fs.deleteFile(previous.uri).catch(() => {});
+  const prevUri = customBackgroundUri(previous);
+  if (prevUri === undefined) return;
+  if (prevUri === nextUri) return;
+  if (!fs.isManagedUri(prevUri)) return;
+  await fs.deleteFile(prevUri).catch(() => {});
 };
 
 export const backgroundFileExists = async (uri: string): Promise<boolean> => {

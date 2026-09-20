@@ -1,4 +1,5 @@
 import {
+  applyPresetBackground,
   rememberModelSettings,
   modelSettingsFor,
   setComposerExtraHeight,
@@ -138,6 +139,60 @@ test('install before bindUiPrefs is flushed once persist is bound', async () => 
   expect(
     (saved?.newThreadComposerBackground as { name?: string } | undefined)?.name,
   ).toBe('early.png');
+});
+
+test('applyPresetBackground stores a preset and retires the managed custom file', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const installed = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/one.png',
+    name: 'one.png',
+    mimeType: 'image/png',
+    size: 20,
+  });
+  expect(installed.ok).toBe(true);
+  expect(fs.files.size).toBe(1);
+
+  const applied = await applyPresetBackground('emma');
+  expect(applied).toBe(true);
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(fs.files.size).toBe(0);
+
+  expect(await applyPresetBackground('not-a-pack-id')).toBe(false);
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+});
+
+test('bindUiPrefs keeps a known preset without checking the documents folder', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: { kind: 'preset', id: 'emma' },
+    newThreadBackgroundEffect: 'dither',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('bindUiPrefs drops an unknown preset id', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: { kind: 'preset', id: 'missing-art' },
+    newThreadBackgroundEffect: 'ascii',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
 });
 
 test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {

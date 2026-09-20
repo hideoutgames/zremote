@@ -23,6 +23,7 @@ import {
 } from '../zeron/state/uiPrefs';
 import {
   NEW_THREAD_BACKGROUND_FROSTED_OPACITY,
+  resolveBackgroundUri,
   type NewThreadBackgroundEffect,
 } from '../zeron/state/newThreadBackground';
 import {
@@ -256,28 +257,26 @@ export function NewThreadBackground() {
   const theme = useTheme();
   const background = useNewThreadComposerBackground();
   const effect = useNewThreadBackgroundEffect();
+  const uri =
+    background === undefined ? undefined : resolveBackgroundUri(background);
   useEffect(() => {
-    if (background === undefined) setWallpaperContrast(undefined, undefined);
-  }, [background]);
-  if (background === undefined) return null;
+    if (uri === undefined) setWallpaperContrast(undefined, undefined);
+  }, [uri]);
+  if (uri === undefined) return null;
   return (
     <View
       pointerEvents="none"
       testID="new-thread-background"
       style={styles.fill}
     >
-      <WallpaperContrastSampler uri={background.uri} />
+      <WallpaperContrastSampler uri={uri} />
       <View
         style={[
           StyleSheet.absoluteFill,
           { opacity: NEW_THREAD_BACKGROUND_FROSTED_OPACITY },
         ]}
       >
-        <Artwork
-          uri={background.uri}
-          effect={effect}
-          light={theme.scheme === 'light'}
-        />
+        <Artwork uri={uri} effect={effect} light={theme.scheme === 'light'} />
       </View>
     </View>
   );

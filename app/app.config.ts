@@ -38,7 +38,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSCameraUsageDescription:
         'ZRemote uses the camera to attach photos to messages sent to remote coding engines.',
       NSPhotoLibraryUsageDescription:
-        'ZRemote accesses the photo library to attach images to messages sent to remote coding engines.',
+        'ZRemote accesses the photo library to attach images to messages and to choose a custom background.',
       NSSupportsLiveActivities: true,
       NSSupportsLiveActivitiesFrequentUpdates: true,
       ITSAppUsesNonExemptEncryption: false,
