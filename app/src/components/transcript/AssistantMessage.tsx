@@ -310,7 +310,7 @@ export const AssistantMessage = React.memo(function ({
           </FrostedBubble>
         </View>
       </ContextMenu.Trigger>
-      {messageCopyContent(fullText)}
+      {messageCopyContent(fullText, entry.createdAt)}
     </ContextMenu.Root>
   );
 });

@@ -159,7 +159,7 @@ export const UserMessage = React.memo(function UserMessageInner({
               ) : null}
             </EnteringStack>
           </ContextMenu.Trigger>
-          {messageCopyContent(visible)}
+          {messageCopyContent(visible, entry.createdAt)}
         </ContextMenu.Root>
       </View>
     </View>

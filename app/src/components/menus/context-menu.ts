@@ -9,4 +9,5 @@ export const ItemTitle = Menu.ItemTitle;
 export const ItemSubtitle = Menu.ItemSubtitle;
 export const ItemIcon = Menu.ItemIcon;
 export const Group = Menu.Group;
+export const Label = Menu.Label;
 export const Separator = Menu.Separator;

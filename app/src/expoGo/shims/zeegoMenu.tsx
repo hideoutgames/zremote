@@ -58,9 +58,30 @@ const findContent = (nodes: ReactNode): React.ReactElement | undefined => {
   return undefined;
 };
 
+/** First <Label> in <Content> (Groups included). Zeego shows one label at
+ * the top of the native menu; Go uses it as the ActionSheet/Alert title. */
+const collectLabel = (children: ReactNode): string | undefined => {
+  const content = findContent(children);
+  if (content === undefined) return undefined;
+  const walk = (nodes: ReactNode): string | undefined => {
+    for (const el of flatten(nodes)) {
+      const name = displayNameOf(el);
+      const props = el.props as { children?: ReactNode };
+      if (name === 'GoMenuLabel') {
+        const text = textOf(props.children);
+        if (text !== '') return text;
+      }
+      const nested = walk(props.children);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  };
+  return walk((content.props as { children?: ReactNode }).children);
+};
+
 /** Pull {title, onSelect, destructive} out of <Content><Item><ItemTitle>…
- * trees (Groups are flattened; Label becomes a disabled header row;
- * disabled Items are omitted). */
+ * trees (Groups are flattened; Label is collected separately as the sheet
+ * title; disabled Items are omitted). */
 const collectItems = (children: ReactNode): ItemDef[] => {
   const content = findContent(children);
   if (content === undefined) return [];
@@ -93,12 +114,14 @@ const collectItems = (children: ReactNode): ItemDef[] => {
   return walk(contentProps.children);
 };
 
-const present = (items: ItemDef[]): void => {
+const present = (items: ItemDef[], title?: string): void => {
   const labels = items.map(i => i.title);
+  const header = title !== undefined && title !== '' ? title : undefined;
   if (Platform.OS === 'ios') {
     const destructive = items.findIndex(i => i.destructive === true);
     ActionSheetIOS.showActionSheetWithOptions(
       {
+        ...(header !== undefined ? { title: header } : {}),
         options: [...labels, 'Cancel'],
         cancelButtonIndex: labels.length,
         ...(destructive >= 0 ? { destructiveButtonIndex: destructive } : {}),
@@ -108,7 +131,7 @@ const present = (items: ItemDef[]): void => {
       },
     );
   } else {
-    Alert.alert('', undefined, [
+    Alert.alert(header ?? '', undefined, [
       ...items.map(i => ({
         text: i.title,
         style: (i.destructive ? 'destructive' : 'default') as
@@ -131,7 +154,7 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
   }) => {
     const open = useCallback(() => {
       onOpenChange?.(true);
-      present(collectItems(children));
+      present(collectItems(children), collectLabel(children));
       onOpenChange?.(false);
     }, [children, onOpenChange]);
     return <Ctx.Provider value={{ open }}>{children}</Ctx.Provider>;
