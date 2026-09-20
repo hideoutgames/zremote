@@ -1,13 +1,11 @@
 // Pinned models for the full picker and the composer Liquid Glass menu.
-// Caps at 10; the composer shows pins instead of recents when any apply.
+// The composer shows pins instead of recents when any catalog-visible pin applies.
 
 import {
   recentMenuModels,
   type CatalogModelRef,
   type RecentModel,
 } from './recentModels';
-
-export const MAX_PINNED_MODELS = 10;
 
 const same = (a: RecentModel, b: RecentModel): boolean =>
   a.harness === b.harness && a.model === b.model;
@@ -19,16 +17,14 @@ export const isPinnedModel = (
   pick: RecentModel,
 ): boolean => pinned.some(p => same(p, pick));
 
-/** Unpin if present; otherwise prepend when under the cap. */
+/** Unpin if present; otherwise prepend. */
 export const togglePinnedModelList = (
   pinned: readonly RecentModel[],
   pick: RecentModel,
-  max = MAX_PINNED_MODELS,
 ): RecentModel[] => {
   if (pinned.some(p => same(p, pick))) {
     return pinned.filter(p => !same(p, pick));
   }
-  if (pinned.length >= max) return [...pinned];
   return [pick, ...pinned];
 };
 
@@ -37,16 +33,14 @@ export const pinnedMenuModels = (
   pinned: readonly RecentModel[],
   catalog: readonly CatalogModelRef[],
   current: RecentModel | undefined,
-  limit = MAX_PINNED_MODELS,
   lockHarness = true,
 ): CatalogModelRef[] => {
-  if (limit <= 0 || catalog.length === 0) return [];
+  if (catalog.length === 0) return [];
   const byKey = new Map(catalog.map(m => [keyOf(m), m]));
   const currentHarness = lockHarness ? current?.harness : undefined;
   const out: CatalogModelRef[] = [];
   const seen = new Set<string>();
   for (const p of pinned) {
-    if (out.length >= limit) break;
     if (currentHarness !== undefined && p.harness !== currentHarness) continue;
     const hit = byKey.get(keyOf(p));
     if (hit === undefined) continue;
@@ -63,7 +57,39 @@ export const pinnedMenuModels = (
   return out;
 };
 
-/** Pins (up to 10) when any catalog-visible pin applies; otherwise recents. */
+export interface ProviderMenuGroup {
+  harness: string;
+  label: string;
+  items: CatalogModelRef[];
+}
+
+/** Bucket menu items by harness; group order follows first appearance. */
+export const groupMenuModelsByProvider = (
+  items: readonly CatalogModelRef[],
+): ProviderMenuGroup[] => {
+  const groups: ProviderMenuGroup[] = [];
+  const index = new Map<string, number>();
+  for (const item of items) {
+    let i = index.get(item.harness);
+    if (i === undefined) {
+      i = groups.length;
+      index.set(item.harness, i);
+      groups.push({
+        harness: item.harness,
+        label:
+          item.harnessName !== undefined && item.harnessName !== ''
+            ? item.harnessName
+            : item.harness,
+        items: [item],
+      });
+    } else {
+      groups[i].items.push(item);
+    }
+  }
+  return groups;
+};
+
+/** Pins when any catalog-visible pin applies; otherwise recents. */
 export const composerMenuModels = (
   pinned: readonly RecentModel[],
   recents: readonly RecentModel[],
@@ -71,13 +97,7 @@ export const composerMenuModels = (
   current: RecentModel | undefined,
   lockHarness = true,
 ): CatalogModelRef[] => {
-  const pins = pinnedMenuModels(
-    pinned,
-    catalog,
-    current,
-    MAX_PINNED_MODELS,
-    lockHarness,
-  );
+  const pins = pinnedMenuModels(pinned, catalog, current, lockHarness);
   if (pins.length > 0) return pins;
   return recentMenuModels(recents, catalog, current, 3, lockHarness);
 };

@@ -820,6 +820,7 @@ export const Composer = React.memo(function ({
                       items={recentItems}
                       onPick={onPickRecentModel}
                       onMore={onOpenMoreModels}
+                      groupByProvider={mode === 'compose'}
                     />
                     {effortSupported ? (
                       <Pressable
