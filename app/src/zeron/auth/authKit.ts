@@ -55,11 +55,16 @@ export const parseCallbackUrl = (url: string): CallbackResult => {
     for (const pair of span.split('&')) {
       const eq = pair.indexOf('=');
       if (eq <= 0) continue;
-      const key = decodeURIComponent(pair.slice(0, eq));
-      const value = decodeURIComponent(pair.slice(eq + 1).replace(/\+/g, ' '));
-      if (key === 'code') out.code = value;
-      else if (key === 'state') out.state = value;
-      else if (key === 'error') out.error = value;
+      try {
+        const key = decodeURIComponent(pair.slice(0, eq));
+        // Query strings, not form bodies — do not turn '+' into space.
+        const value = decodeURIComponent(pair.slice(eq + 1));
+        if (key === 'code') out.code = value;
+        else if (key === 'state') out.state = value;
+        else if (key === 'error') out.error = value;
+      } catch {
+        // malformed encoding — skip the pair
+      }
     }
   }
   return out;

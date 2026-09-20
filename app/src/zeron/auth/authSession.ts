@@ -94,6 +94,7 @@ export class AuthSession implements TokenSource {
   private retryAttempts = 0;
   private retryTimer: unknown;
   private restored = false;
+  private completeInFlight = new Map<string, Promise<AuthState>>();
 
   constructor(deps: AuthSessionDeps) {
     this.client = deps.client;
@@ -257,18 +258,25 @@ export class AuthSession implements TokenSource {
     ) {
       return this.authState;
     }
+    const inflight = this.completeInFlight.get(opts.state);
+    if (inflight !== undefined) return inflight;
     const pending = this.consumePending(opts.state);
-    try {
-      const { user, tokens } = await this.client.exchange(opts.code, {
-        codeVerifier: pending.codeVerifier,
-      });
-      return await this.adoptTokens(user, tokens);
-    } catch (e) {
-      this.pendingSignIns.set(pending.state, pending);
-      throw e;
-    } finally {
-      await this.persistPending();
-    }
+    const flight = (async () => {
+      try {
+        const { user, tokens } = await this.client.exchange(opts.code, {
+          codeVerifier: pending.codeVerifier,
+        });
+        return await this.adoptTokens(user, tokens);
+      } catch (e) {
+        this.pendingSignIns.set(pending.state, pending);
+        throw e;
+      } finally {
+        this.completeInFlight.delete(pending.state);
+        await this.persistPending();
+      }
+    })();
+    this.completeInFlight.set(pending.state, flight);
+    return flight;
   }
 
   async completePastedCode(text: string): Promise<AuthState> {

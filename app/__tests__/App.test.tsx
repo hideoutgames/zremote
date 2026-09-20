@@ -23,7 +23,7 @@ const pressByText = async (
     .findAll(n => typeof n.props.onPress === 'function')
     .find(p => p.findAllByType(Text).some(tn => tn.props.children === label));
   if (target === undefined) throw new Error(`no pressable for ${label}`);
-  // Sign in / Try demo are async (PKCE + browser). Await the returned
+  // Sign in / Try demo are async (browser). Await the returned
   // promise so paste UI and demo bootstrap flush inside act.
   await act(async () => {
     await target.props.onPress();
@@ -35,6 +35,13 @@ const allText = (root: TestRenderer.ReactTestInstance): string[] =>
     const c = n.props.children;
     return typeof c === 'string' ? [c] : [];
   });
+
+const flattenStyle = (style: unknown): Record<string, unknown>[] => {
+  if (style == null) return [];
+  if (Array.isArray(style)) return style.flatMap(flattenStyle);
+  if (typeof style === 'object') return [style as Record<string, unknown>];
+  return [];
+};
 
 test('renders SignInScreen when signed out', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
@@ -50,6 +57,34 @@ test('renders SignInScreen when signed out', async () => {
   expect(
     tree!.root.findByProps({ testID: 'bootsplash-hide-on-draw' }),
   ).toBeTruthy();
+  const signIn = tree!.root.findByProps({ accessibilityLabel: 'Sign in' });
+  expect(flattenStyle(signIn.props.style).some(s => s.flex === 1)).toBe(false);
+  await act(async () => {
+    tree?.unmount();
+  });
+});
+
+test('Sign in and Try demo buttons do not flex-grow with the column', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<App />);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  });
+  await pressByText(tree!.root, 'Advanced');
+  const signIn = tree!.root.findByProps({ accessibilityLabel: 'Sign in' });
+  const demo = tree!.root.findByProps({
+    accessibilityLabel: 'Try demo mode',
+  });
+  const signHit = flattenStyle(signIn.props.style);
+  const demoHit = flattenStyle(demo.props.style);
+  expect(signHit.some(s => s.flex === 1)).toBe(false);
+  expect(demoHit.some(s => s.flex === 1)).toBe(false);
+  const signWrap = flattenStyle(signIn.parent?.props.style);
+  const demoWrap = flattenStyle(demo.parent?.props.style);
+  expect(signWrap.some(s => s.flexGrow === 0)).toBe(true);
+  expect(demoWrap.some(s => s.flexGrow === 0)).toBe(true);
+  expect(signWrap.some(s => s.alignSelf === 'center')).toBe(true);
+  expect(demoWrap.some(s => s.alignSelf === 'center')).toBe(true);
   await act(async () => {
     tree!.unmount();
   });
@@ -74,6 +109,7 @@ test('Sign in opens WorkOS via a zeron:// auth session and shows paste fallback 
   expect(url).toContain(
     'https://api.workos.com/user_management/authorize?response_type=code',
   );
+  expect(url).not.toContain('code_challenge');
   expect(redirect).toBe(AUTH_CALLBACK_URL);
   expect(opts).toEqual({
     preferEphemeralSession: false,

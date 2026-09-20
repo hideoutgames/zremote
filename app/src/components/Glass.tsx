@@ -167,7 +167,7 @@ export function GlassControl({
     <Glass
       interactive={interactive}
       tintColor={tintColor}
-      style={style}
+      style={[styles.control, style]}
       {...rest}
     >
       <Pressable
@@ -192,8 +192,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
   },
+  // Never eat leftover column space (sign-in lives in a flexGrow: 1 scroll).
+  control: { flexGrow: 0 },
   controlHit: {
-    flex: 1,
     alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',

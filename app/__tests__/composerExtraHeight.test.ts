@@ -1,6 +1,7 @@
 import {
   COMPOSER_EXTRA_MAX,
   COMPOSER_EXTRA_WINDOW_FRAC,
+  COMPOSER_INSET_FALLBACK,
   beginComposerResize,
   clampComposerExtraHeight,
   composerExtraHeightSV,
@@ -9,11 +10,15 @@ import {
   endComposerResize,
   isComposerResizeActive,
   onComposerResizeEnd,
+  rememberComposerInset,
+  resetComposerInsetSeed,
+  seedComposerInset,
 } from '../src/components/composerExtraHeight';
 
 afterEach(() => {
   if (isComposerResizeActive()) endComposerResize();
   composerExtraHeightSV.value = 0;
+  resetComposerInsetSeed();
 });
 
 test('caps are 10% below the previous 280 / 0.4 limits', () => {
@@ -61,4 +66,13 @@ test('beginComposerResize stays active until end and then notifies', () => {
   endComposerResize();
   expect(calls).toEqual([1]);
   stop();
+});
+
+test('seedComposerInset uses the fallback then the last measured height', () => {
+  resetComposerInsetSeed();
+  expect(seedComposerInset()).toBe(COMPOSER_INSET_FALLBACK);
+  rememberComposerInset(200);
+  expect(seedComposerInset()).toBe(200);
+  rememberComposerInset(0);
+  expect(seedComposerInset()).toBe(200);
 });

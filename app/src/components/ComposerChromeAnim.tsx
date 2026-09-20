@@ -1,5 +1,5 @@
 // Tiny worklet-only children. Bottom chrome and sticky offsets track the
-// grabber extra-height shared value so SessionScreen does not re-render
+// measured composer inset shared value so SessionScreen does not re-render
 // every pan frame.
 
 import React from 'react';
@@ -7,10 +7,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import type { BlurTint } from 'expo-blur';
 import { ChromeFade, COMPOSER_BOTTOM_FADE_BAND } from './TopChromeFade';
-import {
-  composerBaseHeightSV,
-  composerExtraHeightSV,
-} from './composerExtraHeight';
+import { composerInsetSV } from './composerExtraHeight';
 
 export function ComposerChromeFade({
   fadeBand = COMPOSER_BOTTOM_FADE_BAND,
@@ -21,14 +18,12 @@ export function ComposerChromeFade({
   fadeBand?: number;
   wash?: string;
   tint?: BlurTint;
-  /** Committed inset for fadeHold; live height comes from extra SV. */
+  /** Committed inset for fadeHold; live height comes from measured inset SV. */
   inset: number;
 }) {
   'use no memo';
   const heightStyle = useAnimatedStyle(() => ({
-    height:
-      Math.max(0, composerBaseHeightSV.value + composerExtraHeightSV.value) +
-      fadeBand,
+    height: Math.max(0, composerInsetSV.value) + fadeBand,
   }));
   return (
     <ChromeFade
@@ -55,9 +50,7 @@ export function ComposerStickyBottom({
 }) {
   'use no memo';
   const anim = useAnimatedStyle(() => ({
-    bottom:
-      Math.max(0, composerBaseHeightSV.value + composerExtraHeightSV.value) +
-      extra,
+    bottom: Math.max(0, composerInsetSV.value) + extra,
   }));
   return (
     <Animated.View style={[style, anim]} pointerEvents={pointerEvents}>

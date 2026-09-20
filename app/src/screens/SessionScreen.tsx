@@ -684,7 +684,6 @@ function ActiveSessionScreen({
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
   const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
-  const [headerH, setHeaderH] = useState(0);
   const prBadge = useMemo(
     () => composerPrBadge(checkoutSummary, checkoutDiff),
     [checkoutSummary, checkoutDiff],
@@ -723,7 +722,6 @@ function ActiveSessionScreen({
         startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
       />
 
-      <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
       <ComposerChromeFade
         inset={composerHeight}
         fadeBand={COMPOSER_BOTTOM_FADE_BAND}
@@ -733,7 +731,6 @@ function ActiveSessionScreen({
           box-none: taps in the transparent gaps reach the transcript. */}
       <View
         style={[styles.header, { paddingTop: insets.top + 6 }]}
-        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
         <View style={styles.headerRow} pointerEvents="box-none">
