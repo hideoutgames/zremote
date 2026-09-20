@@ -14,7 +14,7 @@ import {
   LiquidGlassContainerView,
   LiquidGlassView,
 } from '@callstack/liquid-glass';
-import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 
 type GlassProps = ViewProps & {
   // Interactive glass grows on touch and shimmers (iOS 26+ only).
@@ -35,7 +35,7 @@ export function Glass({
   children,
   ...rest
 }: GlassProps) {
-  const theme = useTheme();
+  const theme = useChromeTheme();
   // Reduce Transparency → always the opaque fallback surface.
   const [reduceTransparency, setReduceTransparency] = useState(false);
   useEffect(() => {

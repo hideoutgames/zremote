@@ -6,10 +6,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text } from 'react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { BrandMark } from '../src/components/BrandMark';
-import {
-  CHROME_FADE_WASH_DARK,
-  TOP_CHROME_FADE_BAND,
-} from '../src/components/TopChromeFade';
+import { TOP_CHROME_FADE_BAND } from '../src/components/TopChromeFade';
 import * as Theme from '../src/theme';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import {
@@ -102,18 +99,8 @@ const bodyText = (root: TestRenderer.ReactTestInstance, id: string): string => {
     .join(' ');
 };
 
-const flattenStyle = (style: unknown): Record<string, unknown>[] => {
-  const list = Array.isArray(style) ? style.flat() : [style];
-  return list.filter(
-    (s): s is Record<string, unknown> => s != null && typeof s === 'object',
-  );
-};
-
 const washesOf = (root: TestRenderer.ReactTestInstance) =>
   root.findAll(n => n.props.testID === 'chrome-fade-wash');
-
-const bottomFadeOf = (root: TestRenderer.ReactTestInstance) =>
-  root.findAll(n => n.props.testID === 'bottom-chrome-fade')[0];
 
 jest.useFakeTimers();
 
@@ -200,13 +187,9 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   )[0];
   expect(trigger).toBeDefined();
   const fade = mounted.root.findAll(
-    n => n.props.testID === 'top-chrome-fade',
+    n => n.props.testID === 'content-edge-mask',
   )[0];
   expect(fade).toBeDefined();
-  const fadeStyle = Array.isArray(fade.props.style)
-    ? fade.props.style.flat()
-    : [fade.props.style];
-  const fadeHeight = fadeStyle.find(s => s?.height != null)?.height as number;
   const list = mounted.root.findByType(FlatList);
   const listPad = Array.isArray(list.props.contentContainerStyle)
     ? list.props.contentContainerStyle.flat()
@@ -214,7 +197,7 @@ test('renders Threads title, row titles, and a time subtitle — not project · 
   const paddingTop = listPad.find(s => s?.paddingTop != null)?.paddingTop as
     | number
     | undefined;
-  expect(paddingTop).toBeGreaterThanOrEqual(fadeHeight);
+  expect(paddingTop).toBeGreaterThan(TOP_CHROME_FADE_BAND);
   expect(trigger.props.accessibilityLabel).toBe('All spaces');
   const search = searchInput(mounted.root);
   expect(search).toBeDefined();
@@ -698,19 +681,16 @@ test('threads title uses white type when wallpaper is set, even in light theme',
     expect(homeTitleStyle.some(s => s?.color === Theme.darkTheme.text)).toBe(
       true,
     );
-    const bottom = bottomFadeOf(mounted.root);
-    expect(bottom).toBeDefined();
-    const bottomStyle = flattenStyle(bottom.props.style);
-    expect(bottomStyle.some(s => s.height === TOP_CHROME_FADE_BAND)).toBe(true);
-    expect(bottomStyle.some(s => s.bottom === 0)).toBe(true);
+    expect(washesOf(mounted.root)).toHaveLength(0);
     expect(
-      bottomStyle.some(s => typeof s.bottom === 'number' && s.bottom > 0),
-    ).toBe(false);
-    const washes = washesOf(mounted.root);
-    expect(washes.length).toBeGreaterThan(0);
+      mounted.root.findAll(n => n.props.testID === 'content-edge-mask').length,
+    ).toBeGreaterThan(0);
     expect(
-      washes.every(n => n.props.colors.includes(CHROME_FADE_WASH_DARK)),
-    ).toBe(true);
+      mounted.root.findAll(n => n.props.testID === 'top-chrome-fade'),
+    ).toHaveLength(0);
+    expect(
+      mounted.root.findAll(n => n.props.testID === 'bottom-chrome-fade'),
+    ).toHaveLength(0);
   } finally {
     await act(async () => {
       tree?.unmount();
@@ -721,7 +701,7 @@ test('threads title uses white type when wallpaper is set, even in light theme',
   }
 });
 
-test('wallpaper fade wash stays black in dark theme', async () => {
+test('threads list has no overlay fade wash when wallpaper is set', async () => {
   const themeSpy = jest
     .spyOn(Theme, 'useTheme')
     .mockReturnValue(Theme.darkTheme);
@@ -735,18 +715,10 @@ test('wallpaper fade wash stays black in dark theme', async () => {
     const mounted = await render(
       <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
     );
-    const washes = washesOf(mounted.root);
-    expect(washes.length).toBeGreaterThan(0);
+    expect(washesOf(mounted.root)).toHaveLength(0);
     expect(
-      washes.every(n => n.props.colors.includes(CHROME_FADE_WASH_DARK)),
-    ).toBe(true);
-    expect(
-      washes.some(n =>
-        n.props.colors.some(
-          (c: string) => c.includes('255,255,255') || c === '#FFFFFF',
-        ),
-      ),
-    ).toBe(false);
+      mounted.root.findAll(n => n.props.testID === 'content-edge-mask').length,
+    ).toBeGreaterThan(0);
   } finally {
     await act(async () => {
       tree?.unmount();
@@ -757,14 +729,15 @@ test('wallpaper fade wash stays black in dark theme', async () => {
   }
 });
 
-test('threads fades have no black wash without wallpaper', async () => {
+test('threads list keeps a content mask and no overlay fade without wallpaper', async () => {
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
   expect(washesOf(mounted.root)).toHaveLength(0);
-  const bottom = bottomFadeOf(mounted.root);
-  expect(bottom).toBeDefined();
-  const bottomStyle = flattenStyle(bottom.props.style);
-  expect(bottomStyle.some(s => s.height === TOP_CHROME_FADE_BAND)).toBe(true);
-  expect(bottomStyle.some(s => s.bottom === 0)).toBe(true);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'content-edge-mask').length,
+  ).toBeGreaterThan(0);
+  expect(
+    mounted.root.findAll(n => n.props.testID === 'bottom-chrome-fade'),
+  ).toHaveLength(0);
 });

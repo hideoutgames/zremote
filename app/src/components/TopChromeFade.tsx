@@ -18,6 +18,8 @@ import type { BlurTint } from 'expo-blur';
 import { FadeBlur } from './FadeBlur';
 
 export const TOP_CHROME_FADE_BAND = 56;
+/** Dissolve above the composer — shorter than the top chrome band. */
+export const COMPOSER_BOTTOM_FADE_BAND = 40;
 /** Strong blur under chrome so wallpaper remains. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
 /** Black edge wash when a session wallpaper is set on Home. */
