@@ -16,6 +16,7 @@ import {
 import {
   bindBackgroundFs,
   unbindBackgroundFs,
+  customBackgroundUri,
   type BackgroundFs,
 } from '../newThreadBackground';
 import { memDocDisk } from '../../native/memDocDisk';
@@ -98,8 +99,11 @@ test('installNewThreadComposerBackground copies then replaces the pointer', asyn
   });
   expect(first.ok).toBe(true);
   const stored = uiPrefsStore.getState().newThreadComposerBackground;
-  expect(stored?.name).toBe('one.png');
-  expect(stored?.uri).toContain('/new-thread-backgrounds/');
+  expect(stored?.kind).toBe('custom');
+  expect(customBackgroundUri(stored)).toContain('/new-thread-backgrounds/');
+  expect(
+    stored !== undefined && stored.kind !== 'preset' ? stored.name : undefined,
+  ).toBe('one.png');
   expect(fs.files.size).toBe(1);
 
   const second = await installNewThreadComposerBackground({
@@ -109,9 +113,12 @@ test('installNewThreadComposerBackground copies then replaces the pointer', asyn
     size: 20,
   });
   expect(second.ok).toBe(true);
-  expect(uiPrefsStore.getState().newThreadComposerBackground?.name).toBe(
-    'two.jpg',
-  );
+  const replaced = uiPrefsStore.getState().newThreadComposerBackground;
+  expect(
+    replaced !== undefined && replaced.kind !== 'preset'
+      ? replaced.name
+      : undefined,
+  ).toBe('two.jpg');
   expect(fs.files.size).toBe(1);
 
   setNewThreadBackgroundEffect('ascii');
