@@ -11,10 +11,14 @@ import {
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
 import type { MessageEntry } from '../src/zeron/protocol/types';
+import { setComposerExtraHeightLive } from '../src/zeron/state/uiPrefs';
 import {
-  setComposerExtraHeightLive,
-  uiPrefsStore,
-} from '../src/zeron/state/uiPrefs';
+  beginComposerResize,
+  composerBaseHeightSV,
+  composerExtraHeightSV,
+  endComposerResize,
+  isComposerResizeActive,
+} from '../src/components/composerExtraHeight';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 
 const flashMock = jest.requireMock('@shopify/flash-list') as {
@@ -134,7 +138,9 @@ beforeEach(() => {
   scrollToEnd.mockClear();
   scrollToIndex.mockClear();
   scrollToOffset.mockClear();
-  uiPrefsStore.setState({ composerExtraHeight: 0 });
+  if (isComposerResizeActive()) endComposerResize();
+  setComposerExtraHeightLive(0);
+  composerBaseHeightSV.value = 0;
 });
 
 test('scrolls to the bottom once when entries are present on mount', async () => {
@@ -398,6 +404,56 @@ test('live extra height adds 1:1 to the transcript inset', async () => {
     listRef.current!.onComposerLayout(layoutEvent(292));
   });
   expect(heights.at(-1)).toBe(292);
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('resize-active extra height does not flush React inset until release', async () => {
+  const listRef = React.createRef<SessionTranscriptListHandle>();
+  const composerRef = React.createRef<View>();
+  const heights: number[] = [];
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <SessionTranscriptList
+        ref={listRef}
+        openKey="c1:1"
+        entries={[entry('m1')]}
+        renderEntry={({ item }: { item: MessageEntry }) => (
+          <Text>{item.id}</Text>
+        )}
+        composerRef={composerRef}
+        windowWidth={390}
+        windowHeight={844}
+        insetsTop={47}
+        insetsBottom={34}
+        onComposerHeight={h => heights.push(h)}
+        onShowScrollDown={() => {}}
+        chatId="c1"
+      />,
+    );
+  });
+
+  await act(async () => {
+    listRef.current!.onComposerLayout(layoutEvent(200));
+  });
+  expect(heights.at(-1)).toBe(200);
+  const flushed = heights.length;
+
+  await act(async () => {
+    beginComposerResize();
+    setComposerExtraHeightLive(40);
+  });
+  expect(heights.length).toBe(flushed);
+  expect(heights.at(-1)).toBe(200);
+  expect(composerExtraHeightSV.value).toBe(40);
+
+  await act(async () => {
+    endComposerResize();
+  });
+  expect(heights.at(-1)).toBe(240);
 
   await act(async () => {
     tree!.unmount();

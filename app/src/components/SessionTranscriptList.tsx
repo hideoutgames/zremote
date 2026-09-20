@@ -31,9 +31,13 @@ import { useTheme } from '../theme';
 import { ContentEdgeMask, TOP_CHROME_FADE_BAND } from './TopChromeFade';
 import {
   clampComposerExtraHeight,
+  composerBaseHeightSV,
   composerExtraMax,
   composerListInset,
+  isComposerResizeActive,
+  onComposerResizeEnd,
 } from './composerExtraHeight';
+import { ComposerInsetBinding } from './ComposerInsetBinding';
 import { WorkingStatusBubble } from './WorkingStatus';
 import { PreviewRail } from './agentsKit/PreviewRail';
 import {
@@ -213,9 +217,12 @@ export const SessionTranscriptList = forwardRef<
         extraHeight,
         composerExtraMax(windowHeightRef.current),
       );
+      extraHeightRef.current = extra;
+      composerBaseHeightSV.value = base;
       const inset = composerListInset(base, extra);
-      setComposerInset(inset);
       extraContentPadding.value = inset;
+      if (isComposerResizeActive()) return;
+      setComposerInset(inset);
       onComposerHeightRef.current(inset);
     },
     [extraContentPadding],
@@ -245,6 +252,14 @@ export const SessionTranscriptList = forwardRef<
           composerExtraMax(windowHeightRef.current),
         );
         publishInset(s.composerExtraHeight);
+      }),
+    [publishInset],
+  );
+
+  useEffect(
+    () =>
+      onComposerResizeEnd(() => {
+        publishInset(uiPrefsStore.getState().composerExtraHeight);
       }),
     [publishInset],
   );
@@ -303,6 +318,7 @@ export const SessionTranscriptList = forwardRef<
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
+      if (isComposerResizeActive()) return;
       const height = event.nativeEvent.layout.height;
       const extra = extraHeightRef.current;
       const base = baseHeightRef.current;
@@ -488,6 +504,7 @@ export const SessionTranscriptList = forwardRef<
         setListWidth(prev => (prev === width ? prev : width));
       }}
     >
+      <ComposerInsetBinding extraContentPadding={extraContentPadding} />
       <ContentEdgeMask
         topInset={insetsTop + 58}
         topBand={TOP_CHROME_FADE_BAND}

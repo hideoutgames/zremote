@@ -20,6 +20,7 @@ import {
   parseColorSchemePreference,
   type ColorSchemePreference,
 } from '../../theme';
+import { syncComposerExtraHeightSV } from '../../components/composerExtraHeight';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
@@ -138,6 +139,7 @@ export const bindUiPrefs = async (
       uiPrefsStore.setState(WALLPAPER_UNSET);
     }
   }
+  syncComposerExtraHeightSV(uiPrefsStore.getState().composerExtraHeight);
   await saveAsync();
 };
 
@@ -241,12 +243,14 @@ export const usePlanMode = (chatId: string): boolean =>
 
 /** Live grabber extra height — no disk write (pan frames). */
 export const setComposerExtraHeightLive = (v: number): void => {
+  syncComposerExtraHeightSV(v);
   uiPrefsStore.setState({ composerExtraHeight: v });
 };
 
-export const setComposerExtraHeight = (v: number): void => {
+export const setComposerExtraHeight = (v: number): Promise<void> => {
+  syncComposerExtraHeightSV(v);
   uiPrefsStore.setState({ composerExtraHeight: v });
-  save();
+  return saveAsync();
 };
 
 export const useComposerExtraHeight = (): number =>

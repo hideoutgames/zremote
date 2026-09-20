@@ -132,9 +132,16 @@ import { createLog } from '../zeron/log';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 import {
   TopChromeFade,
-  ChromeFade,
   TOP_CHROME_FADE_BAND,
 } from '../components/TopChromeFade';
+import {
+  ComposerChromeFade,
+  ComposerStickyBottom,
+} from '../components/ComposerChromeAnim';
+import {
+  isComposerResizeActive,
+  onComposerResizeEnd,
+} from '../components/composerExtraHeight';
 import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
@@ -212,6 +219,7 @@ function ComposeSessionScreen({
   const keyboardHeight = useKeyboardState(s => s.height);
   const [headerH, setHeaderH] = useState(0);
   const [composerH, setComposerH] = useState(0);
+  const lastComposerHRef = useRef(0);
   const dismissPan = useKeyboardDismissPan();
   const wallpaper = useNewThreadComposerBackground() !== undefined;
   const shift = composeKeyboardShift({
@@ -219,6 +227,15 @@ function ComposeSessionScreen({
     composerHeight: composerH,
     keyboardHeight,
   });
+  useEffect(
+    () =>
+      onComposerResizeEnd(() => {
+        if (lastComposerHRef.current > 0) {
+          setComposerH(lastComposerHRef.current);
+        }
+      }),
+    [],
+  );
   return (
     <View
       style={[
@@ -242,7 +259,12 @@ function ComposeSessionScreen({
           autoFocus
           composerMaxWidth={composerMaxWidth}
           onCreated={id => onCreated?.(id)}
-          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
+          onLayout={e => {
+            const h = e.nativeEvent.layout.height;
+            lastComposerHRef.current = h;
+            if (isComposerResizeActive()) return;
+            setComposerH(h);
+          }}
         />
       </View>
       <View
@@ -718,8 +740,7 @@ function ActiveSessionScreen({
       />
 
       <TopChromeFade inset={headerH !== 0 ? headerH : insets.top + 58} />
-      <ChromeFade
-        edge="bottom"
+      <ComposerChromeFade
         inset={composerHeight}
         fadeBand={TOP_CHROME_FADE_BAND}
       />
@@ -912,59 +933,63 @@ function ActiveSessionScreen({
       ) : null}
 
       {session.failedSends.length > 0 ? (
-        <KeyboardStickyView
-          offset={keyboardOffset}
-          style={[styles.failedWrap, { bottom: composerHeight + 10 }]}
+        <ComposerStickyBottom
+          extra={10}
+          style={styles.failedWrap}
           pointerEvents="box-none"
         >
-          {session.failedSends.map(f => (
-            <Glass
-              key={f.messageId}
-              style={[
-                styles.failedBanner,
-                { backgroundColor: theme.glassFallbackBackground },
-              ]}
-            >
-              <View
-                style={[styles.failedDot, { backgroundColor: theme.danger }]}
-              />
-              <Text style={[styles.failedText, { color: theme.text }]}>
-                {t('session.failedSend')}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  restoreFailedSend(chatId, f.text);
-                  dismissFailedSend(chatId, f.messageId);
-                }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={t('session.restoreDraft')}
+          <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
+            {session.failedSends.map(f => (
+              <Glass
+                key={f.messageId}
+                style={[
+                  styles.failedBanner,
+                  { backgroundColor: theme.glassFallbackBackground },
+                ]}
               >
-                <Text style={[styles.failedAction, { color: theme.text }]}>
-                  {t('session.restoreDraft')}
+                <View
+                  style={[styles.failedDot, { backgroundColor: theme.danger }]}
+                />
+                <Text style={[styles.failedText, { color: theme.text }]}>
+                  {t('session.failedSend')}
                 </Text>
-              </Pressable>
-            </Glass>
-          ))}
-        </KeyboardStickyView>
+                <Pressable
+                  onPress={() => {
+                    restoreFailedSend(chatId, f.text);
+                    dismissFailedSend(chatId, f.messageId);
+                  }}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.restoreDraft')}
+                >
+                  <Text style={[styles.failedAction, { color: theme.text }]}>
+                    {t('session.restoreDraft')}
+                  </Text>
+                </Pressable>
+              </Glass>
+            ))}
+          </KeyboardStickyView>
+        </ComposerStickyBottom>
       ) : null}
 
-      <KeyboardStickyView
-        offset={keyboardOffset}
-        style={[styles.scrollDown, { bottom: composerHeight + 10 }]}
+      <ComposerStickyBottom
+        extra={10}
+        style={styles.scrollDown}
         pointerEvents="box-none"
       >
-        {showScrollDown ? (
-          <ScrollToBottomButton
-            onPress={() =>
-              transcriptRef.current?.followEnd({
-                animated: true,
-                closeKeyboard: false,
-              })
-            }
-          />
-        ) : null}
-      </KeyboardStickyView>
+        <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
+          {showScrollDown ? (
+            <ScrollToBottomButton
+              onPress={() =>
+                transcriptRef.current?.followEnd({
+                  animated: true,
+                  closeKeyboard: false,
+                })
+              }
+            />
+          ) : null}
+        </KeyboardStickyView>
+      </ComposerStickyBottom>
 
       <KeyboardStickyView
         testID="session-composer"
