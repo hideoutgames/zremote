@@ -55,11 +55,13 @@ export function PlanSheet({
         contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
         showsVerticalScrollIndicator={false}
       >
-        <EnrichedMarkdownText
-          markdown={markdown}
-          markdownStyle={mdStyle}
-          flavor="github"
-        />
+        {markdown.trim() !== '' ? (
+          <EnrichedMarkdownText
+            markdown={markdown}
+            markdownStyle={mdStyle}
+            flavor="github"
+          />
+        ) : null}
       </ScrollView>
       <View
         style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}

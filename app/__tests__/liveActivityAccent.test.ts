@@ -74,6 +74,22 @@ const assistantPlan = (): MessageEntry => ({
   ],
 });
 
+const assistantNameOnlyPlan = (): MessageEntry => ({
+  id: 'a1',
+  role: 'assistant',
+  createdAt: 1,
+  deviceId: 'd1',
+  status: 'complete',
+  parts: [
+    {
+      kind: 'tool',
+      id: 't1',
+      call: { kind: 'unknown', name: 'createPlan' },
+      resolved: true,
+    },
+  ],
+});
+
 test('planAwaitingReview: idle + last assistant plan + no later user', () => {
   expect(planAwaitingReview([assistantPlan()], 'idle')).toBe(true);
   expect(planAwaitingReview([assistantPlan()], 'working')).toBe(false);
@@ -92,4 +108,8 @@ test('planAwaitingReview: idle + last assistant plan + no later user', () => {
       'idle',
     ),
   ).toBe(false);
+});
+
+test('planAwaitingReview: name-only createPlan is awaiting review', () => {
+  expect(planAwaitingReview([assistantNameOnlyPlan()], 'idle')).toBe(true);
 });

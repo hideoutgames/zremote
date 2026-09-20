@@ -16,7 +16,7 @@ relative to the pinned clone `../_ref/zeron`; `node app/scripts/check-parity-pat
 - `blocked` — concrete blocker named in the row.
 - `not-started` — not implemented.
 
-Row counts: **verified 43 · implemented-unverified 25 ·
+Row counts: **verified 44 · implemented-unverified 25 ·
 requires-host-edge-change 6 · blocked 7 · not-started 15**
 
 ## Transport / sync substrate
@@ -81,6 +81,7 @@ requires-host-edge-change 6 · blocked 7 · not-started 15**
 | Dictation (on-device only)                                                           | — (new)                                     | —                                              | `VoicePill` + `modules/zeron-dictation`              | implemented-unverified    | Mac compile + device mic; `SpeechAnalyzer` (iOS 26) path is a marked TODO                      |
 | Border Beam                                                                          | fork design                                 | —                                              | `components/BorderBeam.tsx`                          | implemented-unverified    | Skia/Reanimated need a device                                                                  |
 | Transcript projection/parts                                                          | `crates/engine/src/chat2_host.rs`           | doc `entries`                                  | `doc/sessionDoc.ts`, transcript store                | verified                  | `transcript.test.tsx`, e2e entries                                                             |
+| Cursor `createPlan` PlanCard                                                         | `crates/harness/src/cursor/mod.rs` catch-all → `Unknown`; `crates/doc/src/parts.rs` `sanitize_tool_call` drops `Unknown.input` | session doc tool part `{kind:"unknown",name:"createPlan"}` | `transcript/detectPlan.ts` PlanCard (name-only host shape still shows a card) | verified                  | `planAndChanges.test.ts`, `transcript.test.tsx`, `liveActivityAccent.test.ts`; full markdown `blocked` on stock host sanitize |
 | Transcript rendering on device                                                       | `crates/ui/src/composer.rs` transcript area | —                                              | `components/transcript/*`                            | implemented-unverified    | device render                                                                                  |
 | Message context menu (Copy)                                                          | —                                           | `expo-clipboard`                               | `AssistantMessage`, `UserMessage` (`doc.on.doc`)     | verified                  | `transcript.test.tsx`, `a11y.test.tsx`                                                         |
 | Live Activities (widget, manager, APNs producer)                                     | — (new)                                     | edge `live-activity` routes                    | `liveActivity/*`, `SessionActivity.tsx`              | requires-host-edge-change | `liveActivityManager.test.ts`; edge `live-activity.test.ts`; APNs creds needed for real pushes |

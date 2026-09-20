@@ -258,6 +258,34 @@ test('AssistantMessage shows a plan card and turn changes', async () => {
   expect(texts).toContain('Composer.tsx');
 });
 
+test('AssistantMessage shows a Plan card for name-only createPlan', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [
+      {
+        kind: 'tool',
+        id: 'p1',
+        call: { kind: 'unknown', name: 'createPlan' },
+        resolved: true,
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {}}
+        onOpenPlan={() => {}}
+      />,
+    );
+  });
+  const texts = textOf(tree!.root);
+  expect(texts).toContain('Plan');
+  expect(texts.some(s => s === 'Tool' || s === 'createPlan')).toBe(false);
+  expect(tree!.root.findAllByType(PlanBadge).length).toBe(1);
+});
+
 test('AssistantMessage groups the tool parts into one rail', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
