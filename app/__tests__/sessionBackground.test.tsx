@@ -300,7 +300,7 @@ test('home list uses full-bleed regular blur at the 750pt test window', async ()
   expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
 });
 
-test('session chrome uses dark buttons when wallpaper is set in light theme', async () => {
+test('session chrome follows the content theme when wallpaper is set', async () => {
   const themeSpy = jest
     .spyOn(Theme, 'useTheme')
     .mockReturnValue(Theme.lightTheme);
@@ -322,15 +322,18 @@ test('session chrome uses dark buttons when wallpaper is set in light theme', as
     const back = mounted.root.findAll(
       n => n.props.name === 'chevron.left' && n.props.tintColor != null,
     )[0];
-    expect(back.props.tintColor).toBe(Theme.darkTheme.text);
+    expect(back.props.tintColor).toBe(Theme.lightTheme.text);
     const overflow = mounted.root.findAll(
       n => n.props.name === 'ellipsis' && n.props.tintColor != null,
     )[0];
-    expect(overflow.props.tintColor).toBe(Theme.darkTheme.text);
+    expect(overflow.props.tintColor).toBe(Theme.lightTheme.text);
     const glassTints = mounted.root.findAll(
-      n => n.props.tint === 'systemThinMaterialDark',
+      n => n.props.tint === 'systemThinMaterialLight',
     );
     expect(glassTints.length).toBeGreaterThan(0);
+    expect(
+      mounted.root.findAll(n => n.props.tint === 'systemThinMaterialDark'),
+    ).toHaveLength(0);
     const empty = mounted.root.findAll(n => {
       const c = n.props.children;
       return typeof c === 'string' && c.includes('Nothing here yet');

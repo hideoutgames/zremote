@@ -72,8 +72,12 @@ import {
   usePinnedChatIds,
 } from '../zeron/state/uiPrefs';
 import { partitionPinnedChats } from '../zeron/state/pinnedChats';
-import { type Theme } from '../theme';
-import { useChromeTheme } from '../chromeTheme';
+import { useTheme, type Theme } from '../theme';
+import {
+  chromeThemeFor,
+  ChromeThemeProvider,
+  useChromeTheme,
+} from '../chromeTheme';
 import { t } from '../i18n/strings';
 import {
   ContentEdgeMask,
@@ -416,7 +420,7 @@ export function HomeScreen({
   /** 'sidebar' tightens top-bar padding; New thread is the same on both. */
   variant?: 'screen' | 'sidebar';
 }) {
-  const theme = useChromeTheme();
+  const contentTheme = useTheme();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -430,6 +434,7 @@ export function HomeScreen({
   const runtime = useRuntime();
   const searching = searchFocused || query.trim() !== '';
   const wallpaper = useNewThreadComposerBackground() !== undefined;
+  const theme = chromeThemeFor(wallpaper, contentTheme);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -588,194 +593,199 @@ export function HomeScreen({
   const chromeH = headerH !== 0 ? headerH : insets.top + 64;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
-      ]}
-    >
-      <ThreadsBackgroundBlur />
-      <ContentEdgeMask
-        topInset={chromeH}
-        bottomInset={0}
-        bottomBand={searching ? 0 : TOP_CHROME_FADE_BAND}
+    <ChromeThemeProvider theme={theme}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+        ]}
       >
-        <LegendList
-          style={styles.fillList}
-          data={rest}
-          keyExtractor={item => item.id}
-          estimatedItemSize={78}
-          recycleItems
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListHeaderComponent={
-            <>
-              <Text
-                style={[styles.largeTitle, { color: theme.text }]}
-                testID="home-title"
-              >
-                {spaceFilter === undefined
-                  ? t('home.sessions')
-                  : spaceName(spaceFilter)}
-              </Text>
-              {pinned.length > 0 ? (
-                <View style={styles.pinnedSection} testID="home-pinned-section">
-                  <Text
-                    style={[styles.section, { color: theme.textSecondary }]}
-                  >
-                    {t('home.pinned')}
-                  </Text>
-                  {pinned.map(c => (
-                    <ChatRow
-                      key={c.id}
-                      chat={c}
-                      onOpen={onOpenSession}
-                      now={now}
-                    />
-                  ))}
-                </View>
-              ) : null}
-            </>
-          }
-          ListEmptyComponent={
-            pinned.length === 0 ? (
-              <Text style={[styles.empty, { color: theme.textSecondary }]}>
-                {t('home.empty')}
-              </Text>
-            ) : null
-          }
-          ListFooterComponent={
-            archived.length > 0 ? (
-              <View>
-                <Pressable
-                  style={styles.archivedHeader}
-                  onPress={() => setArchivedOpen(o => !o)}
-                  hitSlop={6}
-                  testID="home-archived-header"
+        <ThreadsBackgroundBlur />
+        <ContentEdgeMask
+          topInset={chromeH}
+          bottomInset={0}
+          bottomBand={searching ? 0 : TOP_CHROME_FADE_BAND}
+        >
+          <LegendList
+            style={styles.fillList}
+            data={rest}
+            keyExtractor={item => item.id}
+            estimatedItemSize={78}
+            recycleItems
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListHeaderComponent={
+              <>
+                <Text
+                  style={[styles.largeTitle, { color: theme.text }]}
+                  testID="home-title"
                 >
-                  <View style={styles.archivedIcon}>
-                    <Icon
-                      name="archivebox"
-                      size={14}
-                      color={theme.textSecondary}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.archivedLabel,
-                      { color: theme.textSecondary },
-                    ]}
+                  {spaceFilter === undefined
+                    ? t('home.sessions')
+                    : spaceName(spaceFilter)}
+                </Text>
+                {pinned.length > 0 ? (
+                  <View
+                    style={styles.pinnedSection}
+                    testID="home-pinned-section"
                   >
-                    {`${t('home.archived')} (${archived.length})`}
-                  </Text>
-                  <View style={styles.archivedIcon}>
-                    <Icon
-                      name={archivedOpen ? 'chevron.up' : 'chevron.down'}
-                      size={14}
-                      color={theme.textSecondary}
-                    />
-                  </View>
-                </Pressable>
-                {archivedOpen
-                  ? archived.map(c => (
+                    <Text
+                      style={[styles.section, { color: theme.textSecondary }]}
+                    >
+                      {t('home.pinned')}
+                    </Text>
+                    {pinned.map(c => (
                       <ChatRow
                         key={c.id}
                         chat={c}
                         onOpen={onOpenSession}
                         now={now}
                       />
-                    ))
-                  : null}
-              </View>
-            ) : null
-          }
-          contentContainerStyle={[
-            styles.listContent,
-            {
-              paddingTop: chromeH + LIST_GAP_BELOW_CHROME,
-              paddingBottom: bottomPad,
-            },
-          ]}
-          scrollIndicatorInsets={{
-            top: headerH,
-            bottom: searching ? 0 : bottomH,
-          }}
-          showsVerticalScrollIndicator={false}
-          keyboardDismissMode="interactive"
-          renderItem={renderRow}
-        />
-      </ContentEdgeMask>
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            }
+            ListEmptyComponent={
+              pinned.length === 0 ? (
+                <Text style={[styles.empty, { color: theme.textSecondary }]}>
+                  {t('home.empty')}
+                </Text>
+              ) : null
+            }
+            ListFooterComponent={
+              archived.length > 0 ? (
+                <View>
+                  <Pressable
+                    style={styles.archivedHeader}
+                    onPress={() => setArchivedOpen(o => !o)}
+                    hitSlop={6}
+                    testID="home-archived-header"
+                  >
+                    <View style={styles.archivedIcon}>
+                      <Icon
+                        name="archivebox"
+                        size={14}
+                        color={theme.textSecondary}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.archivedLabel,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      {`${t('home.archived')} (${archived.length})`}
+                    </Text>
+                    <View style={styles.archivedIcon}>
+                      <Icon
+                        name={archivedOpen ? 'chevron.up' : 'chevron.down'}
+                        size={14}
+                        color={theme.textSecondary}
+                      />
+                    </View>
+                  </Pressable>
+                  {archivedOpen
+                    ? archived.map(c => (
+                        <ChatRow
+                          key={c.id}
+                          chat={c}
+                          onOpen={onOpenSession}
+                          now={now}
+                        />
+                      ))
+                    : null}
+                </View>
+              ) : null
+            }
+            contentContainerStyle={[
+              styles.listContent,
+              {
+                paddingTop: chromeH + LIST_GAP_BELOW_CHROME,
+                paddingBottom: bottomPad,
+              },
+            ]}
+            scrollIndicatorInsets={{
+              top: headerH,
+              bottom: searching ? 0 : bottomH,
+            }}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="interactive"
+            renderItem={renderRow}
+          />
+        </ContentEdgeMask>
 
-      <View
-        style={[styles.topBar, { paddingTop: insets.top + 8 }]}
-        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
-        pointerEvents="box-none"
-      >
         <View
-          style={[
-            styles.topRow,
-            variant === 'sidebar' ? styles.topRowSidebar : undefined,
-          ]}
-        >
-          <Glass interactive style={styles.search}>
-            <Icon
-              name="magnifyingglass"
-              size={18}
-              color={theme.textSecondary}
-            />
-            <TextInput
-              ref={searchRef}
-              style={[styles.searchInput, { color: theme.text }]}
-              placeholder={t('home.search')}
-              placeholderTextColor={theme.textSecondary}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              testID="home-search-input"
-              accessibilityLabel={t('home.search')}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-            />
-          </Glass>
-          <View style={styles.trailingCluster}>{trailing}</View>
-        </View>
-
-        {connection !== 'connected' ? (
-          <View
-            style={[styles.pill, { backgroundColor: theme.cardBackground }]}
-          >
-            <Text style={[styles.pillText, { color: theme.textSecondary }]}>
-              {connection === 'connecting'
-                ? t('home.connection.connecting')
-                : t('home.connection.disconnected')}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {searching ? null : (
-        <View
-          style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
-          onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+          style={[styles.topBar, { paddingTop: insets.top + 8 }]}
+          onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
           pointerEvents="box-none"
         >
-          <GlassControl
-            interactive
-            onPress={() => enterCompose()}
-            hitSlop={8}
-            testID="home-new-thread"
-            accessibilityRole="button"
-            accessibilityLabel={t('home.newThread')}
-            style={styles.circle}
+          <View
+            style={[
+              styles.topRow,
+              variant === 'sidebar' ? styles.topRowSidebar : undefined,
+            ]}
           >
-            <Icon name="square.and.pencil" size={18} color={theme.text} />
-          </GlassControl>
+            <Glass interactive style={styles.search}>
+              <Icon
+                name="magnifyingglass"
+                size={18}
+                color={theme.textSecondary}
+              />
+              <TextInput
+                ref={searchRef}
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder={t('home.search')}
+                placeholderTextColor={theme.textSecondary}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                testID="home-search-input"
+                accessibilityLabel={t('home.search')}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+              />
+            </Glass>
+            <View style={styles.trailingCluster}>{trailing}</View>
+          </View>
+
+          {connection !== 'connected' ? (
+            <View
+              style={[styles.pill, { backgroundColor: theme.cardBackground }]}
+            >
+              <Text style={[styles.pillText, { color: theme.textSecondary }]}>
+                {connection === 'connecting'
+                  ? t('home.connection.connecting')
+                  : t('home.connection.disconnected')}
+              </Text>
+            </View>
+          ) : null}
         </View>
-      )}
-    </View>
+
+        {searching ? null : (
+          <View
+            style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
+            onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+            pointerEvents="box-none"
+          >
+            <GlassControl
+              interactive
+              onPress={() => enterCompose()}
+              hitSlop={8}
+              testID="home-new-thread"
+              accessibilityRole="button"
+              accessibilityLabel={t('home.newThread')}
+              style={styles.circle}
+            >
+              <Icon name="square.and.pencil" size={18} color={theme.text} />
+            </GlassControl>
+          </View>
+        )}
+      </View>
+    </ChromeThemeProvider>
   );
 }
 
