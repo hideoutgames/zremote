@@ -116,9 +116,11 @@ registry routes still answer.
 (`zeron login`). iPhone/iPad (and iPadOS desktop-class) user-agents, and
 pending states the iOS app prefixes with `zr1.`, are **302**-redirected to
 `zeron://auth/callback?code&state` so `ASWebAuthenticationSession` can
-complete without a paste UI. Patch `0004` introduced the hop as an HTML
+complete without pasting. Patch `0004` introduced the hop as an HTML
 page; patch `0005` makes it an HTTP 302 and drops the copy-code fallback
-on that path. Desktop browsers without the prefix are unchanged.
+on that path. Desktop browsers without the prefix are unchanged. If the
+hop is missing or the sheet is dismissed, the app still offers an in-app
+paste field (`completePastedCode`) as fallback.
 
 ## Deploy
 
@@ -138,10 +140,10 @@ npm run test:unit && wrangler deploy
 
 ## What works WITHOUT these patches
 
-- Sign-in cannot complete via PKCE (`0001`) or the iOS `zeron://` hop
-  (`0004`/`0005`) on iOS 17.0–17.3 / Safari fallback. iOS 17.4+ intercepts
-  the HTTPS WorkOS callback in-session without the hop. There is no in-app
-  paste-code fallback.
+- Without `0001`, PKCE exchange fails on every path (hop, HTTPS, or paste).
+  Without `0004`/`0005`, iOS 17.0–17.3 / Safari fallback land on the
+  Copy-code page; the in-app paste field is the fallback. iOS 17.4+
+  intercepts the HTTPS WorkOS callback in-session without the hop.
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
 - Live Activities still render locally while the app is foregrounded; only
   APNs-driven updates/start are missing.

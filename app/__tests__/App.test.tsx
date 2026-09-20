@@ -44,6 +44,7 @@ test('renders SignInScreen when signed out', async () => {
   });
   const texts = allText(tree!.root);
   expect(texts).toContain('Sign in to ZRemote');
+  expect(texts).not.toContain('Paste the sign-in code');
   expect(authStore.getState().status.state).toBe('signedOut');
   // Native splash must hide on this path — SessionScreen is not mounted.
   expect(
@@ -54,7 +55,7 @@ test('renders SignInScreen when signed out', async () => {
   });
 });
 
-test('Sign in opens WorkOS via a zeron:// auth session, not a paste-code form', async () => {
+test('Sign in opens WorkOS via a zeron:// auth session and shows paste fallback when it cancels', async () => {
   (WebBrowser.openAuthSessionAsync as jest.Mock).mockClear();
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {
@@ -63,10 +64,10 @@ test('Sign in opens WorkOS via a zeron:// auth session, not a paste-code form', 
   });
   await pressByText(tree!.root, 'Sign in');
   const texts = allText(tree!.root);
-  expect(texts).not.toContain('Paste the sign-in code');
+  expect(texts).toContain('Paste the sign-in code');
   expect(
     tree!.root.findAll(n => typeof n.props.onChangeText === 'function').length,
-  ).toBe(0);
+  ).toBe(1);
   expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalled();
   const [url, redirect, opts] = (WebBrowser.openAuthSessionAsync as jest.Mock)
     .mock.calls[0];

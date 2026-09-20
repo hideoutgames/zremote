@@ -6,6 +6,11 @@ const en = {
   'signIn.title': 'Sign in to ZRemote',
   'signIn.subtitle': 'Control your Zeron sessions from anywhere.',
   'signIn.button': 'Sign in',
+  'signIn.pasteFallback.title': 'Paste the sign-in code',
+  'signIn.pasteFallback.body':
+    'If the browser shows Copy code, copy it and paste it below to finish sign-in.',
+  'signIn.pasteFallback.placeholder': 'state.code',
+  'signIn.pasteFallback.continue': 'Continue',
   'signIn.advanced': 'Advanced',
   'signIn.edgeUrl': 'Edge URL',
   'signIn.error.generic': 'Sign-in failed. Try again.',

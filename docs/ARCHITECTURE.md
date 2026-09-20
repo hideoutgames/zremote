@@ -173,10 +173,14 @@ state is persisted in Keychain (15-minute TTL) so a Safari hop or process
 death can still `completeSignIn`. Tokens are stored under a sanitized
 SecureStore key (URL `:`/`/` are illegal in Keychain keys). `zeron://`
 Linking is the Safari-fallback return path if AuthSession fails to start.
-There is no paste-code UI; cancel shows the generic message and the user
-taps Sign in again. Desktop CLI `zeron login` still sees the paste-code
-page. AASA (`IOS_APP_IDS`) remains useful for HTTPS universal links into
-the app but is not required for the custom-scheme AuthSession.
+If AuthSession does not return a callback (cancel, dismiss, missing hop),
+`SignInScreen` shows a paste field: the user copies `state.code` from the
+edge Copy-code page and `completePastedCode` runs the same exchange.
+Successful exchange persists tokens in Keychain; `restore()` on next
+launch signs the user in automatically. Desktop CLI `zeron login` still
+sees the paste-code page. AASA (`IOS_APP_IDS`) remains useful for HTTPS
+universal links into the app but is not required for the custom-scheme
+AuthSession.
 
 ## Workspace tools (Files / Terminal / History)
 
