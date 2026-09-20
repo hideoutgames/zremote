@@ -102,8 +102,9 @@ window width to a plan:
   session overflow menu as 75% `TrueSheet`s (`SessionSheet`, same chrome as
   View details / Sub-agents: grabber, no close button, first detent 0.75).
   Changes and Previews are not in the menu; checkout diffs live in the PR
-  modal. Transcript is capped at ~720pt; the composer stack is capped at
-  560pt inside the detail column (detail width minus 48pt).
+  modal. Transcript is capped at ~720pt (or the detail width minus 48pt);
+  the composer stack is capped at 560pt inside the same detail gutters. Both
+  columns are centered in the detail pane.
 
 Selection (`chatId`), sidebar collapse, and drafts persist
 across size-class changes because they live in the shell or the stores, not

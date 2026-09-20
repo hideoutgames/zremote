@@ -113,6 +113,10 @@ test('compose session stays sharp: chrome fade, no list or chat blur', async () 
   expect(typeof dismiss.props.onStartShouldSetResponder).toBe('function');
   expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(fade));
   expect(zIndexOf(center)).toBeGreaterThan(zIndexOf(dismiss));
+  const centerStyle = Array.isArray(center.props.style)
+    ? center.props.style.flat()
+    : [center.props.style];
+  expect(centerStyle.some(s => s?.alignItems === 'center')).toBe(true);
 });
 
 test('active session keeps the chrome fade and adds a column blur', async () => {
@@ -183,7 +187,80 @@ test('focused composer dim sits above the top chrome fade', async () => {
   );
 });
 
-test('no artwork means no wallpaper or blur layers', async () => {
+test('iPad compose composer is a centered max-width column', async () => {
+  const mounted = await render(
+    <SessionScreen onBack={() => {}} composerMaxWidth={560} />,
+  );
+  const center = mounted.root.findByProps({ testID: 'compose-center' });
+  const centerStyle = Array.isArray(center.props.style)
+    ? center.props.style.flat()
+    : [center.props.style];
+  expect(centerStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  const composer = mounted.root.findByProps({ testID: 'compose-composer' });
+  const composerStyle = Array.isArray(composer.props.style)
+    ? composer.props.style.flat()
+    : [composer.props.style];
+  expect(composerStyle.some(s => s?.width === '100%')).toBe(true);
+  expect(composerStyle.some(s => s?.maxWidth === 560)).toBe(true);
+  expect(composerStyle.some(s => s?.alignSelf === 'center')).toBe(false);
+});
+
+test('iPad session composer parent centers a max-width column', async () => {
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mounted = await render(
+    <SessionScreen chatId="c1" onBack={() => {}} composerMaxWidth={560} />,
+  );
+  const wrap = mounted.root.findByProps({ testID: 'session-composer' });
+  const wrapStyle = Array.isArray(wrap.props.style)
+    ? wrap.props.style.flat()
+    : [wrap.props.style];
+  expect(wrapStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  const inner = wrap.children[0] as TestRenderer.ReactTestInstance;
+  const innerStyle = Array.isArray(inner.props.style)
+    ? inner.props.style.flat()
+    : [inner.props.style];
+  expect(innerStyle.some(s => s?.width === '100%')).toBe(true);
+  expect(innerStyle.some(s => s?.maxWidth === 560)).toBe(true);
+  expect(innerStyle.some(s => s?.alignSelf === 'center')).toBe(false);
+});
+
+test('chat blur column is parent-centered on iPad', async () => {
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mounted = await render(
+    <SessionScreen chatId="c1" onBack={() => {}} contentMaxWidth={720} />,
+  );
+  const blur = mounted.root.findByProps({ testID: 'chat-background-blur' });
+  const layerStyle = Array.isArray(blur.props.style)
+    ? blur.props.style.flat()
+    : [blur.props.style];
+  expect(layerStyle.some(s => s?.alignItems === 'center')).toBe(true);
+  const column = blur.children[0] as TestRenderer.ReactTestInstance;
+  const columnStyle = Array.isArray(column.props.style)
+    ? column.props.style.flat()
+    : [column.props.style];
+  expect(columnStyle.some(s => s?.width === '100%')).toBe(true);
+  expect(columnStyle.some(s => s?.alignSelf === 'center')).toBe(false);
+});
   uiPrefsStore.setState({
     newThreadComposerBackground: undefined,
     newThreadBackgroundEffect: 'none',

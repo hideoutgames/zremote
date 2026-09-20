@@ -122,11 +122,11 @@ const styles = StyleSheet.create({
   layer: {
     ...StyleSheet.absoluteFill,
     zIndex: 0,
+    alignItems: 'center',
   },
   column: {
     flex: 1,
     width: '100%',
-    alignSelf: 'center',
   },
   dim: {
     ...StyleSheet.absoluteFill,
