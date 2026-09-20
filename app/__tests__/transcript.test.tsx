@@ -10,7 +10,11 @@ import {
   USER_BUBBLE_TEXT_END_PAD,
 } from '../src/components/transcript/UserMessage';
 import { AssistantMessage } from '../src/components/transcript/AssistantMessage';
-import { BUBBLE_BLUR_INTENSITY } from '../src/components/transcript/FrostedBubble';
+import {
+  BUBBLE_BLUR_INTENSITY,
+  BUBBLE_SHADOW_ELEVATION,
+  BUBBLE_SHADOW_OPACITY,
+} from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
 import { messageCopyContent } from '../src/components/transcript/MessageCopyMenu';
 import { PlanBadge } from '../src/components/PlanBadge';
@@ -648,6 +652,24 @@ test('UserMessage shows the sent text inside a bubble sized to content', async (
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+  expect(flatStyle(bubble.props.style).some(s => s.overflow === 'hidden')).toBe(
+    false,
+  );
+  expect(
+    flatStyle(bubble.props.style).some(
+      s => s.shadowOpacity === BUBBLE_SHADOW_OPACITY,
+    ),
+  ).toBe(true);
+  expect(
+    flatStyle(bubble.props.style).some(
+      s => s.elevation === BUBBLE_SHADOW_ELEVATION,
+    ),
+  ).toBe(true);
+  expect(
+    bubble.children.some(n =>
+      flatStyle(n.props.style).some(s => s.overflow === 'hidden'),
+    ),
+  ).toBe(true);
 });
 
 test('UserMessage keeps the full prompt in the bubble Text', async () => {
@@ -706,6 +728,16 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(
     bubble.findAll(n => n.props.intensity != null)[0].props.intensity,
   ).toBe(BUBBLE_BLUR_INTENSITY);
+  expect(style.some(s => s?.overflow === 'hidden')).toBe(false);
+  expect(style.some(s => s?.shadowOpacity === BUBBLE_SHADOW_OPACITY)).toBe(
+    true,
+  );
+  expect(style.some(s => s?.elevation === BUBBLE_SHADOW_ELEVATION)).toBe(true);
+  expect(
+    bubble.children.some(n =>
+      flatStyle(n.props.style).some(s => s.overflow === 'hidden'),
+    ),
+  ).toBe(true);
 });
 
 test('UserMessage never ellipsizes a short prompt', async () => {

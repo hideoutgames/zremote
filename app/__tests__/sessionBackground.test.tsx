@@ -9,6 +9,7 @@ import { HomeScreen } from '../src/screens/HomeScreen';
 import { AdaptiveShell } from '../src/navigation/AdaptiveShell';
 import { FadeBlur } from '../src/components/FadeBlur';
 import {
+  CHAT_BACKGROUND_BLUR_TINT,
   COMPACT_THREADS_INTENSITY,
   REGULAR_THREADS_INTENSITY,
   wallpaperBlurFor,
@@ -52,6 +53,7 @@ beforeEach(() => {
       name: 'sunset.png',
     },
     newThreadBackgroundEffect: 'none',
+    sessionBackgroundBlur: false,
   });
   workspaceStore.setState({
     devices: [],
@@ -407,4 +409,56 @@ test('session chrome follows the content theme when wallpaper is set', async () 
   } finally {
     themeSpy.mockRestore();
   }
+});
+
+test('session background blur frosts the chat without a dark tint', async () => {
+  uiPrefsStore.setState({ sessionBackgroundBlur: true });
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
+  expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
+  expect(count(mounted.root, 'session-background-dim')).toBe(0);
+  const layer = mounted.root.findByProps({ testID: 'chat-background-blur' });
+  const blur = layer.findByType(FadeBlur);
+  expect(blur.props.tint).toBe(CHAT_BACKGROUND_BLUR_TINT);
+  expect(blur.props.tint).not.toBe('systemThinMaterialDark');
+  expect(blur.props.fade).toBe('none');
+  expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
+});
+
+test('compose stays sharp when session background blur is on', async () => {
+  uiPrefsStore.setState({ sessionBackgroundBlur: true });
+  const mounted = await render(<SessionScreen onBack={() => {}} />);
+  expect(count(mounted.root, 'chat-background-blur')).toBe(0);
+  expect(count(mounted.root, 'session-background-blur')).toBe(0);
+});
+
+test('session background blur does nothing without artwork', async () => {
+  uiPrefsStore.setState({
+    sessionBackgroundBlur: true,
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'none',
+  });
+  workspaceStore.setState({
+    chats: [
+      {
+        id: 'c1',
+        deviceId: 'host1',
+        archived: false,
+        createdAt: Date.now(),
+        title: 'Live thread',
+      },
+    ],
+  });
+  const mounted = await render(<SessionScreen chatId="c1" onBack={() => {}} />);
+  expect(count(mounted.root, 'chat-background-blur')).toBe(0);
 });

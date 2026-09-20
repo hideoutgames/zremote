@@ -1,7 +1,8 @@
 // Clipped chat bubble: heavy BlurView of whatever sits behind, then a light
 // theme wash. Reduce Transparency drops the blur for a near-opaque fill.
 // Not Glass — bubbles are content, not chrome (no hairline, no liquid-glass
-// clustering).
+// clustering). Shadow lives on the outer wrapper so overflow clipping does
+// not eat it.
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -17,6 +18,10 @@ import { BlurView, type BlurTint } from 'expo-blur';
 import { useTheme } from '../../theme';
 
 export const BUBBLE_BLUR_INTENSITY = 100;
+export const BUBBLE_SHADOW_OPACITY = 0.16;
+export const BUBBLE_SHADOW_RADIUS = 10;
+export const BUBBLE_SHADOW_OFFSET = { width: 0, height: 4 } as const;
+export const BUBBLE_SHADOW_ELEVATION = 4;
 const FALLBACK_ALPHA = 0.92;
 
 const opaqueWash = (color: ColorValue): ColorValue => {
@@ -54,12 +59,14 @@ export function FrostedBubble({
   }, []);
 
   const pad = <View style={contentStyle}>{children}</View>;
+  const radius = StyleSheet.flatten(style)?.borderRadius;
+  const wrapStyle = [styles.shadow, style];
 
   if (reduceTransparency) {
     return (
       <View
         testID={testID}
-        style={[style, { backgroundColor: opaqueWash(tintColor) }]}
+        style={[wrapStyle, { backgroundColor: opaqueWash(tintColor) }]}
         {...rest}
       >
         {pad}
@@ -73,22 +80,36 @@ export function FrostedBubble({
       : 'systemThinMaterialLight';
 
   return (
-    <View testID={testID} style={[styles.clip, style]} {...rest}>
-      <BlurView
-        pointerEvents="none"
-        tint={tint}
-        intensity={BUBBLE_BLUR_INTENSITY}
-        style={StyleSheet.absoluteFill}
-      />
+    <View testID={testID} style={wrapStyle} {...rest}>
       <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: tintColor }]}
-      />
-      {pad}
+        style={[
+          styles.clip,
+          radius !== undefined ? { borderRadius: radius } : null,
+        ]}
+      >
+        <BlurView
+          pointerEvents="none"
+          tint={tint}
+          intensity={BUBBLE_BLUR_INTENSITY}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: tintColor }]}
+        />
+        {pad}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  shadow: {
+    shadowColor: '#000',
+    shadowOpacity: BUBBLE_SHADOW_OPACITY,
+    shadowRadius: BUBBLE_SHADOW_RADIUS,
+    shadowOffset: BUBBLE_SHADOW_OFFSET,
+    elevation: BUBBLE_SHADOW_ELEVATION,
+  },
   clip: { overflow: 'hidden' },
 });

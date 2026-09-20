@@ -132,6 +132,7 @@ import { ComposerStickyBottom } from '../components/ComposerChromeAnim';
 import { ComposeKeyboardShift } from '../components/ComposeKeyboardShift';
 import { composerKeyboardStickyOffset } from '../navigation/composeKeyboardShift';
 import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
+import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 
 const log = createLog();
 
@@ -718,6 +719,7 @@ function ActiveSessionScreen({
         { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
       ]}
     >
+      <ChatBackgroundBlur />
       <SessionTranscriptList
         key={openKey}
         ref={transcriptRef}
@@ -1331,7 +1333,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     minWidth: 0,
-    alignItems: 'stretch',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   measureCap: { width: '100%' },
@@ -1345,7 +1347,6 @@ const styles = StyleSheet.create({
   },
   titleHit: {
     height: 44,
-    width: '100%',
     maxWidth: '100%',
     minWidth: 0,
     alignItems: 'center',

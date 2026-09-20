@@ -3,7 +3,7 @@
 // now fills the window behind Home, chats, and compose.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Icon } from '../Icon';
@@ -19,9 +19,11 @@ import {
   removeNewThreadComposerBackground,
   setColorSchemePreference,
   setNewThreadBackgroundEffect,
+  setSessionBackgroundBlur,
   useColorSchemePreference,
   useNewThreadBackgroundEffect,
   useNewThreadComposerBackground,
+  useSessionBackgroundBlur,
 } from '../../zeron/state/uiPrefs';
 import {
   NEW_THREAD_BACKGROUND_EFFECTS,
@@ -155,6 +157,7 @@ export function AppearanceBackground({
   const colorScheme = useColorSchemePreference();
   const background = useNewThreadComposerBackground();
   const effect = useNewThreadBackgroundEffect();
+  const sessionBlur = useSessionBackgroundBlur();
   const [available, setAvailable] = useState(true);
 
   useEffect(() => {
@@ -266,6 +269,19 @@ export function AppearanceBackground({
           trailing={trailing}
           testID="settings-background"
           accessibilityLabel={t('settings.background')}
+        />
+      </SettingsGroup>
+      <SettingsGroup footer={t('settings.sessionBackgroundBlurHint')}>
+        <SettingsRow
+          title={t('settings.sessionBackgroundBlur')}
+          trailing={
+            <Switch
+              value={sessionBlur}
+              onValueChange={setSessionBackgroundBlur}
+              accessibilityLabel={t('settings.sessionBackgroundBlur')}
+              testID="settings-session-background-blur"
+            />
+          }
         />
       </SettingsGroup>
       {background !== undefined && available ? (

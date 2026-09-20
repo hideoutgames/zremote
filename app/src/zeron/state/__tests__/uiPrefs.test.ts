@@ -8,6 +8,7 @@ import {
   removeNewThreadComposerBackground,
   setColorSchemePreference,
   setNewThreadBackgroundEffect,
+  setSessionBackgroundBlur,
   bindUiPrefs,
   unbindUiPrefs,
   togglePinnedModel,
@@ -46,6 +47,7 @@ beforeEach(() => {
     newThreadBackgroundEffect: 'none',
     colorScheme: 'system',
     pinnedModels: [],
+    sessionBackgroundBlur: false,
   });
 });
 
@@ -167,6 +169,16 @@ test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
   unbindUiPrefs();
   expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
   expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('none');
+});
+
+test('sessionBackgroundBlur defaults to off and persists', async () => {
+  expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(false);
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  setSessionBackgroundBlur(true);
+  expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(true);
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.sessionBackgroundBlur).toBe(true);
 });
 
 test('colorScheme defaults to system and persists', async () => {
