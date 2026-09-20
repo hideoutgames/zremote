@@ -28,10 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
-import {
-  KeyboardController,
-  useKeyboardState,
-} from 'react-native-keyboard-controller';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
@@ -215,7 +212,6 @@ export const Composer = React.memo(function ({
   'use no memo';
   const theme = useChromeTheme();
   const insets = useSafeAreaInsets();
-  const keyboardVisible = useKeyboardState(s => s.isVisible);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const extraMax = composerExtraMax(windowHeight);
   const extraHeight = clampComposerExtraHeight(
@@ -512,7 +508,9 @@ export const Composer = React.memo(function ({
     right === 'send' &&
     (action.primary === 'send' || live === 'queue' || live === 'steer');
   const coverSend = dictating || processing;
-  const homeInset = (keyboardVisible ? 0 : insets.bottom) + 8;
+  // Constant pad: KeyboardStickyView interpolates insets.bottom so this
+  // layout height does not snap on isVisible and overshoot the home indicator.
+  const homeInset = insets.bottom + 8;
 
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
@@ -831,6 +829,7 @@ export const Composer = React.memo(function ({
       ) : null}
 
       <View
+        testID="composer-home-pad"
         style={[styles.homePad, { height: homeInset }]}
         pointerEvents="none"
       />

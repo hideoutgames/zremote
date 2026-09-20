@@ -56,10 +56,9 @@ import { TranscriptChatScrollView } from './TranscriptChatScrollView';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 export const RAIL_RIGHT = 4;
-/** Remount FlashList after a sidebar-sized width jump so hit testing
- *  picks up the new column. Sub-delta ticks are ignored (no remount,
- *  no scroll restore) so a layout animation cannot remount the list
- *  several times in one collapse. */
+/** Ignore sub-delta width ticks (layout animation noise). A sidebar-sized
+ *  jump re-anchors only when already following the live edge — FlashList
+ *  stays mounted so collapse does not rebuild rows mid-slide. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
 const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
 export const END_THRESHOLD = 1;
@@ -153,12 +152,6 @@ export const SessionTranscriptList = forwardRef<
     contentHeight: 0,
   });
   const [dismissKey, setDismissKey] = useState(0);
-  const [listHitKey, setListHitKey] = useState(0);
-  const savedOffsetRef = useRef(0);
-  const pendingRestoreRef = useRef<{
-    offset: number;
-    follow: boolean;
-  } | null>(null);
   const hasOverflowedRef = useRef(false);
   const scrolledForKeyRef = useRef<string | null>(null);
   const wasWorkingRef = useRef(working);
@@ -317,31 +310,11 @@ export const SessionTranscriptList = forwardRef<
     prevListWidthRef.current = listWidth;
     if (prev === 0 || listWidth === 0 || prev === listWidth) return;
     if (Math.abs(listWidth - prev) < LIST_RESIZE_REMOUNT_DELTA) return;
-    pendingRestoreRef.current = {
-      offset: savedOffsetRef.current,
-      follow: followingRef.current,
-    };
-    setListHitKey(key => key + 1);
-  }, [listWidth]);
-
-  useEffect(() => {
-    const pending = pendingRestoreRef.current;
-    if (pending == null) return;
-    pendingRestoreRef.current = null;
-    const restore = () => {
-      if (pending.follow) {
-        scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
-          () => {},
-        );
-        return;
-      }
-      listRef.current?.scrollToOffset({
-        offset: pending.offset,
-        animated: false,
-      });
-    };
-    requestAnimationFrame(restore);
-  }, [listHitKey, listWidth, scrollMessageToEnd]);
+    if (!followingRef.current) return;
+    scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
+      () => {},
+    );
+  }, [listWidth, scrollMessageToEnd]);
 
   const onComposerLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -421,7 +394,6 @@ export const SessionTranscriptList = forwardRef<
         viewportHeight: layoutMeasurement.height,
         contentHeight: contentSize.height,
       });
-      savedOffsetRef.current = contentOffset.y;
       const distance = listEndDistance(
         contentSize.height,
         contentOffset.y,
@@ -605,8 +577,7 @@ export const SessionTranscriptList = forwardRef<
         bottomBand={COMPOSER_BOTTOM_FADE_BAND}
       >
         <FlashList
-          key={listHitKey}
-          testID={`session-transcript-list-${listHitKey}`}
+          testID="session-transcript-list"
           ref={listRef}
           style={styles.fill}
           data={data}
