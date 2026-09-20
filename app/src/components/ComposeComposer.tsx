@@ -439,11 +439,12 @@ export function ComposeComposer({
   const composer = (
     <View
       ref={wrapRef}
-      style={
+      style={[
+        styles.measureCap,
         composerMaxWidth !== undefined
-          ? [styles.measureCap, { maxWidth: composerMaxWidth }]
-          : undefined
-      }
+          ? { maxWidth: composerMaxWidth }
+          : undefined,
+      ]}
       testID="compose-composer"
     >
       <Composer
@@ -574,6 +575,6 @@ export function ComposeComposer({
 }
 
 const styles = StyleSheet.create({
-  sticky: { width: '100%' },
-  measureCap: { width: '100%', alignSelf: 'center' },
+  sticky: { width: '100%', alignItems: 'center' },
+  measureCap: { width: '100%' },
 });

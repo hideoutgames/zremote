@@ -67,6 +67,25 @@ function returnToEnd(tree: TestRenderer.ReactTestRenderer) {
   });
 }
 
+function flattenStyle(style: unknown): Record<string, unknown>[] {
+  if (style == null) return [];
+  if (Array.isArray(style)) return style.flatMap(flattenStyle);
+  if (typeof style === 'object') return [style as Record<string, unknown>];
+  return [];
+}
+
+function listHorizontalPad(tree: TestRenderer.ReactTestRenderer): {
+  paddingLeft?: number;
+  paddingRight?: number;
+} {
+  const pad: { paddingLeft?: number; paddingRight?: number } = {};
+  for (const s of flattenStyle(listProps(tree).contentContainerStyle)) {
+    if (typeof s.paddingLeft === 'number') pad.paddingLeft = s.paddingLeft;
+    if (typeof s.paddingRight === 'number') pad.paddingRight = s.paddingRight;
+  }
+  return pad;
+}
+
 function Harness({
   entries,
   openKey,
@@ -454,9 +473,10 @@ test('shows the message rail once content overflows two or more entries', async 
     ),
   ).toHaveLength(1);
   expect(listProps(tree!).showsVerticalScrollIndicator).toBe(false);
-  expect(listProps(tree!).contentContainerStyle).toEqual(
-    expect.arrayContaining([expect.objectContaining({ paddingRight: 40 })]),
-  );
+  expect(listHorizontalPad(tree!)).toEqual({
+    paddingLeft: 0,
+    paddingRight: 40,
+  });
 
   await act(async () => {
     tree!.unmount();
@@ -612,6 +632,66 @@ test('message rail stays right-aligned on a wide iPad column', async () => {
     );
   });
   expect(positioned.length).toBeGreaterThan(0);
+  expect(listHorizontalPad(tree!)).toEqual({
+    paddingLeft: 0,
+    paddingRight: 40,
+  });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('wide iPad transcript uses equal gutters around the measure cap', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1')]}
+        openKey="c1:1"
+        windowWidth={1024}
+        contentMaxWidth={720}
+      />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 1000, height: 844 } },
+    });
+  });
+  expect(listHorizontalPad(tree!)).toEqual({
+    paddingLeft: 140,
+    paddingRight: 140,
+  });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('wide overflowing iPad transcript does not add extra rail padding', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness
+        entries={[entry('m1'), entry('m2')]}
+        openKey="c1:1"
+        windowWidth={1024}
+        contentMaxWidth={720}
+      />,
+    );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'session-transcript' }).props.onLayout({
+      nativeEvent: { layout: { x: 0, y: 0, width: 1000, height: 844 } },
+    });
+    listProps(tree!).onContentSizeChange(1000, 2000);
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'preview-rail').length,
+  ).toBeGreaterThan(0);
+  expect(listHorizontalPad(tree!)).toEqual({
+    paddingLeft: 140,
+    paddingRight: 140,
+  });
   await act(async () => {
     tree!.unmount();
   });
