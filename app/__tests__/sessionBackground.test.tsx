@@ -334,11 +334,12 @@ test('session chrome uses dark buttons when wallpaper is set in light theme', as
     const empty = mounted.root.findAll(n => {
       const c = n.props.children;
       return typeof c === 'string' && c.includes('Nothing here yet');
-    })[0] as { props: { style: unknown; children: string } } | undefined;
+    })[0];
     expect(empty).toBeDefined();
-    const emptyStyle = Array.isArray(empty!.props.style)
-      ? empty!.props.style.flat()
-      : [empty!.props.style];
+    if (empty === undefined) return;
+    const emptyStyle = Array.isArray(empty.props.style)
+      ? empty.props.style.flat()
+      : [empty.props.style];
     expect(
       emptyStyle.some(s => s?.color === Theme.lightTheme.textSecondary),
     ).toBe(true);
