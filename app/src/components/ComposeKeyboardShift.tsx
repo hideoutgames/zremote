@@ -2,15 +2,23 @@
 // thread. Keep this out of SessionScreen — React Compiler + worklets 0.10.x
 // serializes that screen's memo cache and 0.10.1 throws in Release.
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import { composeKeyboardShift } from '../navigation/composeKeyboardShift';
+import {
+  COMPOSE_KEYBOARD_GAP,
+  composeKeyboardShiftPx,
+} from '../navigation/composeKeyboardShift';
+
+const ZERO_SHIFT = { transform: [{ translateY: 0 }] } as const;
 
 export function ComposeKeyboardShift({
   composerHeight,
@@ -28,14 +36,30 @@ export function ComposeKeyboardShift({
   'use no memo';
   const { height: windowHeight } = useWindowDimensions();
   const { height: kbHeight } = useReanimatedKeyboardAnimation();
+  const windowHeightSV = useSharedValue(windowHeight);
+  const composerHeightSV = useSharedValue(composerHeight);
+  useEffect(() => {
+    windowHeightSV.value = windowHeight;
+  }, [windowHeight, windowHeightSV]);
+  useEffect(() => {
+    composerHeightSV.value = composerHeight;
+  }, [composerHeight, composerHeightSV]);
   const anim = useAnimatedStyle(() => {
-    const keyboardHeight = Math.max(0, -kbHeight.value);
-    const shift = composeKeyboardShift({
-      windowHeight,
-      composerHeight,
-      keyboardHeight,
-    });
-    return { transform: [{ translateY: shift }] };
+    try {
+      const keyboardHeight =
+        kbHeight == null || typeof kbHeight.value !== 'number'
+          ? 0
+          : Math.max(0, -kbHeight.value);
+      const shift = composeKeyboardShiftPx(
+        windowHeightSV.value,
+        composerHeightSV.value,
+        keyboardHeight,
+        COMPOSE_KEYBOARD_GAP,
+      );
+      return { transform: [{ translateY: shift }] };
+    } catch {
+      return ZERO_SHIFT;
+    }
   });
   return (
     <Animated.View
