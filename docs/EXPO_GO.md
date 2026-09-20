@@ -36,7 +36,8 @@ Windows).
 
 - Sign-in via **HTTPS callback** on a development/production build (PKCE +
   AASA). Expo Go cannot receive universal links, so production sign-in is
-  not available there — use **Advanced → Try demo mode** to explore the UI.
+  not available there — use the paste-code fallback on the sign-in screen,
+  or a development build.
 - Spaces, sessions, device list — registry layers are unchanged (they never
   needed Loro).
 - Live transcript via **relay mode**, send/steer/stop/questions, queue view
@@ -69,34 +70,9 @@ Windows).
   `react-native-markdown-display` (pure JS); `streamingAnimation` ignored.
 - **Offline queueing / doc persistence** — relay mode keeps no local
   session doc; the host is authoritative (drafts still persist).
-- **Universal-link sign-in**, deep links into the app.
-
-## Demo mode
-
-**Sign in → Advanced → "Try demo mode"** enters a fully in-process demo: a
-simulated edge + host (`src/demo/demoEdge.ts`) is plugged into the exact
-runtime seams the production path uses — the app's `wsFactory` /
-`fetchImpl` / `Clock` / `DocDisk` dependencies — so every screen, store and
-controller runs the real code in relay session mode.
-
-What it simulates:
-
-- Registry room: 2 hosts (one live with presence beats, one dark for ~3h),
-  3 spaces, 7 chats (working / awaitingInput / idle / errored / archived),
-  and client pushes (rename/archive/seen/create) round-tripped as `rows`.
-- Device room: the full relay-forwardable RPC surface — transcript streams
-  (`WatchDocMessages` reset/delta), the command plane (`run` streams a
-  realistic multi-part reply, `steer`, `interrupt`, `respondInput`), the
-  message queue, attachments, workspace files, checkout diffs, git history,
-  echo terminals, agent accounts, previews, and update status.
-- Settings shows "Demo account" / "Exit demo". Demo mode is not persisted
-  — a reload returns to sign-in.
-
-**Nothing leaves the device.** `demoEdge.fetchImpl` answers the same
-endpoint shapes the runtime calls; there is no network dial, no auth
-server, and no account. It also works in the native dev build (the same
-`DemoEdge` drives `AppRuntime` with an in-memory DocDisk and forced relay
-mode).
+- **Universal-link sign-in**, deep links into the app. Expo Go cannot
+  receive AASA links; finish sign-in with the paste-code field, or use a
+  development build.
 
 ## Relay mode vs doc mode
 

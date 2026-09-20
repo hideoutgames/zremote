@@ -50,7 +50,7 @@ export interface AppRuntimeDeps {
   loro: () => LoroDocPort;
   fetchImpl?: FetchImpl;
   /** Explicit session source: overrides the Loro probe AND the persisted
-   * forceRelayMode pref (demo mode forces 'relay'). */
+   * forceRelayMode pref (Expo Go / Settings relay toggle). */
   sessionMode?: SessionMode;
   log?: (line: string) => void;
   /** Reads a staged attachment's bytes as base64 (expo-file-system). */

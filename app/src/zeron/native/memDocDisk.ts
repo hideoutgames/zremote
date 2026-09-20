@@ -1,11 +1,11 @@
-// In-memory DocDisk — demo mode and tests: the full DocDisk surface over a
-// Map, nothing touches the filesystem.
+// In-memory DocDisk — tests: the full DocDisk surface over a Map, nothing
+// touches the filesystem.
 
 import { DocDisk, type DocDiskFs } from './docDisk';
 
 export class MemoryDocFs implements DocDiskFs {
   files = new Map<string, string>();
-  /** Write-order log — used by tests; harmless in demo. */
+  /** Write-order log — used by tests. */
   writes: string[] = [];
 
   async readText(path: string) {
@@ -31,5 +31,5 @@ export class MemoryDocFs implements DocDiskFs {
   }
 }
 
-export const memDocDisk = (baseDir = '/demo-docs'): DocDisk =>
+export const memDocDisk = (baseDir = '/docs'): DocDisk =>
   new DocDisk(new MemoryDocFs(), baseDir);

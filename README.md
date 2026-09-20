@@ -111,10 +111,6 @@ Latest evidence: [docs/evidence/](docs/evidence/).
 > **relay mode** (host-authoritative
 > `WatchDocMessages`/`WatchQueue`/`QueueCommand`). Details:
 > [docs/EXPO_GO.md](docs/EXPO_GO.md).
->
-> **Demo mode** (Sign in → Advanced → "Try demo mode") runs the whole app
-> against an in-process simulated edge + host — sample data, no account, and
-> nothing leaves the device. Works in Expo Go and dev builds.
 
 (verbatim from [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md))
 
@@ -141,7 +137,6 @@ app/
   src/navigation/          adaptive shell (compact pager ↔ iPad 3-column)
   src/screens/             Home/Session/Settings/Changes/Files/Terminal/
                            History/Previews/AgentAccounts…
-  src/demo/                demo mode: in-process simulated edge + fixtures
   src/zeron/
     protocol/              rpc methods, entities, wire types
     doc/                   Loro session docs + registry projection

@@ -29,7 +29,6 @@ import {
   settingsPageBackground,
 } from '../components/settings/SettingsList';
 import { useTheme } from '../theme';
-import { useDemoMode } from '../demo/demoMode';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
 import { impact } from '../zeron/native/haptics';
@@ -311,14 +310,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
       ? status.user
       : undefined;
 
-  const demoActive = useDemoMode();
-
   const confirmSignOut = useCallback(() => {
-    if (demoActive) {
-      signOut().catch(e => log.warn(`signOut: ${e}`));
-      onClose();
-      return;
-    }
     Alert.alert(t('settings.signOut'), t('settings.signOutConfirm'), [
       { text: t('home.row.cancel'), style: 'cancel' },
       {
@@ -330,16 +322,14 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         },
       },
     ]);
-  }, [signOut, onClose, demoActive]);
+  }, [signOut, onClose]);
 
   const deviceConnected = (id: string): boolean => {
     const at = presence[id];
     return at !== undefined && now - at < PRESENCE_TTL_MS;
   };
 
-  const accountTitle = demoActive
-    ? t('settings.demoAccount')
-    : user?.email ?? user?.id ?? '';
+  const accountTitle = user?.email ?? user?.id ?? '';
 
   const dictationFooter =
     dictationModelState === undefined
@@ -421,9 +411,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
 
               <SettingsGroup>
                 <SettingsRow
-                  title={
-                    demoActive ? t('settings.exitDemo') : t('settings.signOut')
-                  }
+                  title={t('settings.signOut')}
                   destructive
                   onPress={confirmSignOut}
                   testID="settings-sign-out"

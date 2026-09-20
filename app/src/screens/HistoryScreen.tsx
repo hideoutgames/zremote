@@ -5,7 +5,7 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useStore } from 'zustand';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
-import { collectThreadPrs, badgeFromSummary } from '../components/threadPrs';
+import { collectThreadPrs } from '../components/threadPrs';
 import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
 import { prToneColor } from '../components/prChrome';
 import { BrandMark } from '../components/BrandMark';
@@ -13,8 +13,6 @@ import { svgForPullRequest } from '../components/harnessBrand';
 import { Icon } from '../components/Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-import { useDemoMode } from '../demo/demoMode';
-import { demoHistoryPrs } from '../demo/fixtures';
 
 export function HistoryScreen({
   chatId,
@@ -24,19 +22,12 @@ export function HistoryScreen({
   onOpenPr?: (badge: PrBadgeModel) => void;
 }) {
   const theme = useTheme();
-  const demo = useDemoMode();
   const summary = useStore(
     changeRequestStore,
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
   const diff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
-  const prs = useMemo(() => {
-    const live = collectThreadPrs(summary, diff);
-    if (!demo) return live;
-    const extras = demoHistoryPrs(chatId).map(s => badgeFromSummary(s, diff));
-    const seen = new Set(live.map(p => p.number));
-    return [...live, ...extras.filter(p => !seen.has(p.number))];
-  }, [summary, diff, demo, chatId]);
+  const prs = useMemo(() => collectThreadPrs(summary, diff), [summary, diff]);
 
   return (
     <View style={styles.root}>

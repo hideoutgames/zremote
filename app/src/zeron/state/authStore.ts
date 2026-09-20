@@ -25,17 +25,6 @@ export const bindAuthSession = (session: AuthSession): (() => void) => {
   return unbind;
 };
 
-/** Demo mode only: inject a status without an AuthSession. No-op while a
- * real session is bound AND signed in, so demo entry can never clobber a
- * live real-auth session (the AuthSession object itself is bound from app
- * start even while signed out — that alone must not block demo entry). */
-export const setDemoAuthStatus = (status: AuthState): boolean => {
-  const s = authStore.getState();
-  if (s.session !== undefined && s.status.state === 'signedIn') return false;
-  authStore.setState({ status });
-  return true;
-};
-
 export const resetAuth = (): void => {
   unbind?.();
   unbind = undefined;
