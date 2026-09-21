@@ -1,0 +1,101 @@
+diff --git a/node_modules/zeego/lib/commonjs/menu/create-ios-menu/index.ios.js b/node_modules/zeego/lib/commonjs/menu/create-ios-menu/index.ios.js
+--- a/node_modules/zeego/lib/commonjs/menu/create-ios-menu/index.ios.js
++++ b/node_modules/zeego/lib/commonjs/menu/create-ios-menu/index.ios.js
+@@ -291,13 +291,24 @@
+                   imageOptions: style
+                 };
+               } else {
+-                const imageValue = _reactNative.Image.resolveAssetSource(typeof imageChild.props.source === 'object' && 'src' in imageChild.props.source ? {
++                // Local requires ignored imageOptions, so menu marks stayed
++                // at their pixel size and brand color. Honor width by raising
++                // the asset scale (point size = pixels / scale) and forward tint.
++                const resolved = _reactNative.Image.resolveAssetSource(typeof imageChild.props.source === 'object' && 'src' in imageChild.props.source ? {
+                   uri: imageChild.props.source.src
+                 } : imageChild.props.source);
+-
++                const desired = imageChild.props.width;
++                let imageValue = resolved;
++                if (resolved != null && typeof desired === 'number' && desired > 0 && typeof resolved.width === 'number' && resolved.width > 0) {
++                  const scale = typeof resolved.scale === 'number' ? resolved.scale : 1;
++                  imageValue = { ...resolved,
++                    scale: scale * (resolved.width / desired)
++                  };
++                }
+                 icon = {
+                   type: 'IMAGE_REQUIRE',
+-                  imageValue
++                  imageValue,
++                  imageOptions: style
+                 };
+               }
+             }
+diff --git a/node_modules/zeego/lib/module/menu/create-ios-menu/index.ios.js b/node_modules/zeego/lib/module/menu/create-ios-menu/index.ios.js
+--- a/node_modules/zeego/lib/module/menu/create-ios-menu/index.ios.js
++++ b/node_modules/zeego/lib/module/menu/create-ios-menu/index.ios.js
+@@ -275,12 +275,24 @@
+                   imageOptions: style
+                 };
+               } else {
+-                const imageValue = Image.resolveAssetSource(typeof imageChild.props.source === 'object' && 'src' in imageChild.props.source ? {
++                // Local requires ignored imageOptions, so menu marks stayed
++                // at their pixel size and brand color. Honor width by raising
++                // the asset scale (point size = pixels / scale) and forward tint.
++                const resolved = Image.resolveAssetSource(typeof imageChild.props.source === 'object' && 'src' in imageChild.props.source ? {
+                   uri: imageChild.props.source.src
+                 } : imageChild.props.source);
++                const desired = imageChild.props.width;
++                let imageValue = resolved;
++                if (resolved != null && typeof desired === 'number' && desired > 0 && typeof resolved.width === 'number' && resolved.width > 0) {
++                  const scale = typeof resolved.scale === 'number' ? resolved.scale : 1;
++                  imageValue = { ...resolved,
++                    scale: scale * (resolved.width / desired)
++                  };
++                }
+                 icon = {
+                   type: 'IMAGE_REQUIRE',
+-                  imageValue
++                  imageValue,
++                  imageOptions: style
+                 };
+               }
+             }
+diff --git a/node_modules/zeego/src/menu/create-ios-menu/index.ios.tsx b/node_modules/zeego/src/menu/create-ios-menu/index.ios.tsx
+--- a/node_modules/zeego/src/menu/create-ios-menu/index.ios.tsx
++++ b/node_modules/zeego/src/menu/create-ios-menu/index.ios.tsx
+@@ -308,15 +308,35 @@
+                   imageOptions: style,
+                 }
+               } else {
+-                const imageValue = Image.resolveAssetSource(
++                // Local requires ignored imageOptions, so menu marks stayed
++                // at their pixel size and brand color. Honor width by raising
++                // the asset scale (point size = pixels / scale) and forward tint.
++                const resolved = Image.resolveAssetSource(
+                   typeof imageChild.props.source === 'object' &&
+                     'src' in imageChild.props.source
+                     ? { uri: imageChild.props.source.src }
+                     : imageChild.props.source
+                 )
++                const desired = imageChild.props.width
++                let imageValue = resolved
++                if (
++                  resolved != null &&
++                  typeof desired === 'number' &&
++                  desired > 0 &&
++                  typeof resolved.width === 'number' &&
++                  resolved.width > 0
++                ) {
++                  const scale =
++                    typeof resolved.scale === 'number' ? resolved.scale : 1
++                  imageValue = {
++                    ...resolved,
++                    scale: scale * (resolved.width / desired),
++                  }
++                }
+                 icon = {
+                   type: 'IMAGE_REQUIRE',
+                   imageValue,
++                  imageOptions: style,
+                 }
+               }
+             }

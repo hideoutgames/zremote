@@ -1,8 +1,11 @@
-// Resolve composer Effort / Fast from the host catalog: advertised
-// reasoningLevels (Codex/Claude), then effort-like Model.options (Cursor
-// params), then Devin-style variant ids (`family-medium` / `family-high-fast`).
+// Resolve composer Effort / Fast / context window from the host catalog:
+// advertised reasoningLevels (Codex/Claude), then effort-like Model.options
+// (Cursor params), then variant ids — Devin-style suffixes
+// (`family-medium` / `family-high-fast`) or Antigravity display names
+// (`Gemini 3.1 Pro (Low)` paired with a different High id).
 
 import type { Model, ModelOption } from '../zeron/protocol/types';
+import { contextOptionForModel } from './contextWindow';
 import {
   fastOffChoice,
   fastOnChoice,
@@ -12,6 +15,7 @@ import {
 } from './fastMode';
 import {
   effortLevelsForModel,
+  normCatalogId,
   rememberedModelOptions,
   rememberedReasoning,
   type ModelSettings,
@@ -36,14 +40,29 @@ const EFFORT_SUFFIX_ORDER = [
   'max',
 ] as const;
 
-const EFFORT_OPTION_IDS = ['effort', 'reasoning', 'reasoningEffort'] as const;
+const EFFORT_OPTION_NORMS = new Set(['effort', 'reasoning', 'reasoningeffort']);
 
-const LEVEL_CHOICE_IDS = new Set<string>([
+/** Longest first so `ultrathink` is not read as `ultra` and `xhigh` as `high`. */
+const LABEL_LEVEL_MATCH = [
+  'ultrathink',
+  'ultracode',
+  'minimal',
+  'medium',
+  'xhigh',
+  'ultra',
+  'high',
+  'max',
+  'low',
+] as const;
+
+const LEVEL_ORDER = [
   ...EFFORT_SUFFIX_ORDER,
   'ultra',
   'ultracode',
   'ultrathink',
-]);
+] as const;
+
+const LEVEL_CHOICE_NORMS = new Set<string>([...LEVEL_ORDER, 'extrahigh']);
 
 export type EffortKind = 'reasoning' | 'option' | 'variant';
 
@@ -52,6 +71,13 @@ export interface EffortTrait {
   levels: string[];
   value?: string;
   optionId?: string;
+  /** Level → catalog model id when the host id is not `{family}-{level}`. */
+  variantIds?: Record<string, string>;
+}
+
+export interface ContextTrait {
+  option: ModelOption;
+  choice: string;
 }
 
 export interface FastTrait {
@@ -64,6 +90,7 @@ export interface FastTrait {
 export interface ModelTraits {
   effort?: EffortTrait;
   fast?: FastTrait;
+  context?: ContextTrait;
   family?: string;
 }
 
@@ -141,18 +168,18 @@ export const pickVariantId = (
 };
 
 const isLevelChoice = (id: string): boolean =>
-  LEVEL_CHOICE_IDS.has(id.toLowerCase());
+  LEVEL_CHOICE_NORMS.has(normCatalogId(id));
 
 /** Effort-like option: named effort/reasoning, or `thinking` with level choices. */
 export const effortOptionForModel = (
   model: Model | undefined,
 ): ModelOption | undefined => {
   const options = model?.options ?? [];
-  const named = options.find(o =>
-    (EFFORT_OPTION_IDS as readonly string[]).includes(o.id),
+  const named = options.find(
+    o => EFFORT_OPTION_NORMS.has(normCatalogId(o.id)) && o.choices.length >= 2,
   );
-  if (named !== undefined && named.choices.length >= 2) return named;
-  const thinking = options.find(o => o.id === 'thinking');
+  if (named !== undefined) return named;
+  const thinking = options.find(o => normCatalogId(o.id) === 'thinking');
   if (thinking === undefined) return undefined;
   const levelChoices = thinking.choices.filter(c => isLevelChoice(c.id));
   if (levelChoices.length >= 2) return thinking;
@@ -190,6 +217,48 @@ const orderedEfforts = (variants: readonly ParsedModelVariant[]): string[] => {
   return EFFORT_SUFFIX_ORDER.filter(e => present.has(e));
 };
 
+type LabelLevel = (typeof LABEL_LEVEL_MATCH)[number];
+
+/** `Gemini 3.1 Pro (High)` → base + level. Parenthetical, not a bare suffix. */
+const labelEffort = (
+  label: string,
+): { base: string; level: LabelLevel } | undefined => {
+  const trimmed = label.trim();
+  const lower = trimmed.toLowerCase();
+  for (const level of LABEL_LEVEL_MATCH) {
+    const suffix = ` (${level})`;
+    if (!lower.endsWith(suffix)) continue;
+    const base = trimmed.slice(0, trimmed.length - suffix.length).trim();
+    if (base === '') return undefined;
+    return { base, level };
+  }
+  return undefined;
+};
+
+/** Variants grouped by display name when the host ids do not share a family. */
+const labelVariantEffort = (
+  model: Model,
+  catalog: readonly Model[],
+):
+  | { levels: string[]; variantIds: Record<string, string>; value: string }
+  | undefined => {
+  const current = labelEffort(model.label);
+  if (current === undefined) return undefined;
+  const ids: Record<string, string> = {};
+  const base = current.base.toLowerCase();
+  for (const sibling of catalog) {
+    const other = labelEffort(sibling.label);
+    if (other === undefined || other.base.toLowerCase() !== base) continue;
+    if (ids[other.level] === undefined) ids[other.level] = sibling.id;
+  }
+  const levels = LEVEL_ORDER.filter(level => ids[level] !== undefined);
+  if (levels.length < 2) return undefined;
+  const variantIds: Record<string, string> = {};
+  for (const level of levels) variantIds[level] = ids[level];
+  const value = levels.includes(current.level) ? current.level : levels[0];
+  return { levels, variantIds, value };
+};
+
 const resolveFast = (
   model: Model,
   catalog: readonly Model[],
@@ -217,16 +286,32 @@ const resolveFast = (
   };
 };
 
+const resolveContext = (
+  model: Model,
+  config: TraitConfig | undefined,
+): ContextTrait | undefined => {
+  const option = contextOptionForModel(model);
+  if (option === undefined) return undefined;
+  return { option, choice: optionValue(option, config?.modelOptions) };
+};
+
+const withContext = (
+  traits: ModelTraits,
+  context: ContextTrait | undefined,
+): ModelTraits => {
+  if (context !== undefined) traits.context = context;
+  return traits;
+};
+
 export const resolveModelTraits = (
   model: Model | undefined,
   catalog: readonly Model[],
   harnessLevels: readonly string[] | undefined,
   config?: TraitConfig,
 ): ModelTraits => {
-  if (model === undefined) return {};
-  const fast = resolveFast(model, catalog, config);
-  const levels = effortLevelsForModel(model, harnessLevels);
-  if (levels.length > 0) {
+  if (model === undefined) {
+    const levels = [...(harnessLevels ?? [])];
+    if (levels.length === 0) return {};
     return {
       effort: {
         kind: 'reasoning',
@@ -237,41 +322,82 @@ export const resolveModelTraits = (
           config?.reasoning,
         ),
       },
-      fast,
     };
+  }
+  const fast = resolveFast(model, catalog, config);
+  const context = resolveContext(model, config);
+  const levels = effortLevelsForModel(model, harnessLevels);
+  if (levels.length > 0) {
+    return withContext(
+      {
+        effort: {
+          kind: 'reasoning',
+          levels,
+          value: rememberedReasoning(
+            { reasoning: config?.reasoning },
+            levels,
+            config?.reasoning,
+          ),
+        },
+        fast,
+      },
+      context,
+    );
   }
   const option = effortOptionForModel(model);
   if (option !== undefined) {
     const optionLevelsList = optionLevels(option);
-    return {
-      effort: {
-        kind: 'option',
-        levels: optionLevelsList,
-        value: optionValue(option, config?.modelOptions),
-        optionId: option.id,
+    return withContext(
+      {
+        effort: {
+          kind: 'option',
+          levels: optionLevelsList,
+          value: optionValue(option, config?.modelOptions),
+          optionId: option.id,
+        },
+        fast,
       },
-      fast,
-    };
+      context,
+    );
   }
+  const labeled = labelVariantEffort(model, catalog);
   const parsed = parseModelVariant(model.id);
+  if (labeled !== undefined) {
+    return withContext(
+      {
+        effort: {
+          kind: 'variant',
+          levels: labeled.levels,
+          value: labeled.value,
+          variantIds: labeled.variantIds,
+        },
+        fast,
+        family: parsed.family,
+      },
+      context,
+    );
+  }
   const variants = familyModels(catalog, parsed.family);
   const variantLevels = orderedEfforts(variants);
   if (variantLevels.length < 2) {
-    return { fast, family: parsed.family };
+    return withContext({ fast, family: parsed.family }, context);
   }
   const value =
     parsed.effort !== undefined && variantLevels.includes(parsed.effort)
       ? parsed.effort
       : variantLevels[0];
-  return {
-    effort: {
-      kind: 'variant',
-      levels: variantLevels,
-      value,
+  return withContext(
+    {
+      effort: {
+        kind: 'variant',
+        levels: variantLevels,
+        value,
+      },
+      fast,
+      family: parsed.family,
     },
-    fast,
-    family: parsed.family,
-  };
+    context,
+  );
 };
 
 const passThrough = (current: TraitConfig): TraitPatch => ({
@@ -305,6 +431,14 @@ export const applyEffortLevel = (
         ...(current.modelOptions ?? {}),
         [effort.optionId]: level,
       },
+    };
+  }
+  const mapped = effort.variantIds?.[level];
+  if (mapped !== undefined) {
+    return {
+      model: mapped,
+      reasoning: current.reasoning,
+      modelOptions: current.modelOptions ?? {},
     };
   }
   const family = traits.family ?? parseModelVariant(current.model ?? '').family;
@@ -344,6 +478,28 @@ export const selectionForModel = (
     reasoning:
       traits.effort?.kind === 'reasoning' ? traits.effort.value : undefined,
     modelOptions,
+  };
+};
+
+export const applyContextChoice = (
+  traits: ModelTraits,
+  choiceId: string,
+  current: TraitConfig,
+): TraitPatch => {
+  const context = traits.context;
+  if (
+    context === undefined ||
+    !context.option.choices.some(c => c.id === choiceId)
+  ) {
+    return passThrough(current);
+  }
+  return {
+    model: current.model,
+    reasoning: current.reasoning,
+    modelOptions: {
+      ...(current.modelOptions ?? {}),
+      [context.option.id]: choiceId,
+    },
   };
 };
 

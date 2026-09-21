@@ -31,6 +31,7 @@ import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import { capitalizeLevel } from './effortSliderMath';
 import {
+  applyContextChoice,
   applyEffortLevel,
   applyFastChoice,
   resolveModelTraits,
@@ -272,6 +273,8 @@ export function ComposeComposer({
   const effortLevels = traits.effort?.levels ?? [];
   const fastOption = traits.fast?.option;
   const fastEnabled = traits.fast?.enabled ?? false;
+  const contextOption = traits.context?.option;
+  const contextChoice = traits.context?.choice;
   const modelLabel =
     currentModel?.label ?? (model === '' ? t('picker.default') : model);
   const effortLabel = capitalizeLevel(
@@ -526,6 +529,9 @@ export function ComposeComposer({
         fastOption={fastOption}
         fastEnabled={fastEnabled}
         fastChoice={traits.fast?.choice}
+        contextSupported={traits.context !== undefined}
+        contextOption={contextOption}
+        contextChoice={contextChoice}
         effortOpen={effortOpen}
         onOpenEffort={origin => {
           Keyboard.dismiss();
@@ -547,6 +553,27 @@ export function ComposeComposer({
             { model, reasoning, modelOptions },
             harnessModels,
           );
+          if (patch.model !== undefined) setModel(patch.model);
+          setReasoning(patch.reasoning);
+          setModelOptions(patch.modelOptions);
+          persist({
+            ...(patch.model !== undefined ? { model: patch.model } : {}),
+            reasoning: patch.reasoning,
+            modelOptions: patch.modelOptions,
+          });
+          const nextModel = patch.model ?? model;
+          if (harness !== '' && nextModel !== '')
+            rememberModelSettings(harness, nextModel, {
+              reasoning: patch.reasoning,
+              modelOptions: patch.modelOptions,
+            });
+        }}
+        onSelectContext={choice => {
+          const patch = applyContextChoice(traits, choice, {
+            model,
+            reasoning,
+            modelOptions,
+          });
           if (patch.model !== undefined) setModel(patch.model);
           setReasoning(patch.reasoning);
           setModelOptions(patch.modelOptions);

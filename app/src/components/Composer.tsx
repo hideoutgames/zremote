@@ -3,7 +3,7 @@
 //   upper tier: attachment strip + always-mounted TextInput (QuestionPanel
 //     renders above the lower tier inside the same glass, de-emphasizing —
 //     never unmounting — the input),
-//   action row: [+] · live Queue/Steer · Plan · model · effort · fast · context · voice · send.
+//   action row: [+] · live Queue/Steer · Plan · model · effort · fast · context window · usage · voice · send.
 // Host / repo / origin live on the thread Details sheet for existing sessions.
 // All decisions route through composerAction/liveAction + the draftStore;
 // attachment sends go through onSendAttachments (queued `pending://` flow or
@@ -39,6 +39,7 @@ import { CheckoutChips, type CheckoutChipsProps } from './CheckoutSelector';
 import { Glass } from './Glass';
 import { Icon } from './Icon';
 import { ModelMenuButton } from './ModelMenuButton';
+import { ContextWindowButton } from './ContextWindowButton';
 import { FastMenuButton } from './FastMenuButton';
 import { ComposerMenuChip } from './ComposerMenuChip';
 import { PlanBadge } from './PlanBadge';
@@ -161,9 +162,13 @@ export interface ComposerProps {
   fastEnabled: boolean;
   fastOption?: ModelOption;
   fastChoice?: string;
+  contextSupported?: boolean;
+  contextOption?: ModelOption;
+  contextChoice?: string;
   effortOpen?: boolean;
   onOpenEffort: (origin?: EffortOrigin) => void;
   onSelectFast: (choiceId: string) => void;
+  onSelectContext?: (choiceId: string) => void;
   onFocusChange?: (focused: boolean) => void;
   checkout?: CheckoutChipsProps;
   dictation: DictationPort;
@@ -206,9 +211,13 @@ export const Composer = React.memo(function ({
   fastEnabled,
   fastOption,
   fastChoice,
+  contextSupported = false,
+  contextOption,
+  contextChoice,
   effortOpen = false,
   onOpenEffort,
   onSelectFast,
+  onSelectContext,
   onFocusChange,
   checkout,
   dictation,
@@ -843,6 +852,13 @@ export const Composer = React.memo(function ({
                         option={fastOption}
                         value={fastChoice}
                         onSelect={onSelectFast}
+                      />
+                    ) : null}
+                    {contextSupported && contextOption !== undefined ? (
+                      <ContextWindowButton
+                        option={contextOption}
+                        value={contextChoice}
+                        onSelect={onSelectContext ?? (() => {})}
                       />
                     ) : null}
                     <View style={styles.chipSpacer} />

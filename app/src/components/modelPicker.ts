@@ -6,6 +6,10 @@ import type { ChatConfig, Model } from '../zeron/protocol/types';
 export const modelRowKey = (harness: string, modelId: string): string =>
   `${harness}:${modelId}`;
 
+/** Host `norm_id`: alphanumeric, lowercased (`fastMode` == `fast-mode`). */
+export const normCatalogId = (id: string): string =>
+  id.replace(/[^0-9A-Za-z]/g, '').toLowerCase();
+
 /** Last-used effort / Fast for one catalog model (persisted in uiPrefs). */
 export interface ModelSettings {
   reasoning?: string;
