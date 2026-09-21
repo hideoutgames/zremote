@@ -283,6 +283,7 @@ const en = {
   'settings.syncModeHint':
     'Stream transcripts over the host relay instead of syncing session documents. Applies on next sign-in or restart.',
   'settings.updateApply': 'Apply',
+  'settings.updateApplying': 'Updating…',
   'settings.updateApplyConfirm':
     'Download and apply the update on this host? The Zeron service restarts.',
   'settings.agentAccounts': 'Agent Accounts',
