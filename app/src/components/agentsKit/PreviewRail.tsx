@@ -124,10 +124,39 @@ export function PreviewRail({
   onItemSelectRef.current = onItemSelect;
   const trackRef = useRef<View>(null);
   const railPageYRef = useRef<number | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  // The preview card exists to label the landing spot mid-scrub — a brief
+  // linger after release, then it clears. Any other action (transcript
+  // scroll via dismissKey, or simply waiting) leaves a clean screen.
+  const schedulePreviewDismiss = useCallback(() => {
+    if (dismissTimerRef.current !== undefined) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    dismissTimerRef.current = setTimeout(() => {
+      dismissTimerRef.current = undefined;
+      setPinnedId(null);
+    }, 700);
+  }, []);
 
   useEffect(() => {
     setPinnedId(null);
+    if (dismissTimerRef.current !== undefined) {
+      clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = undefined;
+    }
   }, [dismissKey]);
+
+  useEffect(
+    () => () => {
+      if (dismissTimerRef.current !== undefined) {
+        clearTimeout(dismissTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const syncRailOrigin = useCallback(() => {
     trackRef.current?.measureInWindow?.((_x, y) => {
@@ -139,6 +168,10 @@ export function PreviewRail({
 
   const applyTouch = useCallback(
     (e: GestureResponderEvent, kind: 'grant' | 'move') => {
+      if (dismissTimerRef.current !== undefined) {
+        clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = undefined;
+      }
       const y = yFromEvent(e, railPageYRef.current);
       const count = itemsRef.current.length;
       const index = railIndexAtY(
@@ -227,6 +260,8 @@ export function PreviewRail({
         onResponderMove={e => {
           applyTouch(e, 'move');
         }}
+        onResponderRelease={schedulePreviewDismiss}
+        onResponderTerminate={schedulePreviewDismiss}
       >
         <View
           pointerEvents="none"
@@ -238,6 +273,7 @@ export function PreviewRail({
                 ? Number.POSITIVE_INFINITY
                 : Math.abs(index - highlightedIndex);
             const highlighted = item.id === highlightedId;
+            const color = highlighted ? theme.text : theme.textSecondary;
             return (
               <Pressable
                 key={item.id}
@@ -249,11 +285,24 @@ export function PreviewRail({
                 accessibilityState={{ selected: item.id === selectedId }}
                 style={[styles.item, { height: itemSize }]}
               >
-                <RailTick
-                  scale={tickScale(distance)}
-                  color={highlighted ? theme.text : theme.textSecondary}
-                  reduceMotion={reduceMotion === true}
-                />
+                {distance <= 2 ? (
+                  <RailTick
+                    scale={tickScale(distance)}
+                    color={color}
+                    reduceMotion={reduceMotion === true}
+                  />
+                ) : (
+                  // tickScale(>=3) is constant 0.25 — a plain view avoids
+                  // mounting a Reanimated node for every rail item.
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.tick,
+                      { backgroundColor: color },
+                      { transform: [{ scaleX: 0.25 }] },
+                    ]}
+                  />
+                )}
               </Pressable>
             );
           })}

@@ -25,6 +25,7 @@ import {
   useKeyboardState,
 } from 'react-native-keyboard-controller';
 import { useReducedMotion, useSharedValue } from 'react-native-reanimated';
+import { createStore, useStore, type StoreApi } from 'zustand';
 import type { MessageEntry } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
@@ -145,8 +146,11 @@ export const SessionTranscriptList = forwardRef<
   const [listHeight, setListHeight] = useState(0);
   const [listWidth, setListWidth] = useState(0);
   const [composerInset, setComposerInset] = useState(seedComposerInset);
-  const [viewableIds, setViewableIds] = useState<string[]>([]);
-  const [scrollMetrics, setScrollMetrics] = useState({
+  // Rail highlight lives outside React state: scroll picks a new id almost
+  // every frame, and the rail is the only consumer — a per-instance store
+  // lets PreviewRail re-render alone instead of the whole transcript.
+  const railIdStore = useRef(createStore<{ id: string }>(() => ({ id: '' })));
+  const scrollMetricsRef = useRef({
     offset: 0,
     viewportHeight: 0,
     contentHeight: 0,
@@ -167,8 +171,9 @@ export const SessionTranscriptList = forwardRef<
   const railJumpRafRef = useRef<number | null>(null);
   const viewableIdsRef = useRef<string[]>([]);
   const atEndRef = useRef(false);
-  const extraContentPadding = useSharedValue(seedComposerInset());
-  const composerInsetRef = useRef(extraContentPadding.value);
+  const [initialInset] = useState(seedComposerInset);
+  const extraContentPadding = useSharedValue(initialInset);
+  const composerInsetRef = useRef(initialInset);
   const lastDistanceRef = useRef(0);
   const scrollToEndRef = useRef<
     (opts: { animated: boolean; closeKeyboard: boolean }) => Promise<void>
@@ -217,20 +222,34 @@ export const SessionTranscriptList = forwardRef<
     [entries],
   );
   const itemIds = useMemo(() => railItems.map(item => item.id), [railItems]);
+  const itemIdsRef = useRef(itemIds);
+  itemIdsRef.current = itemIds;
+
+  // The rail highlight is the only render consumer of per-frame scroll data;
+  // keep metrics in refs and re-render only when the picked id changes.
+  const recomputeRailId = useCallback(() => {
+    const m = scrollMetricsRef.current;
+    const ids = itemIdsRef.current;
+    const next = followingRef.current
+      ? ids[ids.length - 1] ?? ''
+      : pickActiveRailId({
+          itemIds: ids,
+          offset: m.offset,
+          viewportHeight: m.viewportHeight || listHeightRef.current,
+          contentHeight: m.contentHeight || contentHeightRef.current,
+          viewableIds: viewableIdsRef.current,
+        });
+    railIdStore.current.setState({ id: next });
+  }, []);
+
+  useEffect(() => {
+    recomputeRailId();
+  }, [itemIds, following, recomputeRailId]);
 
   const overflowing = contentHeight > listHeight + 1 && entries.length > 1;
   const railTop = insetsTop + 96;
   const railHeight = Math.max(0, listHeight - railTop - composerInset);
   const railRight = RAIL_RIGHT;
-  const activeRailId = following
-    ? itemIds[itemIds.length - 1] ?? ''
-    : pickActiveRailId({
-        itemIds,
-        offset: scrollMetrics.offset,
-        viewportHeight: scrollMetrics.viewportHeight || listHeight,
-        contentHeight: scrollMetrics.contentHeight || contentHeight,
-        viewableIds,
-      });
 
   const publishMeasuredInset = useCallback(
     (height: number) => {
@@ -375,7 +394,7 @@ export const SessionTranscriptList = forwardRef<
         ids.length === prev.length && ids.every((id, i) => id === prev[i]);
       if (same) return;
       viewableIdsRef.current = ids;
-      setViewableIds(ids);
+      recomputeRailId();
     },
   ).current;
 
@@ -390,11 +409,12 @@ export const SessionTranscriptList = forwardRef<
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } =
         event.nativeEvent;
-      setScrollMetrics({
+      scrollMetricsRef.current = {
         offset: contentOffset.y,
         viewportHeight: layoutMeasurement.height,
         contentHeight: contentSize.height,
-      });
+      };
+      recomputeRailId();
       const distance = listEndDistance(
         contentSize.height,
         contentOffset.y,
@@ -403,7 +423,7 @@ export const SessionTranscriptList = forwardRef<
       lastDistanceRef.current = distance;
       applyEndVisible(isTranscriptAtEnd(distance, composerInsetRef.current));
     },
-    [applyEndVisible],
+    [applyEndVisible, recomputeRailId],
   );
 
   const updateBlankSpace = useCallback(
@@ -655,10 +675,10 @@ export const SessionTranscriptList = forwardRef<
         />
       </ContentEdgeMask>
       {overflowing && railItems.length > 1 && railHeight > 0 ? (
-        <PreviewRail
+        <RailHighlight
+          store={railIdStore.current}
           items={railItems}
           label={t('session.messageNavigation')}
-          activeId={activeRailId}
           onItemSelect={scrollToRailItem}
           top={railTop}
           bottom={composerInset}
@@ -669,6 +689,18 @@ export const SessionTranscriptList = forwardRef<
       ) : null}
     </View>
   );
+});
+
+/** Subscribes to the rail's active id so scroll updates re-render only the
+ *  rail, never the transcript list. */
+const RailHighlight = React.memo(function RailHighlightInner({
+  store,
+  ...props
+}: Omit<React.ComponentProps<typeof PreviewRail>, 'activeId'> & {
+  store: StoreApi<{ id: string }>;
+}) {
+  const activeId = useStore(store, s => s.id);
+  return <PreviewRail {...props} activeId={activeId} />;
 });
 
 const styles = StyleSheet.create({
