@@ -4,6 +4,7 @@ import {
   DITHER_BAYER,
   DITHER_SKSL,
   HALFTONE_SKSL,
+  SCANLINES_SKSL,
   asciiDensityIndex,
   asciiInk,
   ditherBayerAt,
@@ -39,6 +40,9 @@ test('ASCII SKSL embeds every glyph row mask', () => {
   }
   expect(ASCII_SKSL).toContain('floor(sqrt(max(luma, 0.0)) * 9.0)');
   expect(ASCII_SKSL).not.toContain('* 9.0 + 0.5');
+  expect(ASCII_SKSL).not.toContain('* 0.60');
+  expect(ASCII_SKSL).not.toContain('* 0.40');
+  expect(ASCII_SKSL).toContain('mix(half3(paper), sample.rgb, ink)');
 });
 
 test('ascii density truncates sqrt(luma)*9 and does not round', () => {
@@ -63,21 +67,29 @@ test('ascii ink tests the desktop glyph bits with a 1px gap', () => {
   expect(asciiInk(2, 3, 3)).toBe(true);
 });
 
-test('halftone samples origin luma into the desktop radius and coverage', () => {
-  expect(halftoneRadius(0)).toBeCloseTo(0.6, 5);
-  expect(halftoneRadius(1)).toBeCloseTo(2, 5);
-  const center = halftoneCoverage(1.5, 1.5, 1, 1);
+test('halftone dots scale with an 8-point cell and replace the pixel', () => {
+  expect(halftoneRadius(0)).toBeCloseTo(1.2, 5);
+  expect(halftoneRadius(1)).toBeCloseTo(4, 5);
+  const center = halftoneCoverage(4, 4, 1, 1);
   expect(center).toBe(1);
   const corner = halftoneCoverage(0, 0, 0, 1);
   expect(corner).toBe(0);
-  expect(HALFTONE_SKSL).toContain('image.eval(origin + float2(0.5))');
-  expect(HALFTONE_SKSL).toContain('image.eval(origin + float2(2.5))');
+  expect(HALFTONE_SKSL).toContain('float cell = 8.0;');
+  expect(HALFTONE_SKSL).toContain('mix(half3(paper), sample.rgb, coverage)');
+  expect(HALFTONE_SKSL).not.toContain('* 0.60');
+  expect(HALFTONE_SKSL).not.toContain('* 0.40');
 });
 
-test('treatment mix is 60% source and 40% ink-or-paper', () => {
-  expect(mixTreatment(100, 200, 0, 1)).toBeCloseTo(140, 5);
-  expect(mixTreatment(100, 200, 0, 0)).toBeCloseTo(60, 5);
-  expect(mixTreatment(100, 200, 255, 0)).toBeCloseTo(162, 5);
+test('treatment mix replaces the pixel with ink or paper', () => {
+  expect(mixTreatment(200, 0, 1)).toBeCloseTo(200, 5);
+  expect(mixTreatment(200, 0, 0)).toBeCloseTo(0, 5);
+  expect(mixTreatment(200, 255, 0)).toBeCloseTo(255, 5);
+  expect(mixTreatment(200, 0, 0.5)).toBeCloseTo(100, 5);
+});
+
+test('scanlines darken one of every three rows at gain 0.32', () => {
+  expect(SCANLINES_SKSL).toContain('mod(floor(xy.y), 3.0) < 0.5 ? 0.32 : 1.0');
+  expect(SCANLINES_SKSL).not.toContain('0.52');
 });
 
 test('dither uses the Bayer table with ordered 4-level quantize', () => {
@@ -88,8 +100,9 @@ test('dither uses the Bayer table with ordered 4-level quantize', () => {
     [15, 7, 13, 5],
   ]);
   expect(ditherBayerAt(0, 0)).toBe(0);
-  expect(ditherBayerAt(1, 0)).toBe(8);
-  expect(ditherBayerAt(0, 1)).toBe(12);
+  expect(ditherBayerAt(1, 0)).toBe(0);
+  expect(ditherBayerAt(2, 0)).toBe(8);
+  expect(ditherBayerAt(0, 2)).toBe(12);
   // Mid-tones dither between adjacent levels so gradients keep their tone
   // instead of collapsing into saturated-or-black squares.
   expect(ditherQuantize(0.5, 0)).toBe(0.25);
@@ -97,9 +110,11 @@ test('dither uses the Bayer table with ordered 4-level quantize', () => {
   expect(ditherQuantize(0.9, 0)).toBe(0.75);
   expect(ditherQuantize(0.9, 15)).toBe(1);
   expect(ditherQuantize(0.05, 15)).toBe(0);
+  expect(DITHER_SKSL).toContain('floor(xy / 2.0)');
   expect(DITHER_SKSL).toContain(
     'floor(c.rgb * 4.0 + ((bayer / 16.0) - 0.5)) / 4.0',
   );
+  expect(DITHER_SKSL).not.toContain('step((bayer');
   for (const row of DITHER_BAYER) {
     for (const cell of row) {
       expect(DITHER_SKSL).toContain(`${cell}.0`);

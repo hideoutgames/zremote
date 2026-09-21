@@ -105,7 +105,7 @@ test('effect none keeps the untreated ExpoImage after layout', async () => {
   ).toHaveLength(0);
 });
 
-test('treated effects rasterize offscreen and draw the snapshot cover-fit', async () => {
+test('treated effects rasterize at the view size and draw the snapshot 1:1', async () => {
   uiPrefsStore.setState({ newThreadBackgroundEffect: 'dither' });
   await act(async () => {
     tree = TestRenderer.create(<NewThreadBackground />);
@@ -114,15 +114,16 @@ test('treated effects rasterize offscreen and draw the snapshot cover-fit', asyn
   expect(
     tree!.root.findByProps({ testID: 'new-thread-background-treated' }),
   ).toBeTruthy();
-  // The pattern must be baked at source resolution, then scaled — live
-  // shaders resample the Bayer/halftone thresholds per device pixel and
-  // alias into block artifacts (the cube pattern regression).
+  // Baked at the laid-out view size. A live shader under a fractional
+  // cover-fit resamples the pattern into block artifacts.
   expect(tree!.root.findAllByType(SkiaNS.Shader)).toHaveLength(0);
   expect(tree!.root.findAllByType(SkiaNS.ImageShader)).toHaveLength(0);
   expect(tree!.root.findAllByType(SkiaNS.Image)).toHaveLength(1);
   const image = tree!.root.findByType(SkiaNS.Image);
-  expect(image.props.fit).toBe('cover');
+  expect(image.props.fit).toBe('fill');
   expect(image.props.image).toBe(fakeRasterSnapshot);
+  expect(SkiaNS.Skia.Surface.MakeOffscreen).toHaveBeenCalledWith(390, 844);
+  expect(SkiaNS.Skia.Surface.MakeOffscreen).not.toHaveBeenCalledWith(120, 80);
 });
 
 test('an empty raster falls back to the untreated image', async () => {
