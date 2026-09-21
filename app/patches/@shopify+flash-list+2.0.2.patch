@@ -1,0 +1,24 @@
+diff --git a/node_modules/@shopify/flash-list/dist/recyclerview/hooks/useRecyclerViewController.js b/node_modules/@shopify/flash-list/dist/recyclerview/hooks/useRecyclerViewController.js
+index 3cb76b8..3ee8a51 100644
+--- a/node_modules/@shopify/flash-list/dist/recyclerview/hooks/useRecyclerViewController.js
++++ b/node_modules/@shopify/flash-list/dist/recyclerview/hooks/useRecyclerViewController.js
+@@ -186,7 +186,8 @@ function useRecyclerViewController(recyclerViewManager, ref, scrollViewRef, scro
+                     var scrollTo_1 = horizontal
+                         ? { x: adjustedOffset, y: 0 }
+                         : { x: 0, y: adjustedOffset };
+-                    scrollViewRef.current.scrollTo(tslib_1.__assign(tslib_1.__assign({}, scrollTo_1), { animated: animated }));
++                    var _b2 = scrollViewRef.current;
++                    _b2 === null || _b2 === void 0 ? void 0 : _b2.scrollTo(tslib_1.__assign(tslib_1.__assign({}, scrollTo_1), { animated: animated }));
+                 }
+             },
+             clearLayoutCacheOnUpdate: function () {
+@@ -232,7 +233,8 @@ function useRecyclerViewController(recyclerViewManager, ref, scrollViewRef, scro
+                                 _c.label = 2;
+                             case 2:
+                                 setTimeout(function () {
+-                                    scrollViewRef.current.scrollToEnd({ animated: animated });
++                                    var _a;
++                                    (_a = scrollViewRef.current) === null || _a === void 0 ? void 0 : _a.scrollToEnd({ animated: animated });
+                                 }, 0);
+                                 return [2 /*return*/];
+                         }

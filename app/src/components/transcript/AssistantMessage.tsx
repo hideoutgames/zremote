@@ -5,6 +5,14 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ContextMenu from '../menus/context-menu';
+
+// zeego's iOS Root forwards `style`/`__unsafeIosProps` to the native
+// ContextMenuView at runtime but doesn't declare them in its types.
+const ContextMenuRoot = ContextMenu.Root as React.ComponentType<
+  React.ComponentProps<typeof ContextMenu.Root> & {
+    __unsafeIosProps?: { style?: React.ComponentProps<typeof View>['style'] };
+  }
+>;
 import type {
   MessageEntry,
   MessagePart,
@@ -249,8 +257,8 @@ export const AssistantMessage = React.memo(function ({
     .join('\n');
   return (
     <View testID="assistant-message" style={styles.row}>
-      <ContextMenu.Root>
-        <ContextMenu.Trigger>
+      <ContextMenuRoot __unsafeIosProps={{ style: styles.triggerFill }}>
+        <ContextMenu.Trigger style={styles.triggerFill}>
           <FrostedBubble
             testID="assistant-bubble"
             style={styles.bubble}
@@ -310,7 +318,7 @@ export const AssistantMessage = React.memo(function ({
           </FrostedBubble>
         </ContextMenu.Trigger>
         {messageCopyContent(fullText, entry.createdAt)}
-      </ContextMenu.Root>
+      </ContextMenuRoot>
     </View>
   );
 });
@@ -327,8 +335,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
+  // The trigger view shrink-wraps its child unless told to fill the row —
+  // without this the native markdown view measures at a narrow intrinsic
+  // width and the whole bubble collapses to ~100pt columns.
+  triggerFill: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
   bubble: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
     maxWidth: '100%',
     borderRadius: 20,
   },
