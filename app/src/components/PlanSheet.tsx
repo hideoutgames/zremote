@@ -23,7 +23,19 @@ export function PlanSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const sheet = useRef<TrueSheet>(null);
+  const implementing = useRef(false);
   const mdStyle = markdownStyleFor(theme);
+
+  const implement = () => {
+    if (implementing.current) return;
+    implementing.current = true;
+    onImplement();
+    if (sheet.current) {
+      void sheet.current.dismiss();
+    } else {
+      onDismiss();
+    }
+  };
 
   return (
     <TrueSheet
@@ -66,7 +78,7 @@ export function PlanSheet({
         pointerEvents="box-none"
       >
         <Pressable
-          onPress={onImplement}
+          onPress={implement}
           accessibilityRole="button"
           accessibilityLabel={t('session.implementPlan')}
         >

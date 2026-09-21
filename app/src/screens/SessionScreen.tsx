@@ -931,7 +931,6 @@ export function SessionScreen({
           markdown={planSheet.markdown}
           onDismiss={() => setPlanSheet(null)}
           onImplement={() => {
-            setPlanSheet(null);
             setPlanMode(chatId, false);
             doSend('Implement the plan.');
           }}
