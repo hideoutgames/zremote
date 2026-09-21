@@ -18,9 +18,17 @@ const fakeImage = {
   readPixels: () => new Uint8Array([255, 255, 255, 255]),
 };
 
+const fakeRasterSnapshot = {
+  width: () => 120,
+  height: () => 80,
+  readPixels: () => new Uint8Array([255, 255, 255, 255]),
+};
+
+// GPU-backed offscreen snapshot: must be read back before the Canvas draws it.
 const fakeSnapshot = {
   width: () => 120,
   height: () => 80,
+  makeNonTextureImage: () => fakeRasterSnapshot,
   readPixels: () => new Uint8Array([255, 255, 255, 255]),
 };
 
@@ -114,13 +122,14 @@ test('treated effects rasterize offscreen and draw the snapshot cover-fit', asyn
   expect(tree!.root.findAllByType(SkiaNS.Image)).toHaveLength(1);
   const image = tree!.root.findByType(SkiaNS.Image);
   expect(image.props.fit).toBe('cover');
-  expect(image.props.image).toBe(fakeSnapshot);
+  expect(image.props.image).toBe(fakeRasterSnapshot);
 });
 
 test('an empty raster falls back to the untreated image', async () => {
   jest.spyOn(fakeSurface, 'makeImageSnapshot').mockReturnValue({
     width: () => 120,
     height: () => 80,
+    makeNonTextureImage: () => null,
     readPixels: () => new Uint8Array(256),
   } as never);
   uiPrefsStore.setState({ newThreadBackgroundEffect: 'dither' });

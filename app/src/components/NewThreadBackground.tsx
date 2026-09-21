@@ -88,7 +88,9 @@ const thumbnailImage = (image: SkiaNS.SkImage): SkiaNS.SkImage | null => {
       SkiaNS.MipmapMode.None,
       SkiaNS.Skia.Paint(),
     );
-  return surface.makeImageSnapshot();
+  surface.flush();
+  const snapshot = surface.makeImageSnapshot();
+  return snapshot == null ? null : rasterImage(snapshot);
 };
 
 const BLANK_PROBE = 8;
@@ -140,9 +142,15 @@ const rasterizeBackgroundEffect = (
   surface
     .getCanvas()
     .drawRect(SkiaNS.Skia.XYWHRect(0, 0, width, height), paint);
+  surface.flush();
+  // Offscreen surfaces are GPU-backed on device; the snapshot's texture is
+  // owned by the JS-thread context and draws black from the Canvas render
+  // thread, so hand back a CPU copy that any context can upload.
   const snapshot = surface.makeImageSnapshot();
-  if (snapshot == null || !rasterPaintsContent(snapshot)) return null;
-  return snapshot;
+  if (snapshot == null) return null;
+  const raster = snapshot.makeNonTextureImage() ?? snapshot;
+  if (!rasterPaintsContent(raster)) return null;
+  return raster;
 };
 
 function UntreatedImage({ uri }: { uri: string }) {
