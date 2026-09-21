@@ -52,6 +52,10 @@ e2e for transport/runtime changes · edge `test:unit` for edge changes.
 - **Never log prompts, message text, or secrets.** `zeron/log.ts` is the
   redacting logger; use it.
 - **Never commit** unless explicitly asked; never push to main.
+- **Pull requests go only to `hideoutgames/zremote`.** Never open a pull
+  request against any other repository, including `margelo/ai-chat-demo` and
+  any other upstream. `gh pr create` must use `--repo hideoutgames/zremote`.
+  If a pull request is opened against another repo, close it.
 - **PRs always target `main`.** Feature branches and worktrees are for
   development only. Do not open or merge a PR into another feature /
   Cursor branch. TestFlight and iOS Compile Check are **manual dispatch

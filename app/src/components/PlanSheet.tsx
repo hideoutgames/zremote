@@ -38,8 +38,20 @@ export function PlanSheet({
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const sheet = useRef<TrueSheet>(null);
+  const implementing = useRef(false);
   const mdStyle = markdownStyleFor(theme);
   const cap = Math.max(240, Math.round(windowHeight - insets.top));
+
+  const implement = () => {
+    if (implementing.current) return;
+    implementing.current = true;
+    onImplement();
+    if (sheet.current) {
+      void sheet.current.dismiss();
+    } else {
+      onDismiss();
+    }
+  };
 
   return (
     <TrueSheet
@@ -91,7 +103,7 @@ export function PlanSheet({
           style={[styles.footer, { paddingBottom: insets.bottom + 40 }]}
         >
           <Pressable
-            onPress={onImplement}
+            onPress={implement}
             accessibilityRole="button"
             accessibilityLabel={t('session.implementPlan')}
           >

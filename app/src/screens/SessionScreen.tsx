@@ -1359,7 +1359,6 @@ function ActiveSessionScreen({
           markdown={planSheet.markdown}
           onDismiss={() => setPlanSheet(null)}
           onImplement={() => {
-            setPlanSheet(null);
             setPlanMode(chatId, false);
             const text = applyBuildPrefix(planSheet.name);
             if (controller !== undefined) {
