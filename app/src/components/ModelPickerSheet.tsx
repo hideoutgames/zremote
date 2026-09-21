@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
 import {
-  FULL_ACCESS_SANDBOX,
+  DESKTOP_SANDBOX,
   type Chat,
   type ChatConfig,
   type Model,
@@ -443,7 +443,7 @@ export function ModelPickerSheet({
         modelOptions: config?.modelOptions ?? {},
         ...config,
         ...patch,
-        sandbox: FULL_ACCESS_SANDBOX,
+        sandbox: DESKTOP_SANDBOX,
       };
       if (onApplyConfig !== undefined) onApplyConfig(next);
       else if (runtime !== null) setChatConfig(runtime, chat.id, next);

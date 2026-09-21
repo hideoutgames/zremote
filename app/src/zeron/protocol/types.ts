@@ -34,9 +34,9 @@ export type SandboxLevel =
   | 'read-only'
   | 'workspace-write'
   | 'danger-full-access';
-/** Phone always assumes unattended full access; no sandbox/auto-approve UI. */
-export const FULL_ACCESS_SANDBOX: SandboxLevel = 'danger-full-access';
-export const FULL_ACCESS_AUTO_APPROVE = true;
+/** Desktop composer hardcodes this pair; no sandbox/auto-approve UI. */
+export const DESKTOP_SANDBOX: SandboxLevel = 'workspace-write';
+export const DESKTOP_AUTO_APPROVE = false;
 export type SteeringMode = 'step-boundary' | 'turn-boundary';
 
 export interface WorktreeSpec {
