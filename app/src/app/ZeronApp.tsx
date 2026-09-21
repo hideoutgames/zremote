@@ -44,6 +44,9 @@ import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
 import { bindExpoVoiceModelManager } from '../zeron/native/expoVoiceModels';
 import { bindRunFinishedHaptic } from '../notifications/runFinishedHaptic';
 import { bindWorkedDuration } from '../zeron/state/workedDuration';
+import { bindLocalLogs } from '../zeron/diagnostics/bindLocalLogs';
+import { routeRuntimeLog } from '../zeron/diagnostics/localLogs';
+import { accountLogsRoot, expoLocalLogFs } from '../zeron/native/expoLocalLogs';
 
 const log = createLog();
 
@@ -142,7 +145,10 @@ export function ZeronApp() {
         docDisk: createDocDisk(),
         loro: createLoroDoc,
         readFileBase64,
-        log: line => log.info(line),
+        log: line => {
+          log.info(line);
+          routeRuntimeLog(line);
+        },
       });
       if (cancelled) {
         rt.stop();
@@ -177,6 +183,17 @@ export function ZeronApp() {
     if (runtime === null) return;
     return bindRunFinishedHaptic();
   }, [runtime]);
+
+  // Redacted per-run text files. Off until Settings → Debug → Local Logs.
+  useEffect(() => {
+    if (runtime === null || signedIn === undefined) return;
+    return bindLocalLogs({
+      fs: expoLocalLogFs,
+      logsRoot: accountLogsRoot(signedIn.orgId, signedIn.user.id),
+      sessionMode: runtime.sessionMode,
+      phoneDeviceId: runtime.deviceId,
+    });
+  }, [runtime, signedIn]);
 
   // Freeze working elapsed onto the last assistant bubble after a finish.
   useEffect(() => {

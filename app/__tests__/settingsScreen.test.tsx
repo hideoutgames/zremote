@@ -3,7 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
@@ -19,6 +19,12 @@ import {
   type AppServices,
 } from '../src/app/runtimeContext';
 import type { DeviceRow } from '../src/zeron/protocol/types';
+import {
+  deleteLocalLogs,
+  installLocalLogWriter,
+  LocalLogWriter,
+} from '../src/zeron/diagnostics/localLogs';
+import { memLocalLogFs } from '../src/zeron/testing/memLocalLogFs';
 
 const mockedHaptics = Haptics as jest.Mocked<typeof Haptics>;
 
@@ -95,7 +101,9 @@ beforeEach(() => {
     voiceModelId: null,
     cleanupModelId: null,
     cleanupPromptOverride: null,
+    localLogsEnabled: false,
   });
+  installLocalLogWriter(undefined);
 });
 
 afterEach(() => {
@@ -456,4 +464,78 @@ test('cleanup instructions save, cancel, and restore default', async () => {
     save2.props.onPress();
   });
   expect(uiPrefsStore.getState().cleanupPromptOverride).toBeNull();
+});
+
+const localLogsSwitch = (root: TestRenderer.ReactTestInstance) =>
+  root.findAll(
+    n =>
+      n.props.testID === 'settings-local-logs' &&
+      typeof n.props.onValueChange === 'function',
+  )[0];
+
+test('local logs stay off until enabled, then offer the viewer', async () => {
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const text = allText(mounted.root);
+  expect(text).toContain('Debug');
+  expect(text).toContain('Local Logs');
+  expect(text).not.toContain('View Local Logs');
+  const sw = localLogsSwitch(mounted.root);
+  expect(sw.props.value).toBe(false);
+  await act(async () => {
+    sw.props.onValueChange(true);
+  });
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(true);
+  expect(allText(mounted.root)).toContain('View Local Logs');
+  const row = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-view-local-logs' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    row.props.onPress();
+  });
+  expect(allText(mounted.root)).toContain('No local logs yet');
+});
+
+test('disabling local logs confirms, then deletes the files', async () => {
+  const fs = memLocalLogFs();
+  const writer = new LocalLogWriter({
+    fs,
+    logsRoot: '/logs',
+    enabled: () => true,
+    sessionMode: 'doc',
+  });
+  installLocalLogWriter(writer);
+  await fs.appendText('/logs/c1/2026-09-21T18-17-03.txt', 'run start\n');
+  fs.calls = 0;
+  uiPrefsStore.setState({ localLogsEnabled: true });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const sw = localLogsSwitch(mounted.root);
+  await act(async () => {
+    sw.props.onValueChange(false);
+  });
+  expect(alert).toHaveBeenCalledWith(
+    'Disable Local Logs',
+    'Warning: Disabling logging deletes the local log files.',
+    expect.any(Array),
+  );
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(true);
+  const buttons = alert.mock.calls[0]?.[2] as {
+    text: string;
+    style?: string;
+    onPress?: () => void;
+  }[];
+  expect(buttons.find(b => b.style === 'cancel')?.text).toBe('Cancel');
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(true);
+  const disable = buttons.find(b => b.style === 'destructive');
+  expect(disable?.text).toBe('Disable');
+  await act(async () => {
+    disable?.onPress?.();
+    await deleteLocalLogs();
+  });
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(false);
+  expect(fs.files.size).toBe(0);
+  expect(allText(mounted.root)).not.toContain('View Local Logs');
+  alert.mockRestore();
 });

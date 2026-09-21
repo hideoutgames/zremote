@@ -75,6 +75,8 @@ export interface UiPrefs {
   colorScheme: ColorSchemePreference;
   /** Frost the wallpaper in open sessions (not compose). Off keeps it sharp. */
   sessionBackgroundBlur: boolean;
+  /** Settings → Debug. Off: no local diagnostic files are created. */
+  localLogsEnabled: boolean;
 }
 
 export interface ComposeDefaults {
@@ -109,6 +111,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
   colorScheme: 'system',
   sessionBackgroundBlur: false,
+  localLogsEnabled: false,
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -151,6 +154,10 @@ export const bindUiPrefs = async (
         patch.cleanupPromptOverride,
         s.cleanupPromptOverride,
       ),
+      localLogsEnabled:
+        typeof patch.localLogsEnabled === 'boolean'
+          ? patch.localLogsEnabled
+          : s.localLogsEnabled,
       modelSettingsByKey: {
         ...s.modelSettingsByKey,
         ...(patch.modelSettingsByKey ?? {}),
@@ -244,6 +251,14 @@ export const setHapticsEnabled = (v: boolean): void => {
 
 export const useHapticsEnabled = (): boolean =>
   useStore(uiPrefsStore, s => s.hapticsEnabled);
+
+export const setLocalLogsEnabled = (v: boolean): Promise<void> => {
+  uiPrefsStore.setState({ localLogsEnabled: v });
+  return saveAsync();
+};
+
+export const useLocalLogsEnabled = (): boolean =>
+  useStore(uiPrefsStore, s => s.localLogsEnabled);
 
 export const setDictationLocale = (v: string): void => {
   uiPrefsStore.setState({ dictationLocale: v });
