@@ -4,10 +4,12 @@
 // documented at the function.
 
 import { useStore } from 'zustand';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { effectiveStatus } from '../protocol/entities';
 import type {
   Chat,
+  ContextUsage,
   MessageEntry,
   QueuedMessage,
   SessionCommandEntry,
@@ -15,6 +17,7 @@ import type {
   UserInputQuestion,
 } from '../protocol/types';
 import type { SessionDocMeta } from '../doc/sessionDoc';
+import { draftFor, restoreFailedSend } from './draftStore';
 
 export interface PendingSend {
   messageId: string;
@@ -83,6 +86,67 @@ export const removeSessionStore = (chatId: string): void => {
 
 export const resetSessionStores = (): void => {
   stores.clear();
+};
+
+export const recordFailedSend = (chatId: string, failed: FailedSend): void => {
+  getSessionStore(chatId).setState(s => ({
+    pendingSends: s.pendingSends.filter(p => p.messageId !== failed.messageId),
+    failedSends: s.failedSends.some(f => f.messageId === failed.messageId)
+      ? s.failedSends
+      : [...s.failedSends, failed],
+  }));
+  const cur = draftFor(chatId)?.text ?? '';
+  if (cur.trim() === '') restoreFailedSend(chatId, failed.text);
+};
+
+export const dismissFailedSend = (chatId: string, messageId: string): void => {
+  getSessionStore(chatId).setState(s => ({
+    failedSends: s.failedSends.filter(f => f.messageId !== messageId),
+  }));
+};
+
+/** Reorder the store's queue rows directly — the no-runtime path (test
+ * mode) has no SessionController/Loro doc to write through. */
+export const moveQueuedInStore = (
+  chatId: string,
+  id: string,
+  toIndex: number,
+): boolean => {
+  const store = getSessionStore(chatId);
+  const queue = store.getState().queue;
+  const from = queue.findIndex(q => q.id === id);
+  if (from < 0) return false;
+  const to = Math.min(Math.max(toIndex, 0), queue.length - 1);
+  if (from === to) return false;
+  const next = [...queue];
+  const [row] = next.splice(from, 1);
+  if (row === undefined) return false;
+  next.splice(to, 0, row);
+  store.setState({ queue: next });
+  return true;
+};
+
+/** Append a locally-sent user message — the no-runtime path (test mode) has
+ * no SessionController/doc to write through. */
+export const appendSentMessage = (
+  chatId: string,
+  text: string,
+  deviceId = 'local',
+): void => {
+  const store = getSessionStore(chatId);
+  const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  store.setState(s => ({
+    entries: [
+      ...s.entries,
+      {
+        id,
+        role: 'user',
+        parts: [{ kind: 'text' as const, id: `${id}-p`, text }],
+        createdAt: Date.now(),
+        deviceId,
+      },
+    ],
+  }));
 };
 
 // ── runPhase ───────────────────────────────────────────────────────────
@@ -193,6 +257,35 @@ export const runPhase = (
 
 export const useSessionState = (chatId: string): SessionState =>
   useStore(getSessionStore(chatId));
+
+export const useSessionCommands = (chatId: string): SessionCommandEntry[] =>
+  useStore(getSessionStore(chatId), s => s.commands);
+
+export const useSessionQueueLength = (chatId: string): number =>
+  useStore(getSessionStore(chatId), s => s.queue.length);
+
+export const useContextUsage = (chatId: string): ContextUsage | undefined =>
+  useStore(getSessionStore(chatId), s => s.meta.contextUsage);
+
+const sameOpenInput = (
+  a: OpenInputRequest | undefined,
+  b: OpenInputRequest | undefined,
+): boolean =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.entryId === b.entryId &&
+    a.requestId === b.requestId &&
+    a.questions === b.questions);
+
+export const useOpenInputRequest = (
+  chatId: string,
+): OpenInputRequest | undefined =>
+  useStoreWithEqualityFn<StoreApi<SessionState>, OpenInputRequest | undefined>(
+    getSessionStore(chatId),
+    s => openInputRequest(s.entries),
+    sameOpenInput,
+  );
 
 export const useRunPhase = (
   chatId: string,

@@ -4,8 +4,15 @@
 // fetch throughout.
 
 import { createHash, randomBytes } from 'crypto';
-import { AuthClient } from '../authClient';
-import { AuthSession, DevAuthSession, type AuthState } from '../authSession';
+import { AuthClient, AuthRequestError, authFailureLog } from '../authClient';
+import {
+  AuthSession,
+  DevAuthSession,
+  SECURE_STORE_KEY_RE,
+  authPendingStoreKey,
+  authStoreKey,
+  type AuthState,
+} from '../authSession';
 import {
   buildAuthorizeUrl,
   challengeFor,
@@ -13,8 +20,9 @@ import {
   generateVerifier,
   parseCallbackUrl,
   parsePastedCode,
+  MOBILE_SIGN_IN_STATE_PREFIX,
 } from '../authKit';
-import { MemorySecureStore } from '../secureStore';
+import { MemorySecureStore, type SecureStorePort } from '../secureStore';
 import { FakeClock } from '../../transport/clock';
 import type { FetchImpl } from '../../transport/edgeHttp';
 
@@ -78,7 +86,10 @@ const authFetch = (handler: {
   return { fetchImpl, calls };
 };
 
-const makeSession = (fetchImpl: FetchImpl, store = new MemorySecureStore()) => {
+const makeSession = (
+  fetchImpl: FetchImpl,
+  store: SecureStorePort = new MemorySecureStore(),
+) => {
   const clock = new FakeClock(1_700_000_000_000);
   const client = new AuthClient({ baseUrl: BASE, fetchImpl });
   const session = new AuthSession({
@@ -90,6 +101,34 @@ const makeSession = (fetchImpl: FetchImpl, store = new MemorySecureStore()) => {
   });
   return { session, clock, store };
 };
+
+/** Mirrors expo-secure-store's `/^[\w.-]+$/` key rule. */
+class ValidatingMemoryStore implements SecureStorePort {
+  private readonly inner = new MemorySecureStore();
+
+  private check(key: string): void {
+    if (!SECURE_STORE_KEY_RE.test(key)) {
+      throw new Error(
+        'Invalid key provided to SecureStore. Keys must not be empty and contain only alphanumeric characters, ".", "-", and "_".',
+      );
+    }
+  }
+
+  async get(key: string): Promise<string | undefined> {
+    this.check(key);
+    return this.inner.get(key);
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    this.check(key);
+    return this.inner.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.check(key);
+    return this.inner.delete(key);
+  }
+}
 
 const signedInTokens = (exp = 1_800_000_000, orgId = 'org_1') => ({
   user,
@@ -131,6 +170,16 @@ describe('authKit', () => {
     });
   });
 
+  test('parseCallbackUrl keeps plus signs and skips bad encoding', () => {
+    expect(parseCallbackUrl('zeron://cb?code=ab+cd&state=s')).toEqual({
+      code: 'ab+cd',
+      state: 's',
+    });
+    expect(parseCallbackUrl('zeron://cb?code=%ZZ&state=ok')).toEqual({
+      state: 'ok',
+    });
+  });
+
   test('parsePastedCode splits on the first dot', () => {
     expect(parsePastedCode('st.ate.co.de')).toEqual({
       state: 'st',
@@ -139,6 +188,31 @@ describe('authKit', () => {
     expect(parsePastedCode('noDot')).toBeUndefined();
     expect(parsePastedCode('.onlycode')).toBeUndefined();
     expect(parsePastedCode('onlystate.')).toBeUndefined();
+  });
+
+  test('parsePastedCode keeps the zr1. mobile prefix on state', () => {
+    expect(parsePastedCode('zr1.abc.thecode')).toEqual({
+      state: 'zr1.abc',
+      code: 'thecode',
+    });
+  });
+
+  test('parsePastedCode reads zeron:// and https callback URLs', () => {
+    expect(
+      parsePastedCode('zeron://auth/callback?code=thecode&state=zr1.abc'),
+    ).toEqual({
+      state: 'zr1.abc',
+      code: 'thecode',
+    });
+    expect(
+      parsePastedCode(
+        '  https://edge.test/auth/cli/callback?code=c&state=st  ',
+      ),
+    ).toEqual({ state: 'st', code: 'c' });
+    expect(
+      parsePastedCode('zeron://auth/callback?error=access_denied'),
+    ).toBeUndefined();
+    expect(parsePastedCode('zeron://auth/callback?code=c')).toBeUndefined();
   });
 
   test('RFC 7636 appendix B PKCE vector', async () => {
@@ -173,6 +247,7 @@ describe('AuthSession sign-in', () => {
       pkce: false,
     });
     expect(url).toContain('provider=authkit&state=');
+    expect(state.startsWith(MOBILE_SIGN_IN_STATE_PREFIX)).toBe(true);
     const next = await session.completeSignIn({ code: 'thecode', state });
     expect(next).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
     expect(calls.find(c => c.url.endsWith('/auth/exchange'))?.body).toEqual({
@@ -233,12 +308,162 @@ describe('AuthSession sign-in', () => {
     const next = await session.completePastedCode(`${state}.pastedcode`);
     expect(next.state).toBe('signedIn');
   });
+
+  test('completePastedCode accepts a zeron:// callback URL', async () => {
+    const { fetchImpl } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    const next = await session.completePastedCode(
+      `zeron://auth/callback?code=pastedcode&state=${encodeURIComponent(
+        state,
+      )}`,
+    );
+    expect(next.state).toBe('signedIn');
+  });
+
+  test('failed exchange keeps pending so paste can retry', async () => {
+    let n = 0;
+    const { fetchImpl } = authFetch({
+      exchange: () => {
+        n += 1;
+        return n === 1
+          ? { status: 401, json: { error: 'fail' } }
+          : { json: signedInTokens() };
+      },
+    });
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    await expect(
+      session.completeSignIn({ code: 'c', state }),
+    ).rejects.toThrow();
+    const next = await session.completePastedCode(`${state}.c`);
+    expect(next.state).toBe('signedIn');
+  });
+
+  test('completeSignIn is a no-op once signed in', async () => {
+    const { fetchImpl, calls } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    await session.completeSignIn({ code: 'thecode', state });
+    const next = await session.completeSignIn({
+      code: 'other',
+      state: 'forged',
+    });
+    expect(next).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
+    expect(calls.filter(c => c.url.endsWith('/auth/exchange'))).toHaveLength(1);
+  });
+
+  test('concurrent completeSignIn joins one exchange', async () => {
+    let finish!: (json: unknown) => void;
+    const wait = new Promise<unknown>(resolve => {
+      finish = resolve;
+    });
+    const calls: string[] = [];
+    const fetchImpl: FetchImpl = async url => {
+      if (!url.endsWith('/auth/exchange')) {
+        return {
+          status: 404,
+          headers: { get: () => null },
+          arrayBuffer: async () => new ArrayBuffer(0),
+          text: async () => '{}',
+        };
+      }
+      calls.push('exchange');
+      const json = await wait;
+      return {
+        status: 200,
+        headers: { get: () => null },
+        arrayBuffer: async () => new ArrayBuffer(0),
+        text: async () => JSON.stringify(json),
+      };
+    };
+    const { session } = makeSession(fetchImpl);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    const first = session.completeSignIn({ code: 'thecode', state });
+    const second = session.completeSignIn({ code: 'other', state });
+    await Promise.resolve();
+    finish(signedInTokens());
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toEqual(b);
+    expect(a).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
+    expect(calls).toHaveLength(1);
+  });
+
+  test('exchange missing tokens is invalidResponse not a TypeError', async () => {
+    const { session } = makeSession(
+      authFetch({
+        exchange: () => ({ json: { user } }),
+      }).fetchImpl,
+    );
+    const { state } = await session.beginSignIn({
+      redirectUri: 'zeron://cb',
+      pkce: false,
+    });
+    await expect(
+      session.completeSignIn({ code: 'c', state }),
+    ).rejects.toBeInstanceOf(AuthRequestError);
+  });
+
+  test('authFailureLog reports kind and status, never a body', () => {
+    expect(
+      authFailureLog(
+        new AuthRequestError({
+          kind: 'http',
+          status: 401,
+          body: 'secret-code',
+        }),
+      ),
+    ).toBe('AuthRequestError http 401');
+    expect(
+      authFailureLog(new AuthRequestError({ kind: 'invalidResponse' })),
+    ).toBe('AuthRequestError invalidResponse');
+    expect(authFailureLog(new TypeError('split'))).toBe('TypeError');
+  });
+
+  test('PKCE beginSignIn adds S256 challenge and exchanges the verifier', async () => {
+    const { fetchImpl, calls } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const { session } = makeSession(fetchImpl);
+    const sha256 = async (b: Uint8Array) =>
+      new Uint8Array(createHash('sha256').update(b).digest());
+    const { url, state } = await session.beginSignIn({
+      redirectUri: 'https://edge.test/auth/cli/callback',
+      pkce: true,
+      random: n => new Uint8Array(randomBytes(n)),
+      sha256,
+    });
+    expect(url).toContain('code_challenge=');
+    expect(url).toContain('code_challenge_method=S256');
+    expect(url).not.toContain('code_challenge_method=S256&code_challenge=');
+    const next = await session.completeSignIn({ code: 'thecode', state });
+    expect(next.state).toBe('signedIn');
+    const body = calls.find(c => c.url.endsWith('/auth/exchange'))?.body;
+    expect(body?.code).toBe('thecode');
+    expect(body?.codeVerifier).toMatch(/^[A-Za-z0-9\-._~]{64}$/);
+  });
 });
 
 describe('AuthSession token lifecycle', () => {
   const seedStore = (store: MemorySecureStore, accessToken: string) =>
     store.set(
-      `zeron.auth.${BASE}`,
+      authStoreKey(BASE),
       JSON.stringify({
         user,
         accessToken,
@@ -310,7 +535,7 @@ describe('AuthSession token lifecycle', () => {
     await expect(session.currentToken()).resolves.toBeUndefined();
     expect(session.state.state).toBe('signedOut');
     expect(states).toContain('signedOut');
-    await expect(store.get(`zeron.auth.${BASE}`)).resolves.toBeUndefined();
+    await expect(store.get(authStoreKey(BASE))).resolves.toBeUndefined();
   });
 
   test('refresh network failure → state kept, undefined token, retry scheduled', async () => {
@@ -335,6 +560,63 @@ describe('AuthSession token lifecycle', () => {
     await Promise.resolve();
     expect(calls).toBe(2);
     await expect(session.currentToken()).resolves.toContain('.');
+  });
+});
+
+describe('AuthSession Keychain keys', () => {
+  test('sanitized store keys match expo-secure-store rules', () => {
+    expect(authStoreKey(BASE)).toMatch(SECURE_STORE_KEY_RE);
+    expect(authPendingStoreKey(BASE)).toMatch(SECURE_STORE_KEY_RE);
+    expect(authStoreKey(BASE)).not.toMatch(/[:/]/);
+    expect(authStoreKey(BASE)).toBe('zeron.auth.https___edge.test');
+    expect(authPendingStoreKey(BASE)).toBe(
+      'zeron.auth.pending.https___edge.test',
+    );
+  });
+
+  test('persist round-trips through a store that enforces the key rule', async () => {
+    const { fetchImpl } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const store = new ValidatingMemoryStore();
+    const { session } = makeSession(fetchImpl, store);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'https://edge.test/auth/cli/callback',
+      pkce: false,
+    });
+    await session.completeSignIn({ code: 'thecode', state });
+    const raw = await store.get(authStoreKey(BASE));
+    expect(raw).toBeDefined();
+    const next = makeSession(authFetch({}).fetchImpl, store).session;
+    await next.restore();
+    expect(next.state).toEqual({ state: 'signedIn', user, orgId: 'org_1' });
+  });
+
+  test('pending PKCE survives restore then completeSignIn', async () => {
+    const { fetchImpl, calls } = authFetch({
+      exchange: () => ({ json: signedInTokens() }),
+    });
+    const store = new ValidatingMemoryStore();
+    const sha256 = async (b: Uint8Array) =>
+      new Uint8Array(createHash('sha256').update(b).digest());
+    const { session } = makeSession(fetchImpl, store);
+    const { state } = await session.beginSignIn({
+      redirectUri: 'https://edge.test/auth/cli/callback',
+      pkce: true,
+      random: n => new Uint8Array(randomBytes(n)),
+      sha256,
+    });
+    const pendingRaw = await store.get(authPendingStoreKey(BASE));
+    expect(pendingRaw).toBeDefined();
+
+    const { session: resumed } = makeSession(fetchImpl, store);
+    await resumed.restore();
+    const next = await resumed.completeSignIn({ code: 'thecode', state });
+    expect(next.state).toBe('signedIn');
+    const body = calls.find(c => c.url.endsWith('/auth/exchange'))?.body;
+    expect(body?.code).toBe('thecode');
+    expect(body?.codeVerifier).toMatch(/^[A-Za-z0-9\-._~]{64}$/);
+    await expect(store.get(authPendingStoreKey(BASE))).resolves.toBeUndefined();
   });
 });
 

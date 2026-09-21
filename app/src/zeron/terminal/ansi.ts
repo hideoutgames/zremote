@@ -46,8 +46,8 @@ const SGR_FG_BRIGHT = 90;
 const SGR_BG_BRIGHT = 100;
 
 export class AnsiScreen {
-  readonly cols: number;
-  readonly rows: number;
+  cols: number;
+  rows: number;
   grid: Cell[][];
   scrollback: Cell[][] = [];
   x = 0;
@@ -63,6 +63,34 @@ export class AnsiScreen {
     this.cols = cols;
     this.rows = rows;
     this.grid = Array.from({ length: rows }, () => emptyRow(cols));
+  }
+
+  /** Grow or shrink the visible grid to match a PTY resize. Extra rows
+   *  go into scrollback; extra columns are padded with blank cells. */
+  resize(cols: number, rows: number): void {
+    const nextCols = Math.max(1, cols);
+    const nextRows = Math.max(1, rows);
+    if (nextCols === this.cols && nextRows === this.rows) return;
+    const fit = (row: Cell[]): Cell[] => {
+      if (row.length === nextCols) return row;
+      if (row.length > nextCols) return row.slice(0, nextCols);
+      return [...row, ...emptyRow(nextCols - row.length)];
+    };
+    this.grid = this.grid.map(fit);
+    this.scrollback = this.scrollback.map(fit);
+    if (this.grid.length > nextRows) {
+      const overflow = this.grid.splice(0, this.grid.length - nextRows);
+      this.scrollback.push(...overflow);
+      if (this.scrollback.length > SCROLLBACK_MAX) {
+        this.scrollback.splice(0, this.scrollback.length - SCROLLBACK_MAX);
+      }
+    } else {
+      while (this.grid.length < nextRows) this.grid.push(emptyRow(nextCols));
+    }
+    this.cols = nextCols;
+    this.rows = nextRows;
+    this.x = clamp(this.x, 0, nextCols - 1);
+    this.y = clamp(this.y, 0, nextRows - 1);
   }
 
   snapshot(): ScreenState {

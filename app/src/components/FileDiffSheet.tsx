@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { Icon } from './Icon';
+import { Glass } from './Glass';
 import { FileDiff } from './agentsKit/FileDiff';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -130,14 +131,25 @@ export function FileDiffSheet({
           accessibilityRole="button"
           accessibilityLabel={t('session.back')}
         >
-          <View style={[styles.closeButton, { borderColor: theme.border }]}>
+          <Glass style={styles.close}>
             <Icon name="xmark" size={15} color={theme.text} />
-          </View>
+          </Glass>
         </Pressable>
         <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
           {leaf(request.path)}
         </Text>
-        <View style={styles.closeButton} />
+        <View style={styles.stats}>
+          {request.additions > 0 ? (
+            <Text style={{ color: theme.diffAddText }}>
+              {`+${request.additions}`}
+            </Text>
+          ) : null}
+          {request.deletions > 0 ? (
+            <Text style={{ color: theme.diffDelText }}>
+              {`-${request.deletions}`}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         {files === 'loading' ? (
@@ -158,8 +170,6 @@ export function FileDiffSheet({
   );
 }
 
-const CLOSE = 32;
-
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -169,15 +179,21 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
   },
-  closeButton: {
-    width: CLOSE,
-    height: CLOSE,
-    borderRadius: CLOSE / 2,
-    borderWidth: StyleSheet.hairlineWidth,
+  close: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  title: { flex: 1, fontSize: 17, fontWeight: '600', textAlign: 'center' },
+  title: { flex: 1, fontSize: 17, fontWeight: '600' },
+  stats: {
+    flexDirection: 'row',
+    gap: 6,
+    minWidth: 32,
+    justifyContent: 'flex-end',
+  },
   center: { marginTop: 40 },
   empty: { padding: 20, fontSize: 15, textAlign: 'center' },
 });

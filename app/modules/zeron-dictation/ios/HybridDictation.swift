@@ -112,30 +112,52 @@ class HybridDictation: HybridDictationSpec {
       self.recognizer = rec
 
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.record, mode: .measurement,
-                              options: [.duckOthers])
-      try session.setActive(true, options: .notifyOthersOnDeactivation)
+      do {
+        try session.setCategory(.record, mode: .measurement,
+                                options: [.duckOthers])
+        // Recording otherwise mutes UIFeedbackGenerator / Core Haptics.
+        try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-      let req = SFSpeechAudioBufferRecognitionRequest()
-      req.requiresOnDeviceRecognition = true   // never server recognition
-      req.shouldReportPartialResults = true
-      self.request = req
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.requiresOnDeviceRecognition = true   // never server recognition
+        req.shouldReportPartialResults = true
+        self.request = req
 
-      self.task = rec.recognitionTask(with: req) { result, error in
-        if let result {
-          let text = result.bestTranscription.formattedString
-          if result.isFinal { onFinal(text) } else { onPartial(text) }
+        self.task = rec.recognitionTask(with: req) { result, error in
+          if let result {
+            let text = result.bestTranscription.formattedString
+            if result.isFinal { onFinal(text) } else { onPartial(text) }
+          }
+          if let error { onError(error.localizedDescription) }
         }
-        if let error { onError(error.localizedDescription) }
-      }
 
-      let input = self.engine.inputNode
-      input.installTap(onBus: 0, bufferSize: 1024,
-                       format: input.outputFormat(forBus: 0)) { buf, _ in
-        req.append(buf)
+        let input = self.engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        // installTap raises an uncatchable NSException for a 0 Hz /
+        // 0-channel format (simulator or hardware without a mic device),
+        // which would crash the whole app — bail before it can.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+          throw NSError(
+            domain: "zeron-dictation", code: 3,
+            userInfo: [NSLocalizedDescriptionKey:
+              "no usable audio input format"])
+        }
+        input.installTap(onBus: 0, bufferSize: 1024,
+                         format: format) { buf, _ in
+          req.append(buf)
+        }
+        try self.engine.start()
+        self.running = true
+      } catch {
+        self.task?.cancel()
+        self.task = nil
+        self.request = nil
+        try? session.setCategory(.ambient, mode: .default)
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        onError(error.localizedDescription)
+        return
       }
-      try self.engine.start()
-      self.running = true
 
       let center = NotificationCenter.default
       self.interruptionObserver = center.addObserver(
@@ -176,7 +198,10 @@ class HybridDictation: HybridDictationSpec {
     if let o = routeObserver {
       NotificationCenter.default.removeObserver(o)
     }
-    try? AVAudioSession.sharedInstance()
-      .setActive(false, options: .notifyOthersOnDeactivation)
+    let session = AVAudioSession.sharedInstance()
+    // Leave .record behind — that category keeps suppressing haptics
+    // after the recognizer stops.
+    try? session.setCategory(.ambient, mode: .default)
+    try? session.setActive(false, options: .notifyOthersOnDeactivation)
   }
 }

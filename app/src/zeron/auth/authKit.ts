@@ -55,25 +55,59 @@ export const parseCallbackUrl = (url: string): CallbackResult => {
     for (const pair of span.split('&')) {
       const eq = pair.indexOf('=');
       if (eq <= 0) continue;
-      const key = decodeURIComponent(pair.slice(0, eq));
-      const value = decodeURIComponent(pair.slice(eq + 1).replace(/\+/g, ' '));
-      if (key === 'code') out.code = value;
-      else if (key === 'state') out.state = value;
-      else if (key === 'error') out.error = value;
+      try {
+        const key = decodeURIComponent(pair.slice(0, eq));
+        // Query strings, not form bodies — do not turn '+' into space.
+        const value = decodeURIComponent(pair.slice(eq + 1));
+        if (key === 'code') out.code = value;
+        else if (key === 'state') out.state = value;
+        else if (key === 'error') out.error = value;
+      } catch {
+        // malformed encoding — skip the pair
+      }
     }
   }
   return out;
 };
 
-/** Parse a pasted `state.code` (the edge's cli/callback page shows one) —
- * split on the FIRST '.', both halves non-empty. */
+/** Prefix so the edge can 302-hop to zeron:// without relying on UA.
+ * iPad desktop-class Safari is often Macintosh without "Mobile". */
+export const MOBILE_SIGN_IN_STATE_PREFIX = 'zr1.';
+
+/** True when the paste is a callback URL rather than `state.code`. */
+const looksLikeCallbackPaste = (text: string): boolean =>
+  text.includes('://') || (text.includes('code=') && text.includes('state='));
+
+/** Parse a pasted `state.code` (the edge Copy-code page) or a callback
+ * URL (`zeron://auth/callback?code&state` / HTTPS cli/callback). Split
+ * `state.code` on the FIRST '.' after an optional mobile prefix; both
+ * halves must be non-empty. */
 export const parsePastedCode = (
   text: string,
 ): { state: string; code: string } | undefined => {
   const trimmed = text.trim();
-  const dot = trimmed.indexOf('.');
-  if (dot <= 0 || dot === trimmed.length - 1) return undefined;
-  return { state: trimmed.slice(0, dot), code: trimmed.slice(dot + 1) };
+  if (looksLikeCallbackPaste(trimmed)) {
+    const link = parseCallbackUrl(trimmed);
+    if (
+      link.error !== undefined ||
+      link.code === undefined ||
+      link.code === '' ||
+      link.state === undefined ||
+      link.state === ''
+    ) {
+      return undefined;
+    }
+    return { state: link.state, code: link.code };
+  }
+  const prefixed = trimmed.startsWith(MOBILE_SIGN_IN_STATE_PREFIX);
+  const prefix = prefixed ? MOBILE_SIGN_IN_STATE_PREFIX : '';
+  const rest = trimmed.slice(prefix.length);
+  const dot = rest.indexOf('.');
+  if (dot <= 0 || dot === rest.length - 1) return undefined;
+  return {
+    state: `${prefix}${rest.slice(0, dot)}`,
+    code: rest.slice(dot + 1),
+  };
 };
 
 // ── PKCE (RFC 7636) — crypto injected (Node tests use `crypto`; the app

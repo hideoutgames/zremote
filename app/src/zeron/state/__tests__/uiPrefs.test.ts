@@ -1,0 +1,344 @@
+import {
+  applyPresetBackground,
+  rememberModelSettings,
+  modelSettingsFor,
+  setComposerExtraHeight,
+  setComposerExtraHeightLive,
+  uiPrefsStore,
+  installNewThreadComposerBackground,
+  removeNewThreadComposerBackground,
+  setColorSchemePreference,
+  setNewThreadBackgroundEffect,
+  setSessionBackgroundBlur,
+  bindUiPrefs,
+  unbindUiPrefs,
+  togglePinnedModel,
+  setVoiceInputMode,
+  setVoiceModelId,
+  setCleanupModelId,
+  setCleanupPromptOverride,
+  setLocalLogsEnabled,
+} from '../uiPrefs';
+import {
+  bindBackgroundFs,
+  unbindBackgroundFs,
+  customBackgroundUri,
+  type BackgroundFs,
+} from '../newThreadBackground';
+import { memDocDisk } from '../../native/memDocDisk';
+
+class MemoryBackgroundFs implements BackgroundFs {
+  files = new Map<string, string>();
+  joinManaged(fileName: string) {
+    return `/docs/new-thread-backgrounds/${fileName}`;
+  }
+  isManagedUri(uri: string) {
+    return uri.includes('/new-thread-backgrounds/');
+  }
+  async copyFile(fromUri: string, destUri: string) {
+    this.files.set(destUri, fromUri);
+  }
+  async deleteFile(uri: string) {
+    this.files.delete(uri);
+  }
+  async fileExists(uri: string) {
+    return this.files.has(uri);
+  }
+}
+
+beforeEach(() => {
+  uiPrefsStore.setState({
+    modelSettingsByKey: {},
+    composerExtraHeight: 0,
+    newThreadComposerBackground: undefined,
+    newThreadBackgroundEffect: 'dither',
+    colorScheme: 'system',
+    pinnedModels: [],
+    sessionBackgroundBlur: false,
+    localLogsEnabled: false,
+  });
+});
+
+afterEach(() => {
+  unbindBackgroundFs();
+  unbindUiPrefs();
+});
+
+test('newThreadBackgroundEffect defaults to dither', () => {
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('rememberModelSettings merges per model and does not clobber siblings', () => {
+  rememberModelSettings('claude', 'sonnet', { reasoning: 'high' });
+  rememberModelSettings('claude', 'sonnet', {
+    modelOptions: { fast: 'on' },
+  });
+  rememberModelSettings('claude', 'opus', { reasoning: 'low' });
+  expect(modelSettingsFor('claude', 'sonnet')).toEqual({
+    reasoning: 'high',
+    modelOptions: { fast: 'on' },
+  });
+  expect(modelSettingsFor('claude', 'opus')).toEqual({ reasoning: 'low' });
+});
+
+test('setComposerExtraHeightLive updates extra height without requiring a remount', () => {
+  setComposerExtraHeightLive(40);
+  expect(uiPrefsStore.getState().composerExtraHeight).toBe(40);
+  setComposerExtraHeightLive(0);
+  expect(uiPrefsStore.getState().composerExtraHeight).toBe(0);
+});
+
+test('setComposerExtraHeightLive does not persist; setComposerExtraHeight does', async () => {
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  setComposerExtraHeightLive(40);
+  expect(uiPrefsStore.getState().composerExtraHeight).toBe(40);
+  const mid = await disk.loadUiPrefs('org', 'user');
+  expect(mid?.composerExtraHeight ?? 0).toBe(0);
+  await setComposerExtraHeight(40);
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.composerExtraHeight).toBe(40);
+});
+
+test('installNewThreadComposerBackground copies then replaces the pointer', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const first = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/one.png',
+    name: 'one.png',
+    mimeType: 'image/png',
+    size: 20,
+  });
+  expect(first.ok).toBe(true);
+  const stored = uiPrefsStore.getState().newThreadComposerBackground;
+  expect(stored?.kind).toBe('custom');
+  expect(customBackgroundUri(stored)).toContain('/new-thread-backgrounds/');
+  expect(
+    stored !== undefined && stored.kind !== 'preset' ? stored.name : undefined,
+  ).toBe('one.png');
+  expect(fs.files.size).toBe(1);
+
+  const second = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/two.jpg',
+    name: 'two.jpg',
+    mimeType: 'image/jpeg',
+    size: 20,
+  });
+  expect(second.ok).toBe(true);
+  const replaced = uiPrefsStore.getState().newThreadComposerBackground;
+  expect(
+    replaced !== undefined && replaced.kind !== 'preset'
+      ? replaced.name
+      : undefined,
+  ).toBe('two.jpg');
+  expect(fs.files.size).toBe(1);
+
+  setNewThreadBackgroundEffect('ascii');
+  await removeNewThreadComposerBackground();
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+  expect(fs.files.size).toBe(0);
+});
+
+test('install before bindUiPrefs is flushed once persist is bound', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  const installed = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/early.png',
+    name: 'early.png',
+    mimeType: 'image/png',
+    size: 20,
+  });
+  expect(installed.ok).toBe(true);
+  expect(await disk.loadUiPrefs('org', 'user')).toBeUndefined();
+
+  await bindUiPrefs(disk, 'org', 'user');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(
+    (saved?.newThreadComposerBackground as { name?: string } | undefined)?.name,
+  ).toBe('early.png');
+});
+
+test('applyPresetBackground stores a preset and retires the managed custom file', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const installed = await installNewThreadComposerBackground({
+    uri: 'file:///tmp/one.png',
+    name: 'one.png',
+    mimeType: 'image/png',
+    size: 20,
+  });
+  expect(installed.ok).toBe(true);
+  expect(fs.files.size).toBe(1);
+
+  const applied = await applyPresetBackground('emma');
+  expect(applied).toBe(true);
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(fs.files.size).toBe(0);
+
+  expect(await applyPresetBackground('not-a-pack-id')).toBe(false);
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+});
+
+test('bindUiPrefs keeps a known preset without checking the documents folder', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: { kind: 'preset', id: 'emma' },
+    newThreadBackgroundEffect: 'dither',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'preset',
+    id: 'emma',
+  });
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('bindUiPrefs drops an unknown preset id', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: { kind: 'preset', id: 'missing-art' },
+    newThreadBackgroundEffect: 'ascii',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: {
+      uri: '/docs/new-thread-backgrounds/gone.png',
+      name: 'gone.png',
+    },
+    newThreadBackgroundEffect: 'dither',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('unbindUiPrefs clears wallpaper so accounts do not leak artwork', () => {
+  uiPrefsStore.setState({
+    newThreadComposerBackground: {
+      uri: '/docs/new-thread-backgrounds/x.png',
+      name: 'x.png',
+    },
+    newThreadBackgroundEffect: 'ascii',
+  });
+  unbindUiPrefs();
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toBeUndefined();
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
+});
+
+test('sessionBackgroundBlur defaults to off and persists', async () => {
+  expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(false);
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setSessionBackgroundBlur(true);
+  expect(uiPrefsStore.getState().sessionBackgroundBlur).toBe(true);
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.sessionBackgroundBlur).toBe(true);
+});
+
+test('colorScheme defaults to system and persists', async () => {
+  expect(uiPrefsStore.getState().colorScheme).toBe('system');
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setColorSchemePreference('dark');
+  expect(uiPrefsStore.getState().colorScheme).toBe('dark');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.colorScheme).toBe('dark');
+});
+
+test('bindUiPrefs restores a saved colorScheme', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', { colorScheme: 'light' });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().colorScheme).toBe('light');
+});
+
+test('bindUiPrefs ignores an invalid colorScheme', async () => {
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', { colorScheme: 'neon' });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().colorScheme).toBe('system');
+});
+
+test('togglePinnedModel persists and unpins', async () => {
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
+  expect(uiPrefsStore.getState().pinnedModels).toEqual([
+    { harness: 'claude-code', model: 'sonnet' },
+  ]);
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.pinnedModels).toEqual([
+    { harness: 'claude-code', model: 'sonnet' },
+  ]);
+  await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
+  expect(uiPrefsStore.getState().pinnedModels).toEqual([]);
+});
+
+test('local logs default off and persist', async () => {
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(false);
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setLocalLogsEnabled(true);
+  expect((await disk.loadUiPrefs('org', 'user'))?.localLogsEnabled).toBe(true);
+  uiPrefsStore.setState({ localLogsEnabled: false });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(true);
+
+  await disk.saveUiPrefs('org', 'user', { hapticsEnabled: true });
+  uiPrefsStore.setState({ localLogsEnabled: false });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(false);
+});
+
+test('voice prefs default to dictation and migrate missing fields', async () => {
+  expect(uiPrefsStore.getState().voiceInputMode).toBe('dictation');
+  expect(uiPrefsStore.getState().voiceModelId).toBeNull();
+  expect(uiPrefsStore.getState().cleanupModelId).toBeNull();
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBeNull();
+  const disk = memDocDisk();
+  await disk.saveUiPrefs('org', 'user', { hapticsEnabled: false });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().voiceInputMode).toBe('dictation');
+  expect(uiPrefsStore.getState().voiceModelId).toBeNull();
+});
+
+test('voice prefs persist and reject an invalid mode', async () => {
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setVoiceInputMode('voiceModel');
+  await setVoiceModelId('whisper-tiny');
+  await setCleanupModelId('qwen25-0.5b-instruct');
+  await setCleanupPromptOverride('keep my words');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.voiceInputMode).toBe('voiceModel');
+  expect(saved?.voiceModelId).toBe('whisper-tiny');
+  expect(saved?.cleanupPromptOverride).toBe('keep my words');
+
+  await disk.saveUiPrefs('org', 'user', {
+    ...saved,
+    voiceInputMode: 'telepathy',
+  });
+  uiPrefsStore.setState({ voiceInputMode: 'dictation' });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().voiceInputMode).toBe('dictation');
+  expect(uiPrefsStore.getState().voiceModelId).toBe('whisper-tiny');
+  expect(uiPrefsStore.getState().cleanupPromptOverride).toBe('keep my words');
+});

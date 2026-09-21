@@ -45,6 +45,16 @@ export class AuthRequestError extends Error {
   }
 }
 
+/** Log-safe label: kind + HTTP status. Never body, codes, or paste. */
+export const authFailureLog = (e: unknown): string => {
+  if (e instanceof AuthRequestError) {
+    return e.detail.kind === 'http'
+      ? `AuthRequestError http ${e.detail.status}`
+      : `AuthRequestError ${e.detail.kind}`;
+  }
+  return e instanceof Error ? e.name : 'Error';
+};
+
 export interface AuthClientDeps {
   /** Edge base URL (e.g. https://edge.zeron.sh). */
   baseUrl: string;
@@ -89,6 +99,14 @@ export class AuthClient {
       accessToken: string;
       refreshToken: string;
     }>('auth/exchange', body);
+    if (
+      r.user == null ||
+      typeof r.user.id !== 'string' ||
+      typeof r.accessToken !== 'string' ||
+      typeof r.refreshToken !== 'string'
+    ) {
+      throw new AuthRequestError({ kind: 'invalidResponse' });
+    }
     return {
       user: r.user,
       tokens: { accessToken: r.accessToken, refreshToken: r.refreshToken },

@@ -26,6 +26,7 @@ import {
 import { resetSessionStores } from '../state/sessionStores';
 import { resetCatalog } from '../state/catalogStore';
 import { bindDrafts, resetDrafts } from '../state/draftStore';
+import { bindQueuedLocal, resetQueuedLocal } from '../state/queuedLocalStore';
 import { bindUiPrefs, unbindUiPrefs, uiPrefsStore } from '../state/uiPrefs';
 import { SessionController, type SessionMode } from './sessionController';
 
@@ -50,7 +51,7 @@ export interface AppRuntimeDeps {
   loro: () => LoroDocPort;
   fetchImpl?: FetchImpl;
   /** Explicit session source: overrides the Loro probe AND the persisted
-   * forceRelayMode pref (demo mode forces 'relay'). */
+   * forceRelayMode pref (Expo Go / Settings relay toggle). */
   sessionMode?: SessionMode;
   log?: (line: string) => void;
   /** Reads a staged attachment's bytes as base64 (expo-file-system). */
@@ -64,6 +65,9 @@ export class AppRuntime {
   }
   get cfg(): EdgeConfig {
     return this.deps.cfg;
+  }
+  get fetchImpl(): FetchImpl | undefined {
+    return this.deps.fetchImpl;
   }
   readonly registry: RegistryClient;
   private readonly deps: AppRuntimeDeps;
@@ -113,6 +117,9 @@ export class AppRuntime {
         : new RegistryDoc(deps.deviceId);
     // Account-scoped composer drafts + UI prefs ride the same DocDisk.
     await bindDrafts(deps.docDisk, deps.orgId, deps.userId, deps.clock).catch(
+      () => {},
+    );
+    await bindQueuedLocal(deps.docDisk, deps.orgId, deps.userId).catch(
       () => {},
     );
     await bindUiPrefs(deps.docDisk, deps.orgId, deps.userId).catch(() => {});
@@ -260,11 +267,11 @@ export class AppRuntime {
       c = undefined;
     }
     if (c === undefined) {
-      c = new SessionController(chatId, {
+      const depsFor = (sessionMode: SessionMode) => ({
         ...this.deps,
-        sessionMode: this.sessionMode,
+        sessionMode,
         chatMeta: this.chatMeta(chatId),
-        relayFor: id => {
+        relayFor: (id: string) => {
           try {
             return this.relayFor(id);
           } catch {
@@ -280,6 +287,13 @@ export class AppRuntime {
           return new Set(dev?.capabilities ?? []);
         },
       });
+      try {
+        c = new SessionController(chatId, depsFor(this.sessionMode));
+      } catch (e) {
+        const name = e instanceof Error ? e.name : 'Error';
+        this.deps.log?.(`session construct failed (${name}) — relay`);
+        c = new SessionController(chatId, depsFor('relay'));
+      }
       c.start().catch(() => {});
       // Re-arm queued-attachment escorts left stashed by a prior launch
       // (SessionStore.swift respawnEscorts).
@@ -337,6 +351,7 @@ export class AppRuntime {
     resetSessionStores();
     resetCatalog();
     resetDrafts();
+    resetQueuedLocal();
     unbindUiPrefs();
   }
 }

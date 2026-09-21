@@ -1,8 +1,7 @@
-import React, { useMemo, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TrueSheet } from '@lodev09/react-native-true-sheet';
-import { Icon } from './Icon';
+import { SessionSheet } from './SessionSheet';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import type { MessageEntry } from '../zeron/protocol/types';
@@ -18,30 +17,10 @@ export function SubagentsSheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const sheet = useRef<TrueSheet>(null);
   const agents = useMemo(() => collectThreadSubagents(entries), [entries]);
 
   return (
-    <TrueSheet
-      ref={sheet}
-      detents={[1]}
-      initialDetentIndex={0}
-      onDidDismiss={onDismiss}
-      grabber
-      backgroundColor={theme.background}
-    >
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => sheet.current?.dismiss()}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.back')}
-        >
-          <View style={[styles.closeButton, { borderColor: theme.border }]}>
-            <Icon name="xmark" size={15} color={theme.text} />
-          </View>
-        </Pressable>
-      </View>
+    <SessionSheet onDismiss={onDismiss}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
         <Text style={[styles.title, { color: theme.text }]}>
           {t('session.subagents')}
@@ -58,26 +37,11 @@ export function SubagentsSheet({
           </View>
         )}
       </ScrollView>
-    </TrueSheet>
+    </SessionSheet>
   );
 }
 
-const CLOSE = 32;
-
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  closeButton: {
-    width: CLOSE,
-    height: CLOSE,
-    borderRadius: CLOSE / 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: {
     fontSize: 28,
     fontWeight: '700',

@@ -1,13 +1,19 @@
 // Host-local change-request + checkout-diff snapshots for the composer PR
 // pill. Never written back to a synced document (desktop change_requests.rs).
 
+import { useMemo } from 'react';
 import { createStore, useStore } from 'zustand';
 import type {
   ChangeRequestSummary,
   CheckoutChangeRequestStatus,
   CheckoutDiff,
 } from '../protocol/types';
-import { prBadgeModel, type PrBadgeModel } from '../../components/prBadge';
+import {
+  prBadgeModel,
+  threadPrDot,
+  type PrBadgeModel,
+  type ThreadPrDot,
+} from '../../components/prBadge';
 
 export interface ChangeRequestState {
   byChat: Record<string, CheckoutChangeRequestStatus | undefined>;
@@ -62,9 +68,19 @@ export const badgeForChat = (
   };
 };
 
-export const usePrBadge = (chatId: string): PrBadgeModel | undefined =>
-  useStore(changeRequestStore, s => {
-    const summary = s.byChat[chatId]?.changeRequest ?? undefined;
-    if (summary === undefined) return undefined;
-    return prBadgeModel(summary, s.diffByChat[chatId]);
-  });
+export const usePrBadge = (chatId: string): PrBadgeModel | undefined => {
+  const summary = useStore(
+    changeRequestStore,
+    s => s.byChat[chatId]?.changeRequest ?? undefined,
+  );
+  const diff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
+  return useMemo(
+    () => (summary === undefined ? undefined : prBadgeModel(summary, diff)),
+    [summary, diff],
+  );
+};
+
+export const useThreadPrDot = (chatId: string): ThreadPrDot | null =>
+  useStore(changeRequestStore, s =>
+    threadPrDot(s.byChat[chatId]?.changeRequest ?? undefined),
+  );

@@ -2,21 +2,28 @@
 
 Two workflows under `.github/workflows/`:
 
-- **`ios-compile.yml` — iOS Compile Check.** Runs on PRs and pushes to
-  `main` touching `app/**` or the iOS workflows. Unsigned Release build
-  (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
-  `dev.zremote.compilecheck`). Needs **no secrets** — forks can run it.
-- **`ios-testflight.yml` — iOS TestFlight.** Manual only
-  (`workflow_dispatch`, optional `notes`). Signed archive + upload to App
-  Store Connect via the App Store Connect API key and the team's **one
-  cloud-managed Apple Distribution certificate**. Expo prebuild's
-  Automatic / Apple Development identity is **stripped** on the app and
-  widget targets (and the project-level `iPhone Developer` setting) so
-  Xcode 26 Automatic cloud signing can pick Distribution for a generic
-  iOS archive. Setting Apple Distribution as an xcarg **or** in the
-  pbxproj conflicts ("automatically signed for development"); Manual
-  style needs a local cert the runner does not have. No certificates,
-  profiles, or key material are committed.
+- **`ios-compile.yml` — iOS Compile Check.** Manual `workflow_dispatch`
+  only. Merges to `main` and pull requests do **not** start it. Unsigned
+  Release build (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
+  `dev.zremote.compilecheck`). Needs **no secrets**.
+- **`ios-testflight.yml` — iOS TestFlight.** Manual `workflow_dispatch`
+  only (optional `notes`). Merges to `main` do **not** start it. The
+  archive is **unsigned** (`CODE_SIGNING_ALLOWED=NO`, same flags as the
+  compile-check job) so ephemeral runners never mint Apple Development
+  certificates. `xcodebuild -exportArchive` then cloud-signs with the
+  App Store Connect API key and the team's **one cloud-managed Apple
+  Distribution certificate**. No certificates, profiles, or key material
+  are committed. The generated `project.pbxproj` is left as Expo prebuild
+  wrote it — rewriting identities cannot stop Xcode 26 from treating
+  Automatic archive as development signing.
+
+  The archive is always the **checked-out git SHA** of the branch
+  selected in the Actions UI (`github.sha`). `CFBundleVersion` is
+  `github.run_number` (counts every run of this workflow, including
+  failures). `extra.gitSha` is baked in at prebuild as
+  `0.1.0 (N) · abc1234`. Dispatch `main` after the work has merged
+  (AGENTS.md) — stacked PRs that land on another feature branch never
+  ship.
 
 Both run on `macos-26` and select `/Applications/Xcode_26.app` when
 present (the step prints `ls /Applications | grep -i xcode` and
@@ -59,19 +66,23 @@ Distribution Certificate" also works). Download the `.p8` **once** —
 Apple does not offer it again. Note the **Key ID** and **Issuer ID**.
 
 That API key is how CI uses the **single** Apple Distribution
-certificate Apple already manages for the team. The workflow never
-creates Apple Development certificates and never registers the GitHub
-runner as a device (`-allowProvisioningDeviceRegistration` is
-intentionally absent). Automatic development signing on an ephemeral
-runner mints a new development cert each job until the account hits
-Apple's 3-certificate cap ("Choose a certificate to revoke"), which is
-what broke later TestFlight archives.
+certificate Apple already manages for the team. The archive step does
+not sign and does not pass `-allowProvisioningUpdates` or the ASC
+authentication flags, so it cannot create Apple Development
+certificates or register the GitHub runner as a device. Automatic
+development signing on an ephemeral runner mints a new development cert
+each job until the account hits Apple's 3-certificate cap ("Choose a
+certificate to revoke"), which is what broke later TestFlight archives.
 
 If Certificates, Identifiers & Profiles already lists several **Apple
 Development** entries named "Created via API" / "Created by Xcode" from
 those earlier runs, revoke the unused development ones so a Mac can
-still issue a local development cert. Leave the Apple Distribution /
-cloud-managed distribution certificate alone.
+still issue a local development cert. Those leftover certs are
+unusable (the private keys died with the runners) and will keep
+blocking **local** Xcode development until revoked. Leave the Apple
+Distribution / cloud-managed distribution certificate alone. Revoking
+the orphaned development certs is optional for the unsigned-archive
+job.
 
 **Team ID**: developer.apple.com → Membership details → Team ID
 (10 chars, e.g. `ABCDE12345`).
@@ -103,25 +114,36 @@ gated. The job's first step fails with a clear list of missing secret
 
 ## 4. Run
 
-- Actions → **iOS TestFlight** → Run workflow.
+- Actions → **iOS TestFlight** → Run workflow (picks a branch; default
+  `main`). Merges to `main` do not start an archive.
 
-`IOS_BUILD_NUMBER` is the workflow run number; `aps-environment` stays
+`IOS_BUILD_NUMBER` is the workflow run number; `GITHUB_SHA` is written
+into `expo.extra.gitSha` at prebuild. `aps-environment` stays
 `development` in the entitlements file — Xcode swaps it to `production`
 on App Store export via the distribution profile.
 
-The archive step does **not** pass `CODE_SIGN_IDENTITY` or
-`CODE_SIGN_STYLE` to `xcodebuild`. Those xcargs apply to every target
-in the workspace (including CocoaPods), which on Xcode 26 produces
-"ZRemote is automatically signed for development, but a conflicting
-code signing identity Apple Distribution has been manually specified."
-The same conflict happens if Apple Distribution is written into the
-generated `project.pbxproj` while `CODE_SIGN_STYLE` stays Automatic —
-Xcode 26 classifies Automatic as development signing. Manual style
-without a local Distribution cert fails with "requires a provisioning
-profile". After prebuild, `ZRemote` and `ExpoWidgetsTarget` stay on
-**Automatic** and their `CODE_SIGN_IDENTITY` (plus the project-level
-`iPhone Developer` setting) is removed so cloud signing can pick the
-Distribution cert for the archive.
+The job summary lists the SHA, commit subject, and build number. Settings
+→ Account shows the same `version (build) · sha` label so a TestFlight
+install can be matched to git.
+
+The archive step passes `CODE_SIGNING_ALLOWED=NO`,
+`CODE_SIGNING_REQUIRED=NO`, and an empty `CODE_SIGN_IDENTITY` — the
+same unsigned flags as **iOS Compile Check**. It does **not** pass
+`-allowProvisioningUpdates` or the ASC authentication flags. Those
+apply only at export, where `ExportOptions.plist` sets
+`signingStyle=automatic` and `signingCertificate=Apple Distribution` so
+cloud signing can pick the team's one Distribution cert.
+
+Do not pass `CODE_SIGN_IDENTITY=Apple Distribution` or
+`CODE_SIGN_STYLE` as workspace-wide xcargs: they leak onto CocoaPods and
+on Xcode 26 produce "automatically signed for development, but a
+conflicting code signing identity Apple Distribution has been manually
+specified." Writing Apple Distribution into the generated
+`project.pbxproj` while `CODE_SIGN_STYLE` stays Automatic is the same
+conflict. Manual style without a local Distribution cert fails with
+"requires a provisioning profile". Stripping `CODE_SIGN_IDENTITY` and
+keeping Automatic still asks for iOS App Development profiles at
+archive time.
 
 ## 5. First-run expectations
 

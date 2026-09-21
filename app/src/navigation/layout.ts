@@ -15,13 +15,47 @@ export interface LayoutPlan {
   sidebarWidth: number;
   /** inspector width, clamped 360–480. */
   inspectorWidth: number;
-  /** transcript/composer measure cap in the detail column. */
+  /** transcript measure cap in the detail column. */
   measureCap: number;
+  /** Composer stack max width on iPad; omitted on compact (iPhone). */
+  composerMaxWidth?: number;
 }
 
 export const REGULAR_MIN_WIDTH = 700;
 export const INSPECTOR_AUTO_WIDTH = 1100;
 export const MEASURE_CAP = 720;
+export const SIDEBAR_MIN_WIDTH = 340;
+export const SIDEBAR_MAX_WIDTH = 420;
+export const SIDEBAR_FRACTION = 0.28;
+export const COMPOSER_MAX_WIDTH = 560;
+export const COMPOSER_H_GUTTER = 24;
+
+/** Equal side inset that centers a capped column in `containerWidth`. */
+export const columnSideGutter = (
+  containerWidth: number,
+  cap: number,
+): number => {
+  if (containerWidth <= 0 || cap <= 0) return 0;
+  return Math.max(0, (containerWidth - cap) / 2);
+};
+
+/** FlashList honors padding on `contentContainerStyle`; maxWidth does not
+ *  shrink virtualized rows. The preview rail overlays and does not reserve
+ *  extra right padding, so gutters stay equal. */
+export const transcriptHorizontalPadding = (
+  listWidth: number,
+  contentMaxWidth: number | undefined,
+  railReserve: number,
+): { paddingLeft: number; paddingRight: number } => {
+  const gutter =
+    contentMaxWidth === undefined
+      ? 0
+      : columnSideGutter(listWidth, contentMaxWidth);
+  return {
+    paddingLeft: gutter,
+    paddingRight: Math.max(gutter, railReserve),
+  };
+};
 
 export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
   if (width < REGULAR_MIN_WIDTH) {
@@ -35,12 +69,19 @@ export const layoutFor = (width: number, prefs: LayoutPrefs): LayoutPlan => {
     };
   }
   const inspectorWidth = Math.min(480, Math.max(360, Math.round(width * 0.28)));
+  const sidebarWidth = Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(SIDEBAR_MIN_WIDTH, Math.round(width * SIDEBAR_FRACTION)),
+  );
+  const detailWidth = width - (prefs.sidebarCollapsed ? 0 : sidebarWidth);
+  const detailInnerWidth = Math.max(0, detailWidth - COMPOSER_H_GUTTER * 2);
   return {
     mode: 'regular',
     sidebarVisible: !prefs.sidebarCollapsed,
     inspectorVisible: false,
-    sidebarWidth: Math.min(360, Math.max(300, Math.round(width * 0.24))),
+    sidebarWidth,
     inspectorWidth,
-    measureCap: MEASURE_CAP,
+    measureCap: Math.min(MEASURE_CAP, detailInnerWidth),
+    composerMaxWidth: Math.min(COMPOSER_MAX_WIDTH, detailInnerWidth),
   };
 };

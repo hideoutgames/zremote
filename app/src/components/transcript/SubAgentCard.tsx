@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
+import { ShimmerText } from '../ShimmerText';
 import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import type { SubagentView } from './detectSubagent';
@@ -17,37 +18,71 @@ const stateLabel = (state: SubagentStatus): string => {
   }
 };
 
-export function SubAgentCard({ view }: { view: SubagentView }) {
+export function SubAgentCard({
+  view,
+  embedded = false,
+}: {
+  view: SubagentView;
+  embedded?: boolean;
+}) {
   const theme = useTheme();
   const state = stateLabel(view.state);
   const subtitle =
     view.agentName !== '' ? `${state} · ${view.agentName}` : state;
-  const dot =
-    view.state === 'running'
-      ? theme.indicatorWorking
-      : view.state === 'failed'
-      ? theme.danger
-      : theme.textSecondary;
+  const [width, setWidth] = useState(160);
+  const running = view.state === 'running';
+  const dot = running
+    ? theme.indicatorWorking
+    : view.state === 'failed'
+    ? theme.danger
+    : theme.textSecondary;
   return (
     <View
       accessibilityRole="summary"
       accessibilityLabel={`${view.title}. ${subtitle}`}
       style={[
         styles.card,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+        embedded ? styles.embedded : undefined,
+        embedded
+          ? undefined
+          : {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
       ]}
     >
       <View style={[styles.dot, { backgroundColor: dot }]} />
-      <View style={styles.body}>
+      <View
+        style={styles.body}
+        onLayout={e => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          if (w > 0) setWidth(w);
+        }}
+      >
         <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
           {view.title}
         </Text>
-        <Text
-          style={[styles.subtitle, { color: theme.textSecondary }]}
-          numberOfLines={1}
-        >
-          {subtitle}
-        </Text>
+        <View testID={`subagent-status-${view.id}`}>
+          {running ? (
+            <ShimmerText
+              text={subtitle}
+              width={width}
+              fontSize={15}
+              fontWeight="400"
+              maxLines={1}
+              align="left"
+              baseColor={theme.textSecondary}
+              highlightColor={theme.text}
+            />
+          ) : (
+            <Text
+              style={[styles.subtitle, { color: theme.textSecondary }]}
+              numberOfLines={1}
+            >
+              {subtitle}
+            </Text>
+          )}
+        </View>
       </View>
       <Icon name="chevron.right" size={14} color={theme.textSecondary} />
     </View>
@@ -64,6 +99,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginTop: 8,
+  },
+  embedded: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    marginTop: 0,
+    backgroundColor: 'transparent',
   },
   dot: {
     width: 8,

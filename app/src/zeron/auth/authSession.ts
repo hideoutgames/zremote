@@ -14,12 +14,14 @@ import {
   decodeJwtPayload,
   generateVerifier,
   parsePastedCode,
+  MOBILE_SIGN_IN_STATE_PREFIX,
   type AuthorizeParams,
 } from './authKit';
 import type { SecureStorePort } from './secureStore';
 import type { TokenSource } from '../transport/tokenSource';
 import type { Clock } from '../transport/clock';
 import { systemClock } from '../transport/clock';
+import { createLog } from '../log';
 
 export type AuthState =
   | { state: 'signedOut' }
@@ -31,6 +33,21 @@ const TOKEN_SLACK_MS = 30_000;
 const REFRESH_RETRY_BASE_MS = 1_000;
 const REFRESH_RETRY_MAX_MS = 5_000;
 const STORE_KEY_PREFIX = 'zeron.auth.';
+const PENDING_KEY_PREFIX = 'zeron.auth.pending.';
+const log = createLog();
+
+/** expo-secure-store only accepts `/^[\w.-]+$/` — `:` and `/` in a URL
+ * base would throw and the Keychain write would never land. */
+export const SECURE_STORE_KEY_RE = /^[\w.-]+$/;
+
+export const sanitizeStoreKeyPart = (value: string): string =>
+  value.replace(/[^A-Za-z0-9._-]/g, '_');
+
+export const authStoreKey = (baseUrl: string): string =>
+  `${STORE_KEY_PREFIX}${sanitizeStoreKeyPart(baseUrl)}`;
+
+export const authPendingStoreKey = (baseUrl: string): string =>
+  `${PENDING_KEY_PREFIX}${sanitizeStoreKeyPart(baseUrl)}`;
 
 interface PersistedAuth {
   user: AuthUser;
@@ -46,7 +63,9 @@ interface PendingSignIn {
 }
 
 const randomState = (): string =>
-  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 18)}`;
+  `${MOBILE_SIGN_IN_STATE_PREFIX}${Date.now().toString(36)}${Math.random()
+    .toString(36)
+    .slice(2, 18)}`;
 
 export interface AuthSessionDeps {
   client: AuthClient;
@@ -75,6 +94,7 @@ export class AuthSession implements TokenSource {
   private retryAttempts = 0;
   private retryTimer: unknown;
   private restored = false;
+  private completeInFlight = new Map<string, Promise<AuthState>>();
 
   constructor(deps: AuthSessionDeps) {
     this.client = deps.client;
@@ -86,34 +106,85 @@ export class AuthSession implements TokenSource {
   }
 
   private get storeKey(): string {
-    return `${STORE_KEY_PREFIX}${this.baseUrl}`;
+    return authStoreKey(this.baseUrl);
+  }
+
+  private get pendingStoreKey(): string {
+    return authPendingStoreKey(this.baseUrl);
   }
 
   // ── restore / persistence ───────────────────────────────────────────────
 
   async restore(): Promise<void> {
-    const raw = await this.store.get(this.storeKey);
-    if (raw !== undefined) {
-      try {
-        const p = JSON.parse(raw) as PersistedAuth;
-        if (typeof p.refreshToken === 'string') {
-          this.persisted = p;
-          this.setState(
-            typeof p.orgId === 'string'
-              ? { state: 'signedIn', user: p.user, orgId: p.orgId }
-              : { state: 'needsOrganization', user: p.user },
-          );
+    try {
+      const raw = await this.store.get(this.storeKey);
+      if (raw !== undefined) {
+        try {
+          const p = JSON.parse(raw) as PersistedAuth;
+          if (typeof p.refreshToken === 'string') {
+            this.persisted = p;
+            this.setState(
+              typeof p.orgId === 'string'
+                ? { state: 'signedIn', user: p.user, orgId: p.orgId }
+                : { state: 'needsOrganization', user: p.user },
+            );
+          }
+        } catch {
+          // corrupt record → signed out
         }
-      } catch {
-        // corrupt record → signed out
       }
+      await this.restorePending();
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`auth restore failed (${name})`);
     }
     this.restored = true;
   }
 
+  private async restorePending(): Promise<void> {
+    const raw = await this.store.get(this.pendingStoreKey);
+    if (raw === undefined) return;
+    try {
+      const list = JSON.parse(raw) as PendingSignIn[];
+      if (!Array.isArray(list)) return;
+      const now = this.clock.now();
+      for (const p of list) {
+        if (
+          typeof p.state === 'string' &&
+          typeof p.expiresAt === 'number' &&
+          p.expiresAt >= now &&
+          (p.codeVerifier === undefined || typeof p.codeVerifier === 'string')
+        ) {
+          this.pendingSignIns.set(p.state, p);
+        }
+      }
+    } catch {
+      // corrupt pending → ignore
+    }
+  }
+
   private async persist(): Promise<void> {
-    if (this.persisted === undefined) await this.store.delete(this.storeKey);
-    else await this.store.set(this.storeKey, JSON.stringify(this.persisted));
+    try {
+      if (this.persisted === undefined) await this.store.delete(this.storeKey);
+      else await this.store.set(this.storeKey, JSON.stringify(this.persisted));
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`auth persist failed (${name})`);
+    }
+  }
+
+  private async persistPending(): Promise<void> {
+    const now = this.clock.now();
+    const live = [...this.pendingSignIns.values()].filter(
+      p => p.expiresAt >= now,
+    );
+    try {
+      if (live.length === 0) await this.store.delete(this.pendingStoreKey);
+      else await this.store.set(this.pendingStoreKey, JSON.stringify(live));
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`auth pending persist failed (${name})`);
+    }
   }
 
   private setState(s: AuthState): void {
@@ -164,6 +235,7 @@ export class AuthSession implements TokenSource {
       params.codeChallenge = await challengeFor(verifier, sha);
     }
     this.pendingSignIns.set(state, pending);
+    await this.persistPending();
     return { url: buildAuthorizeUrl(params), state };
   }
 
@@ -180,11 +252,31 @@ export class AuthSession implements TokenSource {
     code: string;
     state: string;
   }): Promise<AuthState> {
+    if (
+      this.authState.state === 'signedIn' ||
+      this.authState.state === 'needsOrganization'
+    ) {
+      return this.authState;
+    }
+    const inflight = this.completeInFlight.get(opts.state);
+    if (inflight !== undefined) return inflight;
     const pending = this.consumePending(opts.state);
-    const { user, tokens } = await this.client.exchange(opts.code, {
-      codeVerifier: pending.codeVerifier,
-    });
-    return this.adoptTokens(user, tokens);
+    const flight = (async () => {
+      try {
+        const { user, tokens } = await this.client.exchange(opts.code, {
+          codeVerifier: pending.codeVerifier,
+        });
+        return await this.adoptTokens(user, tokens);
+      } catch (e) {
+        this.pendingSignIns.set(pending.state, pending);
+        throw e;
+      } finally {
+        this.completeInFlight.delete(pending.state);
+        await this.persistPending();
+      }
+    })();
+    this.completeInFlight.set(pending.state, flight);
+    return flight;
   }
 
   async completePastedCode(text: string): Promise<AuthState> {
@@ -195,14 +287,17 @@ export class AuthSession implements TokenSource {
   }
 
   /** After exchange/refresh: org_id claim ⇒ signedIn, else needsOrganization. */
-  private adoptTokens(user: AuthUser, tokens: AuthTokens): AuthState {
+  private async adoptTokens(
+    user: AuthUser,
+    tokens: AuthTokens,
+  ): Promise<AuthState> {
     this.persisted = {
       user,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       orgId: decodeJwtPayload(tokens.accessToken)?.org_id,
     };
-    this.persist().catch(() => {});
+    await this.persist();
     const next: AuthState =
       this.persisted.orgId !== undefined
         ? { state: 'signedIn', user, orgId: this.persisted.orgId }
@@ -273,7 +368,7 @@ export class AuthSession implements TokenSource {
   private async doRefresh(p: PersistedAuth): Promise<string | undefined> {
     try {
       const tokens = await this.client.refresh(p.refreshToken, p.orgId);
-      this.adoptTokens(p.user, tokens);
+      await this.adoptTokens(p.user, tokens);
       this.retryAttempts = 0;
       return tokens.accessToken;
     } catch (error) {
@@ -316,6 +411,7 @@ export class AuthSession implements TokenSource {
     this.persisted = undefined;
     this.pendingSignIns.clear();
     await this.persist();
+    await this.persistPending();
     this.setState({ state: 'signedOut' });
   }
 }

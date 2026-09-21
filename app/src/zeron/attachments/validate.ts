@@ -1,17 +1,18 @@
 // Attachment staging validation — the rules behind
 // apps/ios/Zeron/Composer/Attachments.swift `StagedAttachment.stage` and the
-// host's read-back jail (crates/engine/src/uploads.rs `mime_by_ext`).
+// host's upload path (crates/engine/src/uploads.rs).
 //
-// The transport is image-only end to end: the prompt trailer says "Attached
-// images", the engine's read-back serves only image mime types, and desktop's
-// file input is `accept="image/*"`. Non-image files are rejected here with a
-// reason rather than filtered silently.
+// Upload/commit stores any bytes under the size cap; host `ReadAttachmentChunk`
+// still only serves image types (`mime_by_ext`). Composer preview is local
+// (device URI), and the agent opens committed filesystem paths from the
+// prompt trailer, so documents (text/pdf/json/…) are legal to stage and send.
 
 /** use-attachments.ts / Attachments.swift `maxAttachmentBytes`. */
 export const MAX_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 
 /** crates/engine/src/uploads.rs `mime_by_ext` — what the host will serve
- * back to clients (and therefore what the agent can open). */
+ * back to clients via `ReadAttachmentChunk`. Composer preview does not
+ * use this path (local URIs stay on device). */
 export const HOST_IMAGE_MIMES: ReadonlySet<string> = new Set([
   'image/png',
   'image/jpeg',
@@ -24,13 +25,14 @@ export const HOST_IMAGE_MIMES: ReadonlySet<string> = new Set([
   'image/heic',
 ]);
 
-/** Picker filter for the Files entry point: images only, matching the
- * desktop `accept="image/*"` input and the host's read-back jail. */
-export const FILE_PICKER_MIME = 'image/*';
+/** Files entry point: the system document picker, not an image-only filter.
+ * Photos/camera stay on the dedicated image pickers. */
+export const FILE_PICKER_MIME = '*/*';
 
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; reason: 'tooLarge' | 'notImage' | 'unsupportedMime' };
+export type ValidationResult = { ok: true } | { ok: false; reason: 'tooLarge' };
+
+export const isImageMime = (mimeType: string): boolean =>
+  mimeType.toLowerCase().startsWith('image/');
 
 export const validateStagedAttachment = (a: {
   name: string;
@@ -38,10 +40,6 @@ export const validateStagedAttachment = (a: {
   size: number;
 }): ValidationResult => {
   if (a.size > MAX_ATTACHMENT_BYTES) return { ok: false, reason: 'tooLarge' };
-  if (!a.mimeType.startsWith('image/'))
-    return { ok: false, reason: 'notImage' };
-  if (!HOST_IMAGE_MIMES.has(a.mimeType))
-    return { ok: false, reason: 'unsupportedMime' };
   return { ok: true };
 };
 
@@ -49,7 +47,8 @@ export const validateStagedAttachment = (a: {
  * harness — only claude (base64 image blocks, claude/mod.rs L470) and
  * opencode (`{type:'file', url:'file://…'}` parts, opencode/mod.rs L1829)
  * read the field; every other harness sees the prompt-trailer paths only
- * (which is exactly desktop's degradation). */
+ * (which is exactly desktop's degradation). Non-image files are never
+ * inlined — those harnesses expect image blocks. */
 export const harnessInlinesAttachments = (harnessId: string): boolean =>
   harnessId === 'claude' ||
   harnessId === 'claude-code' ||

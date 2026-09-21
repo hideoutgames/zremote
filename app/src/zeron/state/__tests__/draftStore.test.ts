@@ -7,6 +7,7 @@ import {
   resetDrafts,
   setDraftText,
   restoreFailedSend,
+  stageAttachments,
 } from '../draftStore';
 import { draftsPath } from '../../native/docDisk';
 import { FakeClock } from '../../transport/clock';
@@ -65,6 +66,11 @@ describe('draftStore', () => {
     expect(draftStore.getState().byChat.c1.text).toBe(
       'typed since\n\nsecond failure',
     );
+
+    restoreFailedSend('c1', 'typed since\n\nsecond failure');
+    expect(draftStore.getState().byChat.c1.text).toBe(
+      'typed since\n\nsecond failure',
+    );
   });
 
   it('isolates drafts per account (separate files)', async () => {
@@ -86,5 +92,39 @@ describe('draftStore', () => {
     const b = JSON.parse(fs.files.get(draftsPath('/docs', 'o2', 'bob'))!);
     expect(a.c1.text).toBe('alice draft');
     expect(b.c1.text).toBe('bob draft');
+  });
+
+  it('stageAttachments appends a batch in one update', () => {
+    stageAttachments('c1', [
+      {
+        kind: 'file',
+        name: 'a.txt',
+        mimeType: 'text/plain',
+        size: 4,
+        localUri: 'file:///a.txt',
+      },
+      {
+        kind: 'file',
+        name: 'b.txt',
+        mimeType: 'text/plain',
+        size: 4,
+        localUri: 'file:///b.txt',
+      },
+    ]);
+    expect(
+      draftStore.getState().byChat.c1.attachments.map(a => a.name),
+    ).toEqual(['a.txt', 'b.txt']);
+    stageAttachments('c1', [
+      {
+        kind: 'file',
+        name: 'c.txt',
+        mimeType: 'text/plain',
+        size: 4,
+        localUri: 'file:///c.txt',
+      },
+    ]);
+    expect(
+      draftStore.getState().byChat.c1.attachments.map(a => a.name),
+    ).toEqual(['a.txt', 'b.txt', 'c.txt']);
   });
 });

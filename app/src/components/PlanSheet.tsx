@@ -1,12 +1,26 @@
+// TrueSheet needs a real detent height — `minHeight: '100%'` on the fill
+// wrapper (same pattern as GlassSheet / SessionSheet) so the plan ScrollView
+// does not collapse to 0 on iPhone. The Implement Plan CTA lives in normal
+// column flow (not overlay) so TrueSheet cannot clip it against the home
+// indicator.
+
 import React, { useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import { Icon } from './Icon';
 import { Glass } from './Glass';
+import { SESSION_SHEET_GRABBER_INSET } from './SessionSheet';
 import { useTheme } from '../theme';
-import { markdownStyleFor } from '../markdownStyle';
+import { markdownMd4cFlags, markdownStyleFor } from '../markdownStyle';
 import { t } from '../i18n/strings';
 
 export function PlanSheet({
@@ -22,9 +36,11 @@ export function PlanSheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const sheet = useRef<TrueSheet>(null);
   const implementing = useRef(false);
   const mdStyle = markdownStyleFor(theme);
+  const cap = Math.max(240, Math.round(windowHeight - insets.top));
 
   const implement = () => {
     if (implementing.current) return;
@@ -44,48 +60,58 @@ export function PlanSheet({
       initialDetentIndex={0}
       onDidDismiss={onDismiss}
       grabber
+      maxContentHeight={cap}
       backgroundColor={theme.background}
     >
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => sheet.current?.dismiss()}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.back')}
+      <View testID="plan-sheet" style={styles.fill}>
+        <View
+          testID="plan-sheet-header"
+          style={[styles.header, { paddingTop: SESSION_SHEET_GRABBER_INSET }]}
         >
-          <View style={[styles.closeButton, { borderColor: theme.border }]}>
-            <Icon name="xmark" size={15} color={theme.text} />
-          </View>
-        </Pressable>
-        <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
-          {name}
-        </Text>
-        <View style={styles.closeButton} />
-      </View>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <EnrichedMarkdownText
-          markdown={markdown}
-          markdownStyle={mdStyle}
-          flavor="github"
-        />
-      </ScrollView>
-      <View
-        style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          onPress={implement}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.implementPlan')}
+          <Pressable
+            onPress={() => sheet.current?.dismiss()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('session.back')}
+          >
+            <View style={[styles.closeButton, { borderColor: theme.border }]}>
+              <Icon name="xmark" size={15} color={theme.text} />
+            </View>
+          </Pressable>
+          <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
+            {name}
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <ScrollView
+          testID="plan-sheet-scroll"
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <Glass interactive tintColor={theme.planButton} style={styles.cta}>
-            <Text style={styles.ctaLabel}>{t('session.implementPlan')}</Text>
-          </Glass>
-        </Pressable>
+          {markdown.trim() !== '' ? (
+            <EnrichedMarkdownText
+              markdown={markdown}
+              markdownStyle={mdStyle}
+              md4cFlags={markdownMd4cFlags}
+              flavor="github"
+            />
+          ) : null}
+        </ScrollView>
+        <View
+          testID="plan-sheet-footer"
+          style={[styles.footer, { paddingBottom: insets.bottom + 40 }]}
+        >
+          <Pressable
+            onPress={implement}
+            accessibilityRole="button"
+            accessibilityLabel={t('session.implementPlan')}
+          >
+            <Glass interactive tintColor={theme.planButton} style={styles.cta}>
+              <Text style={styles.ctaLabel}>{t('session.implementPlan')}</Text>
+            </Glass>
+          </Pressable>
+        </View>
       </View>
     </TrueSheet>
   );
@@ -94,12 +120,12 @@ export function PlanSheet({
 const CLOSE = 32;
 
 const styles = StyleSheet.create({
+  fill: { flex: 1, minHeight: '100%' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 8,
     paddingBottom: 10,
     gap: 12,
   },
@@ -111,18 +137,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerSpacer: { width: CLOSE, height: CLOSE },
   title: {
     flex: 1,
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
   },
-  scroll: { paddingHorizontal: 20, flex: 1 },
+  scroll: { paddingHorizontal: 20, flex: 1, minHeight: 0 },
+  scrollContent: { paddingBottom: 16 },
   footer: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 0,
+    paddingHorizontal: 24,
+    paddingTop: 12,
   },
   cta: {
     height: 52,

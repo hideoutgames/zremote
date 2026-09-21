@@ -10,7 +10,9 @@ import {
   StyleSheet,
   View,
   type ColorValue,
+  type DimensionValue,
 } from 'react-native';
+import { useDismissibleNativeModal } from '../../hooks/useDismissibleNativeModal';
 
 export interface TrueSheetProps {
   detents?: (number | 'auto')[];
@@ -19,7 +21,9 @@ export interface TrueSheetProps {
   grabber?: boolean;
   backgroundColor?: ColorValue;
   maxContentHeight?: number;
+  onDetentChange?: (event: { nativeEvent: { index: number } }) => void;
   dismissible?: boolean;
+  draggable?: boolean;
   children?: React.ReactNode;
   style?: object;
 }
@@ -31,24 +35,48 @@ export interface TrueSheetRef {
 
 export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
   (
-    { onDidDismiss, grabber, backgroundColor, maxContentHeight, children },
+    {
+      onDidDismiss,
+      grabber,
+      backgroundColor,
+      maxContentHeight,
+      detents,
+      initialDetentIndex,
+      dismissible,
+      children,
+    },
     ref,
   ) => {
+    const canDismiss = dismissible !== false;
+    const { visible, hide, onDismiss } = useDismissibleNativeModal(() => {
+      onDidDismiss?.();
+    });
+    const dismiss = () => {
+      if (canDismiss) hide();
+    };
     useImperativeHandle(ref, () => ({
       present: async () => {},
-      dismiss: async () => onDidDismiss?.(),
+      dismiss: async () => {
+        hide();
+      },
     }));
+    const detent = detents?.[initialDetentIndex ?? 0];
+    const fraction: DimensionValue | undefined =
+      typeof detent === 'number' ? `${Math.round(detent * 100)}%` : undefined;
+    const maxHeight: DimensionValue = fraction ?? maxContentHeight ?? '85%';
+    const fill = fraction !== undefined;
     return (
       <Modal
-        visible
+        visible={visible}
         transparent
         animationType="slide"
         presentationStyle="overFullScreen"
-        onRequestClose={() => onDidDismiss?.()}
+        onRequestClose={dismiss}
+        onDismiss={onDismiss}
       >
         <Pressable
           style={styles.backdrop}
-          onPress={() => onDidDismiss?.()}
+          onPress={canDismiss ? dismiss : undefined}
           accessibilityLabel="Dismiss"
         />
         <View
@@ -56,12 +84,14 @@ export const TrueSheet = forwardRef<TrueSheetRef, TrueSheetProps>(
             styles.sheet,
             {
               backgroundColor: backgroundColor ?? '#1c1c1e',
-              maxHeight: maxContentHeight ?? '85%',
+              height: fraction,
+              maxHeight,
             },
+            fill ? styles.fill : undefined,
           ]}
         >
           {grabber ? <View style={styles.grabber} /> : null}
-          {children}
+          <View style={fill ? styles.fill : undefined}>{children}</View>
         </View>
       </Modal>
     );
@@ -77,6 +107,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingBottom: 12,
   },
+  fill: { flex: 1, minHeight: 0 },
   grabber: {
     alignSelf: 'center',
     width: 36,

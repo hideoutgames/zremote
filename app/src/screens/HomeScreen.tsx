@@ -1,25 +1,31 @@
-// Home (left pager page): search, spaces filter, the sessions list driven by
-// workspaceStore, archived shelf, connection pill, New session + Settings.
+// Home (left pager page): search, spaces filter, the threads list driven by
+// workspaceStore, archived shelf, connection pill. Settings sits next to
+// the folder control. A right-aligned circular New thread button opens a
+// blank chat (compact pager compose / regular detail compose).
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Pressable,
   RefreshControl,
-  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
   View,
-  type ViewStyle,
 } from 'react-native';
 import {
   LegendList,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as DropdownMenu from 'zeego/dropdown-menu';
-import * as ContextMenu from 'zeego/context-menu';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
+import * as ContextMenu from '../components/menus/context-menu';
 import { useStore } from 'zustand';
 import {
   workspaceStore,
@@ -27,13 +33,19 @@ import {
   useArchivedChats,
   useIndicator,
   useHostForChat,
-  useDeviceOnline,
+  useDerivedNow,
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
+import {
+  isPresenceFresh,
+  sortOverviewThreads,
+} from '../zeron/protocol/entities';
 import {
   sessionTitle,
   hostLabel,
   checkoutLabel,
+  threadStatusLine,
+  type ThreadStatusLine,
 } from '../zeron/state/sessionTruth';
 import {
   markChatSeen,
@@ -43,28 +55,43 @@ import {
 } from '../zeron/runtime/workspaceActions';
 import { useRuntime } from '../app/runtimeContext';
 import type { Chat } from '../zeron/protocol/types';
-import type { ChatIndicator } from '../zeron/protocol/entities';
-import { Glass } from '../components/Glass';
+import { BrandMark } from '../components/BrandMark';
+import { HarnessMark } from '../components/HarnessMark';
+import { Glass, GlassControl } from '../components/Glass';
 import { Icon } from '../components/Icon';
-import { NewSessionSheet } from './NewSessionSheet';
-import { usePinnedChatIds } from '../zeron/state/uiPrefs';
+import { svgForPullRequest } from '../components/harnessBrand';
+import { prToneColor } from '../components/prChrome';
+import { ShimmerText } from '../components/ShimmerText';
+import { formatWorkingElapsed } from '../zeron/state/workingElapsed';
+import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
+import {
+  changeRequestStore,
+  useThreadPrDot,
+} from '../zeron/state/changeRequestStore';
+import {
+  setComposeDefaults,
+  toggleChatPinned,
+  useChatPinned,
+  useNewThreadComposerBackground,
+  usePinnedChatIds,
+} from '../zeron/state/uiPrefs';
+import { partitionPinnedChats } from '../zeron/state/pinnedChats';
 import { useTheme, type Theme } from '../theme';
+import {
+  chromeThemeFor,
+  ChromeThemeProvider,
+  useChromeTheme,
+} from '../chromeTheme';
 import { t } from '../i18n/strings';
+import {
+  ContentEdgeMask,
+  TOP_CHROME_FADE_BAND,
+} from '../components/TopChromeFade';
+import { ThreadsBackgroundBlur } from '../components/SessionBackgroundBlur';
+import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 
-const indicatorColor = (theme: Theme, i: ChatIndicator): string | null => {
-  switch (i) {
-    case 'awaitingInput':
-      return theme.indicatorAwaitingInput;
-    case 'errored':
-      return theme.indicatorErrored;
-    case 'working':
-      return theme.indicatorWorking;
-    case 'completed':
-      return theme.indicatorCompleted;
-    default:
-      return null;
-  }
-};
+/** Extra list padding so the Threads title sits below the content mask. */
+const LIST_GAP_BELOW_CHROME = TOP_CHROME_FADE_BAND + 16;
 
 export const relativeTime = (at: number, now: number): string => {
   const s = Math.max(0, Math.floor((now - at) / 1000));
@@ -78,6 +105,123 @@ export const relativeTime = (at: number, now: number): string => {
   return new Date(at).toLocaleDateString();
 };
 
+const statusCopy = (line: ThreadStatusLine): string => {
+  switch (line.kind) {
+    case 'working':
+      return t('session.working');
+    case 'awaitingInput':
+      return t('session.awaitingInput');
+    case 'errored':
+      return t('session.errored');
+    case 'time':
+      return line.label;
+    case 'pr':
+      return line.tone === 'merged'
+        ? t('pr.merged')
+        : line.tone === 'draft'
+        ? t('pr.draft')
+        : t('pr.open');
+  }
+};
+
+const ThreadStatus = ({
+  line,
+  theme,
+  chatId,
+  hostOnline,
+}: {
+  line: ThreadStatusLine;
+  theme: Theme;
+  chatId: string;
+  hostOnline: boolean;
+}) => {
+  const label = statusCopy(line);
+  const suffix = hostOnline ? '' : ` • ${t('settings.notConnected')}`;
+  const live = line.kind === 'working' || line.kind === 'awaitingInput';
+  const [width, setWidth] = useState(160);
+  if (live) {
+    return (
+      <View
+        testID={`thread-status-${chatId}`}
+        style={styles.statusRow}
+        onLayout={e => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          if (w > 0) setWidth(w);
+        }}
+      >
+        <View style={styles.statusLive}>
+          <ShimmerText
+            text={label}
+            width={width}
+            fontSize={15}
+            fontWeight="500"
+            maxLines={1}
+            align="left"
+            baseColor={theme.textSecondary}
+            highlightColor={theme.text}
+          />
+        </View>
+        {suffix !== '' ? (
+          <Text
+            style={[styles.subtitle, { color: theme.textSecondary }]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.6}
+          >
+            {suffix}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+  if (line.kind === 'pr') {
+    const prColor = prToneColor(theme, {
+      tone: line.tone,
+      state: line.tone === 'merged' ? 'merged' : 'open',
+    });
+    const showCounts = line.additions > 0 || line.deletions > 0;
+    return (
+      <View style={styles.prStatus} testID={`thread-status-${chatId}`}>
+        <BrandMark svg={svgForPullRequest(prColor)} size={14} />
+        <Text
+          style={[
+            styles.subtitle,
+            styles.prStatusText,
+            { color: theme.textSecondary },
+          ]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.6}
+        >
+          {label}
+          {showCounts ? ' · ' : null}
+          {showCounts && line.additions > 0 ? (
+            <Text
+              style={{ color: theme.diffAddText }}
+            >{`+${line.additions}`}</Text>
+          ) : null}
+          {showCounts && line.additions > 0 && line.deletions > 0 ? ' ' : null}
+          {showCounts && line.deletions > 0 ? (
+            <Text
+              style={{ color: theme.diffDelText }}
+            >{`-${line.deletions}`}</Text>
+          ) : null}
+          {suffix}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <Text
+      style={[styles.subtitle, { color: theme.textSecondary }]}
+      numberOfLines={1}
+      maxFontSizeMultiplier={1.6}
+      testID={`thread-status-${chatId}`}
+    >
+      {label}
+      {suffix}
+    </Text>
+  );
+};
+
 const ChatRow = React.memo(function ({
   chat,
   onOpen,
@@ -85,15 +229,79 @@ const ChatRow = React.memo(function ({
   chat: Chat;
   onOpen: (id: string) => void;
 }) {
-  const theme = useTheme();
+  const theme = useChromeTheme();
   const runtime = useRuntime();
   const indicator = useIndicator(chat.id);
+  const session = useStore(workspaceStore, s => s.sessions[chat.id]);
   const host = useHostForChat(chat.id);
-  const online = useDeviceOnline(chat.deviceId);
+  const presenceAt = useStore(workspaceStore, s => s.presence[chat.deviceId]);
+  const hostOnline = useDerivedNow(n => isPresenceFresh(presenceAt, n));
   const unseen = chatUnseen(chat);
-  const dot = indicatorColor(theme, indicator);
+  const prTone = useThreadPrDot(chat.id);
+  const prAdds = useStore(
+    changeRequestStore,
+    s => s.diffByChat[chat.id]?.additions ?? 0,
+  );
+  const prDels = useStore(
+    changeRequestStore,
+    s => s.diffByChat[chat.id]?.deletions ?? 0,
+  );
+  const pinned = useChatPinned(chat.id);
   const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const suppressOpen = useRef(false);
+  const suppressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const at = chat.lastMessageAt ?? chat.createdAt;
+  const atLabel = useDerivedNow(n => relativeTime(at, n));
+  const workingStarted = session?.startedAt ?? session?.updatedAt;
+  const elapsedLabel = useDerivedNow(n =>
+    workingStarted === undefined
+      ? undefined
+      : formatWorkingElapsed(workingStarted, n),
+  );
+  const line = threadStatusLine(
+    indicator,
+    prTone === null
+      ? undefined
+      : { tone: prTone, additions: prAdds, deletions: prDels },
+    atLabel,
+  );
+  const workingElapsed = line.kind === 'working' ? elapsedLabel : undefined;
+
+  const armSuppress = useCallback(() => {
+    suppressOpen.current = true;
+    if (suppressTimer.current !== undefined) {
+      clearTimeout(suppressTimer.current);
+      suppressTimer.current = undefined;
+    }
+  }, []);
+
+  const onMenuOpenChange = useCallback(
+    (open: boolean) => {
+      setMenuOpen(open);
+      if (open) {
+        armSuppress();
+        return;
+      }
+      suppressTimer.current = setTimeout(() => {
+        suppressOpen.current = false;
+        suppressTimer.current = undefined;
+      }, 100);
+    },
+    [armSuppress],
+  );
+
+  useEffect(
+    () => () => {
+      if (suppressTimer.current !== undefined)
+        clearTimeout(suppressTimer.current);
+    },
+    [],
+  );
+
+  const onPin = useCallback(() => toggleChatPinned(chat.id), [chat.id]);
 
   const onRename = useCallback(() => {
     Alert.prompt(
@@ -125,78 +333,93 @@ const ChatRow = React.memo(function ({
     ]);
   }, [runtime, chat.id]);
 
+  const project = checkoutLabel(chat);
+  const hostName = hostLabel(chat, host === undefined ? [] : [host]);
+  const live = line.kind === 'working' || line.kind === 'awaitingInput';
+
   return (
-    <ContextMenu.Root>
+    <ContextMenu.Root onOpenChange={onMenuOpenChange}>
       <ContextMenu.Trigger>
         <Pressable
-          style={[styles.row, hovered ? styles.rowHover : undefined]}
+          style={[
+            styles.row,
+            { borderBottomColor: theme.border },
+            hovered && !menuOpen ? styles.rowHover : undefined,
+            menuOpen
+              ? [
+                  styles.rowMenuOpen,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                    shadowColor: theme.scheme === 'dark' ? '#000' : '#111',
+                  },
+                ]
+              : undefined,
+          ]}
           onPress={() => {
+            if (suppressOpen.current) return;
             if (runtime !== null) markChatSeen(runtime, chat.id);
             onOpen(chat.id);
           }}
+          onLongPress={armSuppress}
           onHoverIn={() => setHovered(true)}
           onHoverOut={() => setHovered(false)}
           accessibilityRole="button"
-          accessibilityLabel={[
-            sessionTitle(chat),
-            indicator,
-            hostLabel(chat, host === undefined ? [] : [host]),
-          ]
+          accessibilityLabel={[sessionTitle(chat), project, hostName]
             .filter(Boolean)
             .join(', ')}
         >
-          {dot !== null ? (
-            <View style={[styles.dot, { backgroundColor: dot }]} />
-          ) : (
-            <View style={styles.dotPlaceholder} />
-          )}
-          <View style={styles.rowText}>
-            <Text
-              style={[
-                styles.title,
-                { color: theme.text },
-                unseen ? styles.unseen : undefined,
-              ]}
-              numberOfLines={1}
-            >
-              {sessionTitle(chat)}
-            </Text>
-            <Text
-              style={[styles.subtitle, { color: theme.textSecondary }]}
-              numberOfLines={1}
-            >
-              {[
-                hostLabel(chat, host === undefined ? [] : [host]),
-                checkoutLabel(chat),
-                relativeTime(at, Date.now()),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-            {chat.lastMessagePreview !== undefined &&
-            chat.lastMessagePreview !== '' ? (
+          <View style={styles.rowText} testID={`thread-body-${chat.id}`}>
+            <View style={styles.titleRow}>
+              <HarnessMark
+                harnessId={chat.config?.harness}
+                size={16}
+                color={theme.text}
+              />
               <Text
-                style={[styles.preview, { color: theme.textSecondary }]}
+                style={[
+                  styles.title,
+                  { color: live ? theme.accent : theme.text },
+                  unseen ? styles.unseen : undefined,
+                ]}
                 numberOfLines={1}
-                maxFontSizeMultiplier={1.6}
               >
-                {chat.lastMessagePreview}
+                {sessionTitle(chat)}
               </Text>
-            ) : null}
+              {pinned ? (
+                <View testID={`thread-pin-${chat.id}`}>
+                  <Icon name="pin.fill" size={12} color={theme.textSecondary} />
+                </View>
+              ) : null}
+            </View>
+            <ThreadStatus
+              line={line}
+              theme={theme}
+              chatId={chat.id}
+              hostOnline={hostOnline}
+            />
           </View>
-          <View
-            style={[
-              styles.onlineDot,
-              {
-                backgroundColor: online
-                  ? theme.indicatorCompleted
-                  : theme.border,
-              },
-            ]}
-          />
+          {workingElapsed !== undefined ? (
+            <Text
+              style={[styles.elapsed, { color: theme.textSecondary }]}
+              testID={`thread-elapsed-${chat.id}`}
+            >
+              {workingElapsed}
+            </Text>
+          ) : null}
         </Pressable>
       </ContextMenu.Trigger>
       <ContextMenu.Content>
+        <ContextMenu.Group>
+          <ContextMenu.Item key="pin" onSelect={onPin}>
+            <ContextMenu.ItemTitle>
+              {pinned ? t('session.unpin') : t('session.pin')}
+            </ContextMenu.ItemTitle>
+            <ContextMenu.ItemIcon
+              ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+            />
+          </ContextMenu.Item>
+        </ContextMenu.Group>
         <ContextMenu.Item key="rename" onSelect={onRename}>
           <ContextMenu.ItemTitle>{t('home.row.rename')}</ContextMenu.ItemTitle>
         </ContextMenu.Item>
@@ -216,41 +439,37 @@ const ChatRow = React.memo(function ({
 export function HomeScreen({
   onOpenSession,
   onOpenSettings,
+  onCompose,
   variant = 'screen',
 }: {
   onOpenSession: (chatId: string) => void;
   onOpenSettings: () => void;
-  /** 'sidebar' renders inside the floating glass panel — its own controls
-   * switch from glass to subtle fills (no glass-on-glass). */
+  /** Compact pager / iPad detail: enter a blank compose session. */
+  onCompose?: (opts?: { spaceId?: string }) => void;
+  /** 'sidebar' tightens top-bar padding; New thread is the same on both. */
   variant?: 'screen' | 'sidebar';
 }) {
-  const theme = useTheme();
+  const contentTheme = useTheme();
   const insets = useSafeAreaInsets();
-  // Inside the floating sidebar the safe area is handled by the panel.
-  const barInset = variant === 'sidebar' ? 0 : undefined;
-  // Sidebar variant: controls use subtle fills, never a second glass layer.
-  // (A render helper, not a component — a JSX-typed const would remount.)
-  const control = (style: StyleProp<ViewStyle>, children: React.ReactNode) =>
-    variant === 'sidebar' ? (
-      <View style={[style, { backgroundColor: theme.inputBackground }]}>
-        {children}
-      </View>
-    ) : (
-      <Glass interactive style={style}>
-        {children}
-      </Glass>
-    );
   const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchRef = useRef<TextInput>(null);
   const [spaceFilter, setSpaceFilter] = useState<string | undefined>(undefined);
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const [bottomH, setBottomH] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
+  const searching = searchFocused || query.trim() !== '';
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
+  const theme = chromeThemeFor(wallpaper, contentTheme);
 
-  // Pull-to-refresh kicks the registry + open session rooms (same path the
-  // foreground handler uses — appRuntime.onForeground L270).
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     runtime?.onForeground();
@@ -262,8 +481,9 @@ export function HomeScreen({
   const spaces = useStore(workspaceStore, s => s.spaces);
   const devices = useStore(workspaceStore, s => s.devices);
   const connection = useStore(workspaceStore, s => s.connection);
-
+  const sessions = useStore(workspaceStore, s => s.sessions);
   const pinnedIds = usePinnedChatIds();
+
   const chats = useMemo(() => {
     const scoped =
       spaceFilter === undefined
@@ -278,16 +498,22 @@ export function HomeScreen({
               .toLowerCase()
               .includes(q),
           );
-    const pinned = new Set(pinnedIds);
-    return [...filtered].sort((a, b) => {
-      const ap = pinned.has(a.id) ? 0 : 1;
-      const bp = pinned.has(b.id) ? 0 : 1;
-      return ap - bp;
-    });
-  }, [overview, spaceFilter, query, pinnedIds]);
+    return sortOverviewThreads(filtered, sessions, now);
+  }, [overview, spaceFilter, query, sessions, now]);
+  const { pinned, rest } = useMemo(
+    () => partitionPinnedChats(chats, pinnedIds),
+    [chats, pinnedIds],
+  );
+
+  useOverviewChangeRequestWatches(runtime, chats);
 
   const spaceName = useCallback(
-    (id: string) => spaces.find(s => s.id === id)?.name ?? id,
+    (id: string) => {
+      const space = spaces.find(s => s.id === id);
+      if (space === undefined) return id;
+      if (space.name !== undefined && space.name !== '') return space.name;
+      return space.path.split(/[\\/]/).filter(Boolean).pop() ?? id;
+    },
     [spaces],
   );
 
@@ -298,212 +524,287 @@ export function HomeScreen({
     [onOpenSession],
   );
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <LegendList
-        data={chats}
-        keyExtractor={item => item.id}
-        estimatedItemSize={66}
-        recycleItems
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListHeaderComponent={
-          <Text style={[styles.section, { color: theme.textSecondary }]}>
-            {t('home.sessions')}
-          </Text>
-        }
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: theme.textSecondary }]}>
-            {t('home.empty')}
-          </Text>
-        }
-        ListFooterComponent={
-          archived.length > 0 ? (
-            <View>
-              <Pressable
-                style={styles.archivedHeader}
-                onPress={() => setArchivedOpen(o => !o)}
-                hitSlop={6}
-              >
-                <Icon name="archivebox" size={14} color={theme.textSecondary} />
-                <Text style={[styles.section, { color: theme.textSecondary }]}>
-                  {`${t('home.archived')} (${archived.length})`}
-                </Text>
-                <Icon
-                  name={archivedOpen ? 'chevron.up' : 'chevron.down'}
-                  size={12}
-                  color={theme.textSecondary}
-                />
-              </Pressable>
-              {archivedOpen
-                ? archived.map(c => (
-                    <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
-                  ))
-                : null}
-            </View>
-          ) : null
-        }
-        contentContainerStyle={[
-          styles.listContent,
-          {
-            paddingTop: headerH !== 0 ? headerH : insets.top + 64,
-            paddingBottom: bottomH !== 0 ? bottomH + 12 : insets.bottom + 76,
-          },
-        ]}
-        scrollIndicatorInsets={{
-          top: headerH,
-          bottom: bottomH,
-        }}
-        showsVerticalScrollIndicator={false}
-        renderItem={renderRow}
-      />
+  const folderLabel =
+    spaceFilter === undefined ? t('home.allSpaces') : spaceName(spaceFilter);
 
-      {/* Floating top bar: search + space filter + connection pill, glass
-          over the sessions list which scrolls underneath. */}
-      <View
-        style={[styles.topBar, { paddingTop: (barInset ?? insets.top) + 8 }]}
-        onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
-        pointerEvents="box-none"
-      >
-        <View style={styles.topRow}>
-          <View
-            style={[styles.search, { backgroundColor: theme.inputBackground }]}
+  const enterCompose = useCallback(
+    (spaceId?: string) => {
+      if (spaceId !== undefined) {
+        const space = spaces.find(s => s.id === spaceId);
+        if (space !== undefined)
+          setComposeDefaults({
+            deviceId: space.deviceId,
+            spaceId: space.id,
+          });
+      }
+      onCompose?.({ spaceId });
+    },
+    [spaces, onCompose],
+  );
+
+  const folderMenu = (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Pressable
+          style={styles.fill}
+          accessibilityRole="button"
+          accessibilityLabel={folderLabel}
+          testID="spaceFilter"
+        >
+          <Icon
+            key={spaceFilter === undefined ? 'folder' : 'folder.fill'}
+            name={spaceFilter === undefined ? 'folder' : 'folder.fill'}
+            size={18}
+            color={theme.text}
+          />
+        </Pressable>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content>
+        <DropdownMenu.Item key="all" onSelect={() => setSpaceFilter(undefined)}>
+          <DropdownMenu.ItemTitle>{t('home.allSpaces')}</DropdownMenu.ItemTitle>
+        </DropdownMenu.Item>
+        {spaceFilter !== undefined ? (
+          <DropdownMenu.Item
+            key="newHere"
+            onSelect={() => enterCompose(spaceFilter)}
           >
-            <Icon
-              name="magnifyingglass"
-              size={18}
-              color={theme.textSecondary}
-            />
-            <TextInput
-              style={[styles.searchInput, { color: theme.text }]}
-              placeholder={t('home.search')}
-              placeholderTextColor={theme.textSecondary}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-            />
-          </View>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              {control(
-                styles.filterPill,
-                <>
-                  <Text
-                    style={[styles.filterText, { color: theme.text }]}
-                    numberOfLines={1}
-                  >
-                    {spaceFilter === undefined
-                      ? t('home.allSpaces')
-                      : spaceName(spaceFilter)}
-                  </Text>
-                  <Icon
-                    name="chevron.down"
-                    size={12}
-                    color={theme.textSecondary}
-                  />
-                </>,
-              )}
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-              <DropdownMenu.Item
-                key="all"
-                onSelect={() => setSpaceFilter(undefined)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('home.allSpaces')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              {spaceFilter !== undefined ? (
+            <DropdownMenu.ItemTitle>
+              {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
+            </DropdownMenu.ItemTitle>
+          </DropdownMenu.Item>
+        ) : null}
+        {devices.map(device => {
+          const deviceSpaces = spaces.filter(s => s.deviceId === device.id);
+          if (deviceSpaces.length === 0) return null;
+          return (
+            <DropdownMenu.Group key={device.id}>
+              <DropdownMenu.Label>{device.name}</DropdownMenu.Label>
+              {deviceSpaces.map(s => (
                 <DropdownMenu.Item
-                  key="newHere"
-                  onSelect={() => setSheetOpen(true)}
+                  key={s.id}
+                  onSelect={() => setSpaceFilter(s.id)}
                 >
                   <DropdownMenu.ItemTitle>
-                    {`${t('home.newSessionIn')} ${spaceName(spaceFilter)}`}
+                    {s.name ?? s.path}
                   </DropdownMenu.ItemTitle>
                 </DropdownMenu.Item>
-              ) : null}
-              {devices.map(device => {
-                const deviceSpaces = spaces.filter(
-                  s => s.deviceId === device.id,
-                );
-                if (deviceSpaces.length === 0) return null;
-                return (
-                  <DropdownMenu.Group key={device.id}>
-                    <DropdownMenu.Label>{device.name}</DropdownMenu.Label>
-                    {deviceSpaces.map(s => (
-                      <DropdownMenu.Item
-                        key={s.id}
-                        onSelect={() => setSpaceFilter(s.id)}
-                      >
-                        <DropdownMenu.ItemTitle>
-                          {s.name ?? s.path}
-                        </DropdownMenu.ItemTitle>
-                      </DropdownMenu.Item>
-                    ))}
-                  </DropdownMenu.Group>
-                );
-              })}
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </View>
+              ))}
+            </DropdownMenu.Group>
+          );
+        })}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+  const trailing = (
+    <>
+      <Glass interactive style={styles.circle}>
+        {folderMenu}
+      </Glass>
+      <GlassControl
+        interactive
+        onPress={onOpenSettings}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('settings.title')}
+        testID="home-settings"
+        style={styles.circle}
+      >
+        <Icon name="gearshape" size={20} color={theme.text} />
+      </GlassControl>
+    </>
+  );
 
-        {connection !== 'connected' ? (
-          <View
-            style={[styles.pill, { backgroundColor: theme.cardBackground }]}
-          >
-            <Text style={[styles.pillText, { color: theme.textSecondary }]}>
-              {connection === 'connecting'
-                ? t('home.connection.connecting')
-                : t('home.connection.disconnected')}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+  const bottomPad = searching
+    ? insets.bottom + 12
+    : bottomH !== 0
+    ? bottomH + 12
+    : insets.bottom + 76;
+  const chromeH = headerH !== 0 ? headerH : insets.top + 64;
 
+  return (
+    <ChromeThemeProvider theme={theme}>
       <View
         style={[
-          styles.bottomBar,
-          { paddingBottom: (barInset ?? insets.bottom) + 8 },
+          styles.container,
+          { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
         ]}
-        onLayout={e => setBottomH(e.nativeEvent.layout.height)}
-        pointerEvents="box-none"
       >
-        <Pressable
-          style={styles.newChatWrap}
-          onPress={() => setSheetOpen(true)}
-          hitSlop={8}
+        <ThreadsBackgroundBlur />
+        <ContentEdgeMask
+          topInset={chromeH}
+          bottomInset={0}
+          bottomBand={searching ? 0 : TOP_CHROME_FADE_BAND}
         >
-          {control(
-            styles.newChat,
-            <>
-              <Icon name="plus" size={16} color={theme.text} />
-              <Text style={[styles.newChatText, { color: theme.text }]}>
-                {t('home.newSession')}
-              </Text>
-            </>,
-          )}
-        </Pressable>
-        <Pressable onPress={onOpenSettings} hitSlop={8}>
-          {control(
-            styles.circle,
-            <Icon name="gearshape" size={20} color={theme.text} />,
-          )}
-        </Pressable>
-      </View>
+          <LegendList
+            style={styles.fillList}
+            data={rest}
+            keyExtractor={item => item.id}
+            estimatedItemSize={78}
+            recycleItems
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListHeaderComponent={
+              <>
+                <Text
+                  style={[styles.largeTitle, { color: theme.text }]}
+                  testID="home-title"
+                >
+                  {spaceFilter === undefined
+                    ? t('home.sessions')
+                    : spaceName(spaceFilter)}
+                </Text>
+                {pinned.length > 0 ? (
+                  <View
+                    style={styles.pinnedSection}
+                    testID="home-pinned-section"
+                  >
+                    <Text
+                      style={[styles.section, { color: theme.textSecondary }]}
+                    >
+                      {t('home.pinned')}
+                    </Text>
+                    {pinned.map(c => (
+                      <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            }
+            ListEmptyComponent={
+              pinned.length === 0 ? (
+                <Text style={[styles.empty, { color: theme.textSecondary }]}>
+                  {t('home.empty')}
+                </Text>
+              ) : null
+            }
+            ListFooterComponent={
+              archived.length > 0 ? (
+                <View>
+                  <Pressable
+                    style={styles.archivedHeader}
+                    onPress={() => setArchivedOpen(o => !o)}
+                    hitSlop={6}
+                    testID="home-archived-header"
+                  >
+                    <View style={styles.archivedIcon}>
+                      <Icon
+                        name="archivebox"
+                        size={14}
+                        color={theme.textSecondary}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.archivedLabel,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      {`${t('home.archived')} (${archived.length})`}
+                    </Text>
+                    <View style={styles.archivedIcon}>
+                      <Icon
+                        name={archivedOpen ? 'chevron.up' : 'chevron.down'}
+                        size={14}
+                        color={theme.textSecondary}
+                      />
+                    </View>
+                  </Pressable>
+                  {archivedOpen
+                    ? archived.map(c => (
+                        <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
+                      ))
+                    : null}
+                </View>
+              ) : null
+            }
+            contentContainerStyle={[
+              styles.listContent,
+              {
+                paddingTop: chromeH + LIST_GAP_BELOW_CHROME,
+                paddingBottom: bottomPad,
+              },
+            ]}
+            scrollIndicatorInsets={{
+              top: headerH,
+              bottom: searching ? 0 : bottomH,
+            }}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="interactive"
+            renderItem={renderRow}
+          />
+        </ContentEdgeMask>
 
-      {sheetOpen ? (
-        <NewSessionSheet
-          initialSpaceId={spaceFilter}
-          onClose={() => setSheetOpen(false)}
-          onCreated={id => {
-            setSheetOpen(false);
-            onOpenSession(id);
-          }}
-        />
-      ) : null}
-    </View>
+        <View
+          style={[styles.topBar, { paddingTop: insets.top + 8 }]}
+          onLayout={e => setHeaderH(e.nativeEvent.layout.height)}
+          pointerEvents="box-none"
+        >
+          <View
+            style={[
+              styles.topRow,
+              variant === 'sidebar' ? styles.topRowSidebar : undefined,
+            ]}
+          >
+            <Glass interactive style={styles.search}>
+              <Icon
+                name="magnifyingglass"
+                size={18}
+                color={theme.textSecondary}
+              />
+              <TextInput
+                ref={searchRef}
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder={t('home.search')}
+                placeholderTextColor={theme.textSecondary}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                testID="home-search-input"
+                accessibilityLabel={t('home.search')}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+              />
+            </Glass>
+            <View style={styles.trailingCluster}>{trailing}</View>
+          </View>
+
+          {connection !== 'connected' ? (
+            <View
+              style={[styles.pill, { backgroundColor: theme.cardBackground }]}
+            >
+              <Text style={[styles.pillText, { color: theme.textSecondary }]}>
+                {connection === 'connecting'
+                  ? t('home.connection.connecting')
+                  : t('home.connection.disconnected')}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {searching ? null : (
+          <View
+            style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
+            onLayout={e => setBottomH(e.nativeEvent.layout.height)}
+            pointerEvents="box-none"
+          >
+            <GlassControl
+              interactive
+              onPress={() => enterCompose()}
+              hitSlop={8}
+              testID="home-new-thread"
+              accessibilityRole="button"
+              accessibilityLabel={t('home.newThread')}
+              style={styles.circle}
+            >
+              <Icon name="square.and.pencil" size={18} color={theme.text} />
+            </GlassControl>
+          </View>
+        )}
+      </View>
+    </ChromeThemeProvider>
   );
 }
 
@@ -511,14 +812,17 @@ const CIRCLE = 44;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0 },
+  fillList: { flex: 1 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
-    paddingHorizontal: 16,
     paddingBottom: 12,
+    paddingHorizontal: 16,
   },
+  topRowSidebar: { paddingHorizontal: 16 },
   search: {
     flex: 1,
     flexDirection: 'row',
@@ -529,17 +833,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   searchInput: { flex: 1, fontSize: 17, padding: 0 },
-  filterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: CIRCLE,
-    paddingHorizontal: 14,
-    borderRadius: CIRCLE / 2,
-    overflow: 'hidden',
-    maxWidth: 160,
-  },
-  filterText: { fontSize: 14, fontWeight: '500' },
   pill: {
     alignSelf: 'center',
     borderRadius: 12,
@@ -548,32 +841,67 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   pillText: { fontSize: 12, fontWeight: '500' },
-  section: {
-    fontSize: 16,
+  largeTitle: {
+    fontSize: 20,
     fontWeight: '500',
     paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 8,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  section: {
+    fontSize: 15,
+    fontWeight: '500',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   empty: { fontSize: 15, padding: 20, textAlign: 'center' },
   listContent: { paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowHover: { opacity: 0.72 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotPlaceholder: { width: 8, height: 8 },
-  rowText: { flex: 1, gap: 3 },
-  title: { fontSize: 18, fontWeight: '500' },
-  unseen: { fontWeight: '700' },
-  subtitle: { fontSize: 14 },
-  preview: { fontSize: 13 },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
+  rowMenuOpen: {
+    borderRadius: 12,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  rowText: { flex: 1, gap: 4 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: { flex: 1, fontSize: 17, fontWeight: '400' },
+  unseen: { fontWeight: '500' },
+  subtitle: { fontSize: 15 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusLive: { flexShrink: 1 },
+  prStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  prStatusText: { flex: 1 },
+  elapsed: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    marginLeft: 12,
+    textAlign: 'right',
+  },
+  pinnedSection: { paddingBottom: 12 },
   archivedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,29 +909,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
+  archivedIcon: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  archivedLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 3,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingTop: 8,
-    gap: 10,
   },
-  newChatWrap: { flex: 1 },
-  newChat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: CIRCLE,
-    borderRadius: CIRCLE / 2,
-    overflow: 'hidden',
-  },
-  newChatText: { fontSize: 17, fontWeight: '600' },
   circle: {
     width: CIRCLE,
     height: CIRCLE,
@@ -611,5 +939,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  fill: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trailingCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

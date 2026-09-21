@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+import * as DropdownMenu from './menus/dropdown-menu';
 import { Icon } from './Icon';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
@@ -9,14 +9,16 @@ type AttachmentMenuProps = {
   onPickPhotos: () => void;
   onPickCamera: () => void;
   onPickFiles: () => void;
-  onEnablePlan?: () => void;
+  planEnabled?: boolean;
+  onTogglePlan?: (enabled: boolean) => void;
 };
 
 export function AttachmentMenu({
   onPickPhotos,
   onPickCamera,
   onPickFiles,
-  onEnablePlan,
+  planEnabled = false,
+  onTogglePlan,
 }: AttachmentMenuProps) {
   const theme = useTheme();
   return (
@@ -47,13 +49,20 @@ export function AttachmentMenu({
           <DropdownMenu.ItemTitle>{t('composer.files')}</DropdownMenu.ItemTitle>
           <DropdownMenu.ItemIcon ios={{ name: 'paperclip' }} />
         </DropdownMenu.Item>
-        {onEnablePlan !== undefined ? (
-          <DropdownMenu.Item key="plan" onSelect={onEnablePlan}>
+        {onTogglePlan !== undefined ? (
+          <DropdownMenu.CheckboxItem
+            key="plan"
+            value={planEnabled}
+            onValueChange={next => {
+              onTogglePlan(next === 'on');
+            }}
+          >
             <DropdownMenu.ItemTitle>
               {t('composer.plan')}
             </DropdownMenu.ItemTitle>
             <DropdownMenu.ItemIcon ios={{ name: 'list.bullet.indent' }} />
-          </DropdownMenu.Item>
+            <DropdownMenu.ItemIndicator />
+          </DropdownMenu.CheckboxItem>
         ) : null}
       </DropdownMenu.Content>
     </DropdownMenu.Root>
@@ -69,5 +78,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
 });

@@ -4,15 +4,15 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View, type GestureResponderEvent } from 'react-native';
-import Animated, {
+import {
   Easing,
-  useAnimatedStyle,
   useSharedValue,
   withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { selectionTick } from '../zeron/native/haptics';
+import { prepareSelection, selectionTick } from '../zeron/native/haptics';
 import { detentForValue } from './modelPicker';
+import { EffortTrackAnim } from './EffortTrackAnim';
 import {
   effortSliderMagnetRadius,
   effortSliderProgressHeight,
@@ -41,17 +41,24 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
   const trackWidth = useRef(0);
   const [measured, setMeasured] = useState(0);
   const current = detentForValue(levels, value);
-  const currentRef = useRef(current);
-  currentRef.current = current;
-  const position = useSharedValue(stopFraction(current, levels.length));
+  const lastIndexRef = useRef(current);
   const pressed = useRef(false);
+  // Props can lag a frame (or more, for session Loro writes) behind a drag.
+  // Freeze the last committed index while pressed so a stale `value` cannot
+  // re-arm selection ticks on every move event.
+  if (!pressed.current) {
+    lastIndexRef.current = current;
+  }
+  const position = useSharedValue(stopFraction(current, levels.length));
 
   const commitIndex = useCallback(
     (index: number) => {
-      if (index !== currentRef.current && levels[index] !== undefined) {
-        selectionTick();
-        onChange(levels[index]);
+      if (index === lastIndexRef.current || levels[index] === undefined) {
+        return;
       }
+      lastIndexRef.current = index;
+      selectionTick();
+      onChange(levels[index]);
     },
     [levels, onChange],
   );
@@ -74,7 +81,7 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
         return;
       }
       position.value = pulled;
-      if (next !== currentRef.current) commitIndex(next);
+      commitIndex(next);
     },
     [commitIndex, levels.length, position, reduceMotion],
   );
@@ -93,19 +100,8 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
     effortSliderThumbInset,
   );
 
-  const fillStyle = useAnimatedStyle(() => ({
-    width: effortSliderProgressHeight + geo.travelDistance * position.value,
-  }));
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          effortSliderThumbInset + geo.travelDistance * position.value,
-      },
-    ],
-  }));
-
   const progressInset = geo.thumbCenterStart - effortSliderProgressHeight / 2;
+  const travel = geo.travelDistance;
 
   return (
     <View
@@ -119,6 +115,7 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
       onMoveShouldSetResponder={() => true}
       onResponderGrant={e => {
         pressed.current = true;
+        prepareSelection();
         onTouch(e, false);
       }}
       onResponderMove={e => onTouch(e, false)}
@@ -126,22 +123,25 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
         pressed.current = false;
         onTouch(e, true);
       }}
+      onResponderTerminate={() => {
+        pressed.current = false;
+      }}
       accessibilityRole="adjustable"
       accessibilityValue={{ text: levels[current] }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={e => {
         const dir = e.nativeEvent.actionName === 'increment' ? 1 : -1;
-        const next = Math.min(Math.max(current + dir, 0), levels.length - 1);
-        if (next !== current && levels[next] !== undefined) {
-          selectionTick();
-          onChange(levels[next]);
-          position.value = reduceMotion
-            ? stopFraction(next, levels.length)
-            : withTiming(stopFraction(next, levels.length), {
-                duration: effortSliderSnapMs,
-                easing: Easing.out(Easing.cubic),
-              });
-        }
+        const next = Math.min(
+          Math.max(lastIndexRef.current + dir, 0),
+          levels.length - 1,
+        );
+        commitIndex(next);
+        position.value = reduceMotion
+          ? stopFraction(next, levels.length)
+          : withTiming(stopFraction(next, levels.length), {
+              duration: effortSliderSnapMs,
+              easing: Easing.out(Easing.cubic),
+            });
       }}
     >
       {geo.tickCenters.map((cx, i) => (
@@ -157,28 +157,12 @@ export function EffortSlider({ levels, value, onChange }: EffortSliderProps) {
           ]}
         />
       ))}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.progress,
-          {
-            backgroundColor: theme.text,
-            left: progressInset,
-            top: (effortSliderTrackHeight - effortSliderProgressHeight) / 2,
-          },
-          fillStyle,
-        ]}
-      />
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.thumb,
-          {
-            backgroundColor: theme.sendActive,
-            top: (effortSliderTrackHeight - effortSliderThumbSize) / 2,
-          },
-          thumbStyle,
-        ]}
+      <EffortTrackAnim
+        travel={travel}
+        position={position}
+        progressInset={progressInset}
+        fillColor={theme.text}
+        thumbColor={theme.sendActive}
       />
     </View>
   );
@@ -196,18 +180,5 @@ const styles = StyleSheet.create({
     height: effortSliderTickSize,
     borderRadius: effortSliderTickSize / 2,
     top: (effortSliderTrackHeight - effortSliderTickSize) / 2,
-  },
-  progress: {
-    position: 'absolute',
-    height: effortSliderProgressHeight,
-    borderRadius: effortSliderProgressHeight / 2,
-    overflow: 'hidden',
-  },
-  thumb: {
-    position: 'absolute',
-    width: effortSliderThumbSize,
-    height: effortSliderThumbSize,
-    borderRadius: effortSliderThumbSize / 2,
-    left: 0,
   },
 });

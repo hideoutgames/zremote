@@ -21,12 +21,13 @@ export function BrandMark({
     }
   }, [svg]);
 
-  if (picture == null) {
-    return <View style={{ width: size, height: size }} />;
-  }
   return (
-    <Canvas style={{ width: size, height: size }} pointerEvents="none">
-      <ImageSVG svg={picture} width={size} height={size} />
-    </Canvas>
+    <View style={{ width: size, height: size }}>
+      {picture == null ? null : (
+        <Canvas style={{ width: size, height: size }} pointerEvents="none">
+          <ImageSVG svg={picture} width={size} height={size} />
+        </Canvas>
+      )}
+    </View>
   );
 }

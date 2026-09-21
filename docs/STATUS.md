@@ -13,13 +13,13 @@ Exercised against the real edge/engine (`e2e:windows` 13/13 —
 logic:
 
 - **Sync substrate**: registry room, device relay, chat room, presence/dial
-  parking, auth dev-token/paste-code path.
+  parking, auth restore + PKCE HTTPS callback.
 - **Command ledger**: run, steer, interrupt, respondInput,
   cancelOwnCommand; queue enqueue/send-now/steer-now/remove/move.
 - **Registry writes**: createSpace, deleteSpace, createChat, renameChat,
   archive/unarchive, markSeen, deleteChat, setChatConfig.
-- **Composer logic**: send routing, `autoApprove=false` default, sandbox,
-  picker logic incl. mid-chat harness lock, drafts, checkout rules +
+- **Composer logic**: send routing, workspace-write sandbox + autoApprove false,
+  picker logic incl. provider-bound sessions, drafts, checkout rules +
   version gate.
 - **Transcript projection**, message context menu, a11y labels/roles.
 - **Attachments logic**: chunked upload, retry/deadlines, escorts.
@@ -29,7 +29,7 @@ logic:
   thresholds, catalog toggles.
 - **Navigation logic**: `layoutFor`, deep-link parsing, redacted logging.
 - **Edge patches**: AASA + PKCE + APNs producer (Live Activity + finish
-  banners) — 14 live-activity unit tests in the patch files (was 8);
+  banners + question alerts) — live-activity unit tests in the patch files;
   full edge `test:unit` still needs the worktree. Deployment required.
 - **Relay session mode** (Loro-free, host-authoritative): transcript delta
   reducer ported from `transcript_delta.rs`, `WatchDocMessages`/`WatchQueue`/
@@ -46,16 +46,19 @@ Needs a Mac build, a device, or a host in the right state:
   `zeron-split-view`) — written, never compiled here.
 - Dictation (`SpeechAnalyzer` path is a marked TODO; `SFSpeechRecognizer`
   on-device-only path written).
+- Local Voice Model (Whisper Tiny/Base + optional cleanup) — JS pipeline,
+  settings, and model manager land; native whisper.rn/llama.rn (or Nitro
+  fallbacks) need a Mac spike before artifacts are pinned.
 - Composer/attachment UI surfaces, Border Beam, effort-slider haptics,
   shimmer — device rendering.
 - Transcript rendering, theme, reduced-motion/transparency runtime,
-  ContextUsageBar — device rendering.
+  Context usage chip — device rendering.
 - Terminal on-device rendering/input (font metrics are measured constants).
 - Checkout selector UI + `SwitchRef`/`CreateWorktree` round-trip.
 - Files/Changes/History RPC round-trips on a live checkout.
-- Previews screen (needs a checkout with running services).
+- Previews screen exists but is unwired from the session overflow.
 - Agent account flows (activate/forget/login) — need provider CLIs.
-- Device rename / `UpdateStatus` / `ApplyUpdate` / title settings.
+- Device rename / `UpdateStatus` / `ApplyUpdate`.
 - Adaptive shell visuals on iPad; account isolation (by construction);
   archived settings page (shelf exists, per-device page absent).
 - Real agent runs — e2e uses the `mock` harness only (the host lists
@@ -64,9 +67,11 @@ Needs a Mac build, a device, or a host in the right state:
   no QR scan/device run was possible from this machine; shim fidelity
   (markdown, sheets, menus, glass) is unverified.
 - **iOS CI/TestFlight pipeline** — `ios-compile.yml` (unsigned compile
-  check, no secrets) and `ios-testflight.yml` (ASC-API-key cloud signing)
-  are authored in `.github/workflows/`; unverified until the first macOS
-  runner executes them (docs/TESTFLIGHT.md).
+  check, no secrets, **manual dispatch only** — not on merge to `main`)
+  and `ios-testflight.yml` (ASC-API-key cloud signing, **manual dispatch
+  only** — not on merge to `main`). The IPA is the dispatched SHA
+  (`version (run_number)` + short SHA in the binary). Dispatch `main`
+  after the work has merged (docs/TESTFLIGHT.md).
 
 ## Requires host/edge change (`requires-host-edge-change`)
 
@@ -75,6 +80,8 @@ Needs a Mac build, a device, or a host in the right state:
 - Live Activity pushes + push registration routes — same patch + `APNS_*`
   credentials.
 - Finish-banner alerts when a run completes — patch `0002-*` + same
+  `APNS_*` credentials.
+- Question-alert banners when a run asks for input — patch `0003-*` + same
   `APNS_*` credentials.
 
 ## Blocked (`blocked`)
@@ -95,18 +102,16 @@ Needs a Mac build, a device, or a host in the right state:
 ## Not started (`not-started`)
 
 Queue edit leases · setChatActivity/setChatHost · review comments ·
-change-request badge · session sounds · appearance/theme
+session sounds · appearance/theme
 library · in-app browser pane · widgets/composer/files settings pages ·
-image viewer/lightbox · transcript attachment thumbnails · workspace
+transcript attachment thumbnails · workspace
 `zeron-file:` links · new-thread background effects · Watch\*/queue-admin RPC
 set superseded by room sync.
 
 ## Deviation log (from stage reports)
 
-- TrueSheet cannot anchor iPad popovers — `Modal formSheet` fallback used.
+- `ModelPickerSheet` is a native Modal (`pageSheet` compact, `formSheet` regular); TrueSheet remains for session tools.
 - `loro-crdt` npm replaced by a Nitro module over loro-swift 1.13.3.
-- `autoApprove` is a `RunRequest` field (not `ChatConfig`) — per-chat
-  `uiPrefs`, confirm-gated, off by default.
 - Terminal: bespoke ANSI model; LegendList over scrollback+grid.
 - `zeron-split-view` not in package.json deps on purpose.
 - No device screenshots/recordings — no iOS build was possible on this

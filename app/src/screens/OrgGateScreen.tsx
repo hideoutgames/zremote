@@ -9,8 +9,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthSession } from '../app/runtimeContext';
-import { Glass } from '../components/Glass';
+import { GlassControl } from '../components/Glass';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
@@ -24,6 +25,7 @@ interface Org {
 
 export function OrgGateScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const auth = useAuthSession();
   const [orgs, setOrgs] = useState<Org[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -80,7 +82,15 @@ export function OrgGateScreen() {
   }, [auth, name]);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: theme.background,
+          paddingTop: insets.top + 24,
+        },
+      ]}
+    >
       <Text style={[styles.title, { color: theme.text }]}>
         {t('orgGate.title')}
       </Text>
@@ -132,17 +142,19 @@ export function OrgGateScreen() {
               },
             ]}
           />
-          <Pressable
+          <GlassControl
+            interactive
             onPress={create}
             disabled={busy || name.trim().length === 0}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('orgGate.create')}
+            style={styles.primary}
           >
-            <Glass interactive style={styles.primary}>
-              <Text style={[styles.primaryText, { color: theme.sendActive }]}>
-                {t('orgGate.create')}
-              </Text>
-            </Glass>
-          </Pressable>
+            <Text style={[styles.primaryText, { color: theme.sendActive }]}>
+              {t('orgGate.create')}
+            </Text>
+          </GlassControl>
         </View>
       ) : null}
       {error !== null ? (
@@ -181,6 +193,9 @@ const styles = StyleSheet.create({
   primary: {
     borderRadius: 12,
     paddingVertical: 12,
+    minHeight: 44,
+    alignSelf: 'stretch',
+    flexGrow: 0,
     alignItems: 'center',
     overflow: 'hidden',
   },

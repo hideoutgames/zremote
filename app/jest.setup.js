@@ -10,10 +10,19 @@ jest.mock('react-native-reanimated', () => ({
   ...require('react-native-reanimated/mock'),
   // The upstream mock is missing this hook ("ADD ME IF NEEDED").
   useReducedMotion: () => false,
+  // Upstream `makeMutable` is identity; shared values need `.value`.
+  makeMutable: init => ({ value: init }),
 }));
-jest.mock('react-native-keyboard-controller', () =>
-  require('react-native-keyboard-controller/jest'),
-);
+jest.mock('react-native-keyboard-controller', () => {
+  const actual = require('react-native-keyboard-controller/jest');
+  return {
+    ...actual,
+    useReanimatedKeyboardAnimation: () => ({
+      height: { value: 0 },
+      progress: { value: 0 },
+    }),
+  };
+});
 // The package's own mock exports the whole module as a default export.
 jest.mock(
   'react-native-safe-area-context',
@@ -45,13 +54,30 @@ jest.mock('@callstack/liquid-glass', () => ({
 jest.mock('expo-blur', () => ({
   BlurView: require('react-native').View,
 }));
+jest.mock('expo-linear-gradient', () => ({
+  LinearGradient: require('react-native').View,
+}));
+jest.mock('expo-image', () => ({
+  Image: require('react-native').Image,
+}));
+jest.mock('@react-native-masked-view/masked-view', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const MaskedView = ({ children, maskElement, ...rest }) =>
+    React.createElement(View, { ...rest, maskElement }, maskElement, children);
+  MaskedView.default = MaskedView;
+  return {
+    __esModule: true,
+    default: MaskedView,
+  };
+});
 
 jest.mock('expo-glass-effect', () => ({
   GlassView: require('react-native').View,
   isLiquidGlassAvailable: () => false,
 }));
 
-jest.mock('react-native-nitro-symbols', () => ({
+jest.mock('expo-symbols', () => ({
   SymbolView: (props: object) =>
     require('react').createElement(require('react-native').View, props),
 }));
@@ -82,21 +108,30 @@ jest.mock('react-native-enriched-markdown', () => ({
 }));
 
 jest.mock('@lodev09/react-native-true-sheet', () => ({
-  TrueSheet: ({ children }: { children?: unknown }) =>
+  TrueSheet: ({
+    children,
+    ...props
+  }: {
+    children?: unknown,
+    detents?: unknown,
+  }) =>
     require('react').createElement(
       require('react-native').View,
-      null,
+      { testID: 'TrueSheet', ...props },
       children,
     ),
   dismissSheet: jest.fn(),
 }));
 
-const menuComponent = (name: string) => (props: { children?: unknown }) =>
-  require('react').createElement(
-    require('react-native').View,
-    { testID: name },
-    props.children,
-  );
+const menuComponent =
+  (name: string) => (props: { children?: unknown, [key: string]: unknown }) => {
+    const { children, ...rest } = props;
+    return require('react').createElement(
+      require('react-native').View,
+      { ...rest, testID: name },
+      children,
+    );
+  };
 const menuText = (props: object) =>
   require('react').createElement(require('react-native').Text, props);
 
@@ -108,6 +143,7 @@ jest.mock('zeego/dropdown-menu', () => ({
   ItemTitle: menuText,
   ItemSubtitle: menuText,
   ItemIcon: () => null,
+  ItemImage: menuComponent('DropdownItemImage'),
   Group: menuComponent('DropdownGroup'),
   Separator: () => null,
   CheckboxItem: menuComponent('DropdownCheckbox'),
@@ -130,9 +166,10 @@ jest.mock('zeego/context-menu', () => ({
   Auxiliary: () => null,
   Separator: () => null,
   Group: menuComponent('ContextGroup'),
+  Label: menuText,
 }));
 
-// @legendapp/list: render via FlatList; the keyboard helpers become no-ops.
+// @legendapp/list: render via FlatList (Home / Terminal).
 jest.mock('@legendapp/list/react-native', () => {
   const RN = require('react-native');
   const ReactLib = require('react');
@@ -141,22 +178,27 @@ jest.mock('@legendapp/list/react-native', () => {
   );
   return { LegendList };
 });
-jest.mock('@legendapp/list/keyboard', () => {
-  const ReactLib = require('react');
+// @shopify/flash-list: v2 throws without New Architecture; tests render via
+// FlatList and spy the imperative scroll methods used by the transcript.
+jest.mock('@shopify/flash-list', () => {
   const RN = require('react-native');
+  const ReactLib = require('react');
+  const scrollToEnd = jest.fn();
+  const scrollToIndex = jest.fn(() => Promise.resolve());
+  const scrollToOffset = jest.fn();
+  const FlashList = ReactLib.forwardRef((props: object, ref: unknown) => {
+    ReactLib.useImperativeHandle(ref, () => ({
+      scrollToEnd,
+      scrollToIndex,
+      scrollToOffset,
+    }));
+    return ReactLib.createElement(RN.FlatList, props);
+  });
   return {
-    KeyboardAwareLegendList: ReactLib.forwardRef(
-      (props: object, ref: unknown) =>
-        ReactLib.createElement(RN.FlatList, { ...props, ref }),
-    ),
-    useKeyboardChatComposerInset: () => ({
-      contentInsetEndAdjustment: 0,
-      onComposerLayout: jest.fn(),
-    }),
-    useKeyboardScrollToEnd: () => ({
-      freeze: false,
-      scrollMessageToEnd: jest.fn(),
-    }),
+    FlashList,
+    __scrollToEnd: scrollToEnd,
+    __scrollToIndex: scrollToIndex,
+    __scrollToOffset: scrollToOffset,
   };
 });
 
@@ -207,6 +249,7 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn(() => Promise.resolve()),
   impactAsync: jest.fn(() => Promise.resolve()),
   notificationAsync: jest.fn(() => Promise.resolve()),
+  prepareSelectionAsync: jest.fn(() => Promise.resolve()),
   ImpactFeedbackStyle: { Light: 0, Medium: 1, Heavy: 2 },
   NotificationFeedbackType: { Success: 0, Warning: 1, Error: 2 },
 }));
@@ -231,18 +274,54 @@ jest.mock('expo-notifications', () => ({
 }));
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
+  openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
+  maybeCompleteAuthSession: jest.fn(),
 }));
 jest.mock('expo-file-system', () => ({
   File: class {
-    constructor(uri) {
-      this.uri = uri;
+    constructor(uri, name) {
+      this.uri =
+        typeof uri === 'string'
+          ? name !== undefined
+            ? `${uri.replace(/\/$/, '')}/${name}`
+            : uri
+          : uri?.uri !== undefined && name !== undefined
+          ? `${String(uri.uri).replace(/\/$/, '')}/${name}`
+          : uri?.uri ?? uri;
     }
+    exists = false;
     base64() {
       return Promise.resolve('');
     }
+    text() {
+      return Promise.resolve('');
+    }
+    copy() {}
+    delete() {}
+    create() {}
   },
-  Directory: class {},
+  Directory: class {
+    constructor(base, name) {
+      this.uri =
+        typeof base === 'string'
+          ? `${base.replace(/\/$/, '')}/${name ?? ''}`
+          : `${String(base?.uri ?? 'file:///docs').replace(/\/$/, '')}/${
+              name ?? ''
+            }`;
+      this.exists = false;
+    }
+    create() {}
+    delete() {}
+  },
   Paths: { document: { uri: 'file:///docs' }, cache: { uri: 'file:///cache' } },
+}));
+jest.mock('expo-file-system/legacy', () => ({
+  createDownloadResumable: jest.fn(() => ({
+    downloadAsync: jest.fn(() => Promise.resolve({})),
+    resumeAsync: jest.fn(() => Promise.resolve({})),
+    pauseAsync: jest.fn(() => Promise.resolve({})),
+    savable: jest.fn(() => ({})),
+  })),
 }));
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(() => Promise.resolve({ canceled: true })),
@@ -250,4 +329,23 @@ jest.mock('expo-document-picker', () => ({
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve()),
+}));
+
+// Voice engines are native-only; the voice resolvers probe these lazily and
+// must never reach a real module under Jest.
+jest.mock('expo-audio', () => ({
+  AudioQuality: { MAX: 127 },
+  IOSOutputFormat: { LINEARPCM: 'lpcm' },
+  requestRecordingPermissionsAsync: jest.fn(() =>
+    Promise.resolve({ granted: false }),
+  ),
+  setAudioModeAsync: jest.fn(() => Promise.resolve()),
+  setIsAudioActiveAsync: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('expo-audio/build/AudioModule', () => ({
+  __esModule: true,
+  default: { AudioRecorder: jest.fn() },
+}));
+jest.mock('llama.rn', () => ({
+  initLlama: jest.fn(() => Promise.reject(new Error('jest'))),
 }));

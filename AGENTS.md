@@ -52,6 +52,15 @@ e2e for transport/runtime changes · edge `test:unit` for edge changes.
 - **Never log prompts, message text, or secrets.** `zeron/log.ts` is the
   redacting logger; use it.
 - **Never commit** unless explicitly asked; never push to main.
+- **Pull requests go only to `hideoutgames/zremote`.** Never open a pull
+  request against any other repository, including `margelo/ai-chat-demo` and
+  any other upstream. `gh pr create` must use `--repo hideoutgames/zremote`.
+  If a pull request is opened against another repo, close it.
+- **PRs always target `main`.** Feature branches and worktrees are for
+  development only. Do not open or merge a PR into another feature /
+  Cursor branch. TestFlight and iOS Compile Check are **manual dispatch
+  only** (typically of `main`); stacked PRs never ship. Rebase onto
+  `main` and retarget the PR if the work started on a stacked branch.
 - **Prettier is pinned at 2.8.8** in `app/` — run `npx prettier` inside
   `app/`, not at the repo root (root has no package.json and resolves v3).
 - **`ios.useFrameworks` stays unset** — Nitro requires static linking.
@@ -63,7 +72,7 @@ e2e for transport/runtime changes · edge `test:unit` for edge changes.
   WorkOS tokens for agent logins.
 - **`.git` is never listed** in file browsing (jail boundary — see
   ARCHITECTURE.md).
-- Attachments are **image-only, ≤24MB**, chunked base64 — device-local URIs
-  never leave the phone.
+- Attachments are **≤24MB**, chunked base64 — images plus documents
+  (text/pdf/json/…); device-local URIs never leave the phone.
 - No AI-generated artwork.
 - Standard GitHub runners only.

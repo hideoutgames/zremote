@@ -12,9 +12,11 @@ const leaf = (path: string): string =>
 export function TurnChangesCard({
   files,
   onOpenFile,
+  embedded = false,
 }: {
   files: TurnChange[];
   onOpenFile: (file: TurnChange) => void;
+  embedded?: boolean;
 }) {
   const theme = useTheme();
   if (files.length === 0) return null;
@@ -22,11 +24,20 @@ export function TurnChangesCard({
     <View
       style={[
         styles.card,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
+        embedded ? styles.embedded : undefined,
+        embedded
+          ? undefined
+          : {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+            },
       ]}
     >
-      <Text style={[styles.header, { color: theme.text }]}>
-        {t('session.changesCount').replace('{count}', String(files.length))}
+      <Text
+        style={[styles.heading, { color: theme.text }]}
+        accessibilityRole="header"
+      >
+        {t('session.changes')}
       </Text>
       {files.map(file => (
         <Pressable
@@ -70,11 +81,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 6,
     marginTop: 10,
   },
-  header: { fontSize: 15, fontWeight: '600', marginBottom: 6 },
+  heading: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingBottom: 4,
+  },
+  embedded: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    marginTop: 0,
+    backgroundColor: 'transparent',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

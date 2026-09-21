@@ -3,7 +3,69 @@ import {
   detentForValue,
   nearestDetent,
   revalidateSelection,
+  effortLevelsForModel,
+  modelRowKey,
+  rememberedReasoning,
+  rememberedModelOptions,
 } from '../src/components/modelPicker';
+
+test('rememberedReasoning keeps a valid live/stored level', () => {
+  expect(rememberedReasoning({ reasoning: 'high' }, ['low', 'high'])).toBe(
+    'high',
+  );
+  expect(rememberedReasoning({ reasoning: 'gone' }, ['low', 'high'])).toBe(
+    'low',
+  );
+  expect(
+    rememberedReasoning({ reasoning: 'low' }, ['low', 'high'], 'high'),
+  ).toBe('high');
+  expect(rememberedReasoning(undefined, [])).toBeUndefined();
+});
+
+test("rememberedModelOptions never leaks another model's keys", () => {
+  expect(
+    rememberedModelOptions({ modelOptions: { fast: 'on', other: 'x' } }, [
+      { id: 'fast', defaultChoice: 'off' },
+    ]),
+  ).toEqual({ fast: 'on' });
+  expect(
+    rememberedModelOptions(undefined, [{ id: 'fast', defaultChoice: 'off' }]),
+  ).toEqual({ fast: 'off' });
+  expect(
+    rememberedModelOptions({ modelOptions: { fast: 'on' } }, undefined),
+  ).toEqual({});
+});
+
+test('rememberedModelOptions keeps every advertised option for this model', () => {
+  expect(
+    rememberedModelOptions(
+      { modelOptions: { fast: 'true', effort: 'high', gone: 'x' } },
+      [
+        { id: 'effort', defaultChoice: 'medium' },
+        { id: 'fast', defaultChoice: 'false' },
+        { id: 'optimize_for', defaultChoice: 'balanced' },
+      ],
+    ),
+  ).toEqual({
+    effort: 'high',
+    fast: 'true',
+    optimize_for: 'balanced',
+  });
+});
+
+test('effortLevelsForModel prefers the model ladder', () => {
+  expect(
+    effortLevelsForModel({ reasoningLevels: ['low', 'high'] }, ['medium']),
+  ).toEqual(['low', 'high']);
+  expect(effortLevelsForModel({ reasoningLevels: [] }, ['low'])).toEqual([
+    'low',
+  ]);
+  expect(effortLevelsForModel({ reasoningLevels: [] }, undefined)).toEqual([]);
+});
+
+test('modelRowKey joins harness and model', () => {
+  expect(modelRowKey('claude-code', 'sonnet')).toBe('claude-code:sonnet');
+});
 
 test('effortDetents preserves the advertised order', () => {
   expect(effortDetents(['low', 'medium', 'high'])).toEqual([

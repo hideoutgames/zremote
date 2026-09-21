@@ -1,6 +1,11 @@
 import React, { type ComponentProps } from 'react';
-import { type ColorValue, type StyleProp, type ViewStyle } from 'react-native';
-import { SymbolView } from 'react-native-nitro-symbols';
+import {
+  View,
+  type ColorValue,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { theme } from '../theme';
@@ -17,6 +22,8 @@ const SF_TO_MDI: Record<string, string> = {
   plus: 'plus',
   'arrow.up': 'arrow-up',
   'arrow.down': 'arrow-down',
+  'arrow.left': 'arrow-left',
+  'arrow.right': 'arrow-right',
   'stop.fill': 'stop',
   sparkles: 'creation',
   'text.bubble': 'message-outline',
@@ -42,7 +49,9 @@ const SF_TO_MDI: Record<string, string> = {
   'puzzlepiece.extension': 'puzzle-outline',
   wrench: 'wrench',
   'chevron.left': 'chevron-left',
+  ellipsis: 'dots-horizontal',
   'ellipsis.circle': 'dots-horizontal-circle-outline',
+  link: 'link',
   'checkmark.circle': 'check-circle-outline',
   'circle.fill': 'circle',
   'exclamationmark.triangle': 'alert-outline',
@@ -62,6 +71,12 @@ const SF_TO_MDI: Record<string, string> = {
   'arrow.up.doc': 'file-upload-outline',
   'doc.text': 'file-document-outline',
   eye: 'eye-outline',
+  'eye.slash': 'eye-off-outline',
+  lock: 'lock-outline',
+  minus: 'minus-thick',
+  'plus.forwardslash.minus': 'plus-minus',
+  'slash.circle': 'circle-off-outline',
+  'person.2': 'account-multiple-outline',
   'sidebar.left': 'page-layout-sidebar-left',
   'sidebar.right': 'page-layout-sidebar-right',
   'list.bullet.indent': 'format-list-bulleted',
@@ -71,6 +86,9 @@ const SF_TO_MDI: Record<string, string> = {
   'paperplane.fill': 'send',
   trash: 'trash-can-outline',
   'arrow.right.doc.on.clipboard': 'clipboard-arrow-right-outline',
+  'slider.horizontal.3': 'tune',
+  bolt: 'lightning-bolt-outline',
+  'bolt.fill': 'lightning-bolt',
 };
 
 type MdiName = ComponentProps<typeof MaterialDesignIcons>['name'];
@@ -90,18 +108,20 @@ export function Icon({
 }: IconProps) {
   const mdiName = (SF_TO_MDI[name] ?? 'help-circle-outline') as MdiName;
   return (
-    <SymbolView
-      symbolName={name}
-      tintColor={color}
-      pointSize={size}
-      style={style}
-      fallback={
-        <MaterialDesignIcons
-          name={mdiName}
-          size={size}
-          color={color as string}
-        />
-      }
-    />
+    <View collapsable={false} style={[{ width: size, height: size }, style]}>
+      <SymbolView
+        name={name}
+        size={size}
+        tintColor={color}
+        resizeMode="scaleAspectFit"
+        fallback={
+          <MaterialDesignIcons
+            name={mdiName}
+            size={size}
+            color={color as string}
+          />
+        }
+      />
+    </View>
   );
 }

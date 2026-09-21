@@ -34,6 +34,9 @@ export interface DraftState {
 
 export const draftStore = createStore<DraftState>(() => ({ byChat: {} }));
 
+/** Draft key for the home/detail compose composer (no chat yet). */
+export const COMPOSE_DRAFT_ID = '__compose__';
+
 const PERSIST_DEBOUNCE_MS = 300;
 
 interface DraftPersist {
@@ -109,20 +112,48 @@ export const setDraftPendingWorktree = (
   pendingWorktree: Draft['pendingWorktree'],
 ): void => patchDraft(chatId, { pendingWorktree });
 
-export const stageAttachment = (
+export type StageAttachmentInput = Omit<
+  StagedAttachment,
+  'id' | 'uploadState'
+> &
+  Partial<Pick<StagedAttachment, 'id' | 'uploadState'>>;
+
+/** Append every item in one store update so batched picks cannot clobber. */
+export const stageAttachments = (
   chatId: string,
-  a: Omit<StagedAttachment, 'id' | 'uploadState'> &
-    Partial<Pick<StagedAttachment, 'id' | 'uploadState'>>,
-): StagedAttachment => {
-  const staged: StagedAttachment = {
+  items: readonly StageAttachmentInput[],
+): StagedAttachment[] => {
+  if (items.length === 0) return [];
+  const staged: StagedAttachment[] = items.map(a => ({
     id: a.id ?? newId(),
     uploadState: 'staged',
     ...a,
-  };
-  const cur = draftStore.getState().byChat[chatId];
-  patchDraft(chatId, { attachments: [...(cur?.attachments ?? []), staged] });
+  }));
+  draftStore.setState(s => {
+    const base = s.byChat[chatId] ?? {
+      text: '',
+      attachments: [],
+      updatedAt: 0,
+    };
+    return {
+      byChat: {
+        ...s.byChat,
+        [chatId]: {
+          ...base,
+          attachments: [...base.attachments, ...staged],
+          updatedAt: Date.now(),
+        },
+      },
+    };
+  });
+  schedulePersist();
   return staged;
 };
+
+export const stageAttachment = (
+  chatId: string,
+  a: StageAttachmentInput,
+): StagedAttachment => stageAttachments(chatId, [a])[0]!;
 
 export const updateAttachment = (
   chatId: string,
@@ -155,10 +186,27 @@ export const clearDraft = (chatId: string): void => {
   schedulePersist();
 };
 
+/** Move a draft (compose → new chat) without dropping attachments/text. */
+export const moveDraft = (fromId: string, toId: string): void => {
+  if (fromId === toId) return;
+  const cur = draftStore.getState().byChat[fromId];
+  draftStore.setState(s => {
+    const next = { ...s.byChat };
+    if (cur !== undefined) next[toId] = { ...cur, updatedAt: Date.now() };
+    delete next[fromId];
+    return { byChat: next };
+  });
+  schedulePersist();
+};
+
+export const draftFor = (chatId: string): Draft | undefined =>
+  draftStore.getState().byChat[chatId];
+
 /** A send the host rejected/expired: put the text back without clobbering
  * whatever the user has typed since (append with a blank line if needed). */
 export const restoreFailedSend = (chatId: string, text: string): void => {
   const cur = draftStore.getState().byChat[chatId]?.text ?? '';
+  if (cur === text) return;
   const merged = cur === '' ? text : `${cur}\n\n${text}`;
   patchDraft(chatId, { text: merged });
 };

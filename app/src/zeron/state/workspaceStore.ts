@@ -6,7 +6,7 @@
 // Hooks select the raw slices and derive with useMemo — selector functions
 // must return stable references or useSyncExternalStore loops.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createStore, useStore } from 'zustand';
 import {
   archivedChats,
@@ -15,7 +15,11 @@ import {
   overviewChats,
   type WorkspaceProjection,
 } from '../doc/workspaceProjection';
-import { effectiveStatus, type ChatIndicator } from '../protocol/entities';
+import {
+  effectiveStatus,
+  isPresenceFresh,
+  type ChatIndicator,
+} from '../protocol/entities';
 import type { Chat, DeviceRow, SessionRow, Space } from '../protocol/types';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
@@ -99,25 +103,43 @@ export const useArchivedChats = (spaceId?: string): Chat[] => {
 export const useChat = (chatId: string): Chat | undefined =>
   useStore(workspaceStore, s => s.chats.find(c => c.id === chatId));
 
+/** Shared 1s clock. Every subscriber's selector runs on each tick, but
+ *  zustand only re-renders when the derived value changes — a row showing
+ *  "2d" re-renders once a day, not once a second, and high-in-the-tree
+ *  subscribers stop re-rendering whole screens on every tick. */
+const nowStore = createStore<{ now: number }>(() => ({ now: Date.now() }));
+let nowTimer: ReturnType<typeof setInterval> | undefined;
+
+export const useDerivedNow = <T>(derive: (now: number) => T): T => {
+  useEffect(() => {
+    nowStore.setState({ now: Date.now() });
+    if (nowTimer === undefined) {
+      nowTimer = setInterval(
+        () => nowStore.setState({ now: Date.now() }),
+        1000,
+      );
+      // RN returns a number; Node/Jest returns a Timeout — unref so a live
+      // timer never blocks worker teardown.
+      (nowTimer as { unref?: () => void }).unref?.();
+    }
+  }, []);
+  return useStore(nowStore, s => derive(s.now));
+};
+
 /** Indicator with a 1s-ticking `now` so staleness updates live. */
 export const useIndicator = (chatId: string): ChatIndicator => {
   const w = useProjection();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return useMemo(() => {
+  return useDerivedNow(now => {
     const chat = w.chats.find(c => c.id === chatId);
     return chat === undefined ? 'idle' : indicatorFor(w, chat, now);
-  }, [w, chatId, now]);
+  });
 };
 
-export const useDeviceOnline = (deviceId: string): boolean =>
-  useStore(workspaceStore, s => {
-    const at = s.presence[deviceId];
-    return at !== undefined && Date.now() - at < 45_000;
-  });
+/** Ticking presence freshness so TTL expiry updates without a new beat. */
+export const useDeviceOnline = (deviceId: string): boolean => {
+  const at = useStore(workspaceStore, s => s.presence[deviceId]);
+  return useDerivedNow(now => isPresenceFresh(at, now));
+};
 
 export const useHostForChat = (chatId: string): DeviceRow | undefined =>
   useStore(workspaceStore, s => {

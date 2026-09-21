@@ -29,9 +29,17 @@ import {
 } from '../doc/sessionDoc';
 import {
   getSessionStore,
-  type FailedSend,
+  recordFailedSend,
   type PendingSend,
 } from '../state/sessionStores';
+import { ProjectCoalesce } from '../state/projectCoalesce';
+import {
+  cloneEntry,
+  reuseById,
+  sameQueued,
+  shareSessionProjection,
+} from '../state/shareProjection';
+import { displayedQueue } from '../state/queuedLocalStore';
 
 // ── Transcript frame protocol (transcript_delta.rs) ────────────────────
 
@@ -188,11 +196,18 @@ export class RelaySessionSource {
   private ownCommands = new Map<string, SessionCommandEntry>();
   /** messageId → commandId (failedSend bookkeeping parity with doc mode). */
   private commandByMessage = new Map<string, string>();
+  private readonly coalesce: ProjectCoalesce;
+  /** Last transcript update's contextUsage — applied on the coalesced write. */
+  private pendingUsage: ContextUsage | undefined;
 
   constructor(
     private readonly chatId: string,
     private readonly deps: RelaySessionDeps,
-  ) {}
+  ) {
+    this.coalesce = new ProjectCoalesce(deps.clock, () =>
+      this.applyProjection(),
+    );
+  }
 
   get isActive(): boolean {
     return this.started && !this.stopped;
@@ -214,6 +229,7 @@ export class RelaySessionSource {
       this.deps.clock.clearTimeout(this.reopenTimer);
       this.reopenTimer = undefined;
     }
+    this.coalesce.dispose();
     getSessionStore(this.chatId).setState({ room: 'idle' });
   }
 
@@ -312,41 +328,10 @@ export class RelaySessionSource {
       this.desynced = false;
       // A clean frame proves the stream is healthy — reset the backoff.
       this.reopenDelay = REOPEN_MS;
-      const store = getSessionStore(this.chatId);
-      const entryIds = new Set(this.entries.map(e => e.id));
-      const s = store.getState();
-      // Reconcile pendingSends: an entry carrying the message id is the
-      // host-minted landing (doc mode uses the same id check).
-      const pendingSends = s.pendingSends.filter(
-        p => !entryIds.has(p.messageId),
-      );
-      // Own commands whose message landed are applied host-side.
-      for (const [id, c] of this.ownCommands) {
-        if (c.status !== 'pending') continue;
-        const mid =
-          c.payload.kind === 'run' || c.payload.kind === 'steer'
-            ? c.payload.messageId ?? undefined
-            : undefined;
-        if (mid !== undefined && entryIds.has(mid))
-          this.ownCommands.set(id, { ...c, status: 'applied' });
-        if (c.kind === 'interrupt') {
-          const row = this.deps.sessionRow?.();
-          if (row !== undefined && NOT_WORKING.has(row.status ?? ''))
-            this.ownCommands.set(id, { ...c, status: 'applied' });
-        }
-      }
-      store.setState({
-        entries: joinContinuations(this.entries),
-        commands: [...this.ownCommands.values()],
-        meta: {
-          chatId: this.chatId,
-          ...(update.contextUsage !== undefined
-            ? { contextUsage: update.contextUsage }
-            : {}),
-        },
-        pendingSends,
-        hostDeviceId: this.deps.chatMeta().hostDeviceId,
-      });
+      if (update.contextUsage !== undefined)
+        this.pendingUsage = update.contextUsage;
+      this.reconcileOwnCommands();
+      this.coalesce.schedule();
     } catch (e) {
       if (e instanceof TranscriptDesync) {
         // Diverged copy is unsafe: drop it and resubscribe for a reset.
@@ -363,17 +348,68 @@ export class RelaySessionSource {
     }
   }
 
+  private reconcileOwnCommands(): void {
+    const entryIds = new Set(this.entries.map(e => e.id));
+    for (const [id, c] of this.ownCommands) {
+      if (c.status !== 'pending') continue;
+      const mid =
+        c.payload.kind === 'run' || c.payload.kind === 'steer'
+          ? c.payload.messageId ?? undefined
+          : undefined;
+      if (mid !== undefined && entryIds.has(mid))
+        this.ownCommands.set(id, { ...c, status: 'applied' });
+      if (c.kind === 'interrupt') {
+        const row = this.deps.sessionRow?.();
+        if (row !== undefined && NOT_WORKING.has(row.status ?? ''))
+          this.ownCommands.set(id, { ...c, status: 'applied' });
+      }
+    }
+  }
+
+  private applyProjection(): void {
+    const store = getSessionStore(this.chatId);
+    const s = store.getState();
+    const entryIds = new Set(this.entries.map(e => e.id));
+    const pendingSends = s.pendingSends.filter(p => !entryIds.has(p.messageId));
+    const shared = shareSessionProjection(s, {
+      entries: joinContinuations(this.entries.map(cloneEntry)),
+      commands: [...this.ownCommands.values()],
+      queue: s.queue,
+      meta: {
+        chatId: this.chatId,
+        ...(this.pendingUsage !== undefined
+          ? { contextUsage: this.pendingUsage }
+          : s.meta.contextUsage !== undefined
+          ? { contextUsage: s.meta.contextUsage }
+          : {}),
+      },
+    });
+    store.setState({
+      entries: shared.entries,
+      commands: shared.commands,
+      meta: shared.meta,
+      pendingSends:
+        pendingSends.length === s.pendingSends.length &&
+        pendingSends.every((p, i) => p === s.pendingSends[i])
+          ? s.pendingSends
+          : pendingSends,
+      hostDeviceId: this.deps.chatMeta().hostDeviceId,
+    });
+  }
+
   private onQueue(value: unknown): void {
     const items =
       typeof value === 'object' && value !== null
         ? (value as { items?: unknown[] }).items
         : undefined;
     if (!Array.isArray(items)) return;
-    getSessionStore(this.chatId).setState({
-      queue: items
-        .map(queuedFrom)
-        .filter((q): q is QueuedMessage => q !== undefined),
-    });
+    const store = getSessionStore(this.chatId);
+    const next = items
+      .map(queuedFrom)
+      .filter((q): q is QueuedMessage => q !== undefined);
+    store.setState(s => ({
+      queue: displayedQueue(this.chatId, reuseById(s.queue, next, sameQueued)),
+    }));
   }
 
   // ── Command plane ────────────────────────────────────────────────────
@@ -406,19 +442,11 @@ export class RelaySessionSource {
       return commandId;
     } catch (e) {
       if (pending !== undefined) {
-        store.setState(s => ({
-          pendingSends: s.pendingSends.filter(
-            p => p.messageId !== pending.messageId,
-          ),
-          failedSends: [
-            ...s.failedSends,
-            {
-              ...pending,
-              commandId: 'relay-rejected',
-              status: 'rejected' as FailedSend['status'],
-            },
-          ],
-        }));
+        recordFailedSend(this.chatId, {
+          ...pending,
+          commandId: 'relay-rejected',
+          status: 'rejected',
+        });
       }
       throw e;
     }

@@ -1,4 +1,10 @@
-import { DocDisk, chatDocPath, registryPath, type DocDiskFs } from '../docDisk';
+import {
+  DocDisk,
+  chatDocPath,
+  queuedLocalPath,
+  registryPath,
+  type DocDiskFs,
+} from '../docDisk';
 
 class MemoryFs implements DocDiskFs {
   files = new Map<string, string>();
@@ -65,5 +71,21 @@ describe('docDisk', () => {
     await disk.clearAccount('org1', 'alice');
     expect(await disk.loadRegistry('org1', 'alice')).toBeUndefined();
     expect(await disk.loadChat2('org1', 'alice', 'c1')).toBeUndefined();
+  });
+
+  it('round-trips queuedLocal.json per account', async () => {
+    const fs = new MemoryFs();
+    const disk = new DocDisk(fs, '/docs');
+    await disk.saveQueuedLocal('org1', 'alice', {
+      c1: [{ id: 'q1', text: 'hi' }],
+    });
+    expect(queuedLocalPath('/docs', 'org1', 'alice')).toContain(
+      'zeron/org1/alice/queuedLocal.json',
+    );
+    expect(await disk.loadQueuedLocal('org1', 'alice')).toEqual({
+      c1: [{ id: 'q1', text: 'hi' }],
+    });
+    await disk.clearAccount('org1', 'alice');
+    expect(await disk.loadQueuedLocal('org1', 'alice')).toBeUndefined();
   });
 });

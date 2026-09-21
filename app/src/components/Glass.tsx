@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
+  Pressable,
   StyleSheet,
   View,
   type ColorValue,
+  type PressableProps,
   type ViewProps,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -12,7 +14,7 @@ import {
   LiquidGlassContainerView,
   LiquidGlassView,
 } from '@callstack/liquid-glass';
-import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 
 type GlassProps = ViewProps & {
   // Interactive glass grows on touch and shimmers (iOS 26+ only).
@@ -20,17 +22,20 @@ type GlassProps = ViewProps & {
   // Base tint of the glass; lifts it off pure black when there is little
   // content behind it to frost.
   tintColor?: ColorValue;
+  // Animate materialize/dematerialize of the glass effect (iOS 26+).
+  animated?: boolean;
 };
 
 // Real liquid glass on iOS 26+, a plain rounded surface everywhere else.
 export function Glass({
   interactive,
   tintColor,
+  animated,
   style,
   children,
   ...rest
 }: GlassProps) {
-  const theme = useTheme();
+  const theme = useChromeTheme();
   // Reduce Transparency → always the opaque fallback surface.
   const [reduceTransparency, setReduceTransparency] = useState(false);
   useEffect(() => {
@@ -48,6 +53,7 @@ export function Glass({
       <LiquidGlassView
         interactive={interactive}
         effect="regular"
+        animated={animated}
         colorScheme={theme.scheme}
         tintColor={tintColor}
         style={style}
@@ -124,9 +130,73 @@ export function GlassContainer({
   );
 }
 
+type GlassControlProps = ViewProps &
+  Pick<
+    PressableProps,
+    | 'onPress'
+    | 'disabled'
+    | 'hitSlop'
+    | 'testID'
+    | 'accessibilityRole'
+    | 'accessibilityLabel'
+    | 'accessibilityState'
+    | 'accessibilityHint'
+  > & {
+    interactive?: boolean;
+    tintColor?: ColorValue;
+  };
+
+// Interactive glass as the outer surface; the Pressable lives *inside* so
+// iOS 26 does not wrap a second glass UIButton around the chip.
+export function GlassControl({
+  interactive = true,
+  tintColor,
+  style,
+  children,
+  onPress,
+  disabled,
+  hitSlop,
+  testID,
+  accessibilityRole = 'button',
+  accessibilityLabel,
+  accessibilityState,
+  accessibilityHint,
+  ...rest
+}: GlassControlProps) {
+  return (
+    <Glass
+      interactive={interactive}
+      tintColor={tintColor}
+      style={[styles.control, style]}
+      {...rest}
+    >
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        hitSlop={hitSlop}
+        testID={testID}
+        accessibilityRole={accessibilityRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={accessibilityState}
+        accessibilityHint={accessibilityHint}
+        style={styles.controlHit}
+      >
+        {children}
+      </Pressable>
+    </Glass>
+  );
+}
+
 const styles = StyleSheet.create({
   clip: {
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  // Never eat leftover column space (sign-in lives in a flexGrow: 1 scroll).
+  control: { flexGrow: 0 },
+  controlHit: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

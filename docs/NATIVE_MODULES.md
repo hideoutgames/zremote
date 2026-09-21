@@ -48,26 +48,51 @@ surfaces and has never been compiled. First build happens on a Mac.
 - Settings → Dictation shows the model state for `uiPrefs.dictationLocale`
   and offers "Download offline model" when downloadable.
 
+### Local Voice Model (Whisper + optional cleanup)
+
+Settings → Voice Input can switch from Apple Dictation to an opt-in **Voice
+Model** mode. Model weights are managed by `zeron/voice/manager.ts` (device
+local, not CRDT, not `uiPrefs` paths). JS ports:
+
+- `zeron/native/voiceCapture.ts` — record WAV/PCM, release the mic, delete
+  the temp file.
+- `zeron/native/transcription.ts` — file transcription adapter.
+- `zeron/native/cleanup.ts` — optional cleanup adapter (`supportsCustomPrompt`).
+
+**Mac spike (not done in this environment):** compile `whisper.rn` +
+`llama.rn` together against Expo 57 / RN 0.86 / Nitro static linking. Reject
+them if they require `ios.useFrameworks`. Fallback is first-party Nitro
+modules wrapping whisper.cpp / llama.cpp, same pattern as `zeron-dictation`.
+Do not set `productionPinned: true` or fill SHA-256 until a device build
+transcribes, unloads, and passes the cleanup fixture suite. Candidate
+catalog entries (Whisper Tiny/Base, Qwen2.5-0.5B-Instruct GGUF) stay
+unpinned so the UI cannot mark a partial/unverified file installed.
+
+Cleanup licenses: Whisper MIT; Qwen2.5 Apache-2.0. Microphone audio and
+cleanup inference stay on-device. Never log transcripts, prompts, or audio.
+
 ### Live Activities
 
 - `src/liveActivity/SessionActivity.tsx` — the `'widget'` component:
   Lock Screen banner + Dynamic Island (compact/minimal/expanded) via
-  `@expo/ui/swift-ui`. Distinct visuals: awaitingInput amber, errored red,
-  completed green, stale dimmed; indeterminate progress without task
-  counts.
+  `@expo/ui/swift-ui`. Per-agent accent: question blue `#0A84FF`, plan-ready
+  yellow `#E5A50A`, open PR green `#30D158`, merged PR purple `#BF5AF2`,
+  running/draft/none white. Precedence: question > plan-ready > open PR >
+  merged PR > running. Overflow activity lists leftover agents when the OS
+  refuses further `start()` calls.
 - `src/liveActivity/liveActivityManager.ts` — pure policy (`planActivity`
-  - `LiveActivityManager`): dedupe by chatId, working updates throttled to
-    1/5s, urgent phases immediate, `completed` → end `after(now+30min)`,
-    archive → `immediate`, stale-date now+120s.
-    **Fallback:** if `start()` throws (OS limit/disabled), one aggregate
-    activity is used for the currently-selected session.
-- `src/liveActivity/bindLiveActivities.ts` — store wiring + push-token
-  registration (`/registry/{org}/live-activity`, see
-  `docs/HOST_EDGE_CHANGES.md`); push-to-start tokens register with
-  `chatId: "*"`; rotation rides `addPushTokenListener`; unregister on
+  - `LiveActivityManager`): one activity per running agent, working updates
+    throttled to 1/5s, urgent phases immediate, `completed` → end
+    `after(now+30min)`, archive → `immediate`, stale-date now+120s.
+    **Fallback:** if `start()` throws (OS limit), leftovers pack into one
+    overflow activity (expanded view lists titles).
+- `src/liveActivity/bindLiveActivities.ts` — workspace + **session** store
+  wiring so phase/plan/PR updates land; push-token registration
+  (`/registry/{org}/live-activity`, see `docs/HOST_EDGE_CHANGES.md`);
+  push-to-start tokens register with `chatId: "*"`; unregister on
   end/sign-out.
-- Settings → Live Activities: on/off + "Show host and project on Lock
-  Screen" (the privacy default — `showContext`).
+- Settings → Live Activities: on/off + Host and Project (the privacy
+  default — `showContext`; footer explains Lock Screen).
 
 ### zeron-split-view (Fabric component — NOT compiled)
 

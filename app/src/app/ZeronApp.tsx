@@ -10,12 +10,12 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthClient } from '../zeron/auth/authClient';
 import { AuthSession } from '../zeron/auth/authSession';
 import { bindAuthSession, useAuthStatus } from '../zeron/state/authStore';
+import { exitTestMode, useTestMode } from '../zeron/testMode/testMode';
 import { expoSecureStore } from '../zeron/native/expoSecureStore';
 import { appConfig } from '../zeron/native/appConfig';
 import { deviceId, deviceName } from '../zeron/native/deviceIdentity';
@@ -27,20 +27,26 @@ import { rnWsFactory } from '../zeron/transport/rnWs';
 import Constants from 'expo-constants';
 import { systemClock } from '../zeron/transport/clock';
 import { getInitialUrl, addUrlListener } from '../zeron/native/authBrowser';
+import * as WebBrowser from 'expo-web-browser';
 import { parseZeronLink } from '../zeron/protocol/edge';
 import { AppRuntime } from '../zeron/runtime/appRuntime';
-import { staticTokenSource } from '../zeron/transport/tokenSource';
-import { memDocDisk } from '../zeron/native/memDocDisk';
-import { DemoEdge } from '../demo/demoEdge';
-import { exitDemo, useDemoMode } from '../demo/demoMode';
-import { DEMO_ORG, DEMO_PHONE, DEMO_USER } from '../demo/fixtures';
-import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
-import { useTheme } from '../theme';
+import { applyColorSchemePreference, useTheme } from '../theme';
+import { useColorSchemePreference } from '../zeron/state/uiPrefs';
 import { AppServicesContext, type AppServices } from './runtimeContext';
 import { SignInScreen } from '../screens/SignInScreen';
 import { OrgGateScreen } from '../screens/OrgGateScreen';
 import { AdaptiveShell } from '../navigation/AdaptiveShell';
+import { AppErrorBoundary } from './AppErrorBoundary';
+import { MenuDismissShield } from '../components/menus/MenuDismissShield';
+import { bindBackgroundFs } from '../zeron/state/newThreadBackground';
+import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
+import { bindExpoVoiceModelManager } from '../zeron/native/expoVoiceModels';
+import { bindRunFinishedHaptic } from '../notifications/runFinishedHaptic';
+import { bindWorkedDuration } from '../zeron/state/workedDuration';
+import { bindLocalLogs } from '../zeron/diagnostics/bindLocalLogs';
+import { routeRuntimeLog } from '../zeron/diagnostics/localLogs';
+import { accountLogsRoot, expoLocalLogFs } from '../zeron/native/expoLocalLogs';
 
 const log = createLog();
 
@@ -52,8 +58,12 @@ const wsFactory = isExpoGo ? rnWsFactory : nitroWsFactory;
 
 export function ZeronApp() {
   const theme = useTheme();
+  const colorSchemePref = useColorSchemePreference();
   const status = useAuthStatus();
-  const demoActive = useDemoMode();
+
+  useEffect(() => {
+    applyColorSchemePreference(colorSchemePref);
+  }, [colorSchemePref]);
 
   // One AuthSession per edge URL (persisted record is namespaced by baseUrl).
   const cfg = useMemo(() => appConfig(), []);
@@ -78,23 +88,36 @@ export function ZeronApp() {
     }
   }, [cfg.edgeUrl]);
 
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    bindBackgroundFs(expoBackgroundFs);
+    bindExpoVoiceModelManager();
+  }, []);
+
+  useEffect(() => {
+    WebBrowser.maybeCompleteAuthSession();
+  }, []);
+
   useEffect(() => {
     const unbind = bindAuthSession(auth);
-    auth.restore().catch(() => {});
+    auth
+      .restore()
+      .catch(() => {})
+      .finally(() => setAuthReady(true));
     return unbind;
   }, [auth]);
 
   // ── Account-scoped runtime ────────────────────────────────────────────
   const [runtime, setRuntime] = useState<AppRuntime | null>(null);
   const accountRef = useRef<string | null>(null);
-  const demoEdge = useMemo(
-    () => (demoActive ? new DemoEdge({ clock: systemClock }) : null),
-    [demoActive],
-  );
 
   const signedIn = status.state === 'signedIn' ? status : undefined;
+  // Temporary test mode: synthetic stores + no runtime (offline).
+  const testMode = useTestMode();
 
   useEffect(() => {
+    if (testMode) return;
     if (signedIn === undefined) {
       // Explicit sign-out already ran clearAccountCaches via signOut(); an
       // account change stops the old runtime without wiping the new account's
@@ -110,38 +133,23 @@ export function ZeronApp() {
     accountRef.current = key;
     let cancelled = false;
     (async () => {
-      const rt = demoActive
-        ? await AppRuntime.create({
-            // In-process simulated edge: same runtime seams, no network.
-            cfg: { baseUrl: 'https://demo.invalid' },
-            tokenSource: staticTokenSource('demo'),
-            deviceId: DEMO_PHONE,
-            deviceName: 'Demo Phone',
-            orgId: DEMO_ORG,
-            userId: DEMO_USER,
-            wsFactory: demoEdge!.wsFactory,
-            fetchImpl: demoEdge!.fetchImpl,
-            clock: systemClock,
-            docDisk: memDocDisk(),
-            loro: createLoroDoc,
-            sessionMode: 'relay',
-            readFileBase64,
-            log: line => log.info(line),
-          })
-        : await AppRuntime.create({
-            cfg: { baseUrl: cfg.edgeUrl },
-            tokenSource: auth,
-            deviceId: await deviceId(expoSecureStore),
-            deviceName: deviceName(),
-            orgId: signedIn.orgId,
-            userId: signedIn.user.id,
-            wsFactory,
-            clock: systemClock,
-            docDisk: createDocDisk(),
-            loro: createLoroDoc,
-            readFileBase64,
-            log: line => log.info(line),
-          });
+      const rt = await AppRuntime.create({
+        cfg: { baseUrl: cfg.edgeUrl },
+        tokenSource: auth,
+        deviceId: await deviceId(expoSecureStore),
+        deviceName: deviceName(),
+        orgId: signedIn.orgId,
+        userId: signedIn.user.id,
+        wsFactory,
+        clock: systemClock,
+        docDisk: createDocDisk(),
+        loro: createLoroDoc,
+        readFileBase64,
+        log: line => {
+          log.info(line);
+          routeRuntimeLog(line);
+        },
+      });
       if (cancelled) {
         rt.stop();
         return;
@@ -155,7 +163,7 @@ export function ZeronApp() {
       rt?.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedIn?.orgId, signedIn?.user.id, demoActive, demoEdge]);
+  }, [signedIn?.orgId, signedIn?.user.id]);
 
   // ── Live Activities (iOS; expo-widgets) — lazily imported so the JS
   // bundle still loads where the pod/module is absent.
@@ -169,46 +177,75 @@ export function ZeronApp() {
     setRequestedChat(chatId);
   }, []);
 
+  // One haptic when a run finishes while the app is open (any thread).
+  // Independent of APNs / Expo Go — local CRDT status only.
   useEffect(() => {
-    // Demo mode never registers push tokens — no real-edge traffic.
-    if (runtime === null || signedIn === undefined || demoActive) return;
+    if (runtime === null) return;
+    return bindRunFinishedHaptic();
+  }, [runtime]);
+
+  // Redacted per-run text files. Off until Settings → Debug → Local Logs.
+  useEffect(() => {
+    if (runtime === null || signedIn === undefined) return;
+    return bindLocalLogs({
+      fs: expoLocalLogFs,
+      logsRoot: accountLogsRoot(signedIn.orgId, signedIn.user.id),
+      sessionMode: runtime.sessionMode,
+      phoneDeviceId: runtime.deviceId,
+    });
+  }, [runtime, signedIn]);
+
+  // Freeze working elapsed onto the last assistant bubble after a finish.
+  useEffect(() => {
+    if (runtime === null) return;
+    return bindWorkedDuration();
+  }, [runtime]);
+
+  useEffect(() => {
+    if (runtime === null || signedIn === undefined) return;
     let unbind: (() => void) | undefined;
     import('../liveActivity/bindLiveActivities')
       .then(m => {
-        unbind = m.bindLiveActivities({
-          edgeUrl: cfg.edgeUrl,
-          tokenSource: auth,
-          orgId: signedIn.orgId,
-          phoneDeviceId: runtime.deviceId,
-          selectedChatId: () => selectedChatRef.current,
-        });
+        try {
+          unbind = m.bindLiveActivities({
+            edgeUrl: cfg.edgeUrl,
+            tokenSource: auth,
+            orgId: signedIn.orgId,
+            phoneDeviceId: runtime.deviceId,
+            selectedChatId: () => selectedChatRef.current,
+          });
+        } catch (e) {
+          log.warn(`live activities unavailable: ${e}`);
+        }
       })
       .catch(e => log.warn(`live activities unavailable: ${e}`));
     return () => unbind?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, signedIn?.orgId, demoActive]);
+  }, [runtime, signedIn?.orgId]);
 
-  // Alert banners when a run finishes. Skip Expo Go (wrong APNs topic)
-  // and demo (no real edge).
+  // Alert banners when a run finishes. Skip Expo Go (wrong APNs topic).
   useEffect(() => {
-    if (runtime === null || signedIn === undefined || demoActive || isExpoGo)
-      return;
+    if (runtime === null || signedIn === undefined || isExpoGo) return;
     let unbind: (() => void) | undefined;
     import('../notifications/bindPushNotifications')
       .then(m => {
-        unbind = m.bindPushNotifications({
-          edgeUrl: cfg.edgeUrl,
-          tokenSource: auth,
-          orgId: signedIn.orgId,
-          phoneDeviceId: runtime.deviceId,
-          selectedChatId: () => selectedChatRef.current,
-          openSession,
-        });
+        try {
+          unbind = m.bindPushNotifications({
+            edgeUrl: cfg.edgeUrl,
+            tokenSource: auth,
+            orgId: signedIn.orgId,
+            phoneDeviceId: runtime.deviceId,
+            selectedChatId: () => selectedChatRef.current,
+            openSession,
+          });
+        } catch (e) {
+          log.warn(`push notifications unavailable: ${e}`);
+        }
       })
       .catch(e => log.warn(`push notifications unavailable: ${e}`));
     return () => unbind?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, signedIn?.orgId, demoActive, openSession]);
+  }, [runtime, signedIn?.orgId, openSession]);
 
   // ── AppState → foreground/background ──────────────────────────────────
   useEffect(() => {
@@ -239,29 +276,22 @@ export function ZeronApp() {
   }, [auth, edgeHost, openSession]);
 
   const signOut = useCallback(async () => {
-    if (demoActive) {
-      exitDemo();
-      const rt = runtime;
-      setRuntime(null);
-      accountRef.current = null;
-      rt?.stop();
-      return;
-    }
+    exitTestMode();
     await auth.signOut();
     const rt = runtime;
     setRuntime(null);
     accountRef.current = null;
     if (rt !== null) await rt.clearAccountCaches();
-  }, [auth, runtime, demoActive]);
+  }, [auth, runtime]);
 
-  const insets = useSafeAreaInsets();
   const services = useMemo<AppServices>(
     () => ({ auth, runtime, openSession, signOut }),
     [auth, runtime, openSession, signOut],
   );
 
   let body: React.ReactNode;
-  if (status.state === 'signedOut') body = <SignInScreen />;
+  if (!authReady) body = null;
+  else if (status.state === 'signedOut') body = <SignInScreen />;
   else if (status.state === 'needsOrganization') body = <OrgGateScreen />;
   else
     body = (
@@ -273,33 +303,13 @@ export function ZeronApp() {
 
   return (
     <AppServicesContext.Provider value={services}>
-      <View
-        style={[
-          styles.root,
-          {
-            backgroundColor: theme.background,
-            paddingTop: insets.top,
-          },
-        ]}
-      >
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
         <StatusBar
           barStyle={theme.scheme === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor="transparent"
         />
-        {body}
-        {demoActive ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.demoBadge,
-              { top: insets.top + 6, backgroundColor: theme.accent },
-            ]}
-          >
-            <Text style={[styles.demoBadgeText, { color: theme.background }]}>
-              {t('demo.badge')}
-            </Text>
-          </View>
-        ) : null}
+        <AppErrorBoundary resetKey={status.state}>{body}</AppErrorBoundary>
+        <MenuDismissShield />
       </View>
     </AppServicesContext.Provider>
   );
@@ -307,12 +317,4 @@ export function ZeronApp() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  demoBadge: {
-    position: 'absolute',
-    right: 14,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  demoBadgeText: { fontSize: 11, fontWeight: '700' },
 });

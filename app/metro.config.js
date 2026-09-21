@@ -16,7 +16,6 @@ if (process.env.EXPO_GO === '1') {
     'react-native-nitro-modules': shim('nitroModules.ts'),
     'react-native-nitro-image': shim('nitroImage.tsx'),
     'react-native-nitro-web-image': shim('nitroWebImage.tsx'),
-    'react-native-nitro-symbols': shim('nitroSymbols.tsx'),
     '@callstack/liquid-glass': shim('liquidGlass.tsx'),
     'react-native-enriched-markdown': shim('enrichedMarkdown.tsx'),
     '@lodev09/react-native-true-sheet': shim('trueSheet.tsx'),

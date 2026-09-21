@@ -33,14 +33,37 @@ import {
   type FailedSend,
   type RunPhase,
 } from '../state/sessionStores';
-import { updateAttachment, type StagedAttachment } from '../state/draftStore';
+import { ProjectCoalesce } from '../state/projectCoalesce';
+import { shareSessionProjection } from '../state/shareProjection';
+import {
+  draftFor,
+  restoreFailedSend,
+  updateAttachment,
+  type StagedAttachment,
+} from '../state/draftStore';
 import { withAttachments } from '../protocol/messages';
 import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
 import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
-import { harnessInlinesAttachments } from '../attachments/validate';
+import {
+  harnessInlinesAttachments,
+  isImageMime,
+} from '../attachments/validate';
 import { sendPlan, type SendPlan } from '../attachments/sendPlan';
+import { noteLocalDiagnostic } from '../diagnostics/localLogs';
 import { RelaySessionSource } from './relaySessionSource';
 import { workspaceStore } from '../state/workspaceStore';
+import { isPresenceFresh } from '../protocol/entities';
+import {
+  addLocalQueued,
+  displayedQueue,
+  isLocalQueued,
+  isQueuedLocalBound,
+  localQueuedFor,
+  moveLocalQueued,
+  reconcileLocalQueued,
+  removeLocalQueued,
+  type LocalQueuedMessage,
+} from '../state/queuedLocalStore';
 
 export type SessionMode = 'doc' | 'relay';
 
@@ -107,9 +130,13 @@ export class SessionController {
   private room: ChatRoomClient | undefined;
   private cursor = 0;
   private started = false;
+  /** In-flight or completed `start()` — overlapping callers await this
+   * instead of returning while load/subscribe is still pending. */
+  private startWork: Promise<void> | undefined;
   private refCount = 0;
   private unsub: (() => void) | undefined;
   private persistTimer: unknown;
+  private readonly coalesce: ProjectCoalesce;
   /** messageId → commandId for run/steer sends (failedSend bookkeeping). */
   private commandByMessage = new Map<string, string>();
   /** Staged-attachment ids whose in-flight upload must abort between
@@ -120,6 +147,9 @@ export class SessionController {
     this.chatId = chatId;
     this.deps = deps;
     this.mode = deps.sessionMode ?? 'doc';
+    this.coalesce = new ProjectCoalesce(deps.clock, () =>
+      this.applyProjection(),
+    );
     if (this.mode === 'relay') {
       this.relay = new RelaySessionSource(chatId, {
         deviceId: deps.deviceId,
@@ -159,30 +189,45 @@ export class SessionController {
 
   /** Loads persisted state, wires the local-update→enqueue subscription,
    * pushes the full log on first contact, then (roomGen permitting) starts
-   * the room. Mirrors SessionStore.start ordering. */
+   * the room. Mirrors SessionStore.start ordering. Overlapping calls share
+   * one promise so compose send can wait for subscribe before `sendRun`. */
   async start(): Promise<void> {
+    if (this.startWork !== undefined) return this.startWork;
+    this.startWork = this.runStart();
+    return this.startWork;
+  }
+
+  private async runStart(): Promise<void> {
     if (this.started) return;
     this.started = true;
-    if (this.relay !== undefined) {
-      this.relay.start();
-      return;
-    }
-    const { docDisk, orgId, userId } = this.deps;
-    const saved = await docDisk
-      .loadChat2(orgId, userId, this.chatId)
-      .catch(() => undefined);
-    if (saved !== undefined) {
-      try {
-        this.port.import(base64ToBytes(saved.snapshot));
-        this.cursor = saved.cursor;
-      } catch {
-        this.cursor = 0;
+    try {
+      if (this.relay !== undefined) {
+        this.relay.start();
+        this.seedRelayLocalQueue();
+        return;
       }
+      const { docDisk, orgId, userId } = this.deps;
+      const saved = await docDisk
+        .loadChat2(orgId, userId, this.chatId)
+        .catch(() => undefined);
+      if (saved !== undefined) {
+        try {
+          this.port.import(base64ToBytes(saved.snapshot));
+          this.cursor = saved.cursor;
+        } catch {
+          this.cursor = 0;
+        }
+      }
+      this.unsub = this.port.subscribeLocalUpdates(bytes =>
+        this.room?.enqueue(bytes),
+      );
+      this.project();
+      this.connectIfReady();
+    } catch (e) {
+      this.started = false;
+      this.startWork = undefined;
+      throw e;
     }
-    this.unsub = this.port.subscribeLocalUpdates(bytes =>
-      this.room?.enqueue(bytes),
-    );
-    this.connectIfReady();
   }
 
   /** SessionStore.connectIfReady: rooms only exist at generation ≥ 2. */
@@ -218,7 +263,7 @@ export class SessionController {
             return false;
           }
           this.cursor = Math.max(this.cursor, seq);
-          this.project();
+          this.coalesce.schedule();
           return true;
         },
         applyRow: (bytes, seq) => {
@@ -228,7 +273,7 @@ export class SessionController {
             /* malformed row — cursor still advances (skip-not-fail) */
           }
           this.cursor = Math.max(this.cursor, seq);
-          this.project();
+          this.coalesce.schedule();
         },
         advanceCursor: seq => {
           this.cursor = Math.max(this.cursor, seq);
@@ -281,11 +326,16 @@ export class SessionController {
 
   /** Re-derive store state from the doc; reconcile pending/failed sends. */
   project(): void {
+    this.coalesce.flush();
+  }
+
+  private applyProjection(): void {
     if (this.relay !== undefined) return;
-    const proj = this.doc.project();
-    if (proj === undefined) return;
+    const raw = this.doc.project();
+    if (raw === undefined) return;
     const store = getSessionStore(this.chatId);
     const s = store.getState();
+    const proj = shareSessionProjection(s, raw);
     const entryIds = new Set(proj.entries.map(e => e.id));
     const pendingSends = s.pendingSends.filter(p => !entryIds.has(p.messageId));
     const failedSends = [...s.failedSends];
@@ -303,15 +353,31 @@ export class SessionController {
       }
       return true;
     });
+    const knownFailed = new Set(s.failedSends.map(f => f.messageId));
+    const liveIds = new Set(proj.queue.map(q => q.id));
+    reconcileLocalQueued(this.chatId, liveIds).catch(() => {});
     store.setState({
       entries: proj.entries,
       commands: proj.commands,
-      queue: proj.queue,
+      queue: displayedQueue(this.chatId, proj.queue),
       meta: proj.meta,
-      pendingSends: stillPending,
-      failedSends,
+      pendingSends:
+        stillPending.length === s.pendingSends.length &&
+        stillPending.every((p, i) => p === s.pendingSends[i])
+          ? s.pendingSends
+          : stillPending,
+      failedSends:
+        failedSends.length === s.failedSends.length &&
+        failedSends.every((f, i) => f === s.failedSends[i])
+          ? s.failedSends
+          : failedSends,
       hostDeviceId: this.deps.chatMeta().hostDeviceId,
     });
+    for (const f of failedSends) {
+      if (knownFailed.has(f.messageId)) continue;
+      if ((draftFor(this.chatId)?.text ?? '').trim() === '')
+        restoreFailedSend(this.chatId, f.text);
+    }
     this.schedulePersist();
   }
 
@@ -349,6 +415,8 @@ export class SessionController {
   }
 
   stop(): void {
+    this.startWork = undefined;
+    this.coalesce.dispose();
     if (this.relay !== undefined) {
       this.relay.stop();
       this.started = false;
@@ -370,7 +438,7 @@ export class SessionController {
   // ── Command plane ────────────────────────────────────────────────────
 
   private basedOn(): string | undefined {
-    return this.doc.project()?.entries.at(-1)?.id;
+    return getSessionStore(this.chatId).getState().entries.at(-1)?.id;
   }
 
   private send(payload: SessionCommandPayload, basedOnTurnId?: string): string {
@@ -484,14 +552,87 @@ export class SessionController {
     opts: { attachments?: string[]; holdForTurnEnd?: boolean } = {},
   ): string {
     if (this.relay !== undefined) {
+      if (this.shouldBackupLocal()) return this.parkRelayLocal(text, opts);
       // Host mints the row id; WatchQueue lands it in store.queue.
-      this.relay.queueMessage(text, opts).catch(e => {
-        getSessionStore(this.chatId).setState({
-          queueActionError: `Couldn't queue the message: ${e}`,
-        });
-      });
+      this.enqueueQueued(text, opts).catch(() => {});
       return '';
     }
+    return this.enqueueLocal(text, opts);
+  }
+
+  private hostOnline(): boolean {
+    const host = this.deps.chatMeta().hostDeviceId;
+    if (host === undefined) return false;
+    return isPresenceFresh(
+      workspaceStore.getState().presence[host],
+      this.deps.clock.now(),
+    );
+  }
+
+  private shouldBackupLocal(): boolean {
+    return isQueuedLocalBound() && !this.hostOnline();
+  }
+
+  private localRow(
+    id: string,
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): LocalQueuedMessage {
+    return {
+      id,
+      text,
+      issuedBy: this.deps.deviceId,
+      issuedAt: this.deps.clock.now(),
+      ...(opts.attachments !== undefined && opts.attachments.length > 0
+        ? { attachments: [...opts.attachments] }
+        : {}),
+      ...(opts.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
+    };
+  }
+
+  private seedRelayLocalQueue(): void {
+    const store = getSessionStore(this.chatId);
+    store.setState(s => ({
+      queue: displayedQueue(this.chatId, s.queue),
+    }));
+  }
+
+  private parkRelayLocal(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): string {
+    const id = newId();
+    addLocalQueued(this.chatId, this.localRow(id, text, opts)).catch(() => {});
+    this.seedRelayLocalQueue();
+    return id;
+  }
+
+  /** Push sidecar-only relay rows once the host is reachable. Doc-mode
+   * rows are already on the Loro queue. */
+  async flushLocalQueue(): Promise<void> {
+    if (!this.hostOnline()) return;
+    if (this.relay === undefined) return;
+    const rows = localQueuedFor(this.chatId);
+    for (const row of rows) {
+      try {
+        await this.relay.queueMessage(row.text, {
+          ...(row.attachments !== undefined
+            ? { attachments: row.attachments }
+            : {}),
+          ...(row.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
+        });
+        await removeLocalQueued(this.chatId, row.id);
+      } catch {
+        // Keep the sidecar row; a later flush/retry will try again.
+      }
+    }
+    this.seedRelayLocalQueue();
+  }
+
+  private enqueueLocal(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): string {
     const id = this.doc.enqueueMessage({
       text,
       deviceId: this.deps.deviceId,
@@ -499,15 +640,44 @@ export class SessionController {
       attachments: opts.attachments,
       holdForTurnEnd: opts.holdForTurnEnd,
     });
+    if (this.shouldBackupLocal()) {
+      addLocalQueued(this.chatId, this.localRow(id, text, opts)).catch(
+        () => {},
+      );
+      this.flush().catch(() => {});
+    }
     this.project();
     this.nudge();
     return id;
+  }
+
+  /** Awaitable queue write — doc mode is sync; relay waits for the RPC. */
+  private async enqueueQueued(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): Promise<string> {
+    if (this.relay !== undefined) {
+      try {
+        return await this.relay.queueMessage(text, opts);
+      } catch (e) {
+        getSessionStore(this.chatId).setState({
+          queueActionError: `Couldn't queue the message: ${e}`,
+        });
+        throw e;
+      }
+    }
+    return this.enqueueLocal(text, opts);
   }
 
   /** moveQueued: a pure local movable-list write in doc mode; a
    * `MoveQueuedMessage` RPC in relay mode. */
   moveQueued(id: string, toIndex: number): boolean {
     if (this.relay !== undefined) {
+      if (isLocalQueued(this.chatId, id) && !this.hostOnline()) {
+        const ok = moveLocalQueued(this.chatId, id, toIndex);
+        if (ok) this.seedRelayLocalQueue();
+        return ok;
+      }
       this.relay.moveQueued(id, toIndex).catch(() => {});
       return false;
     }
@@ -536,6 +706,20 @@ export class SessionController {
     if (row === undefined) return false;
     // deliveryGate'd rows are held for turn end — no actions.
     if (action !== 'remove' && row.deliveryGate != null) return false;
+    if (
+      action === 'remove' &&
+      !this.hostOnline() &&
+      isLocalQueued(this.chatId, id)
+    ) {
+      await removeLocalQueued(this.chatId, id);
+      if (this.relay === undefined) {
+        this.doc.removeQueuedLocal(id);
+        this.project();
+      } else {
+        this.seedRelayLocalQueue();
+      }
+      return true;
+    }
     store.setState(s => ({
       queueActionsPending: new Set([...s.queueActionsPending, id]),
       queueActionError: undefined,
@@ -557,6 +741,7 @@ export class SessionController {
         this.doc.removeQueuedLocal(id);
         this.project();
       }
+      await removeLocalQueued(this.chatId, id);
       return true;
     } catch (e) {
       store.setState(() => ({
@@ -589,13 +774,19 @@ export class SessionController {
       worktree?: WorktreeSpec;
       phase: RunPhase;
       autoApprove?: boolean;
+      /** Draft key for upload-progress patches (compose uses `__compose__`). */
+      draftChatId?: string;
+      /** Host is offline — park on the queue even without queue caps. */
+      forceQueue?: boolean;
     } = { phase: 'idle' },
   ): Promise<SendPlan> {
-    const plan = sendPlan(
+    const draftId = opts.draftChatId ?? this.chatId;
+    let plan = sendPlan(
       opts.phase,
       this.deps.hostCapabilities?.() ?? new Set(),
       staged.length > 0,
     );
+    if (opts.forceQueue === true && staged.length > 0) plan = 'queue';
     if (plan === 'direct') {
       this.sendRun(text, chat, opts);
       return 'direct';
@@ -630,7 +821,16 @@ export class SessionController {
       // `attachments` at dispatch (doc_host.rs queued_message_prompt —
       // `message-queue-clean-attachment-text-v1` even strips a client-
       // expanded trailer), so `text` stays the raw user text.
-      this.queueMessage(text, { attachments: pendingRefsFor(transfers) });
+      await this.enqueueQueued(text, {
+        attachments: pendingRefsFor(transfers),
+      });
+      noteLocalDiagnostic(
+        this.chatId,
+        `upload count=${transfers.length} bytes=${transfers.reduce(
+          (n, t) => n + t.size,
+          0,
+        )} result=queued`,
+      );
       this.spawnEscort(transfers);
       return 'queue';
     }
@@ -640,22 +840,24 @@ export class SessionController {
     const relay = this.hostRelay();
     const paths: string[] = [];
     for (const a of staged) {
-      updateAttachment(this.chatId, a.id, { uploadState: 'uploading' });
+      updateAttachment(draftId, a.id, { uploadState: 'uploading' });
       try {
         const path = await uploadAttachmentChunked(relay, a.name, a.id, {
           readBase64: () => readBase64(a.localUri),
           clock: this.deps.clock,
           isAborted: () => this.abortedUploads.has(a.id),
-          onProgress: p => updateAttachment(this.chatId, a.id, { progress: p }),
+          onProgress: p => updateAttachment(draftId, a.id, { progress: p }),
         });
-        updateAttachment(this.chatId, a.id, {
+        updateAttachment(draftId, a.id, {
           uploadState: 'uploaded',
           progress: 1,
           remoteRef: path,
         });
         paths.push(path);
+        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=ok`);
       } catch (e) {
-        updateAttachment(this.chatId, a.id, { uploadState: 'failed' });
+        updateAttachment(draftId, a.id, { uploadState: 'failed' });
+        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=fail`);
         throw e;
       }
     }
@@ -664,9 +866,16 @@ export class SessionController {
     // inline image blocks.
     const body = withAttachments(text, paths);
     const harnessId = chat.config?.harness ?? '';
+    const imagePaths = staged.flatMap((a, i) => {
+      const path = paths[i];
+      return isImageMime(a.mimeType) && path !== undefined ? [path] : [];
+    });
     this.sendRun(body, chat, {
       ...opts,
-      attachments: harnessInlinesAttachments(harnessId) ? paths : undefined,
+      attachments:
+        harnessInlinesAttachments(harnessId) && imagePaths.length > 0
+          ? imagePaths
+          : undefined,
     });
     return 'legacy';
   }
@@ -704,7 +913,14 @@ export class SessionController {
       clock: this.deps.clock,
       relayFor: () => this.hostRelay(),
       nudgeHost: () => this.nudge(),
-      log: this.deps.log,
+      log: line => {
+        this.deps.log?.(line);
+        if (line.startsWith('attachment escort gave up')) {
+          noteLocalDiagnostic(this.chatId, 'upload result=giveup');
+        } else if (line.startsWith('attachment escort failed')) {
+          noteLocalDiagnostic(this.chatId, 'upload result=retry');
+        }
+      },
     }).spawn(transfers);
   }
 

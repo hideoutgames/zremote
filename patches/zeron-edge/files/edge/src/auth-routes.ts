@@ -112,7 +112,7 @@ export const handleAuthRoute = async (
   }
 
   if (parts[1] === "cli" && parts[2] === "callback" && request.method === "GET") {
-    return cliCallback(url);
+    return cliCallback(url, request);
   }
 
   return undefined;
@@ -163,13 +163,69 @@ const html = (body: string, status = 200): Response =>
 
 /**
  * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
- * WorkOS redirect URI; it does NOT exchange the code — it renders `state.code`
- * for the user to paste into the device that started the flow (`zeron login`),
- * where the exchange runs so the tokens land on that machine. The state half
- * must match the pending sign-in there, so the paste is CSRF-checked at the
- * same point the loopback flow is.
+ * WorkOS redirect URI; it does NOT exchange the code. Desktop CLI (`zeron
+ * login`) still renders `state.code`. iPhone/iPad user agents, and pending
+ * states the iOS app prefixes with `zr1.`, are 302-hopped to
+ * `zeron://auth/callback?code&state` so ASWebAuthenticationSession can finish.
+ * The hop HTML still includes `state.code` so the in-app paste field works
+ * if the sheet is dismissed.
  */
-const cliCallback = (url: URL): Response => {
+export const MOBILE_SIGN_IN_STATE_PREFIX = "zr1.";
+
+export const isIosMobileUa = (ua: string): boolean =>
+  /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+
+export const shouldHopToApp = (ua: string, state: string): boolean =>
+  isIosMobileUa(ua) || state.startsWith(MOBILE_SIGN_IN_STATE_PREFIX);
+
+const iosReturnPage = (appUrl: string, paste: string): string => {
+  const safe = escapeHtml(appUrl);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Zeron — sign in</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #0a0a0a; color: #ededed;
+         font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 34rem; padding: 2rem; text-align: center; }
+  h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 0.75rem; }
+  p { color: #a1a1a1; margin: 0.25rem 0; }
+  a { color: #ededed; }
+  code#paste { display: block; margin: 1.25rem 0 0.75rem; padding: 0.9rem 1rem;
+         background: #171717; border: 1px solid #2e2e2e; border-radius: 8px;
+         font: 13px/1.5 ui-monospace, monospace; word-break: break-all;
+         user-select: all; cursor: pointer; }
+  button { margin-top: 0.25rem; padding: 0.45rem 1rem; border-radius: 8px;
+         border: 1px solid #2e2e2e; background: #ededed; color: #0a0a0a;
+         font: 500 13px ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+</style>
+</head>
+<body><main>
+<h1>Returning to ZRemote</h1>
+<p><a href="${safe}">Open ZRemote</a></p>
+<p>If nothing happens, this code still works on the device that started sign-in:</p>
+<code id="paste">${paste}</code>
+<button onclick="navigator.clipboard.writeText(document.getElementById('paste').textContent).then(()=>{this.textContent='Copied'})">Copy code</button>
+</main></body>
+</html>`;
+};
+
+const hopToApp = (code: string, state: string, paste: string): Response => {
+  const app = `zeron://auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+  return new Response(iosReturnPage(app, paste), {
+    status: 302,
+    headers: {
+      location: app,
+      "content-type": "text/html; charset=utf-8"
+    }
+  });
+};
+
+const cliCallback = (url: URL, request: Request): Response => {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const denied = url.searchParams.get("error");
@@ -183,6 +239,8 @@ const cliCallback = (url: URL): Response => {
     );
   }
   const paste = `${escapeHtml(state)}.${escapeHtml(code)}`;
+  const ua = request.headers.get("user-agent") ?? "";
+  if (shouldHopToApp(ua, state)) return hopToApp(code, state, paste);
   return html(
     cliPage(
       `<h1>Almost there</h1>
@@ -193,3 +251,4 @@ const cliCallback = (url: URL): Response => {
     )
   );
 };
+

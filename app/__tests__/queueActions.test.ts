@@ -12,15 +12,22 @@ import { LoroCrdtAdapter } from '../src/zeron/doc/loroCrdtAdapter';
 import { FakeClock } from '../src/zeron/transport/clock';
 import { staticTokenSource } from '../src/zeron/transport/tokenSource';
 import { FakeWsHub, fakeFetch } from '../src/zeron/testing/fakeWs';
-import { memDisk } from '../src/zeron/testing/memDisk';
+import { memDisk, flush } from '../src/zeron/testing/memDisk';
 import type { RelayLike } from '../src/zeron/attachments/upload';
+import { workspaceStore } from '../src/zeron/state/workspaceStore';
+import {
+  bindQueuedLocal,
+  localQueuedFor,
+  resetQueuedLocal,
+} from '../src/zeron/state/queuedLocalStore';
+import { queuedLocalPath } from '../src/zeron/native/docDisk';
 
 const cfg = { baseUrl: 'https://edge.test' };
 
 const make = (relay?: RelayLike) => {
   const clock = new FakeClock(1_000_000);
   const hub = new FakeWsHub();
-  const { disk } = memDisk();
+  const { fs, disk } = memDisk();
   const c = new SessionController('c1', {
     cfg,
     tokenSource: staticTokenSource('u@o1'),
@@ -35,10 +42,22 @@ const make = (relay?: RelayLike) => {
     chatMeta: () => ({ hostDeviceId: 'host1', roomGen: 2 }),
     relayFor: () => relay,
   });
-  return { c, clock };
+  return { c, clock, disk, fs };
 };
 
-beforeEach(() => resetSessionStores());
+beforeEach(() => {
+  resetSessionStores();
+  resetQueuedLocal();
+  workspaceStore.setState({
+    presence: { host1: 1_000_000 },
+    devices: [],
+    spaces: [],
+    chats: [],
+    sessions: {},
+    connection: 'connected',
+    lastSyncAt: undefined,
+  });
+});
 
 test('queueMessage parks a row on the doc queue', async () => {
   const { c } = make();
@@ -138,4 +157,127 @@ test('no host relay → action fails and records the error', async () => {
   await expect(c.queueAction(id, 'sendNow')).resolves.toBe(false);
   expect(getSessionStore('c1').getState().queueActionError).toBeTruthy();
   expect(getSessionStore('c1').getState().queueActionsPending.size).toBe(0);
+});
+
+test('offline queueMessage writes sidecar immediately; online enqueue does not', async () => {
+  const { c, disk, fs, clock } = make();
+  await bindQueuedLocal(disk, 'o1', 'u1');
+  workspaceStore.setState({ presence: {} });
+  const id = c.queueMessage('parked');
+  await flush();
+  expect(localQueuedFor('c1').map(q => q.id)).toEqual([id]);
+  const path = queuedLocalPath('/docs', 'o1', 'u1');
+  const saved = JSON.parse(fs.files.get(path)!) as Record<
+    string,
+    { id: string }[]
+  >;
+  expect(saved.c1.map(q => q.id)).toEqual([id]);
+
+  workspaceStore.setState({ presence: { host1: clock.now() } });
+  c.queueMessage('live');
+  await flush();
+  expect(localQueuedFor('c1').map(q => q.id)).toEqual([id]);
+});
+
+test('offline queue survives a controller restart via chat2 + sidecar', async () => {
+  const { c, disk } = make();
+  await bindQueuedLocal(disk, 'o1', 'u1');
+  workspaceStore.setState({ presence: {} });
+  const id = c.queueMessage('keep me');
+  await flush();
+  await c.flush();
+  c.stop();
+  resetSessionStores();
+  resetQueuedLocal();
+
+  await bindQueuedLocal(disk, 'o1', 'u1');
+  const c2 = new SessionController('c1', {
+    cfg,
+    tokenSource: staticTokenSource('u@o1'),
+    deviceId: 'phone1',
+    orgId: 'o1',
+    userId: 'u1',
+    wsFactory: new FakeWsHub().factory,
+    clock: new FakeClock(1_000_000),
+    docDisk: disk,
+    loro: () => new LoroCrdtAdapter(),
+    fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
+    chatMeta: () => ({ hostDeviceId: 'host1', roomGen: 1 }),
+  });
+  await c2.start();
+  await flush();
+  expect(
+    getSessionStore('c1')
+      .getState()
+      .queue.map(q => q.id),
+  ).toEqual([id]);
+  expect(localQueuedFor('c1').map(q => q.id)).toEqual([id]);
+  c2.stop();
+});
+
+test('confirmed remove and sendNow drop the sidecar id', async () => {
+  const relay: RelayLike = {
+    call: async () => ({ sent: true, removed: true } as never),
+  };
+  const { c, disk } = make(relay);
+  await bindQueuedLocal(disk, 'o1', 'u1');
+  workspaceStore.setState({ presence: {} });
+  const gone = c.queueMessage('gone');
+  await flush();
+  expect(localQueuedFor('c1').map(q => q.id)).toEqual([gone]);
+  await expect(c.queueAction(gone, 'remove')).resolves.toBe(true);
+  expect(localQueuedFor('c1')).toEqual([]);
+
+  const send = c.queueMessage('send');
+  await flush();
+  workspaceStore.setState({ presence: { host1: 1_000_000 } });
+  await expect(c.queueAction(send, 'sendNow')).resolves.toBe(true);
+  expect(localQueuedFor('c1')).toEqual([]);
+});
+
+test('relay parks locally when the host is offline and flushes on reconnect', async () => {
+  const calls: { method: string; params: unknown }[] = [];
+  const relay: RelayLike = {
+    call: async <T>(m: string, p: Record<string, unknown>): Promise<T> => {
+      calls.push({ method: m, params: p });
+      return { id: 'host-q' } as T;
+    },
+  };
+  const clock = new FakeClock(1_000_000);
+  const { disk, fs } = memDisk();
+  await bindQueuedLocal(disk, 'o1', 'u1');
+  workspaceStore.setState({ presence: {} });
+  const c = new SessionController('c1', {
+    cfg,
+    tokenSource: staticTokenSource('u@o1'),
+    deviceId: 'phone1',
+    orgId: 'o1',
+    userId: 'u1',
+    wsFactory: new FakeWsHub().factory,
+    clock,
+    docDisk: disk,
+    loro: () => new LoroCrdtAdapter(),
+    fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
+    chatMeta: () => ({ hostDeviceId: 'host1', roomGen: 2 }),
+    relayFor: () => relay,
+    sessionMode: 'relay',
+  });
+  const id = c.queueMessage('offline relay');
+  await flush();
+  expect(id).toBeTruthy();
+  expect(
+    getSessionStore('c1')
+      .getState()
+      .queue.map(q => q.text),
+  ).toEqual(['offline relay']);
+  expect(localQueuedFor('c1')[0]?.text).toBe('offline relay');
+  expect(calls).toEqual([]);
+
+  workspaceStore.setState({ presence: { host1: clock.now() } });
+  await c.flushLocalQueue();
+  await flush();
+  expect(calls[0]?.method).toBe('QueueMessage');
+  expect(localQueuedFor('c1')).toEqual([]);
+  expect(fs.files.get(queuedLocalPath('/docs', 'o1', 'u1'))).toBe('{}');
+  c.stop();
 });

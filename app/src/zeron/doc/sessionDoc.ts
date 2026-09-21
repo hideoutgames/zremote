@@ -9,6 +9,8 @@
 import { joinContinuations } from '../protocol/messages';
 import {
   COMMAND_DEFAULT_TTL_MS,
+  DESKTOP_AUTO_APPROVE,
+  DESKTOP_SANDBOX,
   type ContextUsage,
   type ToolDiff,
   type ToolDiffStat,
@@ -519,8 +521,7 @@ export interface RunChatContext {
 export const buildRunRequest = (
   prompt: string,
   chat: RunChatContext,
-  // autoApprove defaults to false — the desktop send path hardcodes
-  // auto_approve: false (crates/ui/src/composer.rs L6522-6523).
+  // Desktop hardcodes the run; a stored chat sandbox is ignored.
   opts: {
     attachments?: string[];
     worktree?: WorktreeSpec;
@@ -535,8 +536,8 @@ export const buildRunRequest = (
   reasoning: (chat.config?.reasoning ?? null) as RunRequest['reasoning'],
   modelOptions: chat.config?.modelOptions ?? {},
   cwd: chat.cwd ?? '',
-  sandbox: (chat.config?.sandbox as RunRequest['sandbox']) ?? 'workspace-write',
-  autoApprove: opts.autoApprove ?? false,
+  sandbox: DESKTOP_SANDBOX,
+  autoApprove: opts.autoApprove ?? DESKTOP_AUTO_APPROVE,
   resume: null,
   ...(opts.attachments !== undefined && opts.attachments.length > 0
     ? { attachments: [...opts.attachments] }

@@ -5,25 +5,53 @@
 import { createStore, useStore } from 'zustand';
 import type { DocDisk } from '../native/docDisk';
 import { rememberRecentModel, type RecentModel } from './recentModels';
+import { togglePinnedModelList } from './pinnedModels';
+import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
+import { defaultBackgroundById } from './defaultBackgrounds';
+import {
+  copyBackgroundFile,
+  DEFAULT_BACKGROUND_EFFECT,
+  getBackgroundFs,
+  isWallpaperAvailable,
+  parseNewThreadComposerBackground,
+  retireManagedBackground,
+  type BackgroundInstallResult,
+  type BackgroundSource,
+  type NewThreadBackgroundEffect,
+  type NewThreadComposerBackground,
+} from './newThreadBackground';
+import {
+  parseColorSchemePreference,
+  type ColorSchemePreference,
+} from '../../theme';
+import { syncComposerExtraHeightSV } from '../../components/composerExtraHeight';
+import { parseVoiceInputMode, type VoiceInputMode } from '../voice/types';
 
 export interface UiPrefs {
   /** ComposerView.swift: queue-first when supported; the user may prefer
    * steering into the live turn instead. */
   liveActionPrefersSteer: boolean;
-  /** Per-chat `RunRequest.autoApprove` — a run-time field (not ChatConfig);
-   * off by default, confirm-gated in the model picker. */
-  autoApproveByChat: Record<string, boolean>;
   /** Live Activities on/off + whether host/project show on the Lock Screen. */
   liveActivitiesEnabled: boolean;
   liveActivityShowHost: boolean;
   /** APNs finish banners (run completed / failed). Off → token DELETE. */
   notificationsEnabled: boolean;
-  /** BCP-47 locale for the dictation model (Settings → Dictation). */
+  /** Composer / system haptics (effort slider, run-finished). Off → no-op. */
+  hapticsEnabled: boolean;
+  /** BCP-47 locale for the dictation model (Settings → Voice Input). */
   dictationLocale: string;
+  /** Voice Input mode. Default Dictation; Voice Model is opt-in. */
+  voiceInputMode: VoiceInputMode;
+  /** Selected local transcription catalog id, or null until chosen. */
+  voiceModelId: string | null;
+  /** Selected cleanup catalog id, or null when cleanup is Disabled. */
+  cleanupModelId: string | null;
+  /** Account-scoped cleanup prompt override. Null uses the default. */
+  cleanupPromptOverride: string | null;
   /** Force the Loro-free relay session mode (Settings → Sync mode). When
    * Loro init fails, relay mode is selected regardless. */
   forceRelayMode: boolean;
-  /** iPad floating sidebar collapsed (AdaptiveShell, ≥700pt only). */
+  /** iPad threads sidebar collapsed (AdaptiveShell, ≥700pt only). */
   sidebarCollapsed: boolean;
   /** Per-chat composer Plan mode (prefixes the outgoing prompt). */
   planModeByChat: Record<string, boolean>;
@@ -33,24 +61,70 @@ export interface UiPrefs {
   recentModels: RecentModel[];
   /** Local-only pin-to-top (no registry pin field). */
   pinnedChatIds: string[];
+  /** Local-only pinned catalog models for the picker / composer menu. */
+  pinnedModels: RecentModel[];
+  /** Last compose-composer settings (host/space/model). */
+  composeDefaults?: ComposeDefaults;
+  /** Last-used effort / Fast per catalog model (`harness:modelId`). */
+  modelSettingsByKey: Record<string, ModelSettings>;
+  /** Device-local artwork behind Home, chats, and new-thread compose. */
+  newThreadComposerBackground?: NewThreadComposerBackground;
+  /** Non-destructive treatment composited over the artwork. */
+  newThreadBackgroundEffect: NewThreadBackgroundEffect;
+  /** Settings → Appearance theme: follow the OS, or force dark / light. */
+  colorScheme: ColorSchemePreference;
+  /** Frost the wallpaper in open sessions (not compose). Off keeps it sharp. */
+  sessionBackgroundBlur: boolean;
+  /** Settings → Debug. Off: no local diagnostic files are created. */
+  localLogsEnabled: boolean;
+}
+
+export interface ComposeDefaults {
+  deviceId: string;
+  spaceId?: string;
+  harness: string;
+  model: string;
+  reasoning?: string;
+  /** Fast / other per-model options from the compose chips. */
+  modelOptions?: Record<string, unknown>;
 }
 
 export const uiPrefsStore = createStore<UiPrefs>(() => ({
   liveActionPrefersSteer: false,
-  autoApproveByChat: {},
   liveActivitiesEnabled: true,
   liveActivityShowHost: true,
   notificationsEnabled: true,
+  hapticsEnabled: true,
   dictationLocale: 'en-US',
+  voiceInputMode: 'dictation',
+  voiceModelId: null,
+  cleanupModelId: null,
+  cleanupPromptOverride: null,
   forceRelayMode: false,
   sidebarCollapsed: false,
   planModeByChat: {},
   composerExtraHeight: 0,
   recentModels: [],
   pinnedChatIds: [],
+  pinnedModels: [],
+  modelSettingsByKey: {},
+  newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+  colorScheme: 'system',
+  sessionBackgroundBlur: false,
+  localLogsEnabled: false,
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
+/** Install/remove before bindUiPrefs must still hit disk once persist exists. */
+let prefsDirty = false;
+
+const WALLPAPER_UNSET: Pick<
+  UiPrefs,
+  'newThreadComposerBackground' | 'newThreadBackgroundEffect'
+> = {
+  newThreadComposerBackground: undefined,
+  newThreadBackgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+};
 
 export const bindUiPrefs = async (
   disk: DocDisk,
@@ -58,21 +132,84 @@ export const bindUiPrefs = async (
   userId: string,
 ): Promise<void> => {
   persist = { disk, orgId, userId };
+  const pendingWallpaper = prefsDirty
+    ? {
+        background: uiPrefsStore.getState().newThreadComposerBackground,
+        effect: uiPrefsStore.getState().newThreadBackgroundEffect,
+      }
+    : undefined;
   const saved = await disk.loadUiPrefs(orgId, userId);
-  if (saved !== undefined)
-    uiPrefsStore.setState(s => ({ ...s, ...(saved as Partial<UiPrefs>) }));
+  if (saved !== undefined) {
+    const patch = saved as Partial<UiPrefs>;
+    uiPrefsStore.setState(s => ({
+      ...s,
+      ...patch,
+      colorScheme:
+        parseColorSchemePreference(patch.colorScheme) ?? s.colorScheme,
+      voiceInputMode:
+        parseVoiceInputMode(patch.voiceInputMode) ?? s.voiceInputMode,
+      voiceModelId: parsePrefId(patch.voiceModelId, s.voiceModelId),
+      cleanupModelId: parsePrefId(patch.cleanupModelId, s.cleanupModelId),
+      cleanupPromptOverride: parsePrefId(
+        patch.cleanupPromptOverride,
+        s.cleanupPromptOverride,
+      ),
+      localLogsEnabled:
+        typeof patch.localLogsEnabled === 'boolean'
+          ? patch.localLogsEnabled
+          : s.localLogsEnabled,
+      modelSettingsByKey: {
+        ...s.modelSettingsByKey,
+        ...(patch.modelSettingsByKey ?? {}),
+      },
+    }));
+  }
+  if (pendingWallpaper !== undefined) {
+    uiPrefsStore.setState({
+      newThreadComposerBackground: pendingWallpaper.background,
+      newThreadBackgroundEffect: pendingWallpaper.effect,
+    });
+  }
+  const background = parseNewThreadComposerBackground(
+    uiPrefsStore.getState().newThreadComposerBackground,
+  );
+  if (background === undefined) {
+    if (uiPrefsStore.getState().newThreadComposerBackground !== undefined) {
+      uiPrefsStore.setState(WALLPAPER_UNSET);
+    }
+  } else {
+    uiPrefsStore.setState({ newThreadComposerBackground: background });
+    const ok = await isWallpaperAvailable(background);
+    if (!ok) {
+      uiPrefsStore.setState(WALLPAPER_UNSET);
+    }
+  }
+  syncComposerExtraHeightSV(uiPrefsStore.getState().composerExtraHeight);
+  await saveAsync();
 };
 
 export const unbindUiPrefs = (): void => {
   persist = undefined;
+  prefsDirty = false;
+  uiPrefsStore.setState(WALLPAPER_UNSET);
 };
 
 const save = (): void => {
-  persist?.disk
+  saveAsync().catch(() => {});
+};
+
+const saveAsync = (): Promise<void> => {
+  if (persist === undefined) {
+    prefsDirty = true;
+    return Promise.resolve();
+  }
+  return persist.disk
     .saveUiPrefs(persist.orgId, persist.userId, {
       ...uiPrefsStore.getState(),
     })
-    .catch(() => {});
+    .then(() => {
+      prefsDirty = false;
+    });
 };
 
 export const setLiveActionPrefersSteer = (v: boolean): void => {
@@ -82,19 +219,6 @@ export const setLiveActionPrefersSteer = (v: boolean): void => {
 
 export const useLiveActionPrefersSteer = (): boolean =>
   useStore(uiPrefsStore, s => s.liveActionPrefersSteer);
-
-export const setAutoApprove = (chatId: string, v: boolean): void => {
-  uiPrefsStore.setState(s => ({
-    autoApproveByChat: { ...s.autoApproveByChat, [chatId]: v },
-  }));
-  save();
-};
-
-export const autoApproveFor = (chatId: string): boolean =>
-  uiPrefsStore.getState().autoApproveByChat[chatId] === true;
-
-export const useAutoApprove = (chatId: string): boolean =>
-  useStore(uiPrefsStore, s => s.autoApproveByChat[chatId] === true);
 
 export const setLiveActivitiesEnabled = (v: boolean): void => {
   uiPrefsStore.setState({ liveActivitiesEnabled: v });
@@ -120,6 +244,22 @@ export const setNotificationsEnabled = (v: boolean): void => {
 export const useNotificationsEnabled = (): boolean =>
   useStore(uiPrefsStore, s => s.notificationsEnabled);
 
+export const setHapticsEnabled = (v: boolean): void => {
+  uiPrefsStore.setState({ hapticsEnabled: v });
+  save();
+};
+
+export const useHapticsEnabled = (): boolean =>
+  useStore(uiPrefsStore, s => s.hapticsEnabled);
+
+export const setLocalLogsEnabled = (v: boolean): Promise<void> => {
+  uiPrefsStore.setState({ localLogsEnabled: v });
+  return saveAsync();
+};
+
+export const useLocalLogsEnabled = (): boolean =>
+  useStore(uiPrefsStore, s => s.localLogsEnabled);
+
 export const setDictationLocale = (v: string): void => {
   uiPrefsStore.setState({ dictationLocale: v });
   save();
@@ -127,6 +267,47 @@ export const setDictationLocale = (v: string): void => {
 
 export const useDictationLocale = (): string =>
   useStore(uiPrefsStore, s => s.dictationLocale);
+
+const parsePrefId = (
+  value: unknown,
+  fallback: string | null,
+): string | null => {
+  if (value === undefined) return fallback;
+  if (value === null) return null;
+  return typeof value === 'string' ? value : fallback;
+};
+
+export const setVoiceInputMode = (v: VoiceInputMode): Promise<void> => {
+  uiPrefsStore.setState({ voiceInputMode: v });
+  return saveAsync();
+};
+
+export const useVoiceInputMode = (): VoiceInputMode =>
+  useStore(uiPrefsStore, s => s.voiceInputMode);
+
+export const setVoiceModelId = (v: string | null): Promise<void> => {
+  uiPrefsStore.setState({ voiceModelId: v });
+  return saveAsync();
+};
+
+export const useVoiceModelId = (): string | null =>
+  useStore(uiPrefsStore, s => s.voiceModelId);
+
+export const setCleanupModelId = (v: string | null): Promise<void> => {
+  uiPrefsStore.setState({ cleanupModelId: v });
+  return saveAsync();
+};
+
+export const useCleanupModelId = (): string | null =>
+  useStore(uiPrefsStore, s => s.cleanupModelId);
+
+export const setCleanupPromptOverride = (v: string | null): Promise<void> => {
+  uiPrefsStore.setState({ cleanupPromptOverride: v });
+  return saveAsync();
+};
+
+export const useCleanupPromptOverride = (): string | null =>
+  useStore(uiPrefsStore, s => s.cleanupPromptOverride);
 
 export const setForceRelayMode = (v: boolean): void => {
   uiPrefsStore.setState({ forceRelayMode: v });
@@ -154,9 +335,16 @@ export const setPlanMode = (chatId: string, v: boolean): void => {
 export const usePlanMode = (chatId: string): boolean =>
   useStore(uiPrefsStore, s => s.planModeByChat[chatId] === true);
 
-export const setComposerExtraHeight = (v: number): void => {
+/** Live grabber extra height — no disk write (pan frames). */
+export const setComposerExtraHeightLive = (v: number): void => {
+  syncComposerExtraHeightSV(v);
   uiPrefsStore.setState({ composerExtraHeight: v });
-  save();
+};
+
+export const setComposerExtraHeight = (v: number): Promise<void> => {
+  syncComposerExtraHeightSV(v);
+  uiPrefsStore.setState({ composerExtraHeight: v });
+  return saveAsync();
 };
 
 export const useComposerExtraHeight = (): number =>
@@ -192,3 +380,153 @@ export const usePinnedChatIds = (): string[] =>
 
 export const useChatPinned = (chatId: string): boolean =>
   useStore(uiPrefsStore, s => s.pinnedChatIds.includes(chatId));
+
+export const togglePinnedModel = (pick: RecentModel): Promise<void> => {
+  uiPrefsStore.setState(s => ({
+    pinnedModels: togglePinnedModelList(s.pinnedModels, pick),
+  }));
+  return saveAsync();
+};
+
+export const usePinnedModels = (): RecentModel[] =>
+  useStore(uiPrefsStore, s => s.pinnedModels);
+
+export const setComposeDefaults = (patch: Partial<ComposeDefaults>): void => {
+  uiPrefsStore.setState(s => {
+    const base: ComposeDefaults = s.composeDefaults ?? {
+      deviceId: '',
+      harness: '',
+      model: '',
+    };
+    return { composeDefaults: { ...base, ...patch } };
+  });
+  save();
+};
+
+export const rememberComposeDefaults = (defaults: ComposeDefaults): void => {
+  uiPrefsStore.setState({ composeDefaults: defaults });
+  save();
+};
+
+export const useComposeDefaults = (): ComposeDefaults | undefined =>
+  useStore(uiPrefsStore, s => s.composeDefaults);
+
+export const rememberModelSettings = (
+  harness: string,
+  model: string,
+  patch: ModelSettings,
+): void => {
+  if (harness === '' || model === '') return;
+  const key = modelRowKey(harness, model);
+  uiPrefsStore.setState(s => {
+    const prev = s.modelSettingsByKey[key] ?? {};
+    return {
+      modelSettingsByKey: {
+        ...s.modelSettingsByKey,
+        [key]: {
+          ...prev,
+          ...patch,
+          modelOptions:
+            patch.modelOptions === undefined
+              ? prev.modelOptions
+              : { ...(prev.modelOptions ?? {}), ...patch.modelOptions },
+        },
+      },
+    };
+  });
+  save();
+};
+
+export const modelSettingsFor = (
+  harness: string,
+  model: string,
+): ModelSettings | undefined =>
+  uiPrefsStore.getState().modelSettingsByKey[modelRowKey(harness, model)];
+
+export const useModelSettingsMap = (): Record<string, ModelSettings> =>
+  useStore(uiPrefsStore, s => s.modelSettingsByKey);
+
+export const useNewThreadComposerBackground = ():
+  | NewThreadComposerBackground
+  | undefined => useStore(uiPrefsStore, s => s.newThreadComposerBackground);
+
+export const useNewThreadBackgroundEffect = (): NewThreadBackgroundEffect =>
+  useStore(uiPrefsStore, s => s.newThreadBackgroundEffect);
+
+export const setColorSchemePreference = (
+  v: ColorSchemePreference,
+): Promise<void> => {
+  uiPrefsStore.setState({ colorScheme: v });
+  return saveAsync();
+};
+
+export const useColorSchemePreference = (): ColorSchemePreference =>
+  useStore(uiPrefsStore, s => s.colorScheme);
+
+export const setSessionBackgroundBlur = (v: boolean): Promise<void> => {
+  uiPrefsStore.setState({ sessionBackgroundBlur: v });
+  return saveAsync();
+};
+
+export const useSessionBackgroundBlur = (): boolean =>
+  useStore(uiPrefsStore, s => s.sessionBackgroundBlur);
+
+export const setNewThreadBackgroundEffect = (
+  v: NewThreadBackgroundEffect,
+): void => {
+  uiPrefsStore.setState({ newThreadBackgroundEffect: v });
+  save();
+};
+
+export const applyPresetBackground = async (id: string): Promise<boolean> => {
+  if (defaultBackgroundById(id) === undefined) return false;
+  const previous = uiPrefsStore.getState().newThreadComposerBackground;
+  if (previous?.kind === 'preset' && previous.id === id) return true;
+  uiPrefsStore.setState({
+    newThreadComposerBackground: { kind: 'preset', id },
+  });
+  try {
+    await saveAsync();
+  } catch {
+    uiPrefsStore.setState({ newThreadComposerBackground: previous });
+    return false;
+  }
+  const fs = getBackgroundFs();
+  if (fs !== undefined) {
+    await retireManagedBackground(fs, previous, '');
+  }
+  return true;
+};
+
+export const installNewThreadComposerBackground = async (
+  input: BackgroundSource,
+): Promise<BackgroundInstallResult> => {
+  const fs = getBackgroundFs();
+  if (fs === undefined) return { ok: false, reason: 'failed' };
+  const previous = uiPrefsStore.getState().newThreadComposerBackground;
+  const copied = await copyBackgroundFile(input, fs);
+  if (copied.ok === false) return copied;
+  uiPrefsStore.setState({
+    newThreadComposerBackground: copied.background,
+  });
+  try {
+    await saveAsync();
+  } catch {
+    uiPrefsStore.setState({
+      newThreadComposerBackground: previous,
+    });
+    await fs.deleteFile(copied.background.uri).catch(() => {});
+    return { ok: false, reason: 'failed' };
+  }
+  await retireManagedBackground(fs, previous, copied.background.uri);
+  return copied;
+};
+
+export const removeNewThreadComposerBackground = async (): Promise<void> => {
+  const previous = uiPrefsStore.getState().newThreadComposerBackground;
+  uiPrefsStore.setState(WALLPAPER_UNSET);
+  save();
+  const fs = getBackgroundFs();
+  if (fs === undefined) return;
+  await retireManagedBackground(fs, previous, '');
+};

@@ -8,6 +8,8 @@ export interface RecentModel {
 
 export interface CatalogModelRef extends RecentModel {
   label: string;
+  /** Provider display name from the host catalog. */
+  harnessName?: string;
 }
 
 const same = (a: RecentModel, b: RecentModel): boolean =>
@@ -27,35 +29,39 @@ export const rememberRecentModel = (
 
 /** Up to `limit` models for the composer's Liquid Glass menu. Recents that
  * still exist in the catalog come first; empty recents still fill from the
- * catalog so the menu is never blank when models are available. */
+ * **same harness** as `current` when `lockHarness` (a started session is
+ * provider-bound). Compose mode passes `lockHarness: false` so every
+ * provider/model in the catalog can appear. */
 export const recentMenuModels = (
   recents: readonly RecentModel[],
   catalog: readonly CatalogModelRef[],
   current: RecentModel | undefined,
   limit = 3,
+  lockHarness = true,
 ): CatalogModelRef[] => {
   if (limit <= 0 || catalog.length === 0) return [];
   const byKey = new Map(catalog.map(m => [keyOf(m), m]));
   const out: CatalogModelRef[] = [];
   const seen = new Set<string>();
+  const currentHarness = lockHarness ? current?.harness : undefined;
   const add = (ref: RecentModel | undefined): void => {
     if (ref === undefined || out.length >= limit) return;
+    if (currentHarness !== undefined && ref.harness !== currentHarness) return;
     const hit = byKey.get(keyOf(ref));
     if (hit === undefined) return;
     const k = keyOf(hit);
     if (seen.has(k)) return;
     seen.add(k);
-    out.push(hit);
+    out.push({
+      harness: hit.harness,
+      model: hit.model,
+      label: hit.label,
+      harnessName: hit.harnessName,
+    });
   };
 
   add(current);
   for (const r of recents) add(r);
-
-  const currentHarness = current?.harness ?? recents[0]?.harness;
-  for (const m of catalog) {
-    if (currentHarness !== undefined && m.harness !== currentHarness) continue;
-    add(m);
-  }
   for (const m of catalog) add(m);
   return out;
 };

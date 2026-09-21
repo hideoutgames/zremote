@@ -4,10 +4,25 @@ import {
 } from '../src/zeron/state/recentModels';
 
 const catalog = [
-  { harness: 'claude-code', model: 'sonnet', label: 'Sonnet' },
-  { harness: 'claude-code', model: 'opus', label: 'Opus' },
-  { harness: 'codex', model: 'gpt-5', label: 'GPT-5' },
-  { harness: 'cursor', model: 'composer', label: 'Composer' },
+  {
+    harness: 'claude-code',
+    model: 'sonnet',
+    label: 'Sonnet',
+    harnessName: 'Claude',
+  },
+  {
+    harness: 'claude-code',
+    model: 'opus',
+    label: 'Opus',
+    harnessName: 'Claude',
+  },
+  { harness: 'codex', model: 'gpt-5', label: 'GPT-5', harnessName: 'Codex' },
+  {
+    harness: 'cursor',
+    model: 'composer',
+    label: 'Composer',
+    harnessName: 'Cursor',
+  },
 ];
 
 test('rememberRecentModel prepends and dedupes', () => {
@@ -20,26 +35,42 @@ test('rememberRecentModel prepends and dedupes', () => {
   expect(again).toHaveLength(2);
 });
 
-test('recentMenuModels pads to 3 from the catalog when recents are empty', () => {
+test('recentMenuModels pads to 3 from the same harness when recents are empty', () => {
   const items = recentMenuModels(
     [],
     catalog,
     { harness: 'claude-code', model: 'opus' },
     3,
   );
-  expect(items).toHaveLength(3);
+  expect(items).toHaveLength(2);
   expect(items[0]).toEqual(catalog[1]);
-  expect(items.map(i => i.model)).toEqual(['opus', 'sonnet', 'gpt-5']);
+  expect(items.map(i => i.model)).toEqual(['opus', 'sonnet']);
+  expect(items.every(i => i.harness === 'claude-code')).toBe(true);
 });
 
-test('recentMenuModels prefers recents then same harness', () => {
+test('recentMenuModels drops recents from other harnesses', () => {
   const items = recentMenuModels(
     [{ harness: 'codex', model: 'gpt-5' }],
     catalog,
     { harness: 'cursor', model: 'composer' },
     3,
   );
-  expect(items.map(i => i.model)).toEqual(['composer', 'gpt-5', 'sonnet']);
+  expect(items.map(i => i.model)).toEqual(['composer']);
+  expect(items.every(i => i.harness === 'cursor')).toBe(true);
+});
+
+test('recentMenuModels lockHarness false includes other providers', () => {
+  const items = recentMenuModels(
+    [{ harness: 'codex', model: 'gpt-5' }],
+    catalog,
+    { harness: 'cursor', model: 'composer' },
+    3,
+    false,
+  );
+  expect(items.map(i => i.harness)).toEqual(
+    expect.arrayContaining(['cursor', 'codex']),
+  );
+  expect(items[0]).toEqual(catalog[3]);
 });
 
 test('recentMenuModels ignores recents missing from the catalog', () => {
@@ -51,4 +82,16 @@ test('recentMenuModels ignores recents missing from the catalog', () => {
   );
   expect(items).toHaveLength(3);
   expect(items.every(i => i.harness !== 'gone')).toBe(true);
+});
+
+test('recentMenuModels preserves catalog harnessName', () => {
+  const items = recentMenuModels(
+    [{ harness: 'codex', model: 'gpt-5' }],
+    catalog,
+    { harness: 'cursor', model: 'composer' },
+    3,
+    false,
+  );
+  expect(items.find(i => i.model === 'gpt-5')?.harnessName).toBe('Codex');
+  expect(items.find(i => i.model === 'composer')?.harnessName).toBe('Cursor');
 });

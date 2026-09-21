@@ -14,6 +14,9 @@ import type { TokenSource } from '../zeron/transport/tokenSource';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { createLog } from '../zeron/log';
 import { chatIdFromData, shouldPresentBanner } from './presentation';
+import { shouldLocalQuestionBanner } from './questionAlert';
+import { t } from '../i18n/strings';
+import { workspaceStore } from '../zeron/state/workspaceStore';
 
 const log = createLog();
 
@@ -38,6 +41,15 @@ const registration = (
 
 /** Returns an unbind function. Settings toggle off → DELETE the token. */
 export const bindPushNotifications = (deps: BindPushDeps): (() => void) => {
+  try {
+    return bindPushNotificationsUnsafe(deps);
+  } catch (e) {
+    log.warn(`alert-push bind failed: ${e}`);
+    return () => {};
+  }
+};
+
+const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
   let lastToken: string | undefined;
   let cancelled = false;
 
@@ -129,9 +141,44 @@ export const bindPushNotifications = (deps: BindPushDeps): (() => void) => {
   });
   tick();
 
+  const lastStatus = new Map<string, string | undefined>();
+  const presentQuestion = (chatId: string, title: string): void => {
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body: t('notify.needsInput'),
+        data: { chatId, url: `zeron://session/${chatId}` },
+      },
+      trigger: null,
+    }).catch(e => log.warn(`question banner: ${e}`));
+  };
+  const scanQuestions = (): void => {
+    if (cancelled || !uiPrefsStore.getState().notificationsEnabled) return;
+    const { sessions, chats } = workspaceStore.getState();
+    for (const row of Object.values(sessions)) {
+      const prev = lastStatus.get(row.chatId);
+      lastStatus.set(row.chatId, row.status);
+      if (
+        shouldLocalQuestionBanner({
+          prevStatus: prev,
+          status: row.status,
+          appState: AppState.currentState,
+          selectedChatId: deps.selectedChatId(),
+          chatId: row.chatId,
+        })
+      ) {
+        const chat = chats.find(c => c.id === row.chatId);
+        presentQuestion(row.chatId, chat?.title ?? 'Session');
+      }
+    }
+  };
+  const unsubWorkspace = workspaceStore.subscribe(scanQuestions);
+  scanQuestions();
+
   return () => {
     cancelled = true;
     unsubPrefs();
+    unsubWorkspace();
     responseSub.remove();
     tokenSub.remove();
     unregister();

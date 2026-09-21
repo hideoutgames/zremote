@@ -1,15 +1,25 @@
 // Unify how harnesses surface a named plan document in the transcript.
 //
+// Preferred: marked markdown between ZERON_PLAN_START / ZERON_PLAN_END in
+// assistant text. Plan-mode prefixes ask every harness to emit that block
+// and not to call provider plan tools (`/plan` is never sent — it trips
+// Cursor/Claude plan modes).
+//
+// Fallbacks when a model still uses a tool:
 // Cursor SDK: unknown tool `createPlan` / `CreatePlan` with
-//   { name, overview, plan } on the call or `input`.
+//   { name, plan } on the call, `input`, `arguments`, or `args`.
+//   Stock Zeron 0.2.72 sanitizes Unknown.input, so the live doc is often
+//   name-only — we still emit a PlanArtifact so the turn is not blank.
+//   `overview` is a short summary, never the sheet body.
 // Cursor ACP (historical): todo chip id `cursor-plan`.
-// Claude Code: `EnterPlanMode` unknown tool; the following text part is the
-//   plan markdown (ExitPlanMode / SwitchMode are ignored here).
+// Claude Code: `EnterPlanMode` unknown tool; text parts *after* that tool
+//   are the plan markdown (ExitPlanMode / SwitchMode are ignored here).
 // Codex: `todoList` already renders as TaskRows; structured plan deltas are
-//   dropped by the host — no document to show.
+//   dropped by the host — marked text is the document.
 // Devin / ACP: live tool id `acp-plan` (todos). We still prefer a markdown
 //   `plan` field when the host preserved it on the call.
 
+import { PLAN_END_MARKER, PLAN_START_MARKER } from '../planMode';
 import type { MessageEntry, MessagePart } from '../../zeron/protocol/types';
 
 export interface PlanArtifact {
@@ -34,25 +44,72 @@ const asRecord = (v: unknown): Record<string, unknown> | undefined =>
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-const toolName = (call: Record<string, unknown>): string =>
-  str(call.name).trim();
+const asMarkdown = (v: unknown): string => {
+  if (typeof v === 'string') return v;
+  if (v !== null && typeof v === 'object') {
+    try {
+      const json = JSON.stringify(v, null, 2);
+      return json === undefined || json === 'null' ? '' : json;
+    } catch {
+      return '';
+    }
+  }
+  return '';
+};
+
+const toolName = (call: Record<string, unknown>): string => {
+  if (str(call.kind) === 'mcp')
+    return str(call.tool).trim() || str(call.name).trim();
+  return str(call.name).trim() || str(call.tool).trim();
+};
 
 const isPlanToolName = (name: string): boolean =>
   PLAN_TOOL_NAMES.has(name.toLowerCase());
 
+const fieldBags = (
+  call: Record<string, unknown>,
+): Record<string, unknown>[] => {
+  const bags: Record<string, unknown>[] = [];
+  for (const key of ['input', 'arguments', 'args'] as const) {
+    const bag = asRecord(call[key]);
+    if (bag !== undefined) bags.push(bag);
+  }
+  bags.push(call);
+  return bags;
+};
+
+const markdownFromBags = (bags: Record<string, unknown>[]): string => {
+  for (const bag of bags) {
+    for (const key of ['plan', 'content'] as const) {
+      const text = asMarkdown(bag[key]);
+      if (text.trim() !== '') return text;
+    }
+  }
+  return '';
+};
+
+const nameFromBags = (
+  bags: Record<string, unknown>[],
+  markdown: string,
+): string => {
+  for (const bag of bags) {
+    for (const key of ['name', 'title'] as const) {
+      const n = str(bag[key]).trim();
+      if (n !== '' && !isPlanToolName(n)) return n;
+    }
+  }
+  return firstHeading(markdown) ?? 'Plan';
+};
+
 const planFromCall = (
   call: Record<string, unknown>,
-  toolId?: string,
+  toolId: string | undefined,
+  allowEmpty: boolean,
 ): PlanArtifact | undefined => {
-  const input = asRecord(call.input) ?? call;
-  const markdown = str(input.plan) || str(input.overview) || str(input.content);
-  if (markdown.trim() === '') return undefined;
-  const name =
-    str(input.name).trim() ||
-    str(input.title).trim() ||
-    firstHeading(markdown) ||
-    'Plan';
-  return { name, markdown, toolId };
+  const bags = fieldBags(call);
+  const markdown = markdownFromBags(bags);
+  if (markdown.trim() === '' && !allowEmpty) return undefined;
+  return { name: nameFromBags(bags, markdown), markdown, toolId };
 };
 
 const firstHeading = (markdown: string): string | undefined => {
@@ -64,45 +121,193 @@ const firstHeading = (markdown: string): string | undefined => {
 const isEnterPlanMode = (name: string): boolean =>
   /enterplanmode/i.test(name) || /^switchmode$/i.test(name);
 
+const isCreatePlanPart = (
+  call: Record<string, unknown>,
+  partId: string,
+): boolean =>
+  isPlanToolName(toolName(call)) ||
+  partId === 'acp-plan' ||
+  partId === 'cursor-plan';
+
+const joinTexts = (parts: readonly MessagePart[]): string =>
+  parts
+    .filter(
+      (p): p is Extract<MessagePart, { kind: 'text' }> =>
+        p.kind === 'text' && p.text.trim() !== '',
+    )
+    .map(p => p.text)
+    .join('\n');
+
+/** Extract a marked plan body from assistant text, including a partial
+ * body while streaming (START present, END not yet). */
+export const extractMarkedPlan = (text: string): PlanArtifact | undefined => {
+  const start = text.indexOf(PLAN_START_MARKER);
+  if (start < 0) return undefined;
+  const after = start + PLAN_START_MARKER.length;
+  const end = text.indexOf(PLAN_END_MARKER, after);
+  const markdown = (
+    end < 0 ? text.slice(after) : text.slice(after, end)
+  ).trim();
+  if (markdown === '') return undefined;
+  return { name: firstHeading(markdown) ?? 'Plan', markdown };
+};
+
+/** Drop marked plan blocks from transcript text so the Plan card is the
+ * opener and the raw markers are not duplicated in the bubble. A START
+ * without END (streaming) hides from the marker onward. */
+export const stripPlanMarkers = (text: string): string => {
+  const start = text.indexOf(PLAN_START_MARKER);
+  if (start < 0) return text;
+  const afterStart = start + PLAN_START_MARKER.length;
+  const end = text.indexOf(PLAN_END_MARKER, afterStart);
+  if (end < 0) return text.slice(0, start).trimEnd();
+  const before = text.slice(0, start);
+  const after = text.slice(end + PLAN_END_MARKER.length);
+  return `${before.trimEnd()}\n\n${after.trimStart()}`.trim();
+};
+
 /** Pick the best plan document on an assistant entry, if any. */
 export const detectPlanArtifact = (
   entry: MessageEntry,
 ): PlanArtifact | undefined => {
-  let enterPlan = false;
-  let firstText: string | undefined;
+  const marked = extractMarkedPlan(joinTexts(entry.parts));
+  if (marked !== undefined) return marked;
+
+  let createPlan: PlanArtifact | undefined;
+  let createPlanWithBody: PlanArtifact | undefined;
+  let seenEnter = false;
+  const afterEnterTexts: string[] = [];
+  const allTexts: string[] = [];
+
   for (const part of entry.parts) {
-    if (part.kind === 'text' && firstText === undefined && part.text.trim())
-      firstText = part.text;
+    if (part.kind === 'text' && part.text.trim()) {
+      allTexts.push(part.text);
+      if (seenEnter) afterEnterTexts.push(part.text);
+    }
     if (part.kind !== 'tool') continue;
     const call = rec(part.call);
     const name = toolName(call);
-    if (
-      isPlanToolName(name) ||
-      part.id === 'acp-plan' ||
-      part.id === 'cursor-plan'
-    ) {
-      const found = planFromCall(call, part.id);
-      if (found !== undefined) return found;
+    if (isEnterPlanMode(name)) {
+      seenEnter = true;
+      continue;
     }
-    if (isEnterPlanMode(name)) enterPlan = true;
+    if (isCreatePlanPart(call, part.id)) {
+      const found = planFromCall(call, part.id, isPlanToolName(name));
+      if (found !== undefined) {
+        if (found.markdown.trim() !== '') {
+          if (createPlanWithBody === undefined) createPlanWithBody = found;
+        } else if (createPlan === undefined && isPlanToolName(name)) {
+          createPlan = found;
+        }
+      }
+    }
   }
-  if (enterPlan && firstText !== undefined)
-    return {
-      name: firstHeading(firstText) ?? 'Plan',
-      markdown: firstText,
-    };
+
+  if (createPlanWithBody !== undefined) return createPlanWithBody;
+
+  if (seenEnter && afterEnterTexts.length > 0) {
+    const markdown = afterEnterTexts.join('\n');
+    return { name: firstHeading(markdown) ?? 'Plan', markdown };
+  }
+
+  if (createPlan !== undefined) {
+    if (allTexts.length > 0 && createPlan.markdown.trim() === '') {
+      const markdown = allTexts.join('\n');
+      return {
+        name:
+          createPlan.name !== 'Plan'
+            ? createPlan.name
+            : firstHeading(markdown) ?? 'Plan',
+        markdown,
+        toolId: createPlan.toolId,
+      };
+    }
+    return createPlan;
+  }
+
   return undefined;
 };
 
-/** True when this tool part is the CreatePlan-class call we already show
- * as a PlanCard — hide the raw unknown-tool chip. */
-export const isPlanToolPart = (part: MessagePart): boolean => {
+/** Tools that render as a PlanCard in document order (createPlan, EnterPlanMode,
+ * ACP/cursor plan chips with a body). */
+export const isPlanCardPart = (part: MessagePart): boolean => {
   if (part.kind !== 'tool') return false;
   const call = rec(part.call);
   const name = toolName(call);
   if (isPlanToolName(name) || isEnterPlanMode(name)) return true;
-  if (/exitplanmode/i.test(name)) return true;
   if (part.id === 'acp-plan' || part.id === 'cursor-plan')
-    return planFromCall(call, part.id) !== undefined;
+    return planFromCall(call, part.id, false) !== undefined;
   return false;
+};
+
+/** ExitPlanMode (and similar) — hide the raw chip, no card. */
+export const isHiddenPlanToolPart = (part: MessagePart): boolean => {
+  if (part.kind !== 'tool') return false;
+  return /exitplanmode/i.test(toolName(rec(part.call)));
+};
+
+/** True when this tool part is shown as a PlanCard (or is ExitPlanMode) —
+ * hide the raw unknown-tool chip. CreatePlan-class parts always hide
+ * because `detectPlanArtifact` always emits a card for them. */
+export const isPlanToolPart = (part: MessagePart): boolean =>
+  isPlanCardPart(part) || isHiddenPlanToolPart(part);
+
+/** Text parts consumed as the plan body (empty createPlan / EnterPlanMode
+ * following text). Marked plans are not consumed — `stripPlanMarkers` keeps
+ * surrounding copy and the card is the opener. */
+export const consumedPlanTextIds = (
+  entry: MessageEntry,
+): ReadonlySet<string> => {
+  const ids = new Set<string>();
+  if (extractMarkedPlan(joinTexts(entry.parts)) !== undefined) return ids;
+
+  let seenEnter = false;
+  let createPlanWithBody = false;
+  let emptyCreatePlan = false;
+  const afterEnterIds: string[] = [];
+  const allTextIds: string[] = [];
+
+  for (const part of entry.parts) {
+    if (part.kind === 'text' && part.text.trim()) {
+      allTextIds.push(part.id);
+      if (seenEnter) afterEnterIds.push(part.id);
+    }
+    if (part.kind !== 'tool') continue;
+    const call = rec(part.call);
+    const name = toolName(call);
+    if (isEnterPlanMode(name)) {
+      seenEnter = true;
+      continue;
+    }
+    if (isCreatePlanPart(call, part.id)) {
+      const found = planFromCall(call, part.id, isPlanToolName(name));
+      if (found !== undefined) {
+        if (found.markdown.trim() !== '') createPlanWithBody = true;
+        else if (isPlanToolName(name)) emptyCreatePlan = true;
+      }
+    }
+  }
+
+  if (seenEnter) {
+    for (const id of afterEnterIds) ids.add(id);
+    return ids;
+  }
+  if (emptyCreatePlan && !createPlanWithBody) {
+    for (const id of allTextIds) ids.add(id);
+  }
+  return ids;
+};
+
+/** Part that hosts the single in-transcript PlanCard: the first plan-card
+ * tool, or the text part that contains the marked-plan start. */
+export const planCardAnchorId = (entry: MessageEntry): string | undefined => {
+  if (detectPlanArtifact(entry) === undefined) return undefined;
+  for (const part of entry.parts) {
+    if (isPlanCardPart(part)) return part.id;
+  }
+  for (const part of entry.parts) {
+    if (part.kind === 'text' && part.text.includes(PLAN_START_MARKER))
+      return part.id;
+  }
+  return undefined;
 };

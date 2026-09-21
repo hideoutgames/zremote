@@ -1,6 +1,6 @@
 // SessionScreen — the fork's ChatScreen shape driven by the synchronized
-// session store: KeyboardAwareLegendList transcript, glass composer, scroll
-// chevron, reasoning sheet, context-usage bar, failed-send banner.
+// session store: FlashList + KeyboardChatScrollView transcript, glass composer, scroll
+// chevron, reasoning sheet, failed-send banner.
 
 import React, {
   Suspense,
@@ -14,8 +14,6 @@ import {
   AccessibilityInfo,
   Alert,
   Keyboard,
-  type LayoutChangeEvent,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -23,74 +21,104 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import { type LegendListRef } from '@legendapp/list/react-native';
 import {
-  KeyboardAwareLegendList,
-  useKeyboardChatComposerInset,
-  useKeyboardScrollToEnd,
-} from '@legendapp/list/keyboard';
-import * as DropdownMenu from 'zeego/dropdown-menu';
+  KeyboardController,
+  KeyboardStickyView,
+  useKeyboardState,
+} from 'react-native-keyboard-controller';
+import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
-import { useSessionState, useRunPhase } from '../zeron/state/sessionStores';
-import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
-import { useDraft, setDraftPendingWorktree } from '../zeron/state/draftStore';
 import {
-  autoApproveFor,
+  useSessionState,
+  useSessionCommands,
+  useSessionQueueLength,
+  useRunPhase,
+  dismissFailedSend,
+  moveQueuedInStore,
+  appendSentMessage,
+} from '../zeron/state/sessionStores';
+import {
+  workspaceStore,
+  useChat,
+  useDeviceOnline,
+} from '../zeron/state/workspaceStore';
+import {
+  useDraft,
+  setDraftPendingWorktree,
+  restoreFailedSend,
+} from '../zeron/state/draftStore';
+import {
+  modelSettingsFor,
   rememberModelPick,
+  rememberModelSettings,
   setPlanMode,
   toggleChatPinned,
   useChatPinned,
-  useComposerExtraHeight,
+  useNewThreadComposerBackground,
+  usePinnedModels,
   useRecentModels,
+  useVoiceInputMode,
 } from '../zeron/state/uiPrefs';
+import { sessionTitle } from '../zeron/state/sessionTruth';
+import { useLocalQueuedIds } from '../zeron/state/queuedLocalStore';
 import {
-  sessionTitle,
-  hostLabel,
-  checkoutLabel,
-} from '../zeron/state/sessionTruth';
+  bindPendingWorkedDuration,
+  workedDurationStore,
+  type FrozenWorkedDuration,
+} from '../zeron/state/workedDuration';
+import { formatWorkedDurationRange } from '../zeron/state/workingElapsed';
 import {
   setChatArchived,
   setChatConfig,
   renameChat,
 } from '../zeron/runtime/workspaceActions';
-import { restoreFailedSend } from '../zeron/state/draftStore';
-import { edgeFetchBytes } from '../zeron/transport/edgeHttp';
+import type { SessionController } from '../zeron/runtime/sessionController';
+import { edgeFetchBytes, EdgeHttpError } from '../zeron/transport/edgeHttp';
 import { blobUrl } from '../zeron/transport/edge';
 import {
   catalogStore,
   modelsFor,
-  reasoningLevelsFor,
   selectableHarnesses,
 } from '../zeron/state/catalogStore';
 import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
-import { recentMenuModels } from '../zeron/state/recentModels';
+import { composerMenuModels } from '../zeron/state/pinnedModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
 import {
-  fastOffChoice,
-  fastOnChoice,
-  fastOptionForModel,
-  isFastEnabled,
-} from '../components/fastMode';
+  applyContextChoice,
+  applyEffortLevel,
+  applyFastChoice,
+  resolveModelTraits,
+  selectionForModel,
+} from '../components/modelTraits';
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
-import { usePrBadge } from '../zeron/state/changeRequestStore';
+import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
-import type { MessageEntry } from '../zeron/protocol/types';
+import { DESKTOP_SANDBOX, type MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
-import { Glass } from '../components/Glass';
+import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
+import { ComposeComposer } from '../components/ComposeComposer';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
-import { EffortOverlay } from '../components/EffortOverlay';
+import { composerPrBadge } from '../components/threadPrs';
+import {
+  SessionTranscriptList,
+  type SessionTranscriptListHandle,
+} from '../components/SessionTranscriptList';
+import {
+  EffortOverlay,
+  measureWindowRect,
+  type EffortOrigin,
+} from '../components/EffortOverlay';
+import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
+import { alertHostNotConnectedQueue } from '../components/queueAlerts';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { PrSheet } from '../components/PrSheet';
+import type { PrBadgeModel } from '../components/prBadge';
+import { SessionSheet } from '../components/SessionSheet';
+import { useLocalVoiceRuntime } from '../hooks/useLocalVoiceRuntime';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -101,22 +129,44 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
+import { applyBuildPrefix } from '../components/planMode';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
+import { ThreadUsageSheet } from '../components/ThreadUsageSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
 import { FileDiffSheet } from '../components/FileDiffSheet';
 import type { FileDiffRequest } from '../components/FileDiffSheet';
-import { ContextUsageBar } from '../components/agentsKit/ContextUsageBar';
-import { ScrollToBottomButton } from '../components/ScrollToBottomButton';
+import {
+  ScrollToBottomButton,
+  SCROLL_TO_BOTTOM_SIZE,
+} from '../components/ScrollToBottomButton';
 import { useTheme } from '../theme';
+import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
-import { ChangesScreen } from './ChangesScreen';
+import { useKeyboardDismissPan } from '../navigation/keyboardDismissGesture';
 import { FilesScreen } from './FilesScreen';
 import { TerminalScreen } from './TerminalScreen';
 import { HistoryScreen } from './HistoryScreen';
-import { PreviewsScreen } from './PreviewsScreen';
 import { createLog } from '../zeron/log';
+import { ComposerStickyBottom } from '../components/ComposerChromeAnim';
+import { ComposeKeyboardShift } from '../components/ComposeKeyboardShift';
+import { composerKeyboardStickyOffset } from '../navigation/composeKeyboardShift';
+import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
+import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 
 const log = createLog();
+
+const workedForCaption = (
+  item: MessageEntry,
+  hide: boolean,
+  byId: Record<string, FrozenWorkedDuration>,
+): string | undefined => {
+  if (hide) return undefined;
+  if (item.status !== 'complete' && item.status !== 'aborted') return undefined;
+  const frozen = byId[item.id];
+  return frozen === undefined
+    ? undefined
+    : formatWorkedDurationRange(frozen.startedAt, frozen.endedAt);
+};
 
 const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({
@@ -124,49 +174,180 @@ const ReasoningSheet = React.lazy(() =>
   })),
 );
 
-const ANCHOR_MAX_SIZE = 2 * 21 + 32;
+// Do not add Reanimated worklets in this screen. React Compiler + worklets
+// 0.10.x serializes a wide memo cache (props, runtime, Sets) and 0.10.1
+// throws, which RCTFatal aborts in Release/TestFlight. Extract a tiny child
+// if a worklet is required. ActiveSessionScreen is `'use no memo'` for the
+// same reason; the transcript list is a separate compiled-off child.
 
 export function SessionScreen({
   chatId,
   onBack,
+  onCreated,
   leadingIcon,
   contentMaxWidth,
-  leadingInsetSV,
+  composerMaxWidth,
+  openGeneration = 0,
+}: {
+  chatId?: string;
+  onBack: () => void;
+  onCreated?: (chatId: string) => void;
+  /** iPad split view: replaces the back chevron with a sidebar toggle. */
+  leadingIcon?: string;
+  /** iPad: cap the transcript measure (~720pt or detail − 48pt), centered. */
+  contentMaxWidth?: number;
+  /** iPad: cap the composer stack inside the detail column. */
+  composerMaxWidth?: number;
+  /** Bumps on every Home/deep-link open so reopen also lands at the tail. */
+  openGeneration?: number;
+}) {
+  if (chatId === undefined) {
+    return (
+      <ComposeSessionScreen
+        onBack={onBack}
+        onCreated={onCreated}
+        leadingIcon={leadingIcon}
+        composerMaxWidth={composerMaxWidth}
+      />
+    );
+  }
+  return (
+    <ActiveSessionScreen
+      chatId={chatId}
+      onBack={onBack}
+      leadingIcon={leadingIcon}
+      contentMaxWidth={contentMaxWidth}
+      composerMaxWidth={composerMaxWidth}
+      openGeneration={openGeneration}
+    />
+  );
+}
+
+function ComposeSessionScreen({
+  onBack,
+  onCreated,
+  leadingIcon,
+  composerMaxWidth,
+}: {
+  onBack: () => void;
+  onCreated?: (chatId: string) => void;
+  leadingIcon?: string;
+  composerMaxWidth?: number;
+}) {
+  const theme = useTheme();
+  const chrome = useChromeTheme();
+  const insets = useSafeAreaInsets();
+  const [composerH, setComposerH] = useState(0);
+  const dismissPan = useKeyboardDismissPan();
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
+  return (
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+      ]}
+    >
+      {/* Pan lives here, not on compose-center, so checkout chips can scroll. */}
+      <View
+        testID="compose-dismiss"
+        style={styles.composeDismiss}
+        {...dismissPan.panHandlers}
+      />
+      <ComposeKeyboardShift
+        testID="compose-center"
+        composerHeight={composerH}
+        style={styles.composeCenter}
+        pointerEvents="box-none"
+      >
+        <ComposeComposer
+          autoFocus
+          composerMaxWidth={composerMaxWidth}
+          onCreated={id => onCreated?.(id)}
+          onLayout={e => setComposerH(e.nativeEvent.layout.height)}
+        />
+      </ComposeKeyboardShift>
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
+        pointerEvents="box-none"
+      >
+        <View style={styles.headerRow} pointerEvents="box-none">
+          <GlassControl
+            interactive
+            onPress={() => {
+              KeyboardController.dismiss();
+              onBack();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={
+              leadingIcon !== undefined
+                ? t('sidebar.toggle')
+                : t('session.back')
+            }
+            style={styles.circle}
+          >
+            <Icon
+              name={(leadingIcon ?? 'chevron.left') as never}
+              size={18}
+              color={chrome.text}
+            />
+          </GlassControl>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ActiveSessionScreen({
+  chatId,
+  onBack,
+  leadingIcon,
+  contentMaxWidth,
+  composerMaxWidth,
+  openGeneration,
 }: {
   chatId: string;
   onBack: () => void;
-  /** iPad split view: replaces the back chevron with a sidebar toggle. */
   leadingIcon?: string;
-  /** iPad: cap the transcript/composer measure (~720pt), centered. */
   contentMaxWidth?: number;
-  /** iPad: animated leading inset under the floating sidebar — applied to
-   * the header and composer measure only; the transcript scrolls under. */
-  leadingInsetSV?: SharedValue<number>;
+  composerMaxWidth?: number;
+  openGeneration: number;
 }) {
+  'use no memo';
   const theme = useTheme();
+  const chrome = useChromeTheme();
   const insets = useSafeAreaInsets();
-  const fallbackInset = useSharedValue(0);
-  const leadingPad = useAnimatedStyle(() => ({
-    paddingLeft: (leadingInsetSV ?? fallbackInset).value,
-  }));
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const runtime = useRuntime();
   const auth = useAuthSession();
 
-  // retain on mount, release on unmount — the runtime closes the room only
-  // when no view holds it.
-  const controller = useMemo(
-    () => (runtime === null ? undefined : runtime.openSession(chatId)),
-    [runtime, chatId],
+  // Open off the render path: `loro()` / Nitro LoroDoc throws must not
+  // become a first-paint ErrorBoundary. retain on mount, release on unmount.
+  const [controller, setController] = useState<SessionController | undefined>(
+    undefined,
   );
   useEffect(() => {
-    const c = controller?.retain();
-    return () => {
-      c?.release();
-    };
-  }, [controller]);
+    if (runtime === null) {
+      setController(undefined);
+      return;
+    }
+    try {
+      const c = runtime.openSession(chatId).retain();
+      setController(c);
+      return () => {
+        c.release();
+        setController(undefined);
+      };
+    } catch (e) {
+      const name = e instanceof Error ? e.name : 'Error';
+      log.warn(`openSession failed (${name})`);
+      setController(undefined);
+      return;
+    }
+  }, [runtime, chatId]);
 
   const session = useSessionState(chatId);
+  const commands = useSessionCommands(chatId);
+  const queueCount = useSessionQueueLength(chatId);
   const chat = useChat(chatId);
   const row = useStore(workspaceStore, s => s.sessions[chatId]);
   const deviceId = runtime?.deviceId ?? '';
@@ -174,6 +355,11 @@ export function SessionScreen({
   const draft = useDraft(chatId);
 
   const hostDeviceId = chat?.deviceId;
+  const hostOnline = useDeviceOnline(hostDeviceId ?? '');
+  const localQueuedIds = useLocalQueuedIds(chatId);
+  useEffect(() => {
+    if (hostOnline) controller?.flushLocalQueue().catch(() => {});
+  }, [hostOnline, controller]);
   const catalog = useStore(catalogStore, s =>
     hostDeviceId === undefined ? undefined : s.byDevice[hostDeviceId],
   );
@@ -185,25 +371,52 @@ export function SessionScreen({
   }, [runtime, hostDeviceId, catalog]);
   const harness = catalog?.harnesses.find(h => h.id === chat?.config?.harness);
 
-  const [composerHeight, setComposerHeight] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [reasoning, setReasoning] = useState<string | null>(null);
-  const [following, setFollowing] = useState(false);
-  const [anchorIndex, setAnchorIndex] = useState<number | undefined>(undefined);
-  const hasOverflowedRef = useRef(false);
-  const listRef = useRef<LegendListRef>(null);
   const composerRef = useRef<View>(null);
+  const transcriptRef = useRef<SessionTranscriptListHandle>(null);
 
   const entries = session.entries;
+  const openKey = `${chatId}:${openGeneration}`;
+  const agentWorking =
+    phase === 'working' ||
+    phase === 'queuedLocally' ||
+    phase === 'synchronized';
+  const lastEntryId = entries[entries.length - 1]?.id;
+  const workedByMessage = useStore(workedDurationStore, s => s.byMessageId);
+
+  useEffect(() => {
+    bindPendingWorkedDuration(chatId);
+  }, [chatId, entries]);
+
+  // Local send/steer ids play SlideInDown once. Historical rows (thread
+  // open, list recycle) must not — UserMessage entering is mount-time.
+  const enterIdsRef = useRef(new Set<string>());
+  for (const p of session.pendingSends) {
+    enterIdsRef.current.add(p.messageId);
+  }
+  const onUserMessageEntered = useCallback((id: string) => {
+    enterIdsRef.current.delete(id);
+  }, []);
 
   const openReasoning = useCallback((text: string) => setReasoning(text), []);
 
-  const onFetchOutput = useCallback(
-    (partId: string) => {
-      if (runtime === null) return;
-      edgeFetchBytes(blobUrl(runtime.cfg, chatId, partId), auth).catch(e =>
-        log.warn(`blob fetch failed: ${e}`),
-      );
+  const onFetchBlob = useCallback(
+    async (partId: string): Promise<string> => {
+      if (runtime === null) throw new Error('no runtime');
+      try {
+        const { bytes } = await edgeFetchBytes(
+          blobUrl(runtime.cfg, chatId, partId),
+          auth,
+          {},
+          runtime.fetchImpl,
+        );
+        return new TextDecoder().decode(bytes);
+      } catch (e) {
+        const status = e instanceof EdgeHttpError ? e.status : 'error';
+        log.warn(`blob fetch failed (${status})`);
+        throw e;
+      }
     },
     [runtime, auth, chatId],
   );
@@ -211,85 +424,114 @@ export function SessionScreen({
   const renderEntry = useCallback(
     ({ item }: { item: MessageEntry }) =>
       item.role === 'user' ? (
-        <UserMessage entry={item} chatId={chatId} />
+        <UserMessage
+          entry={item}
+          chatId={chatId}
+          animateEnter={enterIdsRef.current.has(item.id)}
+          onEntered={onUserMessageEntered}
+        />
       ) : (
         <AssistantMessage
           entry={item}
-          phase={phase}
           onOpenReasoning={openReasoning}
-          onFetchOutput={onFetchOutput}
-          chatId={chatId}
+          onFetchBlob={onFetchBlob}
           onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
           onOpenFileDiff={file => setFileDiff(file)}
+          commands={commands}
+          showWorking={agentWorking && item.id === lastEntryId}
+          workingChatId={chatId}
+          workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+          workedFor={workedForCaption(
+            item,
+            agentWorking && item.id === lastEntryId,
+            workedByMessage,
+          )}
         />
       ),
-    [phase, openReasoning, onFetchOutput, chatId],
-  );
-
-  const { contentInsetEndAdjustment, onComposerLayout: reportComposerInset } =
-    useKeyboardChatComposerInset(listRef, composerRef);
-  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
-  const extraHeight = useComposerExtraHeight();
-
-  const onComposerLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const height = event.nativeEvent.layout.height;
-      setComposerHeight(height);
-      reportComposerInset({
-        ...event,
-        nativeEvent: {
-          ...event.nativeEvent,
-          layout: {
-            ...event.nativeEvent.layout,
-            height: Math.max(0, height - extraHeight),
-          },
-        },
-      });
-    },
-    [reportComposerInset, extraHeight],
+    [
+      openReasoning,
+      onFetchBlob,
+      chatId,
+      onUserMessageEntered,
+      commands,
+      agentWorking,
+      lastEntryId,
+      row?.startedAt,
+      row?.updatedAt,
+      workedByMessage,
+    ],
   );
 
   const doSend = useCallback(
-    (text: string) => {
-      if (controller === undefined) return;
+    (text: string): boolean => {
+      if (controller === undefined) return false;
+      if (!hostOnline) {
+        try {
+          controller.queueMessage(text);
+        } catch {
+          return false;
+        }
+        alertHostNotConnectedQueue();
+        return true;
+      }
       const wt = draft.pendingWorktree;
-      controller.sendRun(
-        text,
-        { config: chat?.config, cwd: chat?.cwd },
-        {
-          autoApprove: autoApproveFor(chatId),
-          ...(wt !== undefined ? { worktree: wt } : {}),
-        },
-      );
+      try {
+        controller.sendRun(
+          text,
+          { config: chat?.config, cwd: chat?.cwd },
+          {
+            ...(wt !== undefined ? { worktree: wt } : {}),
+          },
+        );
+      } catch {
+        return false;
+      }
       if (wt !== undefined) setDraftPendingWorktree(chatId, undefined);
-      setAnchorIndex(entries.length);
-      hasOverflowedRef.current = false;
-      setFollowing(false);
-      scrollMessageToEnd({ animated: entries.length > 0, closeKeyboard: true });
+      transcriptRef.current?.noteSent(entries.length);
+      const list = transcriptRef.current;
+      const count = entries.length;
+      requestAnimationFrame(() => {
+        list?.scrollMessageToEnd({
+          animated: count > 0,
+          closeKeyboard: true,
+        });
+      });
+      return true;
     },
     [
       controller,
+      hostOnline,
       draft.pendingWorktree,
       chat,
       chatId,
       entries.length,
-      scrollMessageToEnd,
     ],
   );
 
   const doSteer = useCallback(
-    (text: string) => controller?.sendSteer(text),
-    [controller],
+    (text: string) => {
+      if (controller === undefined) return;
+      if (!hostOnline) {
+        controller.queueMessage(text);
+        alertHostNotConnectedQueue();
+        return;
+      }
+      controller.sendSteer(text);
+    },
+    [controller, hostOnline],
   );
   const doStop = useCallback(() => controller?.interrupt(), [controller]);
   const doQueue = useCallback(
-    (text: string) => controller?.queueMessage(text),
-    [controller],
+    (text: string) => {
+      controller?.queueMessage(text);
+      if (!hostOnline) alertHostNotConnectedQueue();
+    },
+    [controller, hostOnline],
   );
   const doCancel = useCallback(() => {
     // Cancel the own still-pending run/steer command (queuedLocally /
     // synchronized phases) — same rule the phase machine used to pick it.
-    const own = session.commands.find(
+    const own = commands.find(
       c =>
         c.issuedBy === deviceId &&
         (c.kind === 'run' || c.kind === 'steer') &&
@@ -298,7 +540,7 @@ export function SessionScreen({
         ),
     );
     if (own !== undefined) controller?.cancelOwnCommand(own.id);
-  }, [controller, session, deviceId]);
+  }, [controller, commands, deviceId]);
   const doRespond = useCallback(
     (requestId: string, answers: { questionId: string; labels: string[] }[]) =>
       controller?.respondInput(requestId, answers),
@@ -308,16 +550,21 @@ export function SessionScreen({
   const doSendAttachments = useCallback(
     (text: string): Promise<SendPlan> => {
       if (controller === undefined) return Promise.resolve('blocked');
-      return controller.sendWithAttachments(
-        text,
-        { config: chat?.config, cwd: chat?.cwd },
-        draft.attachments,
-        {
-          worktree: draft.pendingWorktree,
-          phase,
-          autoApprove: autoApproveFor(chatId),
-        },
-      );
+      return controller
+        .sendWithAttachments(
+          text,
+          { config: chat?.config, cwd: chat?.cwd },
+          draft.attachments,
+          {
+            worktree: draft.pendingWorktree,
+            phase,
+            forceQueue: !hostOnline,
+          },
+        )
+        .then(plan => {
+          if (!hostOnline && plan === 'queue') alertHostNotConnectedQueue();
+          return plan;
+        });
     },
     [
       controller,
@@ -326,7 +573,7 @@ export function SessionScreen({
       draft.attachments,
       draft.pendingWorktree,
       phase,
-      chatId,
+      hostOnline,
     ],
   );
 
@@ -373,21 +620,30 @@ export function SessionScreen({
       ? undefined
       : s.spaces.find(sp => sp.id === chat.spaceId),
   );
-  const spaces = useStore(workspaceStore, s => s.spaces);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
-  const [prOpen, setPrOpen] = useState(false);
+  const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
+  const [effortAnchor, setEffortAnchor] = useState<EffortOrigin | undefined>(
+    undefined,
+  );
+  const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
+  const pendingPrRef = useRef<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const keyboardHeight = useKeyboardState(s => s.height);
+  const keyboardWasVisible = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [subagentsOpen, setSubagentsOpen] = useState(false);
   const [planSheet, setPlanSheet] = useState<{
     name: string;
     markdown: string;
   } | null>(null);
   const [fileDiff, setFileDiff] = useState<FileDiffRequest | null>(null);
-  const [toolOverlay, setToolOverlay] = useState<
-    'changes' | 'files' | 'terminal' | 'history' | 'previews' | null
+  const [toolSheet, setToolSheet] = useState<
+    'files' | 'terminal' | 'history' | null
   >(null);
 
   // Announce run-phase transitions for VoiceOver (working → awaiting
@@ -407,9 +663,33 @@ export function SessionScreen({
         : undefined;
     if (key !== undefined) AccessibilityInfo.announceForAccessibility(t(key));
   }, [phase]);
+
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      keyboardWasVisible.current = true;
+      return;
+    }
+    if (!keyboardWasVisible.current) return;
+    keyboardWasVisible.current = false;
+    setComposerFocused(false);
+  }, [keyboardHeight]);
+
+  useEffect(() => {
+    if (toolSheet !== null) return;
+    const badge = pendingPrRef.current;
+    if (badge == null) return;
+    pendingPrRef.current = null;
+    setPrSheet(badge);
+  }, [toolSheet]);
   const [dictation, setDictation] =
     useState<DictationPort>(dictationUnavailable);
+  const voiceInputMode = useVoiceInputMode();
+  const voiceRuntime = useLocalVoiceRuntime(voiceInputMode === 'voiceModel');
   useEffect(() => {
+    if (voiceInputMode !== 'dictation') {
+      setDictation(dictationUnavailable);
+      return;
+    }
     let mounted = true;
     resolveDictationPort().then(port => {
       if (mounted) setDictation(port);
@@ -417,15 +697,26 @@ export function SessionScreen({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [voiceInputMode]);
   const recents = useRecentModels();
+  const pinnedModels = usePinnedModels();
   const catalogTick = catalog?.loadedAt ?? 0;
   const catalogModels = useMemo(() => {
     if (hostDeviceId === undefined) return [];
-    const out: { harness: string; model: string; label: string }[] = [];
+    const out: {
+      harness: string;
+      model: string;
+      label: string;
+      harnessName: string;
+    }[] = [];
     for (const h of selectableHarnesses(hostDeviceId)) {
       for (const m of modelsFor(hostDeviceId, h.id)) {
-        out.push({ harness: h.id, model: m.id, label: m.label });
+        out.push({
+          harness: h.id,
+          model: m.id,
+          label: m.label,
+          harnessName: h.name,
+        });
       }
     }
     return out;
@@ -435,36 +726,51 @@ export function SessionScreen({
   const currentModelId = chat?.config?.model;
   const recentItems = useMemo(
     () =>
-      recentMenuModels(
+      composerMenuModels(
+        pinnedModels,
         recents,
         catalogModels,
         currentHarness !== undefined && currentModelId !== undefined
           ? { harness: currentHarness, model: currentModelId }
           : undefined,
-        3,
       ),
-    [recents, catalogModels, currentHarness, currentModelId],
+    [pinnedModels, recents, catalogModels, currentHarness, currentModelId],
   );
-  const effortLevels =
-    hostDeviceId === undefined || chat?.config?.harness === undefined
-      ? []
-      : reasoningLevelsFor(
-          hostDeviceId,
-          chat.config.harness,
-          chat.config.model,
-        );
   const currentModel =
     hostDeviceId === undefined || chat?.config?.harness === undefined
       ? undefined
       : modelsFor(hostDeviceId, chat.config.harness).find(
           m => m.id === chat.config?.model,
         );
-  const fastOption = fastOptionForModel(currentModel);
-  const fastEnabled = isFastEnabled(chat?.config?.modelOptions, fastOption);
+  const harnessModels =
+    hostDeviceId === undefined || chat?.config?.harness === undefined
+      ? []
+      : modelsFor(hostDeviceId, chat.config.harness);
+  const harnessLevels =
+    hostDeviceId === undefined || chat?.config?.harness === undefined
+      ? undefined
+      : selectableHarnesses(hostDeviceId).find(
+          h => h.id === chat.config?.harness,
+        )?.reasoningLevels;
+  const traits = resolveModelTraits(
+    currentModel,
+    harnessModels,
+    harnessLevels,
+    {
+      model: chat?.config?.model,
+      reasoning: chat?.config?.reasoning,
+      modelOptions: chat?.config?.modelOptions,
+    },
+  );
+  const effortLevels = traits.effort?.levels ?? [];
+  const fastOption = traits.fast?.option;
+  const fastEnabled = traits.fast?.enabled ?? false;
+  const contextOption = traits.context?.option;
+  const contextChoice = traits.context?.choice;
   const modelLabel =
     currentModel?.label ?? chat?.config?.model ?? t('picker.default');
   const effortLabel = capitalizeLevel(
-    chat?.config?.reasoning ?? effortLevels[0] ?? t('picker.effort'),
+    traits.effort?.value ?? t('picker.effort'),
   );
 
   useEffect(() => {
@@ -475,7 +781,7 @@ export function SessionScreen({
       modelsFor(hostDeviceId, chat.config.harness).length === 0
     )
       loadModels(runtime, hostDeviceId, chat.config.harness).catch(() => {});
-  }, [runtime, hostDeviceId, chat?.config?.harness]);
+  }, [runtime, hostDeviceId, chat?.config?.harness, catalogTick]);
 
   useCheckoutWatches(
     runtime,
@@ -485,287 +791,312 @@ export function SessionScreen({
     chat?.branch,
     chat?.checkoutId,
   );
-  const prBadge = usePrBadge(chatId);
-  const keyboardOffset = { opened: insets.bottom };
-  const subtitle = [hostLabel(chat, host ? [host] : []), checkoutLabel(chat)]
-    .filter(Boolean)
-    .join(' · ');
+  const checkoutSummary = useStore(
+    changeRequestStore,
+    s => s.byChat[chatId]?.changeRequest ?? undefined,
+  );
+  const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
+  const prBadge = useMemo(
+    () => composerPrBadge(checkoutSummary, checkoutDiff),
+    [checkoutSummary, checkoutDiff],
+  );
+  const keyboardOffset = useMemo(
+    () => composerKeyboardStickyOffset(insets.bottom),
+    [insets.bottom],
+  );
+
+  const wallpaper = useNewThreadComposerBackground() !== undefined;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <KeyboardAwareLegendList
-        ref={listRef}
-        style={styles.fill}
-        data={entries}
-        keyExtractor={(item: MessageEntry) => item.id}
-        renderItem={renderEntry}
-        applyWorkaroundForContentInsetHitTestBug
-        maintainVisibleContentPosition={
-          Platform.OS !== 'android'
-            ? undefined
-            : anchorIndex != null && !following
-        }
-        keyboardLiftBehavior="whenAtEnd"
-        keyboardOffset={insets.bottom}
-        contentInsetEndAdjustment={contentInsetEndAdjustment}
-        freeze={freeze}
-        anchoredEndSpace={
-          anchorIndex != null
-            ? {
-                anchorIndex,
-                anchorMaxSize: ANCHOR_MAX_SIZE,
-                anchorOffset: insets.top + 56,
-                onSizeChanged: size => {
-                  if (size <= 0 && !hasOverflowedRef.current) {
-                    hasOverflowedRef.current = true;
-                    setFollowing(true);
-                  }
-                },
-              }
-            : undefined
-        }
-        maintainScrollAtEnd={
-          following ? { on: { dataChange: true, itemLayout: true } } : undefined
-        }
-        maintainScrollAtEndThreshold={1}
-        estimatedItemSize={64}
-        estimatedListSize={{ width: windowWidth, height: windowHeight }}
-        onEndVisible={v => {
-          setShowScrollDown(!v);
-          if (v && hasOverflowedRef.current) setFollowing(true);
-        }}
-        onScrollBeginDrag={() => {
-          if (hasOverflowedRef.current) setFollowing(false);
-        }}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + 96 },
-          contentMaxWidth !== undefined
-            ? [styles.measureCap, { maxWidth: contentMaxWidth }]
-            : undefined,
-        ]}
-        scrollIndicatorInsets={{ top: insets.top + 96 }}
-        keyboardDismissMode="interactive"
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: theme.textSecondary }]}>
-            {t('session.empty')}
-          </Text>
-        }
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wallpaperScreenFill(theme.background, wallpaper) },
+      ]}
+    >
+      <ChatBackgroundBlur />
+      <SessionTranscriptList
+        key={openKey}
+        ref={transcriptRef}
+        openKey={openKey}
+        entries={entries}
+        renderEntry={renderEntry}
+        composerRef={composerRef}
+        contentMaxWidth={contentMaxWidth}
+        windowWidth={windowWidth}
+        windowHeight={windowHeight}
+        insetsTop={insets.top}
+        insetsBottom={insets.bottom}
+        onComposerHeight={() => {}}
+        onShowScrollDown={setShowScrollDown}
+        working={agentWorking}
+        chatId={chatId}
+        startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
       />
 
-      {/* Header: back, title (tap → rename), subtitle host · branch, overflow.
+      {/* Header: back, title (tap → session menu), overflow.
           box-none: taps in the transparent gaps reach the transcript. */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + 6 }, leadingPad]}
+      <View
+        style={[styles.header, { paddingTop: insets.top + 6 }]}
         pointerEvents="box-none"
       >
-        <Pressable
-          onPress={onBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={
-            leadingIcon !== undefined ? t('sidebar.toggle') : t('session.back')
-          }
-          style={styles.headerBtn}
-        >
-          <Glass interactive style={styles.circle}>
+        <View style={styles.headerRow} pointerEvents="box-none">
+          <View style={styles.headerCenter} pointerEvents="box-none">
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <Pressable
+                  style={styles.titleHit}
+                  testID="session-title-pill"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.titleMenu')}
+                >
+                  <Text
+                    style={[styles.title, { color: chrome.text }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    testID="session-header-title"
+                  >
+                    {sessionTitle(chat)}
+                  </Text>
+                </Pressable>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                <DropdownMenu.Item key="rename" onSelect={onRename}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.rename')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+                <DropdownMenu.Group>
+                  <DropdownMenu.Item key="pin" onSelect={onPin}>
+                    <DropdownMenu.ItemTitle>
+                      {pinned ? t('session.unpin') : t('session.pin')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon
+                      ios={{ name: pinned ? 'pin.slash' : 'pin' }}
+                    />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Group>
+                <DropdownMenu.Item key="archive" onSelect={onArchive}>
+                  <DropdownMenu.ItemTitle>
+                    {chat?.archived
+                      ? t('home.row.unarchive')
+                      : t('session.archive')}
+                  </DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item key="copy" onSelect={onCopyId}>
+                  <DropdownMenu.ItemTitle>
+                    {t('session.copyId')}
+                  </DropdownMenu.ItemTitle>
+                  <DropdownMenu.ItemIcon ios={{ name: 'doc.on.doc' }} />
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </View>
+          <GlassControl
+            interactive
+            onPress={() => {
+              setComposerFocused(false);
+              KeyboardController.dismiss();
+              onBack();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={
+              leadingIcon !== undefined
+                ? t('sidebar.toggle')
+                : t('session.back')
+            }
+            style={styles.circle}
+          >
             <Icon
               name={(leadingIcon ?? 'chevron.left') as never}
               size={18}
-              color={theme.text}
+              color={chrome.text}
             />
-          </Glass>
-        </Pressable>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <Pressable
-              style={styles.headerText}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={t('session.titleMenu')}
-            >
-              <Glass style={styles.titlePill}>
-                <Text
-                  style={[styles.title, { color: theme.text }]}
-                  numberOfLines={1}
-                >
-                  {sessionTitle(chat)}
-                </Text>
-                {subtitle !== '' ? (
-                  <Text
-                    style={[styles.subtitle, { color: theme.textSecondary }]}
-                    numberOfLines={1}
+          </GlassControl>
+          <View style={styles.headerRight}>
+            <Glass interactive style={styles.circle}>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Pressable
+                    style={styles.controlFill}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('session.overflow')}
                   >
-                    {subtitle}
-                  </Text>
-                ) : null}
-              </Glass>
-            </Pressable>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item key="rename" onSelect={onRename}>
-              <DropdownMenu.ItemTitle>
-                {t('session.rename')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="pin" onSelect={onPin}>
-              <DropdownMenu.ItemTitle>
-                {pinned ? t('session.unpin') : t('session.pin')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="archive" onSelect={onArchive}>
-              <DropdownMenu.ItemTitle>
-                {chat?.archived
-                  ? t('home.row.unarchive')
-                  : t('session.archive')}
-              </DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-        <View style={styles.headerRight}>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <Glass
-                interactive
-                style={styles.circle}
-                accessibilityRole="button"
-                accessibilityLabel={t('session.overflow')}
-              >
-                <Icon name="ellipsis.circle" size={18} color={theme.text} />
-              </Glass>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-              <DropdownMenu.Item
-                key="details"
-                onSelect={() => setDetailsOpen(true)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.details')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="subagents"
-                onSelect={() => setSubagentsOpen(true)}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.subagents')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="changes"
-                onSelect={() => setToolOverlay('changes')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.changes')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="files"
-                onSelect={() => setToolOverlay('files')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.files')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="terminal"
-                onSelect={() => setToolOverlay('terminal')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.terminal')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="history"
-                onSelect={() => setToolOverlay('history')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.history')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                key="previews"
-                onSelect={() => setToolOverlay('previews')}
-              >
-                <DropdownMenu.ItemTitle>
-                  {t('session.previews')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item key="copy" onSelect={onCopyId}>
-                <DropdownMenu.ItemTitle>
-                  {t('session.copyId')}
-                </DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
+                    <Icon name="ellipsis" size={18} color={chrome.text} />
+                  </Pressable>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  <DropdownMenu.Item
+                    key="details"
+                    onSelect={() => setDetailsOpen(true)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.details')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'info.circle' }} />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    key="usage"
+                    onSelect={() => setUsageOpen(true)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.usage')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'chart.bar' }} />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    key="subagents"
+                    onSelect={() => setSubagentsOpen(true)}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.subagents')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'person.2' }} />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator />
+                  <DropdownMenu.Item
+                    key="history"
+                    onSelect={() => setToolSheet('history')}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.history')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon
+                      ios={{ name: 'arrow.triangle.branch' }}
+                    />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    key="files"
+                    onSelect={() => setToolSheet('files')}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.files')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'folder' }} />
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    key="terminal"
+                    onSelect={() => {
+                      KeyboardController.dismiss();
+                      setComposerFocused(false);
+                      setToolSheet('terminal');
+                    }}
+                  >
+                    <DropdownMenu.ItemTitle>
+                      {t('session.terminal')}
+                    </DropdownMenu.ItemTitle>
+                    <DropdownMenu.ItemIcon ios={{ name: 'terminal' }} />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </Glass>
+          </View>
         </View>
-      </Animated.View>
+      </View>
 
-      {composerFocused ? (
+      {composerFocused && keyboardHeight > 0 ? (
         <Pressable
+          testID="composer-focus-dim"
           style={[
             styles.focusDim,
             theme.scheme === 'dark'
               ? styles.focusDimDark
               : styles.focusDimLight,
           ]}
-          onPress={() => Keyboard.dismiss()}
+          accessible
           accessibilityRole="button"
           accessibilityLabel={t('composer.dismissKeyboard')}
+          onPress={() => {
+            KeyboardController.dismiss();
+            setComposerFocused(false);
+          }}
         />
       ) : null}
 
-      <ContextUsageBar usage={session.meta.contextUsage} />
-
-      {session.failedSends.map(f => (
-        <View
-          key={f.messageId}
-          style={[styles.failedBanner, { borderColor: theme.danger }]}
+      {session.failedSends.length > 0 ? (
+        <ComposerStickyBottom
+          extra={10}
+          style={styles.failedWrap}
+          pointerEvents="box-none"
         >
-          <Text style={[styles.failedText, { color: theme.danger }]}>
-            {`${t('session.failedSend')} (${t(
-              `session.failedSend.${f.status}`,
-            )})`}
-          </Text>
-          <Pressable
-            onPress={() => restoreFailedSend(chatId, f.text)}
-            hitSlop={6}
-          >
-            <Text style={[styles.failedAction, { color: theme.accent }]}>
-              {t('session.restoreDraft')}
-            </Text>
-          </Pressable>
-        </View>
-      ))}
+          <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
+            {session.failedSends.map(f => (
+              <Glass
+                key={f.messageId}
+                style={[
+                  styles.failedBanner,
+                  { backgroundColor: chrome.glassFallbackBackground },
+                ]}
+              >
+                <View
+                  style={[styles.failedDot, { backgroundColor: theme.danger }]}
+                />
+                <Text style={[styles.failedText, { color: chrome.text }]}>
+                  {t('session.failedSend')}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    restoreFailedSend(chatId, f.text);
+                    dismissFailedSend(chatId, f.messageId);
+                  }}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('session.restoreDraft')}
+                >
+                  <Text style={[styles.failedAction, { color: chrome.text }]}>
+                    {t('session.restoreDraft')}
+                  </Text>
+                </Pressable>
+              </Glass>
+            ))}
+          </KeyboardStickyView>
+        </ComposerStickyBottom>
+      ) : null}
 
-      <KeyboardStickyView
-        offset={keyboardOffset}
-        style={[styles.scrollDown, { bottom: composerHeight + 10 }]}
+      <ComposerStickyBottom
+        extra={10}
+        style={styles.scrollDown}
         pointerEvents="box-none"
       >
-        {showScrollDown ? (
-          <ScrollToBottomButton
-            onPress={() =>
-              scrollMessageToEnd({ animated: true, closeKeyboard: false })
-            }
-          />
-        ) : null}
-      </KeyboardStickyView>
+        <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
+          <View style={styles.scrollDownSlot} pointerEvents="box-none">
+            {showScrollDown ? (
+              <ScrollToBottomButton
+                onPress={() =>
+                  transcriptRef.current?.followEnd({
+                    animated: true,
+                    closeKeyboard: false,
+                  })
+                }
+              />
+            ) : null}
+          </View>
+        </KeyboardStickyView>
+      </ComposerStickyBottom>
 
-      <KeyboardStickyView offset={keyboardOffset} style={styles.composer}>
-        <Animated.View
+      <KeyboardStickyView
+        testID="session-composer"
+        offset={keyboardOffset}
+        style={styles.composer}
+      >
+        <View
+          ref={composerRef}
+          onLayout={event => transcriptRef.current?.onComposerLayout(event)}
+          testID="session-composer-column"
           style={[
-            contentMaxWidth !== undefined
-              ? [styles.measureCap, { maxWidth: contentMaxWidth }]
+            styles.measureCap,
+            composerMaxWidth !== undefined
+              ? { maxWidth: composerMaxWidth }
               : undefined,
-            leadingPad,
           ]}
         >
           <ComposerChromeRow
-            queueCount={session.queue.length}
+            queueCount={queueCount}
             onOpenQueue={() => setQueueOpen(true)}
             pr={prBadge}
-            onOpenPr={() => setPrOpen(true)}
+            onOpenPr={() => {
+              if (prBadge !== undefined) setPrSheet(prBadge);
+            }}
           />
           <Composer
             chatId={chatId}
@@ -778,39 +1109,120 @@ export function SessionScreen({
             recentItems={recentItems}
             onPickRecentModel={(h, m) => {
               if (runtime === null || chat === undefined) return;
+              if (
+                chat.config?.harness !== undefined &&
+                chat.config.harness !== '' &&
+                h !== chat.config.harness
+              )
+                return;
+              const catalogModel = modelsFor(chat.deviceId, h).find(
+                catalogRow => catalogRow.id === m,
+              );
+              const siblings = modelsFor(chat.deviceId, h);
+              const stored = modelSettingsFor(h, m);
+              const same =
+                h === chat.config?.harness && m === chat.config?.model;
+              const live = same
+                ? {
+                    reasoning: chat.config?.reasoning,
+                    modelOptions: chat.config?.modelOptions,
+                  }
+                : undefined;
+              const picked = selectionForModel(
+                catalogModel,
+                siblings,
+                selectableHarnesses(chat.deviceId).find(hRow => hRow.id === h)
+                  ?.reasoningLevels,
+                stored,
+                live,
+              );
               setChatConfig(runtime, chat.id, {
                 harness: h,
                 model: m,
-                modelOptions: chat.config?.modelOptions ?? {},
-                reasoning: chat.config?.reasoning,
-                sandbox: chat.config?.sandbox,
+                modelOptions: picked.modelOptions,
+                reasoning: picked.reasoning,
+                sandbox: DESKTOP_SANDBOX,
               });
               rememberModelPick({ harness: h, model: m });
             }}
             onOpenMoreModels={() => setPickerOpen(true)}
             effortLabel={effortLabel}
             effortSupported={effortLevels.length > 0}
+            fastSupported={traits.fast !== undefined}
+            fastOption={fastOption}
             fastEnabled={fastEnabled}
-            onOpenEffort={() => setEffortOpen(true)}
+            fastChoice={traits.fast?.choice}
+            contextSupported={traits.context !== undefined}
+            contextOption={contextOption}
+            contextChoice={contextChoice}
+            effortOpen={effortOpen}
+            onOpenEffort={origin => {
+              Keyboard.dismiss();
+              setEffortOrigin(origin);
+              if (windowWidth < REGULAR_MIN_WIDTH) {
+                setEffortAnchor(undefined);
+                setEffortOpen(true);
+                return;
+              }
+              measureWindowRect(composerRef.current, rect => {
+                setEffortAnchor(rect);
+                setEffortOpen(true);
+              });
+            }}
+            onSelectFast={choice => {
+              if (runtime === null || chat === undefined) return;
+              const patch = applyFastChoice(
+                traits,
+                choice,
+                {
+                  model: chat.config?.model,
+                  reasoning: chat.config?.reasoning,
+                  modelOptions: chat.config?.modelOptions,
+                },
+                harnessModels,
+              );
+              setChatConfig(runtime, chat.id, {
+                harness: chat.config?.harness ?? '',
+                model: patch.model,
+                reasoning: patch.reasoning,
+                sandbox: DESKTOP_SANDBOX,
+                modelOptions: patch.modelOptions,
+              });
+              if (
+                chat.config?.harness !== undefined &&
+                patch.model !== undefined
+              )
+                rememberModelSettings(chat.config.harness, patch.model, {
+                  reasoning: patch.reasoning,
+                  modelOptions: patch.modelOptions,
+                });
+            }}
+            onSelectContext={choice => {
+              if (runtime === null || chat === undefined) return;
+              const patch = applyContextChoice(traits, choice, {
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                modelOptions: chat.config?.modelOptions,
+              });
+              setChatConfig(runtime, chat.id, {
+                harness: chat.config?.harness ?? '',
+                model: patch.model,
+                reasoning: patch.reasoning,
+                sandbox: DESKTOP_SANDBOX,
+                modelOptions: patch.modelOptions,
+              });
+              if (
+                chat.config?.harness !== undefined &&
+                patch.model !== undefined
+              )
+                rememberModelSettings(chat.config.harness, patch.model, {
+                  reasoning: patch.reasoning,
+                  modelOptions: patch.modelOptions,
+                });
+            }}
             onFocusChange={setComposerFocused}
-            checkout={
-              runtime !== null && chat !== undefined
-                ? {
-                    runtime,
-                    chat,
-                    host,
-                    phase,
-                    repoPath: space?.path,
-                    spaces,
-                    projectLabel:
-                      space?.name ??
-                      space?.path.split(/[\\/]/).filter(Boolean).pop() ??
-                      t('checkout.noProject'),
-                    worktreeLabel: chat.branch ?? t('checkout.worktree'),
-                  }
-                : undefined
-            }
             dictation={dictation}
+            voiceRuntime={voiceRuntime}
             onSend={doSend}
             onSteer={doSteer}
             onQueue={doQueue}
@@ -819,18 +1231,63 @@ export function SessionScreen({
             onSendAttachments={doSendAttachments}
             onRespondInput={doRespond}
             onSendBlocked={onSendBlocked}
-            composerRef={composerRef}
-            onLayout={onComposerLayout}
           />
-        </Animated.View>
+        </View>
       </KeyboardStickyView>
 
+      {effortOpen ? (
+        <EffortOverlay
+          levels={effortLevels}
+          value={traits.effort?.value}
+          origin={effortOrigin}
+          anchor={effortAnchor}
+          onChange={level => {
+            if (runtime === null || chat === undefined) return;
+            const patch = applyEffortLevel(
+              traits,
+              level,
+              {
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                modelOptions: chat.config?.modelOptions,
+              },
+              harnessModels,
+            );
+            setChatConfig(runtime, chat.id, {
+              harness: chat.config?.harness ?? '',
+              model: patch.model,
+              modelOptions: patch.modelOptions,
+              reasoning: patch.reasoning,
+              sandbox: DESKTOP_SANDBOX,
+            });
+            if (chat.config?.harness !== undefined && patch.model !== undefined)
+              rememberModelSettings(chat.config.harness, patch.model, {
+                reasoning: patch.reasoning,
+                modelOptions: patch.modelOptions,
+              });
+          }}
+          onDismiss={() => {
+            setEffortOpen(false);
+            setEffortOrigin(undefined);
+            setEffortAnchor(undefined);
+          }}
+        />
+      ) : null}
+
       {queueOpen ? (
-        <GlassSheet onDismiss={() => setQueueOpen(false)}>
+        <GlassSheet
+          title={t('queue.title')}
+          onDismiss={() => setQueueOpen(false)}
+          /* Not draggable: the sheet's own pan recognizer otherwise fights
+           * the row-drag responder on every reorder gesture. X / backdrop
+           * still dismiss it. */
+          draggable={false}
+        >
           <QueuePanel
             queue={session.queue}
             actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
             pending={session.queueActionsPending}
+            localIds={localQueuedIds}
             error={session.queueActionError}
             canSteer={
               harness?.supportsSteering === true &&
@@ -840,68 +1297,32 @@ export function SessionScreen({
               controller?.queueAction(id, a).catch(() => {});
             }}
             onMove={(id, to) => {
-              controller?.moveQueued(id, to);
+              if (controller !== undefined) {
+                controller.moveQueued(id, to);
+              } else {
+                moveQueuedInStore(chatId, id, to);
+              }
             }}
           />
         </GlassSheet>
       ) : null}
 
-      {effortOpen ? (
-        <EffortOverlay
-          levels={effortLevels}
-          value={chat?.config?.reasoning}
-          onChange={level => {
-            if (runtime === null || chat === undefined) return;
-            setChatConfig(runtime, chat.id, {
-              harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              modelOptions: chat.config?.modelOptions ?? {},
-              reasoning: level,
-              sandbox: chat.config?.sandbox,
-            });
-          }}
-          showFast={fastOption !== undefined}
-          fastEnabled={fastEnabled}
-          onToggleFast={on => {
-            if (
-              runtime === null ||
-              chat === undefined ||
-              fastOption === undefined
-            )
-              return;
-            setChatConfig(runtime, chat.id, {
-              harness: chat.config?.harness ?? '',
-              model: chat.config?.model,
-              reasoning: chat.config?.reasoning,
-              sandbox: chat.config?.sandbox,
-              modelOptions: {
-                ...(chat.config?.modelOptions ?? {}),
-                [fastOption.id]: on
-                  ? fastOnChoice(fastOption)
-                  : fastOffChoice(fastOption),
-              },
-            });
-          }}
-          onDismiss={() => setEffortOpen(false)}
-        />
-      ) : null}
-
-      {prOpen && prBadge !== undefined ? (
+      {prSheet !== null ? (
         <PrSheet
           chatId={chatId}
-          badge={prBadge}
-          onDismiss={() => setPrOpen(false)}
+          badge={prSheet}
+          onDismiss={() => setPrSheet(null)}
         />
       ) : null}
 
-      {pickerOpen && runtime !== null && chat !== undefined ? (
+      {pickerOpen && chat !== undefined ? (
         <ModelPickerSheet
           runtime={runtime}
           chat={chat}
           phase={phase}
-          hasMessages={entries.length > 0}
           onClose={() => setPickerOpen(false)}
           formSheet={windowWidth >= 700}
+          lockHarness
         />
       ) : null}
 
@@ -915,6 +1336,13 @@ export function SessionScreen({
             setDetailsOpen(false);
             onRename();
           }}
+        />
+      ) : null}
+
+      {usageOpen && chat !== undefined ? (
+        <ThreadUsageSheet
+          deviceId={chat.deviceId}
+          onDismiss={() => setUsageOpen(false)}
         />
       ) : null}
 
@@ -932,7 +1360,12 @@ export function SessionScreen({
           onDismiss={() => setPlanSheet(null)}
           onImplement={() => {
             setPlanMode(chatId, false);
-            doSend('Implement the plan.');
+            const text = applyBuildPrefix(planSheet.name);
+            if (controller !== undefined) {
+              doSend(text);
+            } else {
+              appendSentMessage(chatId, text, deviceId || 'local');
+            }
           }}
         />
       ) : null}
@@ -954,64 +1387,34 @@ export function SessionScreen({
         </Suspense>
       ) : null}
 
-      {toolOverlay !== null ? (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: theme.background },
-          ]}
+      {toolSheet === 'history' ? (
+        <SessionSheet
+          title={t('session.history')}
+          fill
+          onDismiss={() => setToolSheet(null)}
         >
-          <View
-            style={[
-              styles.overlayBar,
-              { paddingTop: insets.top + 6, borderBottomColor: theme.border },
-            ]}
-          >
-            <Pressable
-              onPress={() => setToolOverlay(null)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('session.back')}
-              style={styles.headerBtn}
-            >
-              <View
-                style={[
-                  styles.circle,
-                  { backgroundColor: theme.cardBackground },
-                ]}
-              >
-                <Icon name="chevron.left" size={18} color={theme.text} />
-              </View>
-            </Pressable>
-            <Text style={[styles.title, { color: theme.text }]}>
-              {toolOverlay === 'changes'
-                ? t('session.changes')
-                : toolOverlay === 'files'
-                ? t('session.files')
-                : toolOverlay === 'terminal'
-                ? t('session.terminal')
-                : toolOverlay === 'history'
-                ? t('session.history')
-                : t('session.previews')}
-            </Text>
-          </View>
-          <View style={styles.fill}>
-            {toolOverlay === 'changes' ? (
-              <ChangesScreen
-                chatId={chatId}
-                onOpenHistory={() => setToolOverlay('history')}
-              />
-            ) : toolOverlay === 'files' ? (
-              <FilesScreen chatId={chatId} />
-            ) : toolOverlay === 'terminal' ? (
-              <TerminalScreen chatId={chatId} />
-            ) : toolOverlay === 'history' ? (
-              <HistoryScreen chatId={chatId} />
-            ) : (
-              <PreviewsScreen chatId={chatId} />
-            )}
-          </View>
-        </View>
+          <HistoryScreen
+            chatId={chatId}
+            onOpenPr={badge => {
+              pendingPrRef.current = badge;
+              setToolSheet(null);
+            }}
+          />
+        </SessionSheet>
+      ) : null}
+      {toolSheet === 'files' ? (
+        <SessionSheet fill onDismiss={() => setToolSheet(null)}>
+          <FilesScreen chatId={chatId} />
+        </SessionSheet>
+      ) : null}
+      {toolSheet === 'terminal' ? (
+        <SessionSheet
+          fill
+          initialDetentIndex={1}
+          onDismiss={() => setToolSheet(null)}
+        >
+          <TerminalScreen chatId={chatId} />
+        </SessionSheet>
       ) : null}
     </View>
   );
@@ -1019,73 +1422,117 @@ export function SessionScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  fill: { flex: 1 },
-  composer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3 },
+  composer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 3,
+    alignItems: 'center',
+  },
   scrollDown: {
     position: 'absolute',
     left: 0,
     right: 0,
     alignItems: 'center',
   },
-  listContent: { paddingBottom: 4 },
-  empty: { fontSize: 15, textAlign: 'center', padding: 32 },
+  scrollDownSlot: {
+    width: SCROLL_TO_BOTTOM_SIZE,
+    height: SCROLL_TO_BOTTOM_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composeDismiss: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
+  },
+  composeCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
   header: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 8,
     zIndex: 3,
   },
-  measureCap: { width: '100%', alignSelf: 'center' },
-  headerBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  titlePill: {
-    alignItems: 'center',
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    maxWidth: '100%',
-    overflow: 'hidden',
-  },
-  overlayBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  circle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  headerText: { flex: 1, alignItems: 'center' },
-  title: { fontSize: 17, fontWeight: '600' },
-  subtitle: { fontSize: 12 },
-  failedBanner: {
-    position: 'absolute',
-    bottom: 120,
-    left: 16,
-    right: 16,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
+  headerRow: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
   },
-  failedText: { fontSize: 13, flex: 1 },
-  failedAction: { fontSize: 13, fontWeight: '600' },
+  headerCenter: {
+    position: 'absolute',
+    left: 56,
+    right: 56,
+    top: 0,
+    bottom: 0,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  measureCap: { width: '100%' },
+  headerRight: {
+    minWidth: 44,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  titleHit: {
+    height: 44,
+    maxWidth: '100%',
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 1,
+  },
+  circle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlFill: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    minWidth: 0,
+    flexShrink: 1,
+    fontSize: 20,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  failedWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    gap: 8,
+    zIndex: 4,
+  },
+  failedBanner: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    overflow: 'hidden',
+  },
+  failedDot: { width: 8, height: 8, borderRadius: 4 },
+  failedText: { fontSize: 14, flex: 1 },
+  failedAction: { fontSize: 14, fontWeight: '600' },
   queueSheet: { padding: 20 },
   focusDim: {
     ...StyleSheet.absoluteFill,

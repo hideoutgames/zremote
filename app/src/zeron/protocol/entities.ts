@@ -40,6 +40,10 @@ export const SESSION_STALE_MS = 45_000;
 /** Presence freshness window for device online dots. */
 export const PRESENCE_FRESH_MS = 45_000;
 
+/** True when a registry presence beat is inside `PRESENCE_FRESH_MS`. */
+export const isPresenceFresh = (at: number | undefined, now: number): boolean =>
+  at !== undefined && now - at < PRESENCE_FRESH_MS;
+
 export const effectiveStatus = (
   row: SessionRow | undefined,
   now: number,
@@ -95,6 +99,33 @@ export const chatIndicator = (
 /** The Sessions list order: PURE RECENCY, id tiebreak (state.rs sort_active). */
 export const sortActive = (chats: readonly Chat[]): Chat[] =>
   [...chats].sort((a, b) => {
+    const ta = a.lastMessageAt ?? a.createdAt;
+    const tb = b.lastMessageAt ?? b.createdAt;
+    if (ta !== tb) return tb - ta;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+
+export const isAgentRunning = (indicator: ChatIndicator): boolean =>
+  indicator === 'working' || indicator === 'awaitingInput';
+
+/** Overview list: agent-running threads first, then recency within each group. */
+export const sortOverviewThreads = (
+  chats: readonly Chat[],
+  sessions: Readonly<Record<string, SessionRow | undefined>>,
+  nowMs: number,
+): Chat[] =>
+  [...chats].sort((a, b) => {
+    const ar = isAgentRunning(
+      chatIndicator(a, effectiveStatus(sessions[a.id], nowMs)),
+    )
+      ? 0
+      : 1;
+    const br = isAgentRunning(
+      chatIndicator(b, effectiveStatus(sessions[b.id], nowMs)),
+    )
+      ? 0
+      : 1;
+    if (ar !== br) return ar - br;
     const ta = a.lastMessageAt ?? a.createdAt;
     const tb = b.lastMessageAt ?? b.createdAt;
     if (ta !== tb) return tb - ta;

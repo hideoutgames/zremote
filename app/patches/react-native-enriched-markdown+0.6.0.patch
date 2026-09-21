@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm b/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm
+index 50540a2..bab44b9 100644
+--- a/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm
++++ b/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm
+@@ -230,7 +230,9 @@ - (void)configureSegmentViewRegistry
+ 
+ - (CGSize)computeSegmentLayoutForWidth:(CGFloat)width applyFrames:(BOOL)applyFrames
+ {
+-  if (_segmentViews.count == 0)
++  // Guard against unconstrained layout passes (bounds.width == inf): applying
++  // segment frames with an infinite width crashes in CALayer (NaN bounds).
++  if (_segmentViews.count == 0 || !isfinite(width) || width <= 0)
+     return CGSizeZero;
+ 
+   __block CGFloat yOffset = 0.0;

@@ -2,7 +2,32 @@
 // (driven by useColorScheme); `theme` stays exported as the dark palette for
 // non-hook call sites that can't take a hook.
 
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
+import {
+  chromeSchemeForWallpaper,
+  useWallpaperContrastScheme,
+  useWallpaperContrastUri,
+} from './zeron/state/wallpaperContrast';
+
+export type ColorSchemePreference = 'system' | 'light' | 'dark';
+
+export const COLOR_SCHEME_PREFERENCES: readonly ColorSchemePreference[] = [
+  'system',
+  'dark',
+  'light',
+];
+
+export const parseColorSchemePreference = (
+  v: unknown,
+): ColorSchemePreference | undefined =>
+  v === 'system' || v === 'light' || v === 'dark' ? v : undefined;
+
+/** Force light/dark, or `null` so RN follows the OS. */
+export const applyColorSchemePreference = (
+  pref: ColorSchemePreference,
+): void => {
+  Appearance.setColorScheme?.(pref === 'system' ? null : pref);
+};
 
 export interface Theme {
   scheme: 'light' | 'dark';
@@ -12,6 +37,7 @@ export interface Theme {
   textSecondary: string;
   userBubbleBackground: string;
   userBubbleText: string;
+  assistantBubbleBackground: string;
   // Background used wherever liquid glass is not available.
   glassFallbackBackground: string;
   border: string;
@@ -30,10 +56,11 @@ export interface Theme {
   planBadge: string;
   planBadgeFill: string;
   planButton: string;
-  /** Composer effort chip when Fast mode is on. */
+  /** Composer Fast chip when Fast mode is on. */
   fastAccent: string;
   prOpen: string;
   prMerged: string;
+  prDraft: string;
   // Diff rows.
   diffAddBackground: string;
   diffDelBackground: string;
@@ -47,8 +74,9 @@ export const darkTheme: Theme = {
   surface: '#1C1C1E',
   text: '#FFFFFF',
   textSecondary: '#8E8E93',
-  userBubbleBackground: '#1C1C1E',
+  userBubbleBackground: 'rgba(28,28,30,0.38)',
   userBubbleText: '#FFFFFF',
+  assistantBubbleBackground: 'rgba(28,28,30,0.28)',
   glassFallbackBackground: '#1C1C1E',
   border: '#2C2C2E',
   sendActive: '#FFFFFF',
@@ -61,12 +89,13 @@ export const darkTheme: Theme = {
   indicatorCompleted: '#30D158',
   inputBackground: '#1C1C1E',
   cardBackground: '#1C1C1E',
-  planBadge: '#C7934A',
-  planBadgeFill: 'rgba(199,147,74,0.22)',
+  planBadge: '#FF9F0A',
+  planBadgeFill: 'rgba(255,159,10,0.22)',
   planButton: '#E8A317',
   fastAccent: '#FF9F0A',
   prOpen: '#30D158',
   prMerged: '#BF5AF2',
+  prDraft: '#8E8E93',
   diffAddBackground: 'rgba(48,209,88,0.14)',
   diffDelBackground: 'rgba(215,38,61,0.14)',
   diffAddText: '#30D158',
@@ -79,8 +108,9 @@ export const lightTheme: Theme = {
   surface: '#F2F2F7',
   text: '#000000',
   textSecondary: '#6C6C70',
-  userBubbleBackground: '#E9E9EB',
+  userBubbleBackground: 'rgba(233,233,235,0.42)',
   userBubbleText: '#000000',
+  assistantBubbleBackground: 'rgba(242,242,247,0.32)',
   glassFallbackBackground: '#F2F2F7',
   border: '#D1D1D6',
   sendActive: '#000000',
@@ -93,12 +123,13 @@ export const lightTheme: Theme = {
   indicatorCompleted: '#248A3D',
   inputBackground: '#F2F2F7',
   cardBackground: '#F2F2F7',
-  planBadge: '#B07828',
-  planBadgeFill: 'rgba(176,120,40,0.16)',
+  planBadge: '#FF9F0A',
+  planBadgeFill: 'rgba(255,159,10,0.16)',
   planButton: '#E8A317',
   fastAccent: '#FF9F0A',
   prOpen: '#248A3D',
   prMerged: '#8944AB',
+  prDraft: '#6C6C70',
   diffAddBackground: 'rgba(36,138,61,0.12)',
   diffDelBackground: 'rgba(215,38,61,0.10)',
   diffAddText: '#248A3D',
@@ -109,11 +140,15 @@ export const lightTheme: Theme = {
  * per theme in the components that matter). */
 export const theme = darkTheme;
 
-export const useTheme = (): Theme =>
-  useColorScheme() === 'light' ? lightTheme : darkTheme;
+export const useTheme = (): Theme => {
+  const system = useColorScheme() === 'light' ? 'light' : 'dark';
+  const wallpaperUri = useWallpaperContrastUri();
+  const sampled = useWallpaperContrastScheme();
+  const scheme = chromeSchemeForWallpaper(wallpaperUri, sampled, system);
+  return scheme === 'light' ? lightTheme : darkTheme;
+};
 
-export const useColorSchemeName = (): 'light' | 'dark' =>
-  useColorScheme() === 'light' ? 'light' : 'dark';
+export const useColorSchemeName = (): 'light' | 'dark' => useTheme().scheme;
 
 // Shared markdown design tokens. markdownStyle derives the
 // EnrichedMarkdownText style from these, so the transcript and the reasoning

@@ -2,7 +2,7 @@
 // zeego (dropdown-menu / context-menu) needs @react-native-menu/menu, which
 // is NOT bundled in Expo Go. This ActionSheetIOS-based fallback implements
 // the subset the app uses: Root, Trigger, Content, Item, ItemTitle,
-// ItemIcon, Group, Separator, Label. Dropdown Trigger opens on press;
+// ItemIcon, ItemImage, Group, Separator, Label. Dropdown Trigger opens on press;
 // ContextMenu Trigger opens on long-press.
 
 import React, {
@@ -44,26 +44,59 @@ const textOf = (node: ReactNode): string => {
   return '';
 };
 
+const displayNameOf = (el: React.ReactElement): string | undefined =>
+  (el.type as { displayName?: string }).displayName;
+
+/** Find <Content> even when a helper wraps it (recurse unknown nodes). */
+const findContent = (nodes: ReactNode): React.ReactElement | undefined => {
+  for (const el of flatten(nodes)) {
+    if (displayNameOf(el) === 'GoMenuContent') return el;
+    const nested = (el.props as { children?: ReactNode }).children;
+    const found = findContent(nested);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
+/** First <Label> in <Content> (Groups included). Zeego shows one label at
+ * the top of the native menu; Go uses it as the ActionSheet/Alert title. */
+const collectLabel = (children: ReactNode): string | undefined => {
+  const content = findContent(children);
+  if (content === undefined) return undefined;
+  const walk = (nodes: ReactNode): string | undefined => {
+    for (const el of flatten(nodes)) {
+      const name = displayNameOf(el);
+      const props = el.props as { children?: ReactNode };
+      if (name === 'GoMenuLabel') {
+        const text = textOf(props.children);
+        if (text !== '') return text;
+      }
+      const nested = walk(props.children);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  };
+  return walk((content.props as { children?: ReactNode }).children);
+};
+
 /** Pull {title, onSelect, destructive} out of <Content><Item><ItemTitle>…
- * trees (Groups are flattened; Label becomes a disabled header row). */
+ * trees (Groups are flattened; Label is collected separately as the sheet
+ * title; disabled Items are omitted). */
 const collectItems = (children: ReactNode): ItemDef[] => {
-  const content = flatten(children).find(
-    c => (c.type as { displayName?: string }).displayName === 'GoMenuContent',
-  );
+  const content = findContent(children);
   if (content === undefined) return [];
   const contentProps = content.props as { children?: ReactNode };
   const walk = (nodes: ReactNode): ItemDef[] => {
     const out: ItemDef[] = [];
     for (const el of flatten(nodes)) {
-      const name = (el.type as { displayName?: string }).displayName;
+      const name = displayNameOf(el);
       const props = el.props as Record<string, unknown> & {
         children?: ReactNode;
       };
       if (name === 'GoMenuItem') {
+        if (props.disabled === true) continue;
         const titleEl = flatten(props.children).find(
-          c =>
-            (c.type as { displayName?: string }).displayName ===
-            'GoMenuItemTitle',
+          c => displayNameOf(c) === 'GoMenuItemTitle',
         );
         out.push({
           title: textOf(
@@ -81,12 +114,14 @@ const collectItems = (children: ReactNode): ItemDef[] => {
   return walk(contentProps.children);
 };
 
-const present = (items: ItemDef[]): void => {
+const present = (items: ItemDef[], title?: string): void => {
   const labels = items.map(i => i.title);
+  const header = title !== undefined && title !== '' ? title : undefined;
   if (Platform.OS === 'ios') {
     const destructive = items.findIndex(i => i.destructive === true);
     ActionSheetIOS.showActionSheetWithOptions(
       {
+        ...(header !== undefined ? { title: header } : {}),
         options: [...labels, 'Cancel'],
         cancelButtonIndex: labels.length,
         ...(destructive >= 0 ? { destructiveButtonIndex: destructive } : {}),
@@ -96,7 +131,7 @@ const present = (items: ItemDef[]): void => {
       },
     );
   } else {
-    Alert.alert('', undefined, [
+    Alert.alert(header ?? '', undefined, [
       ...items.map(i => ({
         text: i.title,
         style: (i.destructive ? 'destructive' : 'default') as
@@ -119,7 +154,7 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
   }) => {
     const open = useCallback(() => {
       onOpenChange?.(true);
-      present(collectItems(children));
+      present(collectItems(children), collectLabel(children));
       onOpenChange?.(false);
     }, [children, onOpenChange]);
     return <Ctx.Provider value={{ open }}>{children}</Ctx.Provider>;
@@ -127,17 +162,55 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
 
   const Trigger = ({
     children,
-    asChild: _asChild,
+    asChild,
   }: {
     children?: ReactNode;
     asChild?: boolean;
   }) => {
     const { open } = useContext(Ctx);
+    const menuPress = longPress ? undefined : open;
+    const menuLongPress = longPress ? open : undefined;
+    const child =
+      React.Children.count(children) === 1
+        ? React.Children.only(children)
+        : undefined;
+    const childEl = React.isValidElement(child) ? child : undefined;
+    const childPress =
+      childEl !== undefined
+        ? (childEl.props as {
+            onPress?: (event: unknown) => void;
+            onLongPress?: (event: unknown) => void;
+          })
+        : undefined;
+    const shouldClone =
+      childEl !== undefined &&
+      (asChild === true ||
+        childPress?.onPress !== undefined ||
+        childPress?.onLongPress !== undefined);
+    if (shouldClone && childEl !== undefined) {
+      return React.cloneElement(
+        childEl as React.ReactElement<{
+          onPress?: (event: unknown) => void;
+          onLongPress?: (event: unknown) => void;
+        }>,
+        {
+          onPress: longPress
+            ? childPress?.onPress
+            : (event: unknown) => {
+                childPress?.onPress?.(event);
+                open();
+              },
+          onLongPress: longPress
+            ? (event: unknown) => {
+                childPress?.onLongPress?.(event);
+                open();
+              }
+            : childPress?.onLongPress,
+        },
+      );
+    }
     return (
-      <Pressable
-        onPress={longPress ? undefined : open}
-        onLongPress={longPress ? open : undefined}
-      >
+      <Pressable onPress={menuPress} onLongPress={menuLongPress}>
         {children}
       </Pressable>
     );
@@ -157,6 +230,8 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
 
   const ItemIcon = () => null;
   ItemIcon.displayName = 'GoMenuItemIcon';
+  const ItemImage = () => null;
+  ItemImage.displayName = 'GoMenuItemImage';
   const ItemSubtitle = () => null;
   ItemSubtitle.displayName = 'GoMenuItemSubtitle';
   const Group = ({ children }: { children?: ReactNode }) => <>{children}</>;
@@ -175,6 +250,7 @@ export const makeMenu = ({ longPress }: { longPress: boolean }) => {
     Item,
     ItemTitle,
     ItemIcon,
+    ItemImage,
     ItemSubtitle,
     Group,
     Separator,

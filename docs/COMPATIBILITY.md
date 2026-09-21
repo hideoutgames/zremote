@@ -57,9 +57,11 @@ templates. Their only deliberate customisations are:
 1. `react-native-bootsplash` storyboard + generated assets, initialised from `AppDelegate.swift`.
 2. `pod 'SDWebImage', :modular_headers => true` in the `Podfile` (needed by `react-native-nitro-web-image`).
 3. `platform :ios, '16.4'` in the `Podfile`.
-4. `patch-package` patches under `app/patches/` (bootsplash `HideOnDraw`, keyboard-controller, nitro-symbols, ios-utilities) — these patch `node_modules`, not the native projects, and are kept as-is.
+4. `patch-package` patches under `app/patches/` (bootsplash `HideOnDraw`, keyboard-controller, ios-utilities) — these patch `node_modules`, not the native projects, and are kept as-is. Icons use `expo-symbols` (`UIImageView`), not `react-native-nitro-symbols` (SwiftUI hosting blanks glyphs under the keyboard / Liquid Glass).
 
 `react-native-keyboard-controller` is intentionally pinned to **1.21.12** (JS) over Expo Go's bundled 1.21.9 native: 1.21.9's KeyboardChatScrollView emits `contentOffset {0,0}` on first `animatedProps` evaluation, which feedback-loops the JS thread when a streaming chat opens (fixed upstream in 1.21.12; the fix is pure JS, no `ios/` changes). `expo install --check` flags the version mismatch — that is expected.
+
+The in-thread transcript list is **`@shopify/flash-list` 2.0.2** (Expo SDK 57 pin, FlashList v2, JS-only on New Architecture — no config plugin, no `ios.useFrameworks`). `SessionTranscriptList` uses FlashList with `KeyboardChatScrollView` as `renderScrollComponent`. Home threads and Terminal stay on `@legendapp/list`.
 
 Decision: move to **Expo Continuous Native Generation** with `app.config.ts`
 and config plugins. Each customisation above is encoded as a plugin (the
@@ -81,7 +83,9 @@ encoded in a plugin.
 ### Branding
 
 The app icon and splash sources live in `app/assets/brand/` (`icon-1024.png`,
-`splash-logo.png`), copied from the repo-root `logos/` directory. The splash
+`splash-logo.png`), copied from the repo-root `logos/` directory. Sign-in uses
+theme-aware marks `zremote-mark-white.png` / `zremote-mark-black.png` from the
+same folder. The splash
 logo is a 109px-wide raster, so the bootsplash plugin's `logoWidth` is capped
 at 54 (2x = native resolution) until a vector or high-res logo is provided;
 `app/assets/bootsplash/*` is regenerated with `npx react-native-bootsplash
@@ -117,25 +121,34 @@ to the edge (`POST /auth/exchange`, `POST /auth/refresh`, `GET/POST
 `http://127.0.0.1:{port}/callback` and the hosted paste-code page
 `{edge}/auth/cli/callback`. The mobile flow:
 
-1. **Primary**: `ASWebAuthenticationSession` with an _https_ callback
-   (`{edge}/auth/cli/callback`, iOS 17.4+). This reuses the already-registered
-   redirect URI; iOS intercepts the redirect before the paste page renders and
-   hands `code`+`state` to the app. Requirement: the app declares
-   `applinks:<edge host>` in Associated Domains and the edge serves
-   `/.well-known/apple-app-site-association` — a small, additive edge change
-   shipped as a separate patch (`patches/zeron-edge/`). Not deployed yet.
-2. **Fallback (works against the production edge today)**: open the same
-   authorize URL, let the hosted page show the `state.code` string, and paste
-   it into the app — exactly the flow Zeron's SwiftUI client and `zeron login`
-   use.
-3. `state` is minted per attempt, stored until consumed, and bound to the
-   pasted/intercepted code (same CSRF discipline as the engine).
-4. **PKCE**: the edge exchange route does not currently forward a
-   `code_verifier`; we send `code_challenge` only when the edge advertises
-   support. The additive `codeVerifier` passthrough is part of the same edge
-   patch and is separately identified in `docs/HOST_EDGE_CHANGES.md`.
+1. **Primary**: `ASWebAuthenticationSession` on `zeron://auth/callback`
+   (custom scheme, `preferUniversalLinks: false`) so the WorkOS sheet
+   actually presents. WorkOS still uses the registered HTTPS redirect
+   `{edge}/auth/cli/callback` plus PKCE. The edge 302-hops iPhone/iPad
+   user-agents and `zr1.`-prefixed pending states to that scheme
+   (`patches/zeron-edge/0004` + `0005` + `0006`). The 302 completes the
+   auth session; the hop HTML also shows `state.code` for in-app paste if
+   the sheet is dismissed. HTTPS AuthSession with `preferUniversalLinks: true` is not used:
+   without verified AASA/`webcredentials` it silently returns `cancel` and
+   never opens `api.workos.com`. `zeron://` Linking is the Safari-fallback
+   return path if AuthSession fails to start. If the hop is missing or the
+   sheet is cancelled/dismissed, `SignInScreen` shows a paste field so the
+   user can paste `state.code` from the Copy-code page;
+   `completePastedCode` exchanges it and Keychain `restore()` signs in on
+   the next launch. Desktop CLI `zeron login` still sees the paste-code
+   page.
+2. `state` is minted per attempt with a `zr1.` prefix (so the edge can hop
+   without UA sniffing), stored in memory and Keychain until consumed
+   (15-minute TTL), and bound to the intercepted code (same CSRF discipline
+   as the engine).
+3. **PKCE**: `PKCE_ENABLED` is off so authorize + exchange match the engine
+   and native `AuthClient.swift` (`{ code }` only). PKCE helpers remain in
+   `authKit` for a later re-enable. If PKCE is turned on, the edge must
+   forward `code_verifier` (`0001`) or WorkOS rejects every path. See
+   `docs/HOST_EDGE_CHANGES.md`.
 
-Tokens (access + refresh) live in Keychain-backed storage (`expo-secure-store`).
+Tokens (access + refresh) live in Keychain-backed storage (`expo-secure-store`),
+namespaced by a sanitized edge URL (SecureStore keys cannot contain `:` or `/`).
 WebSocket connections send the bearer as an `Authorization` header
 (NitroWebSocket supports headers) instead of `?token=`, so credentials never
 appear in URLs or logs.
@@ -158,7 +171,7 @@ a silent fallback into a less-safe behavior.
 
 | Capability                                                                                                       | Minimum host version                      | Evidence                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — new-session "New worktree" checkout) | **0.2.62**                                | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `NewSessionSheet` + `CheckoutSelector` (blocked, "update Zeron on \<host\>"). |
+| `RunRequest.worktree` (`WorktreeSpec {repoPath, base}` on the first `run` — compose "New worktree" checkout) | **0.2.62**                                | `git log -S"pub worktree: Option<WorktreeSpec>" -- crates/proto/src/agent.rs` → `0a80fc15` (PR #216); `git describe --tags --contains 0a80fc15` → `v0.2.62~2` (first tag carrying it; v0.2.61 predates it). Constant: `MIN_VERSION_RUN_WORKTREE` in `app/src/zeron/protocol/entities.ts`; enforced in `CheckoutSelector` (blocked, "update Zeron on \<host\>"). |
 | Shared queue send (`queue` doc rows, composer "Queue" pill)                                                      | capability `message-queue-v1`             | `crates/rpc/src/lib.rs` `QUEUE_MESSAGE`; ComposerView.swift queue-first flow. Without it the live pill degrades to Steer-or-hidden.                                                                                                                                                                                                                                                 |
 | Queued attachments (`pending://` refs + escort uploads)                                                          | capability `message-queue-attachments-v1` | `attachments.rs`/`UploadStash.swift`; `sendPlan()` in `app/src/zeron/attachments/sendPlan.ts` falls back to legacy upload-first.                                                                                                                                                                                                                                                    |
 | Queue row actions (Send now / Steer now / Remove)                                                                | capability `message-queue-actions-v1`     | `crates/rpc/src/lib.rs` `SEND_QUEUED_MESSAGE_NOW` etc.; `QueuePanel` hides actions without it.                                                                                                                                                                                                                                                                                      |

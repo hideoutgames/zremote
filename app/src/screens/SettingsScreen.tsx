@@ -1,8 +1,5 @@
-// Settings: account card, sign-out (confirm → clearAccountCaches), device
-// list, per-device Agents page (ListHarnesses + enable toggles), read-only
-// edge URL.
-//
-// TODO(later): agent accounts, shortcuts, archived-sessions management.
+// Settings: inset-grouped account, desktops, and prefs. Per-desktop page
+// covers rename, software update, agent accounts, harnesses.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -13,46 +10,96 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useStore } from 'zustand';
+import * as Haptics from 'expo-haptics';
 import { workspaceStore } from '../zeron/state/workspaceStore';
 import { authStore } from '../zeron/state/authStore';
 import { catalogStore } from '../zeron/state/catalogStore';
 import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
-import { appConfig } from '../zeron/native/appConfig';
+import {
+  APPLY_RESTART_WAIT_MS,
+  APPLY_UPDATE_TIMEOUT_MS,
+  UPDATE_STATUS_RETRY_MS,
+  updateInstalled,
+} from '../zeron/runtime/softwareUpdate';
 import { useAppServices, useRuntime } from '../app/runtimeContext';
-import type {
-  DeviceRow,
-  TitleSettings,
-  UpdateStatus,
-} from '../zeron/protocol/types';
+import { isPresenceFresh } from '../zeron/protocol/entities';
+import type { DeviceRow, UpdateStatus } from '../zeron/protocol/types';
 import { METHODS } from '../zeron/protocol/rpc';
 import { AgentAccountsScreen } from './AgentAccountsScreen';
 import { Icon } from '../components/Icon';
+import {
+  SettingsGroup,
+  SettingsRow,
+  settingsPageBackground,
+} from '../components/settings/SettingsList';
 import { useTheme } from '../theme';
-import { useDemoMode } from '../demo/demoMode';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
+import { impact } from '../zeron/native/haptics';
 import {
   setForceRelayMode,
+  setHapticsEnabled,
   setLiveActivitiesEnabled,
   setLiveActivityShowHost,
+  setLocalLogsEnabled,
   setNotificationsEnabled,
+  useCleanupModelId,
   useDictationLocale,
   useForceRelayMode,
+  useHapticsEnabled,
   useLiveActivitiesEnabled,
   useLiveActivityShowHost,
+  useLocalLogsEnabled,
   useNotificationsEnabled,
+  useVoiceInputMode,
+  useVoiceModelId,
 } from '../zeron/state/uiPrefs';
+import { deleteLocalLogs } from '../zeron/diagnostics/localLogs';
+import { LocalLogsScreen } from './LocalLogsScreen';
+import { SessionSheet } from '../components/SessionSheet';
 import {
   dictationUnavailable,
   resolveDictationPort,
 } from '../zeron/native/dictation';
 import type { DictationModelState } from '../../modules/zeron-dictation/src/Dictation.nitro';
+import {
+  AppearanceBackground,
+  ThemePage,
+} from '../components/settings/AppearanceBackground';
+import {
+  VoiceInputPage,
+  voiceInputModeLabel,
+} from '../components/settings/VoiceInputPage';
+import {
+  VoiceModelPicker,
+  selectedModelLabel,
+} from '../components/settings/VoiceModelPicker';
+import { CleanupPromptEditor } from '../components/settings/CleanupPromptEditor';
+import { catalogEntry } from '../zeron/voice/catalog';
 
 const log = createLog();
+
+const PRESENCE_TICK_MS = 5_000;
+
+type SettingsPage =
+  | 'root'
+  | 'theme'
+  | 'voiceInput'
+  | 'voiceModel'
+  | 'cleanupModel'
+  | 'cleanupPrompt';
+
+const useNow = (intervalMs: number): number => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+};
 
 const dictationStateLabel = (s: DictationModelState): string =>
   s === 'installed'
@@ -63,20 +110,18 @@ const dictationStateLabel = (s: DictationModelState): string =>
     ? t('settings.dictationDownloading')
     : t('settings.dictationUnsupported');
 
-const AgentsPage = ({
-  device,
-  onBack,
-}: {
-  device: DeviceRow;
-  onBack: () => void;
-}) => {
+const AgentsPage = ({ device }: { device: DeviceRow }) => {
   const theme = useTheme();
   const runtime = useRuntime();
   const catalog = useStore(catalogStore, s => s.byDevice[device.id]);
   const [update, setUpdate] = useState<UpdateStatus | undefined>(undefined);
   const [applying, setApplying] = useState(false);
-  const [title, setTitle] = useState<TitleSettings>({});
-  const [titleLoaded, setTitleLoaded] = useState(false);
+  const [applyError, setApplyError] = useState<string | undefined>(undefined);
+  /** Version ApplyUpdate reported. The spinner stays up until the restarted
+   * host publishes it, or the restart wait expires. */
+  const [pendingVersion, setPendingVersion] = useState<string | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     if (runtime !== null)
@@ -85,53 +130,70 @@ const AgentsPage = ({
       );
   }, [runtime, device.id]);
 
-  // UpdateStatus is a stream whose first item is the current status
-  // (rpc.rs L1625 watch_stream). Errors mean updates unavailable.
   useEffect(() => {
     if (runtime === null) return;
     let cancelled = false;
     let stream: { cancel(): void } | undefined;
-    runtime
-      .relayFor(device.id)
-      .stream<UpdateStatus>(METHODS.UPDATE_STATUS, {})
-      .then(async s => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const open = async () => {
+      try {
+        const s = await runtime
+          .relayFor(device.id)
+          .stream<UpdateStatus>(METHODS.UPDATE_STATUS, {});
         if (cancelled) {
           s.cancel();
           return;
         }
         stream = s;
-        for await (const u of s.items) if (!cancelled) setUpdate(u);
-      })
-      .catch(() => {});
+        try {
+          for await (const u of s.items) {
+            if (cancelled) break;
+            setUpdate(u);
+          }
+        } finally {
+          if (stream === s) stream = undefined;
+        }
+      } catch {
+        // The restart drops the relay. Re-subscribe below; status payloads
+        // stay off the log.
+      }
+      if (cancelled) return;
+      retry = setTimeout(() => {
+        retry = undefined;
+        open().catch(() => {});
+      }, UPDATE_STATUS_RETRY_MS);
+    };
+
+    open().catch(() => {});
     return () => {
       cancelled = true;
+      if (retry !== undefined) clearTimeout(retry);
       stream?.cancel();
     };
   }, [runtime, device.id]);
 
-  // Per-device title settings (registry.rs TitleSettings: harness + model).
   useEffect(() => {
-    if (runtime === null) return;
-    runtime
-      .relayFor(device.id)
-      .call<TitleSettings>(METHODS.GET_TITLE_SETTINGS, {})
-      .then(s => {
-        setTitle(s);
-        setTitleLoaded(true);
-      })
-      .catch(() => {});
-  }, [runtime, device.id]);
+    if (
+      pendingVersion === undefined ||
+      update === undefined ||
+      !updateInstalled(update, pendingVersion)
+    ) {
+      return;
+    }
+    setPendingVersion(undefined);
+    setApplyError(undefined);
+    setApplying(false);
+  }, [pendingVersion, update]);
 
-  const saveTitle = useCallback(
-    (next: TitleSettings) => {
-      setTitle(next);
-      runtime
-        ?.relayFor(device.id)
-        .call(METHODS.SET_TITLE_SETTINGS, { ...next })
-        .catch(e => log.warn(`SetTitleSettings: ${e}`));
-    },
-    [runtime, device.id],
-  );
+  useEffect(() => {
+    if (pendingVersion === undefined) return;
+    const id = setTimeout(() => {
+      setPendingVersion(undefined);
+      setApplying(false);
+    }, APPLY_RESTART_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [pendingVersion]);
 
   const rename = useCallback(() => {
     Alert.prompt(
@@ -155,22 +217,43 @@ const AgentsPage = ({
   }, [runtime, device.id, device.name]);
 
   const applyUpdate = useCallback(() => {
-    if (runtime === null) return;
-    Alert.alert(t('settings.updateApply'), t('settings.updateApplyConfirm'), [
-      { text: t('home.row.cancel'), style: 'cancel' },
-      {
-        text: t('settings.updateApply'),
-        onPress: () => {
-          setApplying(true);
-          runtime
-            .relayFor(device.id)
-            .call(METHODS.APPLY_UPDATE, {})
-            .catch(e => log.warn(`ApplyUpdate: ${e}`))
-            .finally(() => setApplying(false));
+    if (runtime === null || applying) return;
+    Alert.alert(
+      t('settings.softwareUpdate'),
+      t('settings.updateApplyConfirm'),
+      [
+        { text: t('home.row.cancel'), style: 'cancel' },
+        {
+          text: t('settings.updateApply'),
+          onPress: () => {
+            setApplying(true);
+            setApplyError(undefined);
+            runtime
+              .relayFor(device.id)
+              .call<{ version?: string }>(
+                METHODS.APPLY_UPDATE,
+                {},
+                { timeoutMs: APPLY_UPDATE_TIMEOUT_MS },
+              )
+              .then(result => {
+                const version = result?.version?.trim();
+                if (version === undefined || version === '') {
+                  setApplying(false);
+                  return;
+                }
+                setPendingVersion(version);
+              })
+              .catch(e => {
+                log.warn(`ApplyUpdate: ${e}`);
+                setPendingVersion(undefined);
+                setApplyError(e instanceof Error ? e.message : String(e));
+                setApplying(false);
+              });
+          },
         },
-      },
-    ]);
-  }, [runtime, device.id]);
+      ],
+    );
+  }, [runtime, device.id, applying]);
 
   const toggle = useCallback(
     (harnessId: string, enabled: boolean) => {
@@ -183,155 +266,88 @@ const AgentsPage = ({
   );
 
   return (
-    <View style={styles.page}>
-      <Pressable onPress={onBack} hitSlop={8} style={styles.backRow}>
-        <Icon name="chevron.left" size={16} color={theme.accent} />
-        <Text style={[styles.back, { color: theme.accent }]}>
-          {device.name}
-        </Text>
-      </Pressable>
-
-      {/* Rename + version/capabilities/last-seen are in the row subtitle on
-          the parent list; rename via Mutate op renameDevice (rpc.rs L895). */}
-      <Pressable
-        onPress={rename}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t('settings.renameDevice')}
-        style={styles.agentRowBtn}
-      >
-        <Text style={[styles.agentName, { color: theme.accent }]}>
-          {t('settings.renameDevice')}
-        </Text>
-      </Pressable>
+    <View>
+      <SettingsGroup>
+        <SettingsRow
+          title={t('settings.deviceName')}
+          value={device.name}
+          showChevron
+          onPress={rename}
+          accessibilityLabel={t('settings.renameDevice')}
+        />
+      </SettingsGroup>
 
       {update !== undefined ? (
-        <View
-          style={[
-            styles.agentRow,
-            {
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.border,
-            },
-          ]}
-        >
-          <View style={styles.agentText}>
-            <Text style={[styles.agentName, { color: theme.text }]}>
-              {`v${update.currentVersion}`}
-              {update.updateAvailable && update.latestVersion !== undefined
-                ? ` → v${update.latestVersion}`
-                : ''}
-            </Text>
-            {update.error !== undefined ? (
-              <Text style={[styles.agentSub, { color: theme.danger }]}>
-                {update.error}
-              </Text>
-            ) : null}
-          </View>
-          {update.updateAvailable ? (
-            <Pressable
-              onPress={applyUpdate}
-              disabled={applying}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('settings.updateApply')}
-            >
-              {applying ? (
-                <ActivityIndicator size="small" />
-              ) : (
-                <Text style={{ color: theme.accent }}>
+        <SettingsGroup footer={applyError ?? update.error}>
+          <SettingsRow
+            title={t('settings.softwareUpdate')}
+            value={
+              applying
+                ? t('settings.updateApplying')
+                : update.updateAvailable
+                ? t('settings.updateAvailable')
+                : t('settings.upToDate')
+            }
+            trailing={
+              applying ? (
+                <ActivityIndicator
+                  size="small"
+                  accessibilityLabel={t('settings.updateApplying')}
+                  testID="software-update-spinner"
+                />
+              ) : update.updateAvailable ? (
+                <Text style={[styles.apply, { color: theme.accent }]}>
                   {t('settings.updateApply')}
                 </Text>
-              )}
-            </Pressable>
-          ) : null}
-        </View>
+              ) : undefined
+            }
+            onPress={
+              update.updateAvailable && !applying ? applyUpdate : undefined
+            }
+            accessibilityLabel={t('settings.softwareUpdate')}
+            testID="settings-software-update"
+          />
+        </SettingsGroup>
       ) : null}
 
-      {titleLoaded ? (
-        <View
-          style={[
-            styles.agentRow,
-            {
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.border,
-            },
-          ]}
-        >
-          <View style={styles.agentText}>
-            <Text style={[styles.agentName, { color: theme.text }]}>
-              {t('settings.titleSettings')}
-            </Text>
-            <TextInput
-              value={title.harness ?? ''}
-              onChangeText={v =>
-                saveTitle({ ...title, harness: v || undefined })
-              }
-              placeholder={t('settings.titleHarness')}
-              placeholderTextColor={theme.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[styles.titleInput, { color: theme.text }]}
-              accessibilityLabel={t('settings.titleHarness')}
-            />
-            <TextInput
-              value={title.model ?? ''}
-              onChangeText={v => saveTitle({ ...title, model: v || undefined })}
-              placeholder={t('settings.titleModel')}
-              placeholderTextColor={theme.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[styles.titleInput, { color: theme.text }]}
-              accessibilityLabel={t('settings.titleModel')}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('settings.agentAccounts')}
-      </Text>
+      <View style={styles.embeddedHeader}>
+        <Text style={[styles.embeddedCaption, { color: theme.textSecondary }]}>
+          {t('settings.agentAccounts')}
+        </Text>
+      </View>
       <AgentAccountsScreen deviceId={device.id} />
 
-      <Text style={[styles.section, { color: theme.textSecondary }]}>
-        {t('settings.agents')}
-      </Text>
-      {catalog === undefined || catalog.loading ? (
-        <ActivityIndicator color={theme.textSecondary} />
-      ) : catalog.error !== undefined ? (
-        <Text style={[styles.error, { color: theme.danger }]}>
-          {catalog.error}
-        </Text>
-      ) : (
-        catalog.harnesses.map(h => (
-          <View
-            key={h.id}
-            style={[
-              styles.agentRow,
-              {
-                backgroundColor: theme.cardBackground,
-                borderColor: theme.border,
-              },
-            ]}
-          >
-            <View style={styles.agentText}>
-              <Text style={[styles.agentName, { color: theme.text }]}>
-                {h.name}
-              </Text>
-              {h.installed === false ? (
-                <Text style={[styles.agentSub, { color: theme.textSecondary }]}>
-                  {'not installed'}
-                </Text>
-              ) : null}
-            </View>
-            <Switch
-              value={h.enabled !== false}
-              disabled={h.installed === false}
-              onValueChange={v => toggle(h.id, v)}
-            />
+      <SettingsGroup header={t('settings.agents')}>
+        {catalog === undefined || catalog.loading ? (
+          <View style={styles.centeredRow}>
+            <ActivityIndicator color={theme.textSecondary} />
           </View>
-        ))
-      )}
+        ) : catalog.error !== undefined ? (
+          <View style={styles.centeredRow}>
+            <Text style={[styles.error, { color: theme.danger }]}>
+              {catalog.error}
+            </Text>
+          </View>
+        ) : (
+          catalog.harnesses.map(h => (
+            <SettingsRow
+              key={h.id}
+              title={h.name}
+              subtitle={
+                h.installed === false ? t('settings.notInstalled') : undefined
+              }
+              trailing={
+                <Switch
+                  value={h.enabled !== false}
+                  disabled={h.installed === false}
+                  onValueChange={v => toggle(h.id, v)}
+                  accessibilityLabel={h.name}
+                />
+              }
+            />
+          ))
+        )}
+      </SettingsGroup>
     </View>
   );
 };
@@ -342,18 +358,30 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const status = useStore(authStore, s => s.status);
   const devices = useStore(workspaceStore, s => s.devices);
   const presence = useStore(workspaceStore, s => s.presence);
-  const edgeUrl = appConfig().edgeUrl;
+  const now = useNow(PRESENCE_TICK_MS);
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
+  const [page, setPage] = useState<SettingsPage>('root');
+  const [logsOpen, setLogsOpen] = useState(false);
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
   const notificationsEnabled = useNotificationsEnabled();
+  const hapticsEnabled = useHapticsEnabled();
   const forceRelayMode = useForceRelayMode();
+  const localLogsEnabled = useLocalLogsEnabled();
   const dictationLocale = useDictationLocale();
+  const voiceInputMode = useVoiceInputMode();
+  const voiceModelId = useVoiceModelId();
+  const cleanupModelId = useCleanupModelId();
+  const cleanupEngine = catalogEntry(cleanupModelId);
   const [dictationModelState, setDictationModelState] = useState<
     DictationModelState | undefined
   >(undefined);
 
   useEffect(() => {
+    if (voiceInputMode !== 'dictation') {
+      setDictationModelState(undefined);
+      return;
+    }
     let mounted = true;
     resolveDictationPort()
       .then(port =>
@@ -372,7 +400,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     return () => {
       mounted = false;
     };
-  }, [dictationLocale]);
+  }, [dictationLocale, voiceInputMode]);
 
   const downloadDictationModel = useCallback(() => {
     resolveDictationPort()
@@ -394,16 +422,30 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     status.state === 'signedIn' || status.state === 'needsOrganization'
       ? status.user
       : undefined;
-  const orgId = status.state === 'signedIn' ? status.orgId : undefined;
 
-  const demoActive = useDemoMode();
-
-  const confirmSignOut = useCallback(() => {
-    if (demoActive) {
-      signOut().catch(e => log.warn(`signOut: ${e}`));
-      onClose();
+  const onLocalLogsChange = useCallback((next: boolean) => {
+    if (next) {
+      setLocalLogsEnabled(true).catch(() => {});
       return;
     }
+    Alert.alert(
+      t('settings.localLogsDisableTitle'),
+      t('settings.localLogsDisableBody'),
+      [
+        { text: t('home.row.cancel'), style: 'cancel' },
+        {
+          text: t('settings.localLogsDisable'),
+          style: 'destructive',
+          onPress: () => {
+            setLocalLogsEnabled(false).catch(() => {});
+            deleteLocalLogs().catch(() => {});
+          },
+        },
+      ],
+    );
+  }, []);
+
+  const confirmSignOut = useCallback(() => {
     Alert.alert(t('settings.signOut'), t('settings.signOutConfirm'), [
       { text: t('home.row.cancel'), style: 'cancel' },
       {
@@ -415,271 +457,332 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         },
       },
     ]);
-  }, [signOut, onClose, demoActive]);
+  }, [signOut, onClose]);
 
-  const deviceSubtitle = (d: DeviceRow): string => {
-    const at = presence[d.id];
-    const online = at !== undefined && Date.now() - at < 45_000;
-    const bits = [
-      d.platform,
-      d.version !== undefined ? `v${d.version}` : undefined,
-      online ? t('settings.online') : t('settings.offline'),
-      `${d.capabilities.length} ${t('settings.capabilities')}`,
-    ];
-    return bits.filter(Boolean).join(' · ');
-  };
+  const deviceConnected = (id: string): boolean =>
+    isPresenceFresh(presence[id], now);
+
+  const accountTitle = user?.email ?? user?.id ?? '';
+
+  const subpageOpen = agentsFor !== undefined || page !== 'root';
+  const pageTitle =
+    agentsFor !== undefined
+      ? agentsFor.name
+      : page === 'theme'
+      ? t('settings.theme')
+      : page === 'voiceInput'
+      ? t('settings.voiceInput')
+      : page === 'voiceModel'
+      ? t('settings.voiceModel')
+      : page === 'cleanupModel'
+      ? t('settings.cleanupModel')
+      : page === 'cleanupPrompt'
+      ? t('settings.cleanupInstructions')
+      : t('settings.title');
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background }]}>
-      {/* Native sheet chrome: centered title + text Done button (a glass
-          close circle inside a system sheet is glass-on-glass). */}
+    <View
+      style={[styles.root, { backgroundColor: settingsPageBackground(theme) }]}
+    >
       <View style={styles.header}>
-        <View style={styles.headerSide} />
-        <Text style={[styles.title, { color: theme.text }]}>
-          {agentsFor === undefined ? t('settings.title') : t('settings.agents')}
+        <View style={styles.headerLeft}>
+          {subpageOpen ? (
+            <Pressable
+              onPress={() => {
+                if (agentsFor !== undefined) setAgentsFor(undefined);
+                else setPage('root');
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.title')}
+              style={styles.backBtn}
+            >
+              <Icon name="chevron.left" size={17} color={theme.accent} />
+              <Text style={[styles.backLabel, { color: theme.accent }]}>
+                {t('settings.title')}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
+          {pageTitle}
         </Text>
-        <Pressable
-          onPress={onClose}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.done')}
-          style={styles.headerSide}
-        >
-          <Text style={[styles.done, { color: theme.accent }]}>
-            {t('common.done')}
-          </Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.done')}
+            style={styles.doneHit}
+          >
+            <Text style={[styles.done, { color: theme.accent }]}>
+              {t('common.done')}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-      >
-        {agentsFor !== undefined ? (
-          <AgentsPage
-            device={agentsFor}
-            onBack={() => setAgentsFor(undefined)}
-          />
-        ) : (
-          <>
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('settings.account')}
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <Icon
-                name="person.crop.circle"
-                size={22}
-                color={theme.textSecondary}
-              />
-              <View style={styles.cardText}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {demoActive
-                    ? t('settings.demoAccount')
-                    : user?.email ?? user?.id ?? ''}
-                </Text>
-                {orgId !== undefined ? (
-                  <Text
-                    style={[styles.cardSub, { color: theme.textSecondary }]}
-                  >
-                    {`${t('settings.organization')}: ${orgId}`}
-                  </Text>
-                ) : null}
-                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
-                  {`${t('settings.edgeUrl')}: ${edgeUrl}`}
-                </Text>
-              </View>
-            </View>
-            <Pressable onPress={confirmSignOut} hitSlop={8}>
-              <View
-                style={[
-                  styles.signOut,
-                  { backgroundColor: theme.cardBackground },
-                ]}
-              >
-                <Text style={[styles.signOutText, { color: theme.danger }]}>
-                  {demoActive ? t('settings.exitDemo') : t('settings.signOut')}
-                </Text>
-              </View>
-            </Pressable>
+      <View style={styles.body}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+        >
+          {agentsFor !== undefined ? (
+            <AgentsPage device={agentsFor} />
+          ) : page === 'theme' ? (
+            <ThemePage />
+          ) : page === 'voiceInput' ? (
+            <VoiceInputPage />
+          ) : page === 'voiceModel' ? (
+            <VoiceModelPicker kind="transcription" />
+          ) : page === 'cleanupModel' ? (
+            <VoiceModelPicker kind="cleanup" />
+          ) : page === 'cleanupPrompt' ? (
+            <CleanupPromptEditor onClose={() => setPage('root')} />
+          ) : (
+            <>
+              <SettingsGroup header={t('settings.account')}>
+                <SettingsRow
+                  title={accountTitle}
+                  leading={
+                    <Icon
+                      name="person.crop.circle"
+                      size={28}
+                      color={theme.textSecondary}
+                    />
+                  }
+                  testID="settings-account"
+                  accessibilityLabel={accountTitle}
+                />
+              </SettingsGroup>
 
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('settings.devices')}
-            </Text>
-            {devices.map(d => (
-              <Pressable key={d.id} onPress={() => setAgentsFor(d)} hitSlop={6}>
-                <View
-                  style={[
-                    styles.deviceRow,
-                    {
-                      backgroundColor: theme.cardBackground,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <Icon
-                    name="externaldrive"
-                    size={18}
-                    color={theme.textSecondary}
-                  />
-                  <View style={styles.cardText}>
-                    <Text style={[styles.cardTitle, { color: theme.text }]}>
-                      {d.name}
-                    </Text>
-                    <Text
-                      style={[styles.cardSub, { color: theme.textSecondary }]}
-                    >
-                      {deviceSubtitle(d)}
-                    </Text>
-                  </View>
-                  <Icon
-                    name="chevron.right"
-                    size={13}
-                    color={theme.textSecondary}
-                  />
-                </View>
-              </Pressable>
-            ))}
+              <SettingsGroup>
+                <SettingsRow
+                  title={t('settings.signOut')}
+                  destructive
+                  onPress={confirmSignOut}
+                  testID="settings-sign-out"
+                />
+              </SettingsGroup>
 
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('settings.notifications')}
-            </Text>
-            <View
-              style={[
-                styles.deviceRow,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <View style={styles.cardText}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {t('settings.notificationsEnabled')}
-                </Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-              />
-            </View>
-
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('settings.liveActivities')}
-            </Text>
-            <View
-              style={[
-                styles.deviceRow,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <View style={styles.cardText}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {t('settings.liveActivitiesEnabled')}
-                </Text>
-              </View>
-              <Switch
-                value={liveActivities}
-                onValueChange={setLiveActivitiesEnabled}
-              />
-            </View>
-            <View
-              style={[
-                styles.deviceRow,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <View style={styles.cardText}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {t('settings.liveActivityShowHost')}
-                </Text>
-              </View>
-              <Switch
-                value={liveActivityShowHost}
-                onValueChange={setLiveActivityShowHost}
-              />
-            </View>
-
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('settings.syncMode')}
-            </Text>
-            <View
-              style={[
-                styles.deviceRow,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <View style={styles.cardText}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {t('settings.syncModeRelay')}
-                </Text>
-                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
-                  {t('settings.syncModeHint')}
-                </Text>
-              </View>
-              <Switch
-                value={forceRelayMode}
-                onValueChange={setForceRelayMode}
-                accessibilityLabel={t('settings.syncModeRelay')}
-              />
-            </View>
-
-            <Text style={[styles.section, { color: theme.textSecondary }]}>
-              {t('settings.dictation')}
-            </Text>
-            <View
-              style={[
-                styles.deviceRow,
-                {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <View style={styles.cardText}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {`${t('settings.dictationLanguage')}: ${dictationLocale}`}
-                </Text>
-                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
-                  {dictationModelState === undefined
-                    ? t('settings.dictationUnavailable')
-                    : dictationStateLabel(dictationModelState)}
-                </Text>
-              </View>
-              {dictationModelState === 'downloadable' ? (
-                <Pressable
-                  onPress={downloadDictationModel}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('settings.dictationDownload')}
-                >
-                  <Icon
-                    name="arrow.down.circle"
-                    size={20}
-                    color={theme.accent}
-                  />
-                </Pressable>
+              {devices.length > 0 ? (
+                <SettingsGroup header={t('settings.devices')}>
+                  {devices.map(d => {
+                    const connected = deviceConnected(d.id);
+                    const subtitle = connected
+                      ? t('settings.connected')
+                      : t('settings.notConnected');
+                    return (
+                      <SettingsRow
+                        key={d.id}
+                        title={d.name}
+                        subtitle={subtitle}
+                        leading={
+                          <Icon
+                            name="externaldrive"
+                            size={22}
+                            color={theme.textSecondary}
+                          />
+                        }
+                        showChevron
+                        onPress={() => setAgentsFor(d)}
+                        testID={`settings-device-${d.id}`}
+                        accessibilityLabel={`${d.name}, ${subtitle}`}
+                      />
+                    );
+                  })}
+                </SettingsGroup>
               ) : null}
-            </View>
-          </>
-        )}
-      </ScrollView>
+
+              <SettingsGroup
+                header={t('settings.notifications')}
+                footer={t('settings.notificationsHint')}
+              >
+                <SettingsRow
+                  title={t('settings.notifications')}
+                  trailing={
+                    <Switch
+                      value={notificationsEnabled}
+                      onValueChange={setNotificationsEnabled}
+                      accessibilityLabel={t('settings.notifications')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.haptics')}
+                footer={t('settings.hapticsHint')}
+              >
+                <SettingsRow
+                  title={t('settings.haptics')}
+                  trailing={
+                    <Switch
+                      value={hapticsEnabled}
+                      onValueChange={v => {
+                        setHapticsEnabled(v);
+                        if (v) impact(Haptics.ImpactFeedbackStyle.Medium);
+                      }}
+                      accessibilityLabel={t('settings.haptics')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <AppearanceBackground onOpenTheme={() => setPage('theme')} />
+
+              <SettingsGroup
+                header={t('settings.liveActivities')}
+                footer={t('settings.liveActivityHint')}
+              >
+                <SettingsRow
+                  title={t('settings.liveActivities')}
+                  trailing={
+                    <Switch
+                      value={liveActivities}
+                      onValueChange={setLiveActivitiesEnabled}
+                      accessibilityLabel={t('settings.liveActivities')}
+                    />
+                  }
+                />
+                <SettingsRow
+                  title={t('settings.liveActivityShowHost')}
+                  trailing={
+                    <Switch
+                      value={liveActivityShowHost}
+                      onValueChange={setLiveActivityShowHost}
+                      accessibilityLabel={t('settings.liveActivityShowHost')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.syncMode')}
+                footer={t('settings.syncModeHint')}
+              >
+                <SettingsRow
+                  title={t('settings.syncModeRelay')}
+                  trailing={
+                    <Switch
+                      value={forceRelayMode}
+                      onValueChange={setForceRelayMode}
+                      accessibilityLabel={t('settings.syncModeRelay')}
+                    />
+                  }
+                />
+              </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.voiceInput')}
+                footer={
+                  voiceInputMode === 'dictation'
+                    ? dictationModelState === undefined
+                      ? t('settings.dictationUnavailable')
+                      : dictationStateLabel(dictationModelState)
+                    : undefined
+                }
+              >
+                <SettingsRow
+                  title={t('settings.voiceInput')}
+                  value={voiceInputModeLabel(voiceInputMode)}
+                  showChevron
+                  onPress={() => setPage('voiceInput')}
+                  testID="settings-voice-input"
+                  accessibilityLabel={`${t(
+                    'settings.voiceInput',
+                  )}, ${voiceInputModeLabel(voiceInputMode)}`}
+                />
+                {voiceInputMode === 'dictation' ? (
+                  <SettingsRow
+                    title={t('settings.dictationLanguage')}
+                    value={dictationLocale}
+                    trailing={
+                      dictationModelState === 'downloadable' ? (
+                        <Pressable
+                          onPress={downloadDictationModel}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('settings.dictationDownload')}
+                        >
+                          <Icon
+                            name="arrow.down.circle"
+                            size={22}
+                            color={theme.accent}
+                          />
+                        </Pressable>
+                      ) : undefined
+                    }
+                    testID="settings-dictation-language"
+                  />
+                ) : null}
+                {voiceInputMode === 'voiceModel' ? (
+                  <SettingsRow
+                    title={t('settings.voiceModel')}
+                    value={
+                      voiceModelId === null
+                        ? t('settings.voiceRequired')
+                        : selectedModelLabel(voiceModelId)
+                    }
+                    showChevron
+                    onPress={() => setPage('voiceModel')}
+                    testID="settings-voice-model"
+                  />
+                ) : null}
+                {voiceInputMode === 'voiceModel' ? (
+                  <SettingsRow
+                    title={t('settings.cleanupModel')}
+                    value={selectedModelLabel(cleanupModelId)}
+                    showChevron
+                    onPress={() => setPage('cleanupModel')}
+                    testID="settings-cleanup-model"
+                  />
+                ) : null}
+                {voiceInputMode === 'voiceModel' &&
+                cleanupEngine?.capabilities.supportsCustomPrompt === true ? (
+                  <SettingsRow
+                    title={t('settings.cleanupInstructions')}
+                    showChevron
+                    onPress={() => setPage('cleanupPrompt')}
+                    testID="settings-cleanup-instructions"
+                  />
+                ) : null}
+              </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.debug')}
+                footer={t('settings.localLogsHint')}
+              >
+                <SettingsRow
+                  title={t('settings.localLogs')}
+                  trailing={
+                    <Switch
+                      value={localLogsEnabled}
+                      onValueChange={onLocalLogsChange}
+                      accessibilityLabel={t('settings.localLogs')}
+                      testID="settings-local-logs"
+                    />
+                  }
+                />
+                {localLogsEnabled ? (
+                  <SettingsRow
+                    title={t('settings.viewLocalLogs')}
+                    showChevron
+                    onPress={() => setLogsOpen(true)}
+                    testID="settings-view-local-logs"
+                  />
+                ) : null}
+              </SettingsGroup>
+            </>
+          )}
+        </ScrollView>
+        {logsOpen ? (
+          <SessionSheet fill onDismiss={() => setLogsOpen(false)}>
+            <LocalLogsScreen />
+          </SessionSheet>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -687,77 +790,57 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    height: 52,
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 10,
   },
-  headerSide: {
-    minWidth: 60,
-    minHeight: 44,
+  title: {
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginHorizontal: 88,
+  },
+  headerLeft: {
+    position: 'absolute',
+    left: 8,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    minWidth: 44,
+  },
+  headerRight: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'flex-end',
+    minWidth: 44,
   },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: 4,
+  },
+  backLabel: { fontSize: 17 },
+  doneHit: { minHeight: 44, justifyContent: 'center' },
   done: { fontSize: 17, fontWeight: '600' },
-  title: { fontSize: 17, fontWeight: '600' },
-  content: { padding: 16, gap: 10 },
-  page: { gap: 8 },
-  backRow: {
-    flexDirection: 'row',
+  body: { flex: 1 },
+  content: { paddingTop: 8, paddingBottom: 40 },
+  apply: { fontSize: 17 },
+  embeddedHeader: {
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
+  embeddedCaption: { fontSize: 13 },
+  centeredRow: {
+    minHeight: 44,
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  back: { fontSize: 15 },
-  section: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginTop: 10,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-  },
-  cardText: { flex: 1, gap: 2 },
-  cardTitle: { fontSize: 16, fontWeight: '500' },
-  cardSub: { fontSize: 12 },
-  signOut: {
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  signOutText: { fontSize: 16, fontWeight: '600' },
-  deviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-  },
-  agentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-  },
-  agentText: { flex: 1 },
-  agentName: { fontSize: 15, fontWeight: '500' },
-  agentSub: { fontSize: 12 },
-  agentRowBtn: { minHeight: 44, justifyContent: 'center' },
-  titleInput: {
-    fontSize: 13,
-    fontFamily: 'monospace',
-    paddingVertical: 4,
-  },
-  error: { fontSize: 13 },
+  error: { fontSize: 15 },
 });

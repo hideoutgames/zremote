@@ -4,7 +4,13 @@
 // and the add flow: StartAgentLogin → paste-code (CompleteAgentLogin) or
 // browser-poll (PollAgentLogin until done / CancelAgentLogin).
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,29 +24,18 @@ import * as WebBrowser from 'expo-web-browser';
 import { useRuntime } from '../app/runtimeContext';
 import {
   agentAccountsClient,
-  formatReset,
-  usageLevel,
+  forceUsageFor,
   PROVIDERS,
+  type AccountsLoadTrigger,
 } from '../zeron/accounts/accounts';
 import type {
   AgentAccountsSnapshot,
   AgentLoginStart,
 } from '../zeron/protocol/types';
+import { AgentUsageMeters } from '../components/AgentUsageMeters';
+import { settingsCellBackground } from '../components/settings/SettingsList';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
-
-const usageColor = (
-  level: ReturnType<typeof usageLevel>,
-  theme: {
-    accent: string;
-    danger: string;
-  },
-): string =>
-  level === 'critical'
-    ? theme.danger
-    : level === 'warn'
-    ? '#E5A50A'
-    : '#6366F1';
 
 export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
   const theme = useTheme();
@@ -55,22 +50,30 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
     undefined,
   );
 
-  const client =
-    runtime === null
-      ? undefined
-      : agentAccountsClient(runtime.relayFor(deviceId));
+  const client = useMemo(
+    () =>
+      runtime === null
+        ? undefined
+        : agentAccountsClient(runtime.relayFor(deviceId)),
+    [runtime, deviceId],
+  );
 
   const refresh = useCallback(
-    (force = false) => {
+    (trigger: AccountsLoadTrigger) => {
       client
-        ?.list(force)
-        .then(setSnapshot)
+        ?.list(forceUsageFor(trigger))
+        .then(s => {
+          setSnapshot(s);
+          setError(undefined);
+        })
         .catch(e => setError(String(e?.message ?? e)));
     },
     [client],
   );
 
-  useEffect(() => refresh(), [refresh]);
+  useEffect(() => {
+    refresh('mount');
+  }, [refresh]);
 
   const cancelLogin = useCallback(() => {
     if (pollTimer.current !== undefined) clearTimeout(pollTimer.current);
@@ -87,7 +90,7 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
           .then(p => {
             if (p.status === 'done') {
               setLogin(undefined);
-              refresh(true);
+              refresh('postLogin');
               return;
             }
             if (p.status === 'error') {
@@ -128,22 +131,22 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
     if (login === undefined) return;
     client
       ?.completeLogin(login.loginId, code.trim())
-      .then(s => {
+      .then(() => {
         setLogin(undefined);
         setCode('');
-        setSnapshot(s);
+        refresh('postLogin');
       })
       .catch(e => setError(String(e?.message ?? e)));
-  }, [client, login, code]);
+  }, [client, login, code, refresh]);
 
   const onSwitch = useCallback(
     (harness: string, accountId: string) => {
       client
         ?.activate(harness, accountId)
-        .then(setSnapshot)
+        .then(() => refresh('postAction'))
         .catch(e => setError(String(e?.message ?? e)));
     },
-    [client],
+    [client, refresh],
   );
 
   const onForget = useCallback(
@@ -156,12 +159,12 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
           onPress: () =>
             client
               ?.forget(harness, accountId)
-              .then(setSnapshot)
+              .then(() => refresh('postAction'))
               .catch(e => setError(String(e?.message ?? e))),
         },
       ]);
     },
-    [client],
+    [client, refresh],
   );
 
   return (
@@ -182,7 +185,11 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
         return (
           <View
             key={p.harness}
-            style={[styles.card, { borderColor: theme.border }]}
+            testID="agent-account-card"
+            style={[
+              styles.card,
+              { backgroundColor: settingsCellBackground(theme) },
+            ]}
           >
             <View style={styles.cardHeader}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -211,54 +218,7 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
                   {a.planLabel !== undefined ? ` · ${a.planLabel}` : ''}
                   {a.active ? ` · ${t('accounts.active')}` : ''}
                 </Text>
-                {a.usageWindows.map((w, i) => {
-                  const level = usageLevel(w.usedFraction);
-                  return (
-                    <View key={i} style={styles.meterRow}>
-                      <Text
-                        style={[
-                          styles.meterLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                        maxFontSizeMultiplier={1.6}
-                      >
-                        {w.label}
-                      </Text>
-                      <View
-                        style={[
-                          styles.meterTrack,
-                          { backgroundColor: theme.border },
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.meterFill,
-                            {
-                              width: `${Math.round(w.usedFraction * 100)}%`,
-                              backgroundColor: usageColor(level, theme),
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.meterPct,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        {`${Math.round(w.usedFraction * 100)}%`}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.meterReset,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        {formatReset(w.resetsAt, Date.now()) ?? ''}
-                      </Text>
-                    </View>
-                  );
-                })}
+                <AgentUsageMeters windows={a.usageWindows} />
                 {!a.active && a.switchable ? (
                   <View style={styles.accountActions}>
                     <Pressable
@@ -297,7 +257,12 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
 
       {/* Login flow */}
       {login !== undefined ? (
-        <View style={[styles.card, { borderColor: theme.accent }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: settingsCellBackground(theme) },
+          ]}
+        >
           {login.mode === 'paste-code' ? (
             <>
               <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -382,10 +347,10 @@ const styles = StyleSheet.create({
   err: { fontSize: 13, padding: 8 },
   warn: { fontSize: 12, padding: 4 },
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 12,
+    overflow: 'hidden',
     gap: 8,
   },
   cardHeader: {
@@ -398,12 +363,6 @@ const styles = StyleSheet.create({
   accountName: { fontSize: 14 },
   accountActions: { flexDirection: 'row', gap: 16 },
   smallBtn: { minHeight: 44, justifyContent: 'center' },
-  meterRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  meterLabel: { width: 56, fontSize: 11 },
-  meterTrack: { flex: 1, height: 5, borderRadius: 3, overflow: 'hidden' },
-  meterFill: { height: 5, borderRadius: 3 },
-  meterPct: { width: 36, fontSize: 11, textAlign: 'right' },
-  meterReset: { fontSize: 10, width: 90 },
   codeInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 8,

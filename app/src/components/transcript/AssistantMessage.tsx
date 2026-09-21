@@ -1,39 +1,57 @@
-// Assistant transcript row: parts in doc order — text → EnrichedMarkdownText
-// (streamingAnimation while the entry streams and the part is the last text),
-// reasoning → collapsible label opening ReasoningSheet, consecutive tool
-// parts → one ToolActivity rail, todo calls → TaskRows, input → InputCard,
-// error → red inline, image → placeholder card (bytes arrive via
-// ReadAttachmentChunk in a later stage).
+// Assistant transcript row: every AI artifact for the turn lives inside one
+// bubble — text, reasoning, tools, todos, questions, plan, file changes, the
+// live working strip, and a Worked-for caption after the turn settles.
 
 import React, { useMemo } from 'react';
-import {
-  Linking,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import * as ContextMenu from 'zeego/context-menu';
-import type { MessageEntry, MessagePart } from '../../zeron/protocol/types';
-import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
-import { markdownStyleFor } from '../../markdownStyle';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as ContextMenu from '../menus/context-menu';
+
+// zeego's iOS Root forwards `style`/`__unsafeIosProps` to the native
+// ContextMenuView at runtime but doesn't declare them in its types.
+const ContextMenuRoot = ContextMenu.Root as React.ComponentType<
+  React.ComponentProps<typeof ContextMenu.Root> & {
+    __unsafeIosProps?: { style?: React.ComponentProps<typeof View>['style'] };
+  }
+>;
+import type {
+  MessageEntry,
+  MessagePart,
+  SessionCommandEntry,
+  UserInputAnswer,
+} from '../../zeron/protocol/types';
 import { useTheme } from '../../theme';
 import { Icon } from '../Icon';
-import { ShimmerText } from '../ShimmerText';
-import { ToolActivity, type ToolPart } from '../agentsKit/ToolActivity';
+import {
+  ToolActivity,
+  type FetchToolBlob,
+  type ToolPart,
+} from '../agentsKit/ToolActivity';
 import { TaskRows } from '../agentsKit/TaskRows';
 import { InputCard } from './InputCard';
 import { t } from '../../i18n/strings';
-import type { SFSymbol } from 'sf-symbols-typescript';
-import { detectPlanArtifact, isPlanToolPart } from './detectPlan';
+import {
+  consumedPlanTextIds,
+  detectPlanArtifact,
+  isHiddenPlanToolPart,
+  isPlanCardPart,
+  planCardAnchorId,
+  stripPlanMarkers,
+  type PlanArtifact,
+} from './detectPlan';
 import { isSubagentSpawn, subagentView } from './detectSubagent';
 import { isCompleteAssistant, turnChanges } from './turnChanges';
 import type { TurnChange } from './turnChanges';
 import { PlanCard } from './PlanCard';
 import { SubAgentCard } from './SubAgentCard';
 import { TurnChangesCard } from './TurnChangesCard';
+import { messageCopyContent } from './MessageCopyMenu';
+import { mendMarkdown } from './mendMarkdown';
+import { FrostedBubble } from './FrostedBubble';
+import { MarkdownWithCopy } from './MarkdownWithCopy';
+import { WorkingStatusRow } from '../WorkingStatus';
+import { inputAnswers } from './inputAnswers';
+
+const NO_COMMANDS: SessionCommandEntry[] = [];
 
 /** Render item: a single part, or a run of consecutive tool parts. */
 type Item =
@@ -44,15 +62,15 @@ const groupParts = (parts: MessagePart[]): Item[] => {
   const items: Item[] = [];
   let run: ToolPart[] = [];
   const flush = () => {
-    // Todos and subagent spawns render as their own blocks, in doc order.
-    // Remaining consecutive tools stay in one ToolActivity rail.
+    // Todos, subagent spawns, and plan cards render as their own blocks, in
+    // doc order. Remaining consecutive tools stay in one ToolActivity rail.
     let tools: ToolPart[] = [];
     const flushTools = () => {
       if (tools.length > 0) items.push({ kind: 'tools', parts: tools });
       tools = [];
     };
     for (const p of run) {
-      if (p.call.kind === 'todo' || isSubagentSpawn(p)) {
+      if (p.call.kind === 'todo' || isSubagentSpawn(p) || isPlanCardPart(p)) {
         flushTools();
         items.push({ kind: 'part', part: p });
       } else {
@@ -63,7 +81,7 @@ const groupParts = (parts: MessagePart[]): Item[] => {
     run = [];
   };
   for (const part of parts) {
-    if (part.kind === 'tool' && isPlanToolPart(part)) continue;
+    if (part.kind === 'tool' && isHiddenPlanToolPart(part)) continue;
     if (part.kind === 'tool') run.push(part);
     else {
       flush();
@@ -72,21 +90,6 @@ const groupParts = (parts: MessagePart[]): Item[] => {
   }
   flush();
   return items;
-};
-
-const phaseLabel = (phase: string): string => {
-  const key = `session.${phase}` as const;
-  switch (phase) {
-    case 'working':
-    case 'queuedLocally':
-    case 'synchronized':
-    case 'stale':
-    case 'errored':
-    case 'awaitingInput':
-      return t(key as Parameters<typeof t>[0]);
-    default:
-      return t('session.working');
-  }
 };
 
 const reasoningTitle = (text: string): string => {
@@ -98,32 +101,60 @@ const reasoningTitle = (text: string): string => {
   return t('session.reasoning');
 };
 
+const PlanCardOpen = ({
+  plan,
+  onOpenPlan,
+}: {
+  plan: PlanArtifact;
+  onOpenPlan?: (name: string, markdown: string) => void;
+}) => (
+  <PlanCard plan={plan} onOpen={() => onOpenPlan?.(plan.name, plan.markdown)} />
+);
+
 const PartView = ({
   part,
   streaming,
   isLastText,
   onOpenReasoning,
-  onFetchOutput,
+  onFetchBlob,
+  answers,
+  plan,
+  planAnchorId,
+  consumedIds,
+  onOpenPlan,
 }: {
   part: MessagePart;
   streaming: boolean;
   isLastText: boolean;
   onOpenReasoning: (text: string) => void;
-  onFetchOutput?: (partId: string) => void;
+  onFetchBlob?: FetchToolBlob;
+  answers: readonly UserInputAnswer[];
+  plan: PlanArtifact | undefined;
+  planAnchorId: string | undefined;
+  consumedIds: ReadonlySet<string>;
+  onOpenPlan?: (name: string, markdown: string) => void;
 }) => {
   const theme = useTheme();
-  const mdStyle = markdownStyleFor(theme);
+  const card =
+    part.id === planAnchorId && plan !== undefined ? (
+      <PlanCardOpen plan={plan} onOpenPlan={onOpenPlan} />
+    ) : null;
   switch (part.kind) {
-    case 'text':
+    case 'text': {
+      if (consumedIds.has(part.id)) return card;
+      const visible = stripPlanMarkers(part.text);
+      if (visible === '') return card;
+      const source = streaming && isLastText ? mendMarkdown(visible) : visible;
       return (
-        <EnrichedMarkdownText
-          markdown={part.text}
-          markdownStyle={mdStyle}
-          flavor="github"
-          streamingAnimation={streaming && isLastText}
-          onLinkPress={({ url }) => Linking.openURL(url)}
-        />
+        <>
+          <MarkdownWithCopy
+            markdown={source}
+            streaming={streaming && isLastText}
+          />
+          {card}
+        </>
       );
+    }
     case 'reasoning':
       return (
         <Pressable
@@ -142,7 +173,7 @@ const PartView = ({
         </Pressable>
       );
     case 'input':
-      return <InputCard part={part} />;
+      return <InputCard part={part} answers={answers} embedded />;
     case 'error':
       return (
         <Text style={[styles.error, { color: theme.danger }]}>
@@ -151,15 +182,7 @@ const PartView = ({
       );
     case 'image':
       return (
-        <View
-          style={[
-            styles.imageCard,
-            {
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.border,
-            },
-          ]}
-        >
+        <View style={styles.imageCard}>
           <Icon name="photo" size={16} color={theme.textSecondary} />
           <Text
             style={[styles.imageName, { color: theme.text }]}
@@ -170,9 +193,11 @@ const PartView = ({
         </View>
       );
     case 'tool':
+      if (isPlanCardPart(part)) return card;
       if (part.call.kind === 'todo')
         return (
           <TaskRows
+            embedded
             items={
               // RenderToolCall's loose `{kind:string}` member defeats case
               // narrowing — read `items` explicitly.
@@ -183,7 +208,7 @@ const PartView = ({
         );
       if (isSubagentSpawn(part))
         return <SubAgentCard view={subagentView(part)} />;
-      return <ToolActivity parts={[part]} onFetchOutput={onFetchOutput} />;
+      return <ToolActivity parts={[part]} onFetchBlob={onFetchBlob} />;
     default:
       return null;
   }
@@ -191,25 +216,33 @@ const PartView = ({
 
 export const AssistantMessage = React.memo(function ({
   entry,
-  phase,
   onOpenReasoning,
-  onFetchOutput,
-  chatId,
+  onFetchBlob,
   onOpenPlan,
   onOpenFileDiff,
+  commands = NO_COMMANDS,
+  showWorking = false,
+  workingChatId = '',
+  workingStartedAt = 0,
+  workedFor,
 }: {
   entry: MessageEntry;
-  phase: string;
   onOpenReasoning: (text: string) => void;
-  onFetchOutput?: (partId: string) => void;
-  chatId?: string;
+  onFetchBlob?: FetchToolBlob;
   onOpenPlan?: (name: string, markdown: string) => void;
   onOpenFileDiff?: (file: TurnChange) => void;
+  commands?: readonly SessionCommandEntry[];
+  showWorking?: boolean;
+  workingChatId?: string;
+  workingStartedAt?: number;
+  workedFor?: string;
 }) {
   const theme = useTheme();
   const streaming = entry.status === 'streaming';
   const items = useMemo(() => groupParts(entry.parts), [entry.parts]);
   const plan = useMemo(() => detectPlanArtifact(entry), [entry]);
+  const planAnchor = useMemo(() => planCardAnchorId(entry), [entry]);
+  const consumedIds = useMemo(() => consumedPlanTextIds(entry), [entry]);
   const files = useMemo(
     () => (isCompleteAssistant(entry) ? turnChanges(entry) : []),
     [entry],
@@ -217,41 +250,28 @@ export const AssistantMessage = React.memo(function ({
   const lastTextId = [...entry.parts]
     .reverse()
     .find(p => p.kind === 'text')?.id;
-  const waiting =
-    streaming && !entry.parts.some(p => p.kind === 'text' && p.text !== '');
 
   const fullText = entry.parts
     .filter(p => p.kind === 'text')
     .map(p => (p as { text: string }).text)
     .join('\n');
   return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger>
-        <View style={styles.row}>
-          {waiting ? (
-            <View style={styles.statusRow} accessibilityLiveRegion="polite">
-              <Icon
-                name={
-                  (phase === 'working' ? 'sparkles' : 'text.bubble') as SFSymbol
-                }
-                size={15}
-                color={theme.textSecondary}
-              />
-              <ShimmerText
-                text={phaseLabel(phase)}
-                width={140}
-                fontSize={16}
-                maxLines={1}
-                align="left"
-              />
-            </View>
-          ) : (
-            items.map((item, i) =>
+    <View testID="assistant-message" style={styles.row}>
+      <ContextMenuRoot __unsafeIosProps={{ style: styles.triggerFill }}>
+        <ContextMenu.Trigger style={styles.triggerFill}>
+          <FrostedBubble
+            testID="assistant-bubble"
+            style={styles.bubble}
+            contentStyle={styles.bubblePad}
+            tintColor={theme.assistantBubbleBackground}
+          >
+            {items.map((item, i) =>
               item.kind === 'tools' ? (
                 <ToolActivity
                   key={`tools-${i}`}
                   parts={item.parts}
-                  onFetchOutput={onFetchOutput}
+                  onFetchBlob={onFetchBlob}
+                  autoOpen={streaming && i === items.length - 1}
                 />
               ) : (
                 <PartView
@@ -260,62 +280,78 @@ export const AssistantMessage = React.memo(function ({
                   streaming={streaming}
                   isLastText={item.part.id === lastTextId}
                   onOpenReasoning={onOpenReasoning}
-                  onFetchOutput={onFetchOutput}
+                  onFetchBlob={onFetchBlob}
+                  answers={
+                    item.part.kind === 'input'
+                      ? inputAnswers(commands, item.part.requestId)
+                      : []
+                  }
+                  plan={plan}
+                  planAnchorId={planAnchor}
+                  consumedIds={consumedIds}
+                  onOpenPlan={onOpenPlan}
                 />
               ),
-            )
-          )}
-          {entry.status === 'aborted' ? (
-            <Text style={[styles.error, { color: theme.danger }]}>
-              {t('session.interrupted')}
-            </Text>
-          ) : null}
-          {plan !== undefined ? (
-            <PlanCard
-              plan={plan}
-              onOpen={() => onOpenPlan?.(plan.name, plan.markdown)}
-            />
-          ) : null}
-          {files.length > 0 && onOpenFileDiff !== undefined ? (
-            <TurnChangesCard files={files} onOpenFile={onOpenFileDiff} />
-          ) : null}
-        </View>
-      </ContextMenu.Trigger>
-      <ContextMenu.Content>
-        <ContextMenu.Item
-          key="copy"
-          onSelect={() => Clipboard.setStringAsync(fullText).catch(() => {})}
-        >
-          <ContextMenu.ItemTitle>{t('common.copyText')}</ContextMenu.ItemTitle>
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          key="share"
-          onSelect={() => Share.share({ message: fullText }).catch(() => {})}
-        >
-          <ContextMenu.ItemTitle>{t('common.share')}</ContextMenu.ItemTitle>
-        </ContextMenu.Item>
-        {chatId !== undefined ? (
-          <ContextMenu.Item
-            key="link"
-            onSelect={() =>
-              Clipboard.setStringAsync(`zeron://session/${chatId}`).catch(
-                () => {},
-              )
-            }
-          >
-            <ContextMenu.ItemTitle>
-              {t('common.copyLink')}
-            </ContextMenu.ItemTitle>
-          </ContextMenu.Item>
-        ) : null}
-      </ContextMenu.Content>
-    </ContextMenu.Root>
+            )}
+            {entry.status === 'aborted' ? (
+              <Text style={[styles.error, { color: theme.danger }]}>
+                {t('session.interrupted')}
+              </Text>
+            ) : null}
+            {files.length > 0 && onOpenFileDiff !== undefined ? (
+              <TurnChangesCard files={files} onOpenFile={onOpenFileDiff} />
+            ) : null}
+            {showWorking ? (
+              <WorkingStatusRow
+                compact
+                chatId={workingChatId}
+                startedAt={workingStartedAt}
+              />
+            ) : workedFor !== undefined ? (
+              <Text
+                testID="worked-for"
+                style={[styles.workedFor, { color: theme.textSecondary }]}
+              >
+                {t('session.workedFor').replace('{time}', workedFor)}
+              </Text>
+            ) : null}
+          </FrostedBubble>
+        </ContextMenu.Trigger>
+        {messageCopyContent(fullText, entry.createdAt)}
+      </ContextMenuRoot>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
-  row: { paddingHorizontal: 16, paddingVertical: 4 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // Percentage maxWidth on the bubble must resolve against the list row,
+  // not a shrink-wrapped ContextMenu trigger. Native markdown reports no
+  // intrinsic size; a 0-width parent blanks the prose.
+  row: {
+    alignSelf: 'stretch',
+    width: '100%',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  // The trigger view shrink-wraps its child unless told to fill the row —
+  // without this the native markdown view measures at a narrow intrinsic
+  // width and the whole bubble collapses to ~100pt columns.
+  triggerFill: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  bubble: {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+    borderRadius: 20,
+  },
+  bubblePad: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 8,
+  },
   traceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -324,15 +360,12 @@ const styles = StyleSheet.create({
   },
   traceLabel: { flex: 1, fontSize: 16 },
   error: { fontSize: 13, marginTop: 4 },
+  workedFor: { fontSize: 13, fontVariant: ['tabular-nums'] },
   imageCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginVertical: 3,
+    paddingVertical: 6,
   },
   imageName: { fontSize: 13 },
 });

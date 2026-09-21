@@ -119,3 +119,24 @@ test('base64 round-trip', () => {
   const data = new Uint8Array([0, 1, 2, 250, 255]);
   expect(base64Decode(base64Encode(data))).toEqual(data);
 });
+
+test('resize pads and trims the grid and keeps the cursor in bounds', () => {
+  const s = new AnsiScreen(4, 2);
+  s.write(enc('abcd\r\nefgh'));
+  s.resize(6, 3);
+  expect(s.cols).toBe(6);
+  expect(s.rows).toBe(3);
+  expect(s.grid).toHaveLength(3);
+  expect(s.grid[0]).toHaveLength(6);
+  expect(rowText(s, 0)).toBe('abcd');
+  expect(rowText(s, 1)).toBe('efgh');
+  s.x = 5;
+  s.y = 2;
+  s.resize(3, 1);
+  expect(s.cols).toBe(3);
+  expect(s.rows).toBe(1);
+  expect(s.grid[0]).toHaveLength(3);
+  expect(s.x).toBe(2);
+  expect(s.y).toBe(0);
+  expect(s.scrollback.length).toBeGreaterThan(0);
+});

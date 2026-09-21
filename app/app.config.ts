@@ -24,6 +24,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(process.env.APPLE_TEAM_ID !== undefined
       ? { appleTeamId: process.env.APPLE_TEAM_ID }
       : {}),
+    // expo-widgets reads this (not Podfile.properties.json) for the
+    // widgets extension target; keep it in sync with build-properties.
+    deploymentTarget: '17.0',
     supportsTablet: true,
     requireFullScreen: false,
     associatedDomains: [`applinks:${edgeHost}`],
@@ -38,7 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSCameraUsageDescription:
         'ZRemote uses the camera to attach photos to messages sent to remote coding engines.',
       NSPhotoLibraryUsageDescription:
-        'ZRemote accesses the photo library to attach images to messages sent to remote coding engines.',
+        'ZRemote accesses the photo library to attach images to messages and to choose a custom background.',
       NSSupportsLiveActivities: true,
       NSSupportsLiveActivitiesFrequentUpdates: true,
       ITSAppUsesNonExemptEncryption: false,
@@ -52,9 +55,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     workosClientId:
       process.env.ZERON_WORKOS_CLIENT_ID ?? 'client_01KWD0EAKZKD50YCQJNYSRE4BY',
     workosApiBase: 'https://api.workos.com',
+    gitSha: process.env.GITHUB_SHA ?? 'dev',
   },
   plugins: [
-    ['expo-build-properties', { ios: { deploymentTarget: '17.0' } }],
+    [
+      'expo-build-properties',
+      // UIKit scene lifecycle is mandatory when built with the iOS 27 SDK.
+      { ios: { deploymentTarget: '17.0', enableSceneSupport: true } },
+    ],
     [
       'react-native-bootsplash',
       {

@@ -6,6 +6,7 @@ import { workspaceStore, resetWorkspace } from '../../state/workspaceStore';
 import { resetSessionStores } from '../../state/sessionStores';
 import { resetCatalog } from '../../state/catalogStore';
 import { resetDrafts } from '../../state/draftStore';
+import { resetQueuedLocal } from '../../state/queuedLocalStore';
 import { LoroCrdtAdapter } from '../../doc/loroCrdtAdapter';
 import { FakeClock } from '../../transport/clock';
 import { staticTokenSource } from '../../transport/tokenSource';
@@ -89,6 +90,7 @@ describe('AppRuntime', () => {
     resetSessionStores();
     resetCatalog();
     resetDrafts();
+    resetQueuedLocal();
   });
 
   it('binds a registry state event into workspaceStore', async () => {
@@ -179,6 +181,40 @@ describe('AppRuntime', () => {
     expect(c1.isActive).toBe(false);
     const c2 = rt.openSession('c1');
     expect(c2).not.toBe(c1);
+    rt.stop();
+  });
+
+  it('openSession falls back to relay when loro() throws on construct', async () => {
+    const lines: string[] = [];
+    let loroCalls = 0;
+    const clock = new FakeClock(1_000_000);
+    const hub = new FakeWsHub();
+    const { disk } = memDisk();
+    const rt = await AppRuntime.create({
+      cfg,
+      tokenSource: staticTokenSource('u@o1'),
+      deviceId: 'phone1',
+      deviceName: 'Test Phone',
+      orgId: 'o1',
+      userId: 'u1',
+      wsFactory: hub.factory,
+      clock,
+      docDisk: disk,
+      loro: () => {
+        loroCalls += 1;
+        if (loroCalls === 1) return new LoroCrdtAdapter();
+        throw Object.assign(new Error('boom'), { name: 'LoroError' });
+      },
+      log: line => lines.push(line),
+      fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
+    });
+    expect(loroCalls).toBe(1);
+    const c = rt.openSession('c1');
+    expect(c).toBeDefined();
+    expect(loroCalls).toBe(2);
+    expect(
+      lines.some(l => l.includes('relay') && l.includes('LoroError')),
+    ).toBe(true);
     rt.stop();
   });
 

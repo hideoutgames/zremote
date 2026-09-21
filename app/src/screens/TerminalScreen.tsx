@@ -1,6 +1,6 @@
 // Terminal — tabs of PTY shells on the chat's host. Rendering is a justified
 // specialist renderer: AnsiScreen (pure, tested) produces a cell grid, drawn
-// as monospace Text runs per row. Input: a hidden TextInput captures
+// as Menlo Text runs per row. Input: a hidden TextInput captures
 // keystrokes; a key bar supplies Esc/Ctrl/arrows/Tab/Ctrl-C byte sequences.
 // Reconnects resume via `afterSeq` (never a new shell); detach keeps the PTY
 // alive; CloseTerminal only from the confirmed "Close shell" action.
@@ -8,7 +8,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  type LayoutChangeEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,14 +18,22 @@ import {
   View,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
+import type { SFSymbol } from 'sf-symbols-typescript';
 import { useRuntime } from '../app/runtimeContext';
 import { useChat } from '../zeron/state/workspaceStore';
 import { TerminalClient, openTerminal } from '../zeron/terminal/client';
 import { AnsiScreen, base64Decode, type Cell } from '../zeron/terminal/ansi';
+import {
+  loadTerminalTabs,
+  saveTerminalTabs,
+  type TerminalTab,
+} from '../zeron/terminal/sessions';
+import { createTerminalFocus } from '../zeron/terminal/focus';
 import type { TerminalEvent } from '../zeron/protocol/types';
-import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
+
+export const TERM_FONT = 'Menlo';
 
 // xterm 16-color palette (dim + bright).
 const PALETTE16 = [
@@ -100,8 +110,11 @@ const rowRuns = (row: Cell[], defaultFg: string) => {
   return runs;
 };
 
-const CHAR_W = 7.8; // monospace 13pt advance, measured
-const CHAR_H = 17;
+const CHAR_W = 7.8; // Menlo 13pt advance
+const CHAR_H = 16;
+const FG = '#EEEEEC';
+const TAB_FG = '#A0A0A0';
+const TAB_ACTIVE = '#F5F5F5';
 
 const KEY_BYTES: Record<string, number[]> = {
   esc: [0x1b],
@@ -113,37 +126,88 @@ const KEY_BYTES: Record<string, number[]> = {
   ctrlc: [0x03],
 };
 
-interface Tab {
-  client: TerminalClient;
-  screen: AnsiScreen;
-  exited: boolean;
-  exitCode?: number;
-}
+const KEY_BAR_MARGIN_BOTTOM = 8;
+
+const KEY_BAR: {
+  key: string;
+  label: string;
+  icon?: SFSymbol;
+}[] = [
+  { key: 'esc', label: 'ESC' },
+  { key: 'ctrl', label: 'CTRL' },
+  { key: 'tab', label: 'TAB' },
+  { key: 'left', label: '←', icon: 'arrow.left' },
+  { key: 'down', label: '↓', icon: 'arrow.down' },
+  { key: 'up', label: '↑', icon: 'arrow.up' },
+  { key: 'right', label: '→', icon: 'arrow.right' },
+  { key: 'ctrlc', label: '^C' },
+];
+
+const shellLabel = (path: string): string =>
+  path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 export function TerminalScreen({ chatId }: { chatId: string }) {
-  const theme = useTheme();
   const runtime = useRuntime();
   const chat = useChat(chatId);
-  const { width, height } = useWindowDimensions();
-  const cols = Math.max(20, Math.floor((width - 16) / CHAR_W));
-  const rows = Math.max(6, Math.floor((height - 220) / CHAR_H));
+  const { width } = useWindowDimensions();
+  const [viewport, setViewport] = useState(() => ({
+    cols: Math.max(20, Math.floor((width - 16) / CHAR_W)),
+    rows: 24,
+  }));
+  const cols = viewport.cols;
+  const rows = viewport.rows;
+  const inputRef = useRef<TextInput>(null);
+  const focus = useRef(createTerminalFocus(() => inputRef.current)).current;
+  useEffect(() => () => focus.dispose(), [focus]);
+  const onScreenLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const { width: w, height: h } = e.nativeEvent.layout;
+      if (w <= 0 || h <= 0) return;
+      const next = {
+        cols: Math.max(20, Math.floor(w / CHAR_W)),
+        rows: Math.max(6, Math.floor(h / CHAR_H)),
+      };
+      setViewport(prev =>
+        prev.cols === next.cols && prev.rows === next.rows ? prev : next,
+      );
+      setLayoutReady(true);
+      focus.focusInput();
+    },
+    [focus],
+  );
 
-  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [active, setActive] = useState(0);
   const [ctrl, setCtrl] = useState(false);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
-  const inputRef = useRef<TextInput>(null);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const tabsRef = useRef<TerminalTab[]>([]);
   // Bumping forces a re-render after PTY data mutates the screen model.
   const [, setFrame] = useState(0);
   const bump = useCallback(() => setFrame(f => f + 1), []);
+  const restoredRef = useRef(false);
+
+  const commitTabs = useCallback(
+    (next: TerminalTab[], activeIndex?: number) => {
+      tabsRef.current = next;
+      saveTerminalTabs(chatId, next);
+      setTabs(next);
+      if (activeIndex !== undefined) setActive(activeIndex);
+    },
+    [chatId],
+  );
 
   const spawn = useCallback(() => {
-    if (runtime === null || chat?.deviceId === undefined) return;
+    if (runtime === null || chat?.deviceId === undefined) {
+      setError(t('terminal.unavailable'));
+      return;
+    }
     const relay = runtime.relayFor(chat.deviceId);
     openTerminal(relay, chatId, cols, rows)
       .then(session => {
         const screen = new AnsiScreen(cols, rows);
-        const tab: Tab = {
+        const tab: TerminalTab = {
           client: undefined as never,
           screen,
           exited: false,
@@ -164,34 +228,55 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         tab.client = client;
         client.subscribe().catch(e => setError(String(e?.message ?? e)));
         client.resize(cols, rows);
-        setTabs(prev => [...prev, tab]);
-        setActive(tabs.length);
+        const next = [...tabsRef.current, tab];
+        commitTabs(next, next.length - 1);
       })
       .catch(e => setError(String(e?.message ?? e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime, chat?.deviceId, chatId, cols, rows, bump]);
+  }, [runtime, chat?.deviceId, chatId, cols, rows, bump, commitTabs]);
 
-  // First tab opens on mount.
+  // Restore detached tabs for this chat, then wait for layout before
+  // OpenTerminal so a first shell is not sized to a collapsed sheet.
   useEffect(() => {
-    if (tabs.length === 0) spawn();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (runtime === null || chat?.deviceId === undefined) {
+      setError(t('terminal.unavailable'));
+      return;
+    }
+    const existing = loadTerminalTabs(chatId);
+    if (existing.length > 0 && !restoredRef.current) {
+      restoredRef.current = true;
+      tabsRef.current = existing;
+      setTabs(existing);
+      setActive(0);
+      for (const tb of existing) {
+        if (!tb.exited)
+          tb.client.subscribe().catch(e => setError(String(e?.message ?? e)));
+      }
+    }
+  }, [runtime, chat?.deviceId, chatId]);
 
-  // Resize → debounced ResizeTerminal on the live client.
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
+  useEffect(() => {
+    if (runtime === null || chat?.deviceId === undefined) return;
+    if (!layoutReady) return;
+    if (tabsRef.current.length === 0) spawn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime, chat?.deviceId, layoutReady]);
+
+  // Resize the local grid and the host PTY together.
   useEffect(() => {
     for (const tb of tabsRef.current) {
+      tb.screen.resize(cols, rows);
       if (!tb.exited) tb.client.resize(cols, rows);
     }
-  }, [cols, rows]);
+    bump();
+  }, [cols, rows, bump]);
 
   // Leaving the screen detaches (PTY stays alive on the host).
   useEffect(
     () => () => {
       for (const tb of tabsRef.current) tb.client.detach();
+      saveTerminalTabs(chatId, tabsRef.current);
     },
-    [],
+    [chatId],
   );
 
   const tab = tabs[active];
@@ -223,6 +308,8 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     [send],
   );
 
+  const onSubmitEditing = useCallback(() => send([0x0d]), [send]);
+
   const confirmClose = useCallback(() => {
     if (tab === undefined) return;
     Alert.alert(t('terminal.closeShell'), undefined, [
@@ -233,12 +320,12 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         onPress: () => {
           const idx = active;
           tab.client.close().catch(() => {});
-          setTabs(prev => prev.filter((_, i) => i !== idx));
-          setActive(Math.max(0, idx - 1));
+          const next = tabsRef.current.filter((_, i) => i !== idx);
+          commitTabs(next, Math.max(0, idx - 1));
         },
       },
     ]);
-  }, [tab, active]);
+  }, [tab, active, commitTabs]);
 
   const screen = tab?.screen;
   // Scrollback + visible grid as one virtualized list; follow-tail unless the
@@ -266,70 +353,102 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     },
     [],
   );
+  const cwd =
+    tab?.client.handle.session.cwd !== undefined
+      ? shellLabel(tab.client.handle.session.cwd)
+      : undefined;
   return (
     <View style={[styles.root, styles.termBg]}>
-      {/* Tab bar */}
-      <View style={[styles.tabBar, { borderBottomColor: theme.border }]}>
-        {tabs.map((tb, i) => (
-          <Pressable
-            key={i}
-            onPress={() => setActive(i)}
-            accessibilityRole="button"
-            accessibilityLabel={`${tb.client.handle.session.shell} ${i + 1}`}
-            accessibilityState={{ selected: i === active }}
-            style={[
-              styles.tabChip,
-              i === active && { borderColor: theme.accent },
-            ]}
-          >
-            <Text
-              style={{ color: i === active ? theme.accent : theme.text }}
-              maxFontSizeMultiplier={1.6}
-            >
-              {`${tb.client.handle.session.shell}${
-                tb.exited ? ` (exited ${tb.exitCode ?? ''})` : ''
-              }`}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+          style={styles.tabScroll}
+        >
+          {tabs.map((tb, i) => {
+            const shell = shellLabel(tb.client.handle.session.shell);
+            const selected = i === active;
+            const a11y = tb.exited
+              ? `${shell} ${i + 1}, ${t('terminal.exit').replace(
+                  '{code}',
+                  String(tb.exitCode ?? '?'),
+                )}`
+              : `${shell} ${i + 1}`;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => setActive(i)}
+                accessibilityRole="button"
+                accessibilityLabel={a11y}
+                accessibilityState={{ selected }}
+                style={[
+                  styles.tab,
+                  selected ? styles.tabActive : undefined,
+                  tb.exited ? styles.tabExited : undefined,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { color: selected ? TAB_ACTIVE : TAB_FG },
+                  ]}
+                  maxFontSizeMultiplier={1.6}
+                >
+                  {shell}
+                </Text>
+                {selected && !tb.exited ? (
+                  <Pressable
+                    onPress={confirmClose}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('terminal.closeShell')}
+                    style={styles.tabClose}
+                  >
+                    <Icon name="xmark" size={11} color={TAB_FG} />
+                  </Pressable>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        {cwd !== undefined ? (
+          <Text style={styles.cwd} numberOfLines={1}>
+            {cwd}
+          </Text>
+        ) : null}
         <Pressable
           onPress={spawn}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t('terminal.new')}
-          style={styles.keyBtn}
+          style={styles.iconBtn}
         >
-          <Icon name="plus" size={16} color={theme.text} />
+          <Icon name="plus" size={14} color={TAB_FG} />
         </Pressable>
-        {tab !== undefined && !tab.exited ? (
-          <Pressable
-            onPress={confirmClose}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('terminal.closeShell')}
-            style={styles.keyBtn}
-          >
-            <Icon name="xmark" size={16} color={theme.danger} />
-          </Pressable>
-        ) : null}
       </View>
 
-      {/* Screen — monospace rows of styled runs; tap focuses the hidden input */}
-      <Pressable
+      {/* Screen — Menlo rows of styled runs; tap focuses the overlay input */}
+      <View
+        testID="terminal-screen"
         style={styles.screen}
-        onPress={() => inputRef.current?.focus()}
+        onLayout={onScreenLayout}
         accessibilityLabel={t('terminal.screen')}
       >
         <LegendList
           ref={listRef}
+          testID="terminal-list"
           data={lineData}
           estimatedItemSize={CHAR_H}
           keyExtractor={(_, i) => `${i}`}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+          onTouchEnd={focus.focusInput}
           renderItem={({ item: row, index: y }) => (
             <Text style={styles.termRow} selectable={false}>
-              {rowRuns(row, '#EEEEEC').map((r, i) => (
+              {rowRuns(row, FG).map((r, i) => (
                 <Text key={i} style={[styles.termRun, r.style]}>
                   {r.text}
                 </Text>
@@ -341,63 +460,85 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           )}
           ListFooterComponent={
             tab?.exited ? (
-              <Text style={[styles.exited, { color: theme.textSecondary }]}>
-                {`[exited ${tab.exitCode ?? '?'}]\n${t('terminal.exitedNote')}`}
+              <Text style={styles.exited}>
+                {t('terminal.exit').replace(
+                  '{code}',
+                  String(tab.exitCode ?? '?'),
+                )}
               </Text>
             ) : null
           }
         />
-      </Pressable>
+        <TextInput
+          ref={inputRef}
+          testID="terminal-input"
+          style={styles.hiddenInput}
+          pointerEvents="none"
+          value=""
+          onChangeText={onKeyText}
+          onKeyPress={onKeyPress}
+          onSubmitEditing={onSubmitEditing}
+          onFocus={focus.onFocus}
+          onBlur={focus.onBlur}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus={false}
+          blurOnSubmit={false}
+          caretHidden
+          showSoftInputOnFocus
+          keyboardAppearance="dark"
+          accessibilityLabel={t('terminal.input')}
+        />
+      </View>
 
-      {error !== undefined ? (
-        <Text style={[styles.errLine, { color: theme.danger }]}>{error}</Text>
+      {tabs.length === 0 ? (
+        <Text style={styles.empty}>{error ?? t('terminal.unavailable')}</Text>
       ) : null}
 
-      {/* Hidden input capturing keystrokes */}
-      <TextInput
-        ref={inputRef}
-        style={styles.hiddenInput}
-        value=""
-        onChangeText={onKeyText}
-        onKeyPress={onKeyPress}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoFocus
-        accessibilityLabel={t('terminal.input')}
-      />
-
-      {/* Key bar */}
-      <View style={[styles.keyBar, { borderTopColor: theme.border }]}>
-        {(
-          [
-            ['esc', 'esc'],
-            ['ctrl', 'ctrl'],
-            ['tab', '⇥'],
-            ['left', '←'],
-            ['down', '↓'],
-            ['up', '↑'],
-            ['right', '→'],
-            ['ctrlc', '^C'],
-          ] as const
-        ).map(([key, label]) => (
-          <Pressable
-            key={key}
-            onPress={() => {
-              if (key === 'ctrl') setCtrl(v => !v);
-              else send([...KEY_BYTES[key]]);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            accessibilityState={{ selected: key === 'ctrl' && ctrl }}
-            style={[
-              styles.keyBtn,
-              { borderColor: theme.border },
-              key === 'ctrl' && ctrl ? { borderColor: theme.accent } : null,
-            ]}
-          >
-            <Text style={{ color: theme.text }}>{label}</Text>
-          </Pressable>
-        ))}
+      <View testID="terminal-key-bar" style={styles.keyBarSticky}>
+        <ScrollView
+          horizontal
+          keyboardShouldPersistTaps="always"
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.keyBar}
+        >
+          {KEY_BAR.map(spec => {
+            const selected = spec.key === 'ctrl' && ctrl;
+            const on = selected || pressedKey === spec.key;
+            return (
+              <Pressable
+                key={spec.key}
+                onPressIn={() => setPressedKey(spec.key)}
+                onPressOut={() => setPressedKey(null)}
+                unstable_pressDelay={0}
+                onPress={() => {
+                  if (spec.key === 'ctrl') setCtrl(v => !v);
+                  else send([...(KEY_BYTES[spec.key] ?? [])]);
+                  focus.focusInput();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={spec.label}
+                accessibilityState={{ selected }}
+                style={[styles.keyBtn, on ? styles.keyBtnOn : null]}
+              >
+                {spec.icon !== undefined ? (
+                  <Icon name={spec.icon} size={14} color={on ? '#000' : FG} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.keyLabel,
+                      on ? styles.keyLabelOn : styles.keyLabelOff,
+                    ]}
+                  >
+                    {spec.label}
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
     </View>
   );
@@ -409,39 +550,97 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingLeft: 4,
+    paddingRight: 4,
+    minHeight: 32,
+    backgroundColor: '#1A1A1A',
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#333',
   },
-  tabChip: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  screen: { flex: 1, padding: 8 },
-  termRow: { flexDirection: 'row', height: CHAR_H },
-  termRun: { fontFamily: 'monospace', fontSize: 13 },
-  cursor: { backgroundColor: '#EEEEEC' },
-  exited: { fontFamily: 'monospace', fontSize: 13, paddingTop: 8 },
-  errLine: { fontSize: 12, paddingHorizontal: 12 },
-  hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
-  keyBar: {
+  tabScroll: { flex: 1 },
+  tabs: { flexDirection: 'row', alignItems: 'center' },
+  tab: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'center',
+    paddingHorizontal: 10,
+    minHeight: 32,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: '#333',
   },
-  keyBtn: {
-    minWidth: 44,
-    minHeight: 40,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+  tabActive: { backgroundColor: '#000' },
+  tabExited: { opacity: 0.45 },
+  tabLabel: { fontFamily: TERM_FONT, fontSize: 12 },
+  tabClose: {
+    minWidth: 22,
+    minHeight: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cwd: {
+    fontFamily: TERM_FONT,
+    fontSize: 11,
+    color: TAB_FG,
+    maxWidth: 96,
+    paddingHorizontal: 8,
+  },
+  iconBtn: {
+    minWidth: 36,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screen: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    position: 'relative',
+  },
+  termRow: { flexDirection: 'row', height: CHAR_H },
+  termRun: { fontFamily: TERM_FONT, fontSize: 13 },
+  cursor: { backgroundColor: FG },
+  exited: {
+    fontFamily: TERM_FONT,
+    fontSize: 13,
+    paddingTop: 8,
+    color: TAB_FG,
+  },
+  empty: {
+    fontFamily: TERM_FONT,
+    fontSize: 13,
+    textAlign: 'center',
+    padding: 24,
+    color: TAB_FG,
+  },
+  hiddenInput: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.01,
+  },
+  keyBarSticky: {
+    backgroundColor: '#161616',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#333',
+    marginBottom: KEY_BAR_MARGIN_BOTTOM,
+  },
+  keyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 4,
+    minHeight: 40,
+  },
+  keyBtn: {
+    minWidth: 40,
+    minHeight: 32,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: '#2A2A2A',
+  },
+  keyBtnOn: { backgroundColor: FG },
+  keyLabel: { fontFamily: TERM_FONT, fontSize: 11, fontWeight: '600' },
+  keyLabelOff: { color: FG },
+  keyLabelOn: { color: '#000' },
 });

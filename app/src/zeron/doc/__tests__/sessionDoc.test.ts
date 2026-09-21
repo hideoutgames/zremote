@@ -319,15 +319,17 @@ describe('SessionDoc.queueCommand', () => {
     expect(r2.attachments).toEqual(['/a.png']);
     expect(r2.harness).toBeUndefined();
 
-    // autoApprove is opt-in per chat (uiPrefs); desktop defaults false.
-    const approving = buildRunCommand(
-      'hi',
-      { cwd: '/r' },
-      { autoApprove: true },
-    );
+    // Stored sandbox is ignored; the desktop pair is hardcoded on send.
+    const approving = buildRunCommand('hi', {
+      cwd: '/r',
+      config: { sandbox: 'read-only', modelOptions: {} },
+    });
     if (approving.kind !== 'run') throw new Error('expected run payload');
+    expect((approving.request as { sandbox: string }).sandbox).toBe(
+      'workspace-write',
+    );
     expect((approving.request as { autoApprove: boolean }).autoApprove).toBe(
-      true,
+      false,
     );
   });
 

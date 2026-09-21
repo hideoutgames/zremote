@@ -3,11 +3,11 @@
 //   components/prompt-kit/question.tsx      — MIT (prompt-kit)
 // The composer's answer surface when the host's agent asks: paged questions,
 // option buttons (multiSelect toggles), Submit → the chosen labels per
-// question. The draft underneath is preserved (this panel replaces the input
-// area only while open).
+// question. Optional free-text sits under the options. The draft underneath
+// is preserved (this panel replaces the input area only while open).
 
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type {
   UserInputAnswer,
   UserInputQuestion,
@@ -22,6 +22,16 @@ export interface QuestionPanelProps {
   onSubmit: (requestId: string, answers: UserInputAnswer[]) => void;
 }
 
+const labelsFor = (
+  q: UserInputQuestion,
+  selected: string[] | undefined,
+  custom: string | undefined,
+): string[] => {
+  const options = selected ?? [];
+  const extra = custom?.trim();
+  return extra !== undefined && extra !== '' ? [...options, extra] : options;
+};
+
 export const QuestionPanel = React.memo(function ({
   requestId,
   questions,
@@ -30,6 +40,7 @@ export const QuestionPanel = React.memo(function ({
   const theme = useTheme();
   // questionId → selected labels (multiSelect toggles, single-select replaces)
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [custom, setCustom] = useState<Record<string, string>>({});
 
   const toggle = useMemo(
     () => (q: UserInputQuestion, option: string) =>
@@ -45,23 +56,28 @@ export const QuestionPanel = React.memo(function ({
     [],
   );
 
-  const complete = questions.every(q => (answers[q.id]?.length ?? 0) > 0);
+  const complete = questions.every(
+    q => labelsFor(q, answers[q.id], custom[q.id]).length > 0,
+  );
+  const submitFg = complete
+    ? theme.scheme === 'dark'
+      ? '#000000'
+      : '#FFFFFF'
+    : '#FFFFFF';
 
   const submit = () => {
     if (!complete) return;
     onSubmit(
       requestId,
-      questions.map(q => ({ questionId: q.id, labels: answers[q.id] })),
+      questions.map(q => ({
+        questionId: q.id,
+        labels: labelsFor(q, answers[q.id], custom[q.id]),
+      })),
     );
   };
 
   return (
-    <View
-      style={[
-        styles.panel,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
-      ]}
-    >
+    <View style={styles.panel}>
       {questions.map(q => (
         <View key={q.id} style={styles.question}>
           <Text style={[styles.header, { color: theme.textSecondary }]}>
@@ -82,14 +98,14 @@ export const QuestionPanel = React.memo(function ({
                   accessibilityState={{ selected }}
                   style={[
                     styles.option,
-                    { borderColor: selected ? theme.accent : theme.border },
-                    selected && { backgroundColor: theme.accent + '22' },
+                    { borderColor: selected ? theme.text : theme.border },
+                    selected && { backgroundColor: theme.text + '14' },
                   ]}
                 >
                   <Text
                     style={[
                       styles.optionText,
-                      { color: selected ? theme.accent : theme.text },
+                      { color: selected ? theme.text : theme.text },
                     ]}
                   >
                     {option}
@@ -98,6 +114,24 @@ export const QuestionPanel = React.memo(function ({
               );
             })}
           </View>
+          <TextInput
+            value={custom[q.id] ?? ''}
+            onChangeText={text =>
+              setCustom(prev => ({ ...prev, [q.id]: text }))
+            }
+            placeholder={t('session.question.custom')}
+            placeholderTextColor={theme.textSecondary}
+            style={[
+              styles.custom,
+              {
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
+            accessibilityLabel={t('session.question.custom')}
+            autoCapitalize="sentences"
+            autoCorrect
+          />
         </View>
       ))}
       <Pressable
@@ -108,11 +142,13 @@ export const QuestionPanel = React.memo(function ({
         accessibilityState={{ disabled: !complete }}
         style={[
           styles.submit,
-          { backgroundColor: complete ? theme.accent : theme.border },
+          { backgroundColor: complete ? theme.sendActive : theme.border },
         ]}
       >
-        <Icon name="arrow.up" size={14} color="#FFFFFF" />
-        <Text style={styles.submitText}>{t('session.submit')}</Text>
+        <Icon name="arrow.up" size={14} color={submitFg} />
+        <Text style={[styles.submitText, { color: submitFg }]}>
+          {t('session.submit')}
+        </Text>
       </Pressable>
     </View>
   );
@@ -120,9 +156,9 @@ export const QuestionPanel = React.memo(function ({
 
 const styles = StyleSheet.create({
   panel: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
     gap: 14,
   },
   question: { gap: 8 },
@@ -136,6 +172,13 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   optionText: { fontSize: 14 },
+  custom: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 15,
+  },
   submit: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,5 +187,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 10,
   },
-  submitText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  submitText: { fontSize: 15, fontWeight: '600' },
 });
