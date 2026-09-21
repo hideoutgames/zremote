@@ -40,6 +40,10 @@ export const SESSION_STALE_MS = 45_000;
 /** Presence freshness window for device online dots. */
 export const PRESENCE_FRESH_MS = 45_000;
 
+/** True when a registry presence beat is inside `PRESENCE_FRESH_MS`. */
+export const isPresenceFresh = (at: number | undefined, now: number): boolean =>
+  at !== undefined && now - at < PRESENCE_FRESH_MS;
+
 export const effectiveStatus = (
   row: SessionRow | undefined,
   now: number,

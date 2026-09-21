@@ -39,6 +39,7 @@ import {
   sameQueued,
   shareSessionProjection,
 } from '../state/shareProjection';
+import { displayedQueue } from '../state/queuedLocalStore';
 
 // ── Transcript frame protocol (transcript_delta.rs) ────────────────────
 
@@ -407,7 +408,7 @@ export class RelaySessionSource {
       .map(queuedFrom)
       .filter((q): q is QueuedMessage => q !== undefined);
     store.setState(s => ({
-      queue: reuseById(s.queue, next, sameQueued),
+      queue: displayedQueue(this.chatId, reuseById(s.queue, next, sameQueued)),
     }));
   }
 

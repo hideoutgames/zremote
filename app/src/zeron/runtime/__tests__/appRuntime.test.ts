@@ -6,6 +6,7 @@ import { workspaceStore, resetWorkspace } from '../../state/workspaceStore';
 import { resetSessionStores } from '../../state/sessionStores';
 import { resetCatalog } from '../../state/catalogStore';
 import { resetDrafts } from '../../state/draftStore';
+import { resetQueuedLocal } from '../../state/queuedLocalStore';
 import { LoroCrdtAdapter } from '../../doc/loroCrdtAdapter';
 import { FakeClock } from '../../transport/clock';
 import { staticTokenSource } from '../../transport/tokenSource';
@@ -89,6 +90,7 @@ describe('AppRuntime', () => {
     resetSessionStores();
     resetCatalog();
     resetDrafts();
+    resetQueuedLocal();
   });
 
   it('binds a registry state event into workspaceStore', async () => {

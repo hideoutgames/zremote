@@ -389,6 +389,13 @@ const en = {
   'queue.reorder': 'Reorder',
   'queue.holdForTurnEnd': 'Held',
   'queue.attachments': '{count} files',
+  'queue.hostNotConnected': 'Host not connected',
+  'queue.addedLocally': 'Message was added to local queue.',
+  'queue.continue': 'Continue',
+  'queue.storedLocally':
+    'Message is queued and stored locally until the connect with the host is restored.',
+  'queue.understood': 'Understood',
+  'queue.localInfo': 'Queued locally',
 
   // Model picker
   'picker.title': 'Model',

@@ -742,6 +742,37 @@ test('queue panel: send now and delete are icon-only labelled buttons', async ()
   expect(typeof handle.props.onResponderGrant).toBe('function');
 });
 
+test('queue local-info button is labelled and only on sidecar rows', async () => {
+  const mounted = await render(
+    <QueuePanel
+      queue={[
+        {
+          id: 'local',
+          text: 'parked',
+          issuedBy: 'p',
+          issuedAt: 1,
+        },
+        {
+          id: 'host',
+          text: 'synced',
+          issuedBy: 'p',
+          issuedAt: 2,
+        },
+      ]}
+      actionsSupported
+      pending={new Set()}
+      localIds={new Set(['local'])}
+      canSteer={false}
+      onAction={() => {}}
+      onMove={() => {}}
+    />,
+  );
+  const labels = labelled(mounted.root);
+  expect(
+    labels.some(l => l.role === 'button' && l.label === 'Queued locally'),
+  ).toBe(true);
+});
+
 test('queued pill is a labelled button', async () => {
   const mounted = await render(
     <ComposerChromeRow

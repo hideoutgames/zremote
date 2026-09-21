@@ -15,6 +15,7 @@ const mockRuntime = (
   over: {
     sendRun?: jest.Mock;
     sendWithAttachments?: jest.Mock;
+    queueMessage?: jest.Mock;
     start?: jest.Mock;
   } = {},
 ) => {
@@ -26,6 +27,7 @@ const mockRuntime = (
   const sendRun = over.sendRun ?? jest.fn();
   const sendWithAttachments =
     over.sendWithAttachments ?? jest.fn(async () => 'legacy');
+  const queueMessage = over.queueMessage ?? jest.fn();
   const start = over.start ?? jest.fn(async () => {});
   const runtime = {
     registryDoc: {
@@ -45,9 +47,10 @@ const mockRuntime = (
       start,
       sendRun,
       sendWithAttachments,
+      queueMessage,
     }),
   } as unknown as AppRuntime;
-  return { runtime, writes, sendRun, sendWithAttachments, start };
+  return { runtime, writes, sendRun, sendWithAttachments, queueMessage, start };
 };
 
 beforeEach(() => {
@@ -70,7 +73,7 @@ beforeEach(() => {
     ],
     chats: [],
     sessions: {},
-    presence: {},
+    presence: { host1: Date.now() },
     connection: 'connected',
     lastSyncAt: undefined,
   });
@@ -289,6 +292,54 @@ test('createThreadFromCompose keeps the compose draft when host is missing', asy
   ).rejects.toThrow(/host and agent/);
   expect(draftStore.getState().byChat[COMPOSE_DRAFT_ID]?.text).toBe(
     'do not lose this',
+  );
+});
+
+test('createThreadFromCompose queues the first message when the host is offline', async () => {
+  workspaceStore.setState({ presence: {} });
+  const { runtime, sendRun, queueMessage } = mockRuntime();
+  await createThreadFromCompose(runtime, {
+    text: 'park me',
+    settings: {
+      deviceId: 'host1',
+      spaceId: 's1',
+      harness: 'claude-code',
+      model: 'sonnet',
+    },
+  });
+  expect(sendRun).not.toHaveBeenCalled();
+  expect(queueMessage).toHaveBeenCalledWith('park me');
+});
+
+test('createThreadFromCompose force-queues attachments when the host is offline', async () => {
+  workspaceStore.setState({ presence: {} });
+  const attachments = stageAttachments(COMPOSE_DRAFT_ID, [
+    {
+      kind: 'image',
+      name: 'shot.png',
+      mimeType: 'image/png',
+      size: 12,
+      localUri: 'file:///shot.png',
+    },
+  ]);
+  const sendWithAttachments = jest.fn(async () => 'queue' as const);
+  const { runtime, sendRun } = mockRuntime({ sendWithAttachments });
+  await createThreadFromCompose(runtime, {
+    text: 'see pic',
+    settings: {
+      deviceId: 'host1',
+      spaceId: 's1',
+      harness: 'claude-code',
+      model: 'sonnet',
+    },
+    attachments,
+  });
+  expect(sendRun).not.toHaveBeenCalled();
+  expect(sendWithAttachments).toHaveBeenCalledWith(
+    'see pic',
+    expect.anything(),
+    attachments,
+    expect.objectContaining({ forceQueue: true }),
   );
 });
 

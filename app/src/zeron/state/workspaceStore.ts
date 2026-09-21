@@ -15,7 +15,11 @@ import {
   overviewChats,
   type WorkspaceProjection,
 } from '../doc/workspaceProjection';
-import { effectiveStatus, type ChatIndicator } from '../protocol/entities';
+import {
+  effectiveStatus,
+  isPresenceFresh,
+  type ChatIndicator,
+} from '../protocol/entities';
 import type { Chat, DeviceRow, SessionRow, Space } from '../protocol/types';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
@@ -113,11 +117,16 @@ export const useIndicator = (chatId: string): ChatIndicator => {
   }, [w, chatId, now]);
 };
 
-export const useDeviceOnline = (deviceId: string): boolean =>
-  useStore(workspaceStore, s => {
-    const at = s.presence[deviceId];
-    return at !== undefined && Date.now() - at < 45_000;
-  });
+/** Ticking presence freshness so TTL expiry updates without a new beat. */
+export const useDeviceOnline = (deviceId: string): boolean => {
+  const at = useStore(workspaceStore, s => s.presence[deviceId]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return isPresenceFresh(at, now);
+};
 
 export const useHostForChat = (chatId: string): DeviceRow | undefined =>
   useStore(workspaceStore, s => {

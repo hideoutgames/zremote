@@ -1,4 +1,5 @@
 import { threadStatusLine } from '../sessionTruth';
+import { isPresenceFresh, PRESENCE_FRESH_MS } from '../../protocol/entities';
 
 describe('threadStatusLine', () => {
   const pr = {
@@ -35,5 +36,20 @@ describe('threadStatusLine', () => {
       kind: 'time',
       label: '3m',
     });
+  });
+});
+
+describe('isPresenceFresh', () => {
+  const now = 100_000;
+
+  it('treats a missing beat as not connected', () => {
+    expect(isPresenceFresh(undefined, now)).toBe(false);
+  });
+
+  it('is fresh inside the 45s window and stale after', () => {
+    expect(isPresenceFresh(now, now)).toBe(true);
+    expect(isPresenceFresh(now - PRESENCE_FRESH_MS + 1, now)).toBe(true);
+    expect(isPresenceFresh(now - PRESENCE_FRESH_MS, now)).toBe(false);
+    expect(isPresenceFresh(now - PRESENCE_FRESH_MS - 1, now)).toBe(false);
   });
 });
