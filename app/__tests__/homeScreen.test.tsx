@@ -110,7 +110,7 @@ beforeEach(() => {
     spaces: [],
     chats: [],
     sessions: {},
-    presence: {},
+    presence: { host1: Date.now() },
     connection: 'connected',
     lastSyncAt: undefined,
   });
@@ -748,4 +748,63 @@ test('threads list keeps a content mask and no overlay fade without wallpaper', 
   expect(
     mounted.root.findAll(n => n.props.testID === 'bottom-chrome-fade'),
   ).toHaveLength(0);
+});
+
+test('stale host presence appends • Not connected to the time subtitle', async () => {
+  workspaceStore.setState({
+    chats: [chat({ title: 'Offline host' })],
+    presence: { host1: Date.now() - 60_000 },
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(statusOf(mounted.root, 'c1')).toBe('1m • Not connected');
+});
+
+test('missing host presence appends • Not connected', async () => {
+  workspaceStore.setState({
+    chats: [chat({ title: 'Unknown host' })],
+    presence: {},
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(statusOf(mounted.root, 'c1')).toBe('1m • Not connected');
+});
+
+test('fresh host presence does not append Not connected', async () => {
+  workspaceStore.setState({
+    chats: [chat({ title: 'Live host' })],
+    presence: { host1: Date.now() },
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(statusOf(mounted.root, 'c1')).toBe('1m');
+  expect(statusOf(mounted.root, 'c1')).not.toContain('Not connected');
+});
+
+test('working subtitle keeps the shimmer word and a static Not connected suffix', async () => {
+  workspaceStore.setState({
+    chats: [
+      chat({ id: 'live', title: 'Live agent', lastMessageAt: Date.now() }),
+    ],
+    sessions: {
+      live: {
+        chatId: 'live',
+        deviceId: 'host1',
+        status: 'working',
+        startedAt: Date.now() - 12_000,
+        updatedAt: Date.now(),
+      },
+    },
+    presence: {},
+  });
+  const mounted = await render(
+    <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
+  );
+  expect(statusOf(mounted.root, 'live')).toBe('Working');
+  expect(
+    flattenText(statusNode(mounted.root, 'live').props.children),
+  ).toContain('Not connected');
 });

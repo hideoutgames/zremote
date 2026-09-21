@@ -36,7 +36,11 @@ import {
   useRunPhase,
   dismissFailedSend,
 } from '../zeron/state/sessionStores';
-import { workspaceStore, useChat } from '../zeron/state/workspaceStore';
+import {
+  workspaceStore,
+  useChat,
+  useDeviceOnline,
+} from '../zeron/state/workspaceStore';
 import {
   useDraft,
   setDraftPendingWorktree,
@@ -55,6 +59,7 @@ import {
   useVoiceInputMode,
 } from '../zeron/state/uiPrefs';
 import { sessionTitle } from '../zeron/state/sessionTruth';
+import { useLocalQueuedIds } from '../zeron/state/queuedLocalStore';
 import {
   bindPendingWorkedDuration,
   workedDurationStore,
@@ -108,6 +113,7 @@ import {
 import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 import { GlassSheet } from '../components/GlassSheet';
 import { QueuePanel } from '../components/QueuePanel';
+import { alertHostNotConnectedQueue } from '../components/queueAlerts';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { PrSheet } from '../components/PrSheet';
 import type { PrBadgeModel } from '../components/prBadge';
@@ -349,6 +355,11 @@ function ActiveSessionScreen({
   const draft = useDraft(chatId);
 
   const hostDeviceId = chat?.deviceId;
+  const hostOnline = useDeviceOnline(hostDeviceId ?? '');
+  const localQueuedIds = useLocalQueuedIds(chatId);
+  useEffect(() => {
+    if (hostOnline) controller?.flushLocalQueue().catch(() => {});
+  }, [hostOnline, controller]);
   const catalog = useStore(catalogStore, s =>
     hostDeviceId === undefined ? undefined : s.byDevice[hostDeviceId],
   );
@@ -454,6 +465,15 @@ function ActiveSessionScreen({
   const doSend = useCallback(
     (text: string): boolean => {
       if (controller === undefined) return false;
+      if (!hostOnline) {
+        try {
+          controller.queueMessage(text);
+        } catch {
+          return false;
+        }
+        alertHostNotConnectedQueue();
+        return true;
+      }
       const wt = draft.pendingWorktree;
       try {
         controller.sendRun(
@@ -478,17 +498,35 @@ function ActiveSessionScreen({
       });
       return true;
     },
-    [controller, draft.pendingWorktree, chat, chatId, entries.length],
+    [
+      controller,
+      hostOnline,
+      draft.pendingWorktree,
+      chat,
+      chatId,
+      entries.length,
+    ],
   );
 
   const doSteer = useCallback(
-    (text: string) => controller?.sendSteer(text),
-    [controller],
+    (text: string) => {
+      if (controller === undefined) return;
+      if (!hostOnline) {
+        controller.queueMessage(text);
+        alertHostNotConnectedQueue();
+        return;
+      }
+      controller.sendSteer(text);
+    },
+    [controller, hostOnline],
   );
   const doStop = useCallback(() => controller?.interrupt(), [controller]);
   const doQueue = useCallback(
-    (text: string) => controller?.queueMessage(text),
-    [controller],
+    (text: string) => {
+      controller?.queueMessage(text);
+      if (!hostOnline) alertHostNotConnectedQueue();
+    },
+    [controller, hostOnline],
   );
   const doCancel = useCallback(() => {
     // Cancel the own still-pending run/steer command (queuedLocally /
@@ -512,15 +550,21 @@ function ActiveSessionScreen({
   const doSendAttachments = useCallback(
     (text: string): Promise<SendPlan> => {
       if (controller === undefined) return Promise.resolve('blocked');
-      return controller.sendWithAttachments(
-        text,
-        { config: chat?.config, cwd: chat?.cwd },
-        draft.attachments,
-        {
-          worktree: draft.pendingWorktree,
-          phase,
-        },
-      );
+      return controller
+        .sendWithAttachments(
+          text,
+          { config: chat?.config, cwd: chat?.cwd },
+          draft.attachments,
+          {
+            worktree: draft.pendingWorktree,
+            phase,
+            forceQueue: !hostOnline,
+          },
+        )
+        .then(plan => {
+          if (!hostOnline && plan === 'queue') alertHostNotConnectedQueue();
+          return plan;
+        });
     },
     [
       controller,
@@ -529,6 +573,7 @@ function ActiveSessionScreen({
       draft.attachments,
       draft.pendingWorktree,
       phase,
+      hostOnline,
     ],
   );
 
@@ -1212,6 +1257,7 @@ function ActiveSessionScreen({
             queue={session.queue}
             actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
             pending={session.queueActionsPending}
+            localIds={localQueuedIds}
             error={session.queueActionError}
             canSteer={
               harness?.supportsSteering === true &&

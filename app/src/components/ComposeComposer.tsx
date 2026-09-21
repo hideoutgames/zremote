@@ -61,6 +61,8 @@ import {
   type ComposeDefaults,
 } from '../zeron/state/uiPrefs';
 import { workspaceStore } from '../zeron/state/workspaceStore';
+import { isPresenceFresh } from '../zeron/protocol/entities';
+import { alertHostNotConnectedQueue } from './queueAlerts';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -347,6 +349,14 @@ export function ComposeComposer({
           attachments: withAttachments ? draft.attachments : undefined,
         });
         onCreated(chatId);
+        if (
+          !isPresenceFresh(
+            workspaceStore.getState().presence[deviceId],
+            Date.now(),
+          )
+        ) {
+          alertHostNotConnectedQueue();
+        }
         return withAttachments ? 'legacy' : true;
       } catch {
         return withAttachments ? 'blocked' : false;

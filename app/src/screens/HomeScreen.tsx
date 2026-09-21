@@ -35,7 +35,10 @@ import {
   useHostForChat,
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
-import { sortOverviewThreads } from '../zeron/protocol/entities';
+import {
+  isPresenceFresh,
+  sortOverviewThreads,
+} from '../zeron/protocol/entities';
 import {
   sessionTitle,
   hostLabel,
@@ -124,33 +127,48 @@ const ThreadStatus = ({
   line,
   theme,
   chatId,
+  hostOnline,
 }: {
   line: ThreadStatusLine;
   theme: Theme;
   chatId: string;
+  hostOnline: boolean;
 }) => {
   const label = statusCopy(line);
+  const suffix = hostOnline ? '' : ` • ${t('settings.notConnected')}`;
   const live = line.kind === 'working' || line.kind === 'awaitingInput';
   const [width, setWidth] = useState(160);
   if (live) {
     return (
       <View
         testID={`thread-status-${chatId}`}
+        style={styles.statusRow}
         onLayout={e => {
           const w = Math.round(e.nativeEvent.layout.width);
           if (w > 0) setWidth(w);
         }}
       >
-        <ShimmerText
-          text={label}
-          width={width}
-          fontSize={15}
-          fontWeight="500"
-          maxLines={1}
-          align="left"
-          baseColor={theme.textSecondary}
-          highlightColor={theme.text}
-        />
+        <View style={styles.statusLive}>
+          <ShimmerText
+            text={label}
+            width={width}
+            fontSize={15}
+            fontWeight="500"
+            maxLines={1}
+            align="left"
+            baseColor={theme.textSecondary}
+            highlightColor={theme.text}
+          />
+        </View>
+        {suffix !== '' ? (
+          <Text
+            style={[styles.subtitle, { color: theme.textSecondary }]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.6}
+          >
+            {suffix}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -185,6 +203,7 @@ const ThreadStatus = ({
               style={{ color: theme.diffDelText }}
             >{`-${line.deletions}`}</Text>
           ) : null}
+          {suffix}
         </Text>
       </View>
     );
@@ -197,6 +216,7 @@ const ThreadStatus = ({
       testID={`thread-status-${chatId}`}
     >
       {label}
+      {suffix}
     </Text>
   );
 };
@@ -215,6 +235,8 @@ const ChatRow = React.memo(function ({
   const indicator = useIndicator(chat.id);
   const session = useStore(workspaceStore, s => s.sessions[chat.id]);
   const host = useHostForChat(chat.id);
+  const presenceAt = useStore(workspaceStore, s => s.presence[chat.deviceId]);
+  const hostOnline = isPresenceFresh(presenceAt, now);
   const unseen = chatUnseen(chat);
   const prTone = useThreadPrDot(chat.id);
   const prAdds = useStore(
@@ -368,7 +390,12 @@ const ChatRow = React.memo(function ({
                 </View>
               ) : null}
             </View>
-            <ThreadStatus line={line} theme={theme} chatId={chat.id} />
+            <ThreadStatus
+              line={line}
+              theme={theme}
+              chatId={chat.id}
+              hostOnline={hostOnline}
+            />
           </View>
           {workingElapsed !== undefined ? (
             <Text
@@ -864,6 +891,11 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 17, fontWeight: '400' },
   unseen: { fontWeight: '500' },
   subtitle: { fontSize: 15 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusLive: { flexShrink: 1 },
   prStatus: {
     flexDirection: 'row',
     alignItems: 'center',

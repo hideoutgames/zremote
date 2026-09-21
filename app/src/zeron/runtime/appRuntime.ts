@@ -26,6 +26,7 @@ import {
 import { resetSessionStores } from '../state/sessionStores';
 import { resetCatalog } from '../state/catalogStore';
 import { bindDrafts, resetDrafts } from '../state/draftStore';
+import { bindQueuedLocal, resetQueuedLocal } from '../state/queuedLocalStore';
 import { bindUiPrefs, unbindUiPrefs, uiPrefsStore } from '../state/uiPrefs';
 import { SessionController, type SessionMode } from './sessionController';
 
@@ -116,6 +117,9 @@ export class AppRuntime {
         : new RegistryDoc(deps.deviceId);
     // Account-scoped composer drafts + UI prefs ride the same DocDisk.
     await bindDrafts(deps.docDisk, deps.orgId, deps.userId, deps.clock).catch(
+      () => {},
+    );
+    await bindQueuedLocal(deps.docDisk, deps.orgId, deps.userId).catch(
       () => {},
     );
     await bindUiPrefs(deps.docDisk, deps.orgId, deps.userId).catch(() => {});
@@ -347,6 +351,7 @@ export class AppRuntime {
     resetSessionStores();
     resetCatalog();
     resetDrafts();
+    resetQueuedLocal();
     unbindUiPrefs();
   }
 }

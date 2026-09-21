@@ -19,6 +19,7 @@ import { authStore } from '../zeron/state/authStore';
 import { catalogStore } from '../zeron/state/catalogStore';
 import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
 import { useAppServices, useRuntime } from '../app/runtimeContext';
+import { isPresenceFresh } from '../zeron/protocol/entities';
 import type { DeviceRow, UpdateStatus } from '../zeron/protocol/types';
 import { METHODS } from '../zeron/protocol/rpc';
 import { AgentAccountsScreen } from './AgentAccountsScreen';
@@ -70,7 +71,6 @@ import { catalogEntry } from '../zeron/voice/catalog';
 
 const log = createLog();
 
-const PRESENCE_TTL_MS = 45_000;
 const PRESENCE_TICK_MS = 5_000;
 
 type SettingsPage =
@@ -353,10 +353,8 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     ]);
   }, [signOut, onClose]);
 
-  const deviceConnected = (id: string): boolean => {
-    const at = presence[id];
-    return at !== undefined && now - at < PRESENCE_TTL_MS;
-  };
+  const deviceConnected = (id: string): boolean =>
+    isPresenceFresh(presence[id], now);
 
   const accountTitle = user?.email ?? user?.id ?? '';
 

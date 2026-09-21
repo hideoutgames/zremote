@@ -50,6 +50,13 @@ export const draftsPath = (
   userId: string,
 ): string => join(accountDir(baseDir, orgId, userId), 'drafts.json');
 
+/** Offline-queued message backup (sidecar while the host is unreachable). */
+export const queuedLocalPath = (
+  baseDir: string,
+  orgId: string,
+  userId: string,
+): string => join(accountDir(baseDir, orgId, userId), 'queuedLocal.json');
+
 /** Queued-attachment byte stash (UploadStash.swift): base64 file body plus an
  * index so a relaunch can re-derive escorts without a directory listing. */
 export const uploadsDir = (
@@ -166,6 +173,26 @@ export class DocDisk {
   ): Promise<Record<string, unknown> | undefined> {
     return this.readJson<Record<string, unknown>>(
       draftsPath(this.baseDir, orgId, userId),
+    );
+  }
+
+  saveQueuedLocal(
+    orgId: string,
+    userId: string,
+    byChat: Record<string, unknown>,
+  ): Promise<void> {
+    return this.writeAtomic(
+      queuedLocalPath(this.baseDir, orgId, userId),
+      JSON.stringify(byChat),
+    );
+  }
+
+  loadQueuedLocal(
+    orgId: string,
+    userId: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    return this.readJson<Record<string, unknown>>(
+      queuedLocalPath(this.baseDir, orgId, userId),
     );
   }
 

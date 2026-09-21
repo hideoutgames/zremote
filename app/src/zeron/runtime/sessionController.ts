@@ -51,6 +51,18 @@ import {
 import { sendPlan, type SendPlan } from '../attachments/sendPlan';
 import { RelaySessionSource } from './relaySessionSource';
 import { workspaceStore } from '../state/workspaceStore';
+import { isPresenceFresh } from '../protocol/entities';
+import {
+  addLocalQueued,
+  displayedQueue,
+  isLocalQueued,
+  isQueuedLocalBound,
+  localQueuedFor,
+  moveLocalQueued,
+  reconcileLocalQueued,
+  removeLocalQueued,
+  type LocalQueuedMessage,
+} from '../state/queuedLocalStore';
 
 export type SessionMode = 'doc' | 'relay';
 
@@ -190,6 +202,7 @@ export class SessionController {
     try {
       if (this.relay !== undefined) {
         this.relay.start();
+        this.seedRelayLocalQueue();
         return;
       }
       const { docDisk, orgId, userId } = this.deps;
@@ -207,6 +220,7 @@ export class SessionController {
       this.unsub = this.port.subscribeLocalUpdates(bytes =>
         this.room?.enqueue(bytes),
       );
+      this.project();
       this.connectIfReady();
     } catch (e) {
       this.started = false;
@@ -339,10 +353,12 @@ export class SessionController {
       return true;
     });
     const knownFailed = new Set(s.failedSends.map(f => f.messageId));
+    const liveIds = new Set(proj.queue.map(q => q.id));
+    reconcileLocalQueued(this.chatId, liveIds).catch(() => {});
     store.setState({
       entries: proj.entries,
       commands: proj.commands,
-      queue: proj.queue,
+      queue: displayedQueue(this.chatId, proj.queue),
       meta: proj.meta,
       pendingSends:
         stillPending.length === s.pendingSends.length &&
@@ -535,11 +551,81 @@ export class SessionController {
     opts: { attachments?: string[]; holdForTurnEnd?: boolean } = {},
   ): string {
     if (this.relay !== undefined) {
+      if (this.shouldBackupLocal()) return this.parkRelayLocal(text, opts);
       // Host mints the row id; WatchQueue lands it in store.queue.
       this.enqueueQueued(text, opts).catch(() => {});
       return '';
     }
     return this.enqueueLocal(text, opts);
+  }
+
+  private hostOnline(): boolean {
+    const host = this.deps.chatMeta().hostDeviceId;
+    if (host === undefined) return false;
+    return isPresenceFresh(
+      workspaceStore.getState().presence[host],
+      this.deps.clock.now(),
+    );
+  }
+
+  private shouldBackupLocal(): boolean {
+    return isQueuedLocalBound() && !this.hostOnline();
+  }
+
+  private localRow(
+    id: string,
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): LocalQueuedMessage {
+    return {
+      id,
+      text,
+      issuedBy: this.deps.deviceId,
+      issuedAt: this.deps.clock.now(),
+      ...(opts.attachments !== undefined && opts.attachments.length > 0
+        ? { attachments: [...opts.attachments] }
+        : {}),
+      ...(opts.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
+    };
+  }
+
+  private seedRelayLocalQueue(): void {
+    const store = getSessionStore(this.chatId);
+    store.setState(s => ({
+      queue: displayedQueue(this.chatId, s.queue),
+    }));
+  }
+
+  private parkRelayLocal(
+    text: string,
+    opts: { attachments?: string[]; holdForTurnEnd?: boolean },
+  ): string {
+    const id = newId();
+    addLocalQueued(this.chatId, this.localRow(id, text, opts)).catch(() => {});
+    this.seedRelayLocalQueue();
+    return id;
+  }
+
+  /** Push sidecar-only relay rows once the host is reachable. Doc-mode
+   * rows are already on the Loro queue. */
+  async flushLocalQueue(): Promise<void> {
+    if (!this.hostOnline()) return;
+    if (this.relay === undefined) return;
+    const rows = localQueuedFor(this.chatId);
+    for (const row of rows) {
+      try {
+        await this.relay.queueMessage(row.text, {
+          ...(row.attachments !== undefined
+            ? { attachments: row.attachments }
+            : {}),
+          ...(row.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
+        });
+        await removeLocalQueued(this.chatId, row.id);
+      } catch {
+        // Keep the sidecar row; a later flush/retry will try again.
+      }
+    }
+    this.seedRelayLocalQueue();
   }
 
   private enqueueLocal(
@@ -553,6 +639,12 @@ export class SessionController {
       attachments: opts.attachments,
       holdForTurnEnd: opts.holdForTurnEnd,
     });
+    if (this.shouldBackupLocal()) {
+      addLocalQueued(this.chatId, this.localRow(id, text, opts)).catch(
+        () => {},
+      );
+      this.flush().catch(() => {});
+    }
     this.project();
     this.nudge();
     return id;
@@ -580,6 +672,11 @@ export class SessionController {
    * `MoveQueuedMessage` RPC in relay mode. */
   moveQueued(id: string, toIndex: number): boolean {
     if (this.relay !== undefined) {
+      if (isLocalQueued(this.chatId, id) && !this.hostOnline()) {
+        const ok = moveLocalQueued(this.chatId, id, toIndex);
+        if (ok) this.seedRelayLocalQueue();
+        return ok;
+      }
       this.relay.moveQueued(id, toIndex).catch(() => {});
       return false;
     }
@@ -608,6 +705,20 @@ export class SessionController {
     if (row === undefined) return false;
     // deliveryGate'd rows are held for turn end — no actions.
     if (action !== 'remove' && row.deliveryGate != null) return false;
+    if (
+      action === 'remove' &&
+      !this.hostOnline() &&
+      isLocalQueued(this.chatId, id)
+    ) {
+      await removeLocalQueued(this.chatId, id);
+      if (this.relay === undefined) {
+        this.doc.removeQueuedLocal(id);
+        this.project();
+      } else {
+        this.seedRelayLocalQueue();
+      }
+      return true;
+    }
     store.setState(s => ({
       queueActionsPending: new Set([...s.queueActionsPending, id]),
       queueActionError: undefined,
@@ -629,6 +740,7 @@ export class SessionController {
         this.doc.removeQueuedLocal(id);
         this.project();
       }
+      await removeLocalQueued(this.chatId, id);
       return true;
     } catch (e) {
       store.setState(() => ({
@@ -663,14 +775,17 @@ export class SessionController {
       autoApprove?: boolean;
       /** Draft key for upload-progress patches (compose uses `__compose__`). */
       draftChatId?: string;
+      /** Host is offline — park on the queue even without queue caps. */
+      forceQueue?: boolean;
     } = { phase: 'idle' },
   ): Promise<SendPlan> {
     const draftId = opts.draftChatId ?? this.chatId;
-    const plan = sendPlan(
+    let plan = sendPlan(
       opts.phase,
       this.deps.hostCapabilities?.() ?? new Set(),
       staged.length > 0,
     );
+    if (opts.forceQueue === true && staged.length > 0) plan = 'queue';
     if (plan === 'direct') {
       this.sendRun(text, chat, opts);
       return 'direct';

@@ -15,6 +15,7 @@ import type { QueueActionKind } from '../zeron/runtime/sessionController';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
+import { alertLocalQueuedInfo } from './queueAlerts';
 
 const ROW_H = 56;
 
@@ -22,6 +23,7 @@ export interface QueuePanelProps {
   queue: readonly QueuedMessage[];
   actionsSupported: boolean;
   pending: ReadonlySet<string>;
+  localIds?: ReadonlySet<string>;
   error?: string;
   canSteer: boolean;
   onAction: (id: string, action: QueueActionKind) => void;
@@ -33,6 +35,7 @@ export function QueuePanel({
   queue,
   actionsSupported,
   pending,
+  localIds,
   error,
   canSteer,
   onAction,
@@ -111,6 +114,22 @@ export function QueuePanel({
                     color={theme.textSecondary}
                   />
                 </View>
+              ) : null}
+              {localIds?.has(item.id) === true ? (
+                <Pressable
+                  hitSlop={6}
+                  testID="queue-local-info"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('queue.localInfo')}
+                  onPress={alertLocalQueuedInfo}
+                  style={styles.localInfo}
+                >
+                  <Icon
+                    name="info.circle"
+                    size={16}
+                    color={theme.textSecondary}
+                  />
+                </Pressable>
               ) : null}
               <View style={styles.rowBody}>
                 <Text
@@ -204,6 +223,12 @@ const styles = StyleSheet.create({
   },
   dragging: { zIndex: 2 },
   handle: {
+    width: 28,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  localInfo: {
     width: 28,
     height: 44,
     alignItems: 'center',

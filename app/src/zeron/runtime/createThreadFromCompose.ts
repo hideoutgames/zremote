@@ -21,6 +21,7 @@ import {
   type ComposeDefaults,
 } from '../state/uiPrefs';
 import { workspaceStore } from '../state/workspaceStore';
+import { isPresenceFresh } from '../protocol/entities';
 import type { AppRuntime } from './appRuntime';
 import { createChat, createProjectlessChat } from './workspaceActions';
 
@@ -79,6 +80,10 @@ export const createThreadFromCompose = async (
   }
   const controller = runtime.openSession(chatId);
   await controller.start();
+  const hostOnline = isPresenceFresh(
+    workspaceStore.getState().presence[settings.deviceId],
+    Date.now(),
+  );
   if (attachments.length > 0) {
     const plan = await controller.sendWithAttachments(
       text,
@@ -88,9 +93,12 @@ export const createThreadFromCompose = async (
         worktree,
         phase: 'idle',
         draftChatId: COMPOSE_DRAFT_ID,
+        forceQueue: !hostOnline,
       },
     );
     if (plan === 'blocked') throw new Error('compose: attachments blocked');
+  } else if (!hostOnline) {
+    controller.queueMessage(text);
   } else {
     controller.sendRun(
       text,
