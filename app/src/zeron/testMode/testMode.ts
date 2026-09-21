@@ -487,34 +487,77 @@ const deployQueue: QueuedMessage[] = [
   },
 ];
 
+const TIMESTAMP_KEYS = new Set([
+  'at',
+  'createdAt',
+  'gitCheckedAt',
+  'issuedAt',
+  'lastMessageAt',
+  'lastSeenAt',
+  'lastSyncAt',
+  'loadedAt',
+  'started',
+  'startedAt',
+  'updatedAt',
+]);
+
+/** Seeds are built at module-eval with `now` captured then; rebase every
+ *  timestamp by `delta` so presence/Working freshness is relative to when
+ *  test mode is entered, not when the bundle loaded. */
+const shiftTimes = <T>(value: T, delta: number): T => {
+  if (Array.isArray(value)) {
+    return value.map(v => shiftTimes(v, delta)) as T;
+  }
+  if (value !== null && typeof value === 'object' && !(value instanceof Set)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (TIMESTAMP_KEYS.has(k)) {
+        out[k] =
+          typeof v === 'number'
+            ? v + delta
+            : typeof v === 'string'
+            ? new Date(new Date(v).getTime() + delta).toISOString()
+            : v;
+      } else {
+        out[k] = shiftTimes(v, delta);
+      }
+    }
+    return out as T;
+  }
+  return value;
+};
+
 export const enterTestMode = (): void => {
+  const delta = Date.now() - now;
+  const entryNow = now + delta;
+  const shift = <T>(value: T): T => shiftTimes(value, delta);
   const presence = {
-    [DEV_MACBOOK]: now,
+    [DEV_MACBOOK]: entryNow,
     // desktop was seen ~3 min ago — beyond the 45s "live" freshness window.
-    [DEV_DESKTOP]: now - 3 * min,
+    [DEV_DESKTOP]: entryNow - 3 * min,
   };
 
   workspaceStore.setState({
-    devices,
-    spaces,
-    chats,
-    sessions,
+    devices: shift(devices),
+    spaces: shift(spaces),
+    chats: shift(chats),
+    sessions: shift(sessions),
     presence,
     connection: 'connected',
-    lastSyncAt: now,
+    lastSyncAt: entryNow,
   });
 
   getSessionStore('chat-flaky-login').setState({
-    entries: flakyLoginEntries,
-    commands: flakyLoginCommands,
+    entries: shift(flakyLoginEntries),
+    commands: shift(flakyLoginCommands),
     queue: [],
     meta: { contextUsage: { tokens: 81_234, window: 200_000 } },
     pendingSends: [
       {
         messageId: 'pend-1',
         text: 'Ping me when the soak finishes.',
-        at: now - min,
-        started: now - min,
+        at: entryNow - min,
+        started: entryNow - min,
       },
     ],
     failedSends: [],
@@ -525,9 +568,9 @@ export const enterTestMode = (): void => {
   });
 
   getSessionStore('chat-deploy-runbook').setState({
-    entries: deployEntries,
+    entries: shift(deployEntries),
     commands: [],
-    queue: deployQueue,
+    queue: shift(deployQueue),
     meta: { contextUsage: { tokens: 12_400, window: 128_000 } },
     pendingSends: [],
     failedSends: [
@@ -535,8 +578,8 @@ export const enterTestMode = (): void => {
         messageId: 'fail-1',
         commandId: 'cmd-fail-1',
         text: 'Bump the deploy timeout while you are in there.',
-        at: now - 30 * min,
-        started: now - 30 * min,
+        at: entryNow - 30 * min,
+        started: entryNow - 30 * min,
         status: 'expired',
       },
     ],
@@ -547,7 +590,7 @@ export const enterTestMode = (): void => {
   });
 
   getSessionStore('chat-long').setState({
-    entries: longEntries,
+    entries: shift(longEntries),
     commands: [],
     queue: [],
     meta: { contextUsage: { tokens: 190_000, window: 200_000 } },
@@ -560,7 +603,7 @@ export const enterTestMode = (): void => {
   });
 
   getSessionStore('chat-bench').setState({
-    entries: benchEntries,
+    entries: shift(benchEntries),
     commands: [],
     queue: [],
     meta: {},
@@ -621,7 +664,7 @@ export const enterTestMode = (): void => {
           ],
         },
         loading: false,
-        loadedAt: now,
+        loadedAt: entryNow,
       },
       [DEV_DESKTOP]: {
         harnesses: [
@@ -644,7 +687,7 @@ export const enterTestMode = (): void => {
           ],
         },
         loading: false,
-        loadedAt: now,
+        loadedAt: entryNow,
       },
     },
   });
@@ -665,7 +708,7 @@ export const enterTestMode = (): void => {
           baseRef: 'main',
           headRef: 'fix/login-flake',
         },
-        updatedAt: new Date(now - 5 * min).toISOString(),
+        updatedAt: new Date(entryNow - 5 * min).toISOString(),
       },
     },
     diffByChat: {
@@ -688,7 +731,7 @@ export const enterTestMode = (): void => {
         deletions: 6,
         truncated: false,
         checksum: 'demo',
-        updatedAt: new Date(now - 5 * min).toISOString(),
+        updatedAt: new Date(entryNow - 5 * min).toISOString(),
       },
     },
   });
@@ -699,7 +742,7 @@ export const enterTestMode = (): void => {
       'chat-ui-pass': {
         text: 'Follow up: check the iPad split view too',
         attachments: [],
-        updatedAt: now - 24 * hour,
+        updatedAt: entryNow - 24 * hour,
       },
     },
   }));
