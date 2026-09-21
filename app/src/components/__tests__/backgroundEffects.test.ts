@@ -7,7 +7,7 @@ import {
   asciiDensityIndex,
   asciiInk,
   ditherBayerAt,
-  ditherColor,
+  ditherQuantize,
   halftoneCoverage,
   halftoneRadius,
   mixTreatment,
@@ -80,7 +80,7 @@ test('treatment mix is 60% source and 40% ink-or-paper', () => {
   expect(mixTreatment(100, 200, 255, 0)).toBeCloseTo(162, 5);
 });
 
-test('dither uses the desktop Bayer table and peak-gain color', () => {
+test('dither uses the Bayer table with ordered 4-level quantize', () => {
   expect(DITHER_BAYER).toEqual([
     [0, 8, 2, 10],
     [12, 4, 14, 6],
@@ -88,15 +88,18 @@ test('dither uses the desktop Bayer table and peak-gain color', () => {
     [15, 7, 13, 5],
   ]);
   expect(ditherBayerAt(0, 0)).toBe(0);
-  expect(ditherBayerAt(2, 0)).toBe(8);
-  expect(ditherBayerAt(0, 2)).toBe(12);
-  const [r, g, b, a] = ditherColor([173, 89, 32, 180], 0);
-  expect(a).toBe(180);
-  expect(Math.max(r, g, b)).toBe(255);
-  expect(r).toBeGreaterThanOrEqual(g);
-  expect(g).toBeGreaterThanOrEqual(b);
-  const dim = ditherColor([173, 89, 32, 180], 15);
-  expect(dim[0]).toBe(Math.round(173 * 0.08));
+  expect(ditherBayerAt(1, 0)).toBe(8);
+  expect(ditherBayerAt(0, 1)).toBe(12);
+  // Mid-tones dither between adjacent levels so gradients keep their tone
+  // instead of collapsing into saturated-or-black squares.
+  expect(ditherQuantize(0.5, 0)).toBe(0.25);
+  expect(ditherQuantize(0.5, 8)).toBe(0.5);
+  expect(ditherQuantize(0.9, 0)).toBe(0.75);
+  expect(ditherQuantize(0.9, 15)).toBe(1);
+  expect(ditherQuantize(0.05, 15)).toBe(0);
+  expect(DITHER_SKSL).toContain(
+    'floor(c.rgb * 4.0 + ((bayer / 16.0) - 0.5)) / 4.0',
+  );
   for (const row of DITHER_BAYER) {
     for (const cell of row) {
       expect(DITHER_SKSL).toContain(`${cell}.0`);
