@@ -13,9 +13,13 @@ import { t } from '../i18n/strings';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { groupMenuModelsByProvider } from '../zeron/state/pinnedModels';
 
+/** Half of the 96px mark, and under a UIMenu row's default image slot. */
+const MENU_MARK = 18;
+
 const modelMenuItem = (
   item: CatalogModelRef,
   onPick: (harness: string, model: string) => void,
+  tint: string,
 ) => {
   const source = imageForHarness(item.harness);
   return (
@@ -26,7 +30,11 @@ const modelMenuItem = (
       {source !== undefined ? (
         <DropdownMenu.ItemImage
           source={source}
-          ios={{ style: { renderingMode: 'alwaysTemplate' } }}
+          width={MENU_MARK}
+          height={MENU_MARK}
+          ios={{
+            style: { renderingMode: 'alwaysTemplate', tint },
+          }}
         />
       ) : null}
       <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
@@ -77,10 +85,12 @@ export function ModelMenuButton({
           ? groups.map(group => (
               <DropdownMenu.Group key={group.harness}>
                 <DropdownMenu.Label>{group.label}</DropdownMenu.Label>
-                {group.items.map(item => modelMenuItem(item, onPick))}
+                {group.items.map(item =>
+                  modelMenuItem(item, onPick, theme.text),
+                )}
               </DropdownMenu.Group>
             ))
-          : items.map(item => modelMenuItem(item, onPick))}
+          : items.map(item => modelMenuItem(item, onPick, theme.text))}
         <DropdownMenu.Item key="more" onSelect={onMore}>
           <DropdownMenu.ItemTitle>{t('picker.more')}</DropdownMenu.ItemTitle>
         </DropdownMenu.Item>

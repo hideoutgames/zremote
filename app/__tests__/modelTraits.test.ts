@@ -1,5 +1,7 @@
 import type { Model, ModelOption } from '../src/zeron/protocol/types';
+import { contextChoiceLabel } from '../src/components/contextWindow';
 import {
+  applyContextChoice,
   applyEffortLevel,
   applyFastChoice,
   effortOptionForModel,
@@ -13,10 +15,11 @@ const option = (
   id: string,
   choices: string[],
   defaultChoice = choices[0],
+  labels?: string[],
 ): ModelOption => ({
   id,
   label: id,
-  choices: choices.map(c => ({ id: c, label: c })),
+  choices: choices.map((c, i) => ({ id: c, label: labels?.[i] ?? c })),
   defaultChoice,
 });
 
@@ -261,6 +264,123 @@ test('Cursor option-backed effort and Fast write modelOptions, not reasoning', (
     reasoning: undefined,
     modelOptions: { effort: 'low', fast: 'false' },
   });
+});
+
+test('normalized effort option ids and extra-high thinking choices show effort', () => {
+  const named = model('m', {
+    options: [option('reasoning_effort', ['low', 'high'], 'low')],
+  });
+  expect(effortOptionForModel(named)?.id).toBe('reasoning_effort');
+  expect(resolveModelTraits(named, [named], []).effort).toEqual({
+    kind: 'option',
+    levels: ['low', 'high'],
+    value: 'low',
+    optionId: 'reasoning_effort',
+  });
+
+  const dashed = model('m2', {
+    options: [option('reasoning-effort', ['medium', 'high'], 'medium')],
+  });
+  expect(effortOptionForModel(dashed)?.id).toBe('reasoning-effort');
+
+  const thinking = model('t', {
+    options: [option('thinking', ['x-high', 'extra-high'], 'x-high')],
+  });
+  expect(effortOptionForModel(thinking)?.id).toBe('thinking');
+  expect(resolveModelTraits(thinking, [thinking], []).effort?.levels).toEqual([
+    'x-high',
+    'extra-high',
+  ]);
+});
+
+test('Antigravity label suffixes share a ladder across mismatched ids', () => {
+  const low = model('gemini-3.1-pro-low', {
+    label: 'Gemini 3.1 Pro (Low)',
+  });
+  const high = model('gemini-pro-agent', {
+    label: 'Gemini 3.1 Pro (High)',
+  });
+  const traits = resolveModelTraits(low, [low, high], []);
+  expect(traits.effort).toEqual({
+    kind: 'variant',
+    levels: ['low', 'high'],
+    value: 'low',
+    variantIds: {
+      low: 'gemini-3.1-pro-low',
+      high: 'gemini-pro-agent',
+    },
+  });
+  expect(
+    applyEffortLevel(traits, 'high', { model: low.id }, [low, high]).model,
+  ).toBe('gemini-pro-agent');
+  const highTraits = resolveModelTraits(high, [low, high], []);
+  expect(highTraits.effort?.value).toBe('high');
+  expect(
+    applyEffortLevel(highTraits, 'low', { model: high.id }, [low, high]).model,
+  ).toBe('gemini-3.1-pro-low');
+});
+
+test('missing catalog model still shows the harness effort ladder', () => {
+  expect(
+    resolveModelTraits(undefined, [], ['low', 'medium', 'high'], {
+      reasoning: 'high',
+    }).effort,
+  ).toEqual({
+    kind: 'reasoning',
+    levels: ['low', 'medium', 'high'],
+    value: 'high',
+  });
+  expect(resolveModelTraits(undefined, [], []).effort).toBeUndefined();
+});
+
+test('context window options become a trait and write modelOptions', () => {
+  const claude = model('fable', {
+    label: 'Fable',
+    reasoningLevels: ['low', 'high'],
+    options: [option('contextWindow', ['200k', '1m'], '200k', ['200K', '1M'])],
+  });
+  const traits = resolveModelTraits(claude, [claude], [], {
+    reasoning: 'high',
+    modelOptions: { contextWindow: '1m' },
+  });
+  expect(traits.effort?.kind).toBe('reasoning');
+  expect(traits.context?.option.id).toBe('contextWindow');
+  expect(traits.context?.choice).toBe('1m');
+  expect(contextChoiceLabel(traits.context!.option, '1m')).toBe('1M');
+  expect(
+    applyContextChoice(traits, '200k', {
+      model: 'fable',
+      reasoning: 'high',
+      modelOptions: { contextWindow: '1m' },
+    }),
+  ).toEqual({
+    model: 'fable',
+    reasoning: 'high',
+    modelOptions: { contextWindow: '200k' },
+  });
+
+  const cursor = model('composer', {
+    options: [
+      option('context', ['200k', '1m'], '200k'),
+      option('effort', ['low', 'high'], 'low'),
+    ],
+  });
+  const cursorTraits = resolveModelTraits(cursor, [cursor], []);
+  expect(cursorTraits.context?.option.id).toBe('context');
+  expect(cursorTraits.context?.choice).toBe('200k');
+  expect(cursorTraits.effort?.kind).toBe('option');
+
+  const dashed = model('old', {
+    options: [option('context-window', ['standard', '1m'], 'standard')],
+  });
+  expect(resolveModelTraits(dashed, [dashed], []).context?.choice).toBe(
+    'standard',
+  );
+
+  const one = model('solo', {
+    options: [option('contextWindow', ['200k'], '200k')],
+  });
+  expect(resolveModelTraits(one, [one], []).context).toBeUndefined();
 });
 
 test('thinking is effort only when choices are levels, not on/off', () => {

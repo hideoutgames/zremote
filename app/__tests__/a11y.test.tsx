@@ -564,8 +564,8 @@ test('model picker: search, provider groups, effort, and fast are labelled', asy
   expect(labels.some(l => l.label === 'Done')).toBe(true);
   expect(mounted.root.findAll(n => n.props.children === 'Done')).toEqual([]);
   expect(labels.some(l => l.label === 'Search')).toBe(true);
-  expect(labels.some(l => l.label === 'Sonnet')).toBe(true);
-  expect(labels.some(l => l.label === 'GPT')).toBe(true);
+  expect(labels.some(l => l.label === 'Sonnet, Claude')).toBe(true);
+  expect(labels.some(l => l.label === 'GPT, Codex')).toBe(true);
   expect(labels.some(l => l.label === 'High')).toBe(true);
   expect(labels.some(l => l.label === 'Fast mode')).toBe(true);
   expect(labels.some(l => l.label.includes('Claude'))).toBe(true);
@@ -581,7 +581,7 @@ test('model picker: search, provider groups, effort, and fast are labelled', asy
   ).toBeGreaterThan(0);
   const selected = mounted.root.findAll(
     n =>
-      n.props.accessibilityLabel === 'Sonnet' &&
+      n.props.accessibilityLabel === 'Sonnet, Claude' &&
       n.props.accessibilityState?.selected === true,
   );
   expect(selected.length).toBeGreaterThan(0);
@@ -661,8 +661,12 @@ test('model picker: pinned category shows provider name', async () => {
   expect(headers.length).toBeGreaterThan(0);
   expect(headers[0].props.children).toBe('Pinned');
   const labels = labelled(mounted.root);
-  expect(labels.some(l => l.label === 'GPT, Codex')).toBe(true);
-  expect(labels.some(l => l.label === 'GPT')).toBe(true);
+  expect(
+    labels.filter(l => l.label === 'GPT, Codex').length,
+  ).toBeGreaterThanOrEqual(2);
+  expect(
+    mounted.root.findAll(n => n.props.children === 'GPT').length,
+  ).toBeGreaterThan(0);
 });
 
 test('model picker: pin stays enabled with many existing pins', async () => {

@@ -85,6 +85,7 @@ import { loadCatalog, loadModels } from '../zeron/runtime/catalog';
 import { composerMenuModels } from '../zeron/state/pinnedModels';
 import { capitalizeLevel } from '../components/effortSliderMath';
 import {
+  applyContextChoice,
   applyEffortLevel,
   applyFastChoice,
   resolveModelTraits,
@@ -767,6 +768,8 @@ function ActiveSessionScreen({
   const effortLevels = traits.effort?.levels ?? [];
   const fastOption = traits.fast?.option;
   const fastEnabled = traits.fast?.enabled ?? false;
+  const contextOption = traits.context?.option;
+  const contextChoice = traits.context?.choice;
   const modelLabel =
     currentModel?.label ?? chat?.config?.model ?? t('picker.default');
   const effortLabel = capitalizeLevel(
@@ -1152,6 +1155,9 @@ function ActiveSessionScreen({
             fastOption={fastOption}
             fastEnabled={fastEnabled}
             fastChoice={traits.fast?.choice}
+            contextSupported={traits.context !== undefined}
+            contextOption={contextOption}
+            contextChoice={contextChoice}
             effortOpen={effortOpen}
             onOpenEffort={origin => {
               Keyboard.dismiss();
@@ -1178,6 +1184,29 @@ function ActiveSessionScreen({
                 },
                 harnessModels,
               );
+              setChatConfig(runtime, chat.id, {
+                harness: chat.config?.harness ?? '',
+                model: patch.model,
+                reasoning: patch.reasoning,
+                sandbox: FULL_ACCESS_SANDBOX,
+                modelOptions: patch.modelOptions,
+              });
+              if (
+                chat.config?.harness !== undefined &&
+                patch.model !== undefined
+              )
+                rememberModelSettings(chat.config.harness, patch.model, {
+                  reasoning: patch.reasoning,
+                  modelOptions: patch.modelOptions,
+                });
+            }}
+            onSelectContext={choice => {
+              if (runtime === null || chat === undefined) return;
+              const patch = applyContextChoice(traits, choice, {
+                model: chat.config?.model,
+                reasoning: chat.config?.reasoning,
+                modelOptions: chat.config?.modelOptions,
+              });
               setChatConfig(runtime, chat.id, {
                 harness: chat.config?.harness ?? '',
                 model: patch.model,

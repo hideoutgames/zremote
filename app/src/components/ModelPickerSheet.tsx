@@ -51,11 +51,13 @@ import type { RunPhase } from '../zeron/state/sessionStores';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from './Icon';
+import { ContextWindowButton } from './ContextWindowButton';
 import { FastMenuButton } from './FastMenuButton';
 import { ComposerMenuChip } from './ComposerMenuChip';
 import { EffortOverlay } from './EffortOverlay';
 import { capitalizeLevel } from './effortSliderMath';
 import {
+  applyContextChoice,
   applyEffortLevel,
   applyFastChoice,
   resolveModelTraits,
@@ -81,7 +83,8 @@ export interface ModelPickerSheetProps {
   onApplyConfig?: (config: ChatConfig) => void;
 }
 
-const CLOSE = 32;
+/** HIG minimum hit target. The circles are the control, not just the glyph. */
+const CLOSE = 44;
 /** Dark check on the orange Done glass (matches PlanSheet CTA label). */
 const DONE_CHECK = '#1C1204';
 
@@ -98,6 +101,9 @@ function ModelRow({
   fastOption,
   fastChoice,
   onSelectFast,
+  contextOption,
+  contextChoice,
+  onSelectContext,
   last,
   borderColor,
   textColor,
@@ -121,6 +127,9 @@ function ModelRow({
   fastOption?: Parameters<typeof FastMenuButton>[0]['option'];
   fastChoice?: string;
   onSelectFast: (choiceId: string) => void;
+  contextOption?: Parameters<typeof ContextWindowButton>[0]['option'];
+  contextChoice?: string;
+  onSelectContext: (choiceId: string) => void;
   last: boolean;
   borderColor: string;
   textColor: string;
@@ -256,6 +265,14 @@ function ModelRow({
             option={fastOption}
             value={fastChoice}
             onSelect={onSelectFast}
+          />
+        ) : null}
+        {contextOption !== undefined ? (
+          <ContextWindowButton
+            option={contextOption}
+            value={contextChoice}
+            onSelect={onSelectContext}
+            limitWidth={false}
           />
         ) : null}
         {unavailable ? (
@@ -491,7 +508,7 @@ export function ModelPickerSheet({
         accessibilityLabel={t('common.close')}
       >
         <View style={styles.closeButton}>
-          <Icon name="xmark" size={15} color={theme.text} />
+          <Icon name="xmark" size={20} color={theme.text} />
         </View>
       </Pressable>
       <Text style={[styles.title, { color: theme.text }]}>
@@ -506,7 +523,7 @@ export function ModelPickerSheet({
         accessibilityLabel={t('common.done')}
         style={styles.closeButton}
       >
-        <Icon name="checkmark" size={16} color={DONE_CHECK} />
+        <Icon name="checkmark" size={20} color={DONE_CHECK} />
       </GlassControl>
     </View>
   );
@@ -622,6 +639,20 @@ export function ModelPickerSheet({
                     modelOptions: patch.modelOptions,
                   });
                 }}
+                contextOption={traits.context?.option}
+                contextChoice={traits.context?.choice}
+                onSelectContext={choiceId => {
+                  const patch = applyContextChoice(traits, choiceId, {
+                    model: m.id,
+                    reasoning: selected ? config?.reasoning : stored?.reasoning,
+                    modelOptions: rowOptions,
+                  });
+                  pickModel(h.id, m, {
+                    model: patch.model,
+                    reasoning: patch.reasoning,
+                    modelOptions: patch.modelOptions,
+                  });
+                }}
                 last={i === pinnedVisible.length - 1}
                 borderColor={theme.border}
                 textColor={theme.text}
@@ -655,9 +686,10 @@ export function ModelPickerSheet({
           {models.map((m, i) => {
             const selected = m.id === config?.model && h.id === harnessId;
             const stored = modelSettings[modelRowKey(h.id, m.id)];
+            const siblings = modelsFor(deviceId, h.id);
             const traits = resolveModelTraits(
               m,
-              models,
+              siblings,
               h.reasoningLevels,
               selected
                 ? {
@@ -712,8 +744,22 @@ export function ModelPickerSheet({
                         : stored?.reasoning,
                       modelOptions: rowOptions,
                     },
-                    models,
+                    siblings,
                   );
+                  pickModel(h.id, m, {
+                    model: patch.model,
+                    reasoning: patch.reasoning,
+                    modelOptions: patch.modelOptions,
+                  });
+                }}
+                contextOption={traits.context?.option}
+                contextChoice={traits.context?.choice}
+                onSelectContext={choiceId => {
+                  const patch = applyContextChoice(traits, choiceId, {
+                    model: m.id,
+                    reasoning: selected ? config?.reasoning : stored?.reasoning,
+                    modelOptions: rowOptions,
+                  });
                   pickModel(h.id, m, {
                     model: patch.model,
                     reasoning: patch.reasoning,
@@ -726,6 +772,8 @@ export function ModelPickerSheet({
                 secondaryColor={theme.textSecondary}
                 dangerColor={theme.danger}
                 accentColor={theme.accent}
+                harnessId={h.id}
+                providerName={h.name}
                 pin={pinFor(h.id, m.id)}
                 onLayout={y => {
                   rowY.current[key] = y;
@@ -848,7 +896,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  title: { fontSize: 17, fontWeight: '600' },
+  title: { fontSize: 20, fontWeight: '600' },
   content: { paddingHorizontal: 8, paddingBottom: 24, gap: 4 },
   note: { fontSize: 12, paddingHorizontal: 12, marginBottom: 4 },
   searchWrap: {

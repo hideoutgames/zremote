@@ -408,6 +408,7 @@ const en = {
   'picker.agents': 'Agents',
   'picker.models': 'Models',
   'picker.effort': 'Effort',
+  'picker.contextWindow': 'Context window',
   'picker.effortUnsupported': 'This agent doesn\u2019t support effort levels.',
   'picker.harnessLocked': 'The agent is locked once a chat has messages.',
   'picker.unavailable': 'Unavailable',

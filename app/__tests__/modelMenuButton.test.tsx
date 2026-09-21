@@ -4,6 +4,7 @@ import { Text } from 'react-native';
 import { ModelMenuButton } from '../src/components/ModelMenuButton';
 import { imageForHarness } from '../src/components/harnessBrand';
 import { t } from '../src/i18n/strings';
+import { darkTheme, lightTheme } from '../src/theme';
 
 const sourceUri = (source: unknown): string => {
   if (source !== undefined && typeof source === 'object' && source !== null) {
@@ -54,12 +55,21 @@ test('ModelMenuButton lists models with provider images and More', async () => {
   expect(titles).toContain('Sonnet');
   expect(titles).toContain('GPT-5');
   expect(titles).toContain(t('picker.more'));
-  const uris = tree!.root
-    .findAll(n => n.props.testID === 'DropdownItemImage')
+  const images = tree!.root.findAll(
+    n => n.props.testID === 'DropdownItemImage',
+  );
+  const uris = images
     .map(n => sourceUri(n.props.source))
     .filter(u => u !== 'undefined');
   expect(uris.some(u => u.includes('claude-mark'))).toBe(true);
   expect(uris.some(u => u.includes('openai-mark'))).toBe(true);
+  const tint = new Set([darkTheme.text, lightTheme.text]);
+  for (const image of images) {
+    expect(image.props.width).toBe(18);
+    expect(image.props.height).toBe(18);
+    expect(image.props.ios.style.renderingMode).toBe('alwaysTemplate');
+    expect(tint.has(image.props.ios.style.tint)).toBe(true);
+  }
   await act(async () => {
     tree?.unmount();
   });
