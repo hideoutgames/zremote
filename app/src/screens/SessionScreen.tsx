@@ -35,6 +35,8 @@ import {
   useSessionQueueLength,
   useRunPhase,
   dismissFailedSend,
+  moveQueuedInStore,
+  appendSentMessage,
 } from '../zeron/state/sessionStores';
 import {
   workspaceStore,
@@ -129,7 +131,7 @@ import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { UserMessage } from '../components/transcript/UserMessage';
 import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
-import { applyBuildPrefix, IMPLEMENT_PLAN_TEXT } from '../components/planMode';
+import { applyBuildPrefix } from '../components/planMode';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
 import { ThreadUsageSheet } from '../components/ThreadUsageSheet';
 import { SubagentsSheet } from '../components/SubagentsSheet';
@@ -622,7 +624,6 @@ function ActiveSessionScreen({
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [queueDragging, setQueueDragging] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
   const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
     undefined,
@@ -1251,7 +1252,10 @@ function ActiveSessionScreen({
         <GlassSheet
           title={t('queue.title')}
           onDismiss={() => setQueueOpen(false)}
-          draggable={!queueDragging}
+          /* Not draggable: the sheet's own pan recognizer otherwise fights
+           * the row-drag responder on every reorder gesture. X / backdrop
+           * still dismiss it. */
+          draggable={false}
         >
           <QueuePanel
             queue={session.queue}
@@ -1267,9 +1271,12 @@ function ActiveSessionScreen({
               controller?.queueAction(id, a).catch(() => {});
             }}
             onMove={(id, to) => {
-              controller?.moveQueued(id, to);
+              if (controller !== undefined) {
+                controller.moveQueued(id, to);
+              } else {
+                moveQueuedInStore(chatId, id, to);
+              }
             }}
-            onDragging={setQueueDragging}
           />
         </GlassSheet>
       ) : null}
@@ -1328,7 +1335,12 @@ function ActiveSessionScreen({
           onImplement={() => {
             setPlanSheet(null);
             setPlanMode(chatId, false);
-            doSend(applyBuildPrefix(IMPLEMENT_PLAN_TEXT));
+            const text = applyBuildPrefix(planSheet.name);
+            if (controller !== undefined) {
+              doSend(text);
+            } else {
+              appendSentMessage(chatId, text, deviceId || 'local');
+            }
           }}
         />
       ) : null}

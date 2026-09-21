@@ -105,6 +105,50 @@ export const dismissFailedSend = (chatId: string, messageId: string): void => {
   }));
 };
 
+/** Reorder the store's queue rows directly — the no-runtime path (test
+ * mode) has no SessionController/Loro doc to write through. */
+export const moveQueuedInStore = (
+  chatId: string,
+  id: string,
+  toIndex: number,
+): boolean => {
+  const store = getSessionStore(chatId);
+  const queue = store.getState().queue;
+  const from = queue.findIndex(q => q.id === id);
+  if (from < 0) return false;
+  const to = Math.min(Math.max(toIndex, 0), queue.length - 1);
+  if (from === to) return false;
+  const next = [...queue];
+  const [row] = next.splice(from, 1);
+  if (row === undefined) return false;
+  next.splice(to, 0, row);
+  store.setState({ queue: next });
+  return true;
+};
+
+/** Append a locally-sent user message — the no-runtime path (test mode) has
+ * no SessionController/doc to write through. */
+export const appendSentMessage = (
+  chatId: string,
+  text: string,
+  deviceId = 'local',
+): void => {
+  const store = getSessionStore(chatId);
+  const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  store.setState(s => ({
+    entries: [
+      ...s.entries,
+      {
+        id,
+        role: 'user',
+        parts: [{ kind: 'text' as const, id: `${id}-p`, text }],
+        createdAt: Date.now(),
+        deviceId,
+      },
+    ],
+  }));
+};
+
 // ── runPhase ───────────────────────────────────────────────────────────
 
 export interface OpenInputRequest {
