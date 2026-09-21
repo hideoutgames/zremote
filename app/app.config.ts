@@ -58,7 +58,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     gitSha: process.env.GITHUB_SHA ?? 'dev',
   },
   plugins: [
-    ['expo-build-properties', { ios: { deploymentTarget: '17.0' } }],
+    [
+      'expo-build-properties',
+      // UIKit scene lifecycle is mandatory when built with the iOS 27 SDK.
+      { ios: { deploymentTarget: '17.0', enableSceneSupport: true } },
+    ],
     [
       'react-native-bootsplash',
       {
