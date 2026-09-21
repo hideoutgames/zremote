@@ -38,11 +38,13 @@ function RowActions({
   row,
   selected,
   onDelete,
+  onInstalled,
 }: {
   model: VoiceModelCatalogEntry;
   row: VoiceModelRowState;
   selected: string | null;
   onDelete: (model: VoiceModelCatalogEntry) => void;
+  onInstalled: (model: VoiceModelCatalogEntry) => void;
 }) {
   const theme = useTheme();
   const installed = row.state === 'installed';
@@ -85,7 +87,10 @@ function RowActions({
           onPress: () => {
             const manager = getVoiceModelManager();
             if (manager === undefined) return;
-            manager.download(model.id).catch(() => {});
+            manager
+              .download(model.id)
+              .then(() => onInstalled(model))
+              .catch(() => {});
           },
           testID: `settings-model-download-${model.id}`,
         }
@@ -220,6 +225,13 @@ export function VoiceModelPicker({
               row={row}
               selected={selected}
               onDelete={confirmDelete}
+              onInstalled={m => {
+                // First install of a kind selects it automatically.
+                if (selected === null) {
+                  if (m.kind === 'transcription') setVoiceModelId(m.id);
+                  else setCleanupModelId(m.id);
+                }
+              }}
             />
           );
           return (

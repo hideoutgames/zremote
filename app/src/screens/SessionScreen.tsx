@@ -1282,7 +1282,7 @@ function ActiveSessionScreen({
         />
       ) : null}
 
-      {pickerOpen && runtime !== null && chat !== undefined ? (
+      {pickerOpen && chat !== undefined ? (
         <ModelPickerSheet
           runtime={runtime}
           chat={chat}

@@ -68,7 +68,8 @@ import * as ContextMenu from './menus/context-menu';
 import { HarnessMark } from './HarnessMark';
 
 export interface ModelPickerSheetProps {
-  runtime: AppRuntime;
+  /** Null in test mode: catalog reads still work, loads/apply are skipped. */
+  runtime: AppRuntime | null;
   chat: Chat;
   phase: RunPhase;
   onClose: () => void;
@@ -313,6 +314,7 @@ export function ModelPickerSheet({
   const harnessId = config?.harness;
 
   useEffect(() => {
+    if (runtime === null) return;
     for (const h of harnesses) {
       if (modelsFor(deviceId, h.id).length === 0)
         loadModels(runtime, deviceId, h.id).catch(() => {});
@@ -427,7 +429,7 @@ export function ModelPickerSheet({
         sandbox: FULL_ACCESS_SANDBOX,
       };
       if (onApplyConfig !== undefined) onApplyConfig(next);
-      else setChatConfig(runtime, chat.id, next);
+      else if (runtime !== null) setChatConfig(runtime, chat.id, next);
       if (next.harness !== '' && next.model !== undefined) {
         rememberModelPick({ harness: next.harness, model: next.model });
         rememberModelSettings(next.harness, next.model, {
