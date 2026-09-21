@@ -238,6 +238,7 @@ export function PreviewRail({
                 ? Number.POSITIVE_INFINITY
                 : Math.abs(index - highlightedIndex);
             const highlighted = item.id === highlightedId;
+            const color = highlighted ? theme.text : theme.textSecondary;
             return (
               <Pressable
                 key={item.id}
@@ -249,11 +250,24 @@ export function PreviewRail({
                 accessibilityState={{ selected: item.id === selectedId }}
                 style={[styles.item, { height: itemSize }]}
               >
-                <RailTick
-                  scale={tickScale(distance)}
-                  color={highlighted ? theme.text : theme.textSecondary}
-                  reduceMotion={reduceMotion === true}
-                />
+                {distance <= 2 ? (
+                  <RailTick
+                    scale={tickScale(distance)}
+                    color={color}
+                    reduceMotion={reduceMotion === true}
+                  />
+                ) : (
+                  // tickScale(>=3) is constant 0.25 — a plain view avoids
+                  // mounting a Reanimated node for every rail item.
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.tick,
+                      { backgroundColor: color },
+                      { transform: [{ scaleX: 0.25 }] },
+                    ]}
+                  />
+                )}
               </Pressable>
             );
           })}

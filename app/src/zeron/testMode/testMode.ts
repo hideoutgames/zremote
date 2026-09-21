@@ -135,6 +135,22 @@ const chats: Chat[] = [
     roomGen: 2,
   }),
   chat({
+    id: 'chat-long',
+    deviceId: DEV_MACBOOK,
+    spaceId: 'space-zremote',
+    title: 'Long refactor sweep',
+    cwd: '~/code/zremote',
+    branch: 'refactor/sweep',
+    config: {
+      harness: 'claude-code',
+      model: 'claude-sonnet-4',
+      modelOptions: {},
+    },
+    lastMessagePreview: 'Iteration 119: applied the suggested change',
+    lastMessageAt: now - 40 * min,
+    roomGen: 2,
+  }),
+  chat({
     id: 'chat-ui-pass',
     deviceId: DEV_MACBOOK,
     spaceId: 'space-zremote',
@@ -203,6 +219,7 @@ const sessions: Record<string, SessionRow> = {
     'idle',
     now - 2 * 24 * hour,
   ),
+  'chat-long': sessionRow('chat-long', DEV_MACBOOK, 'idle', now - 40 * min),
 };
 
 const msg = (
@@ -395,6 +412,50 @@ const benchEntries: MessageEntry[] = [
   ),
 ];
 
+// Long transcript for scroll/perf testing — ~120 entries mixing prose,
+// reasoning, tool calls, and fenced code so markdown layout gets a workout.
+const longEntries: MessageEntry[] = Array.from({ length: 120 }, (_, i) => {
+  const role = i % 3 === 0 ? 'user' : 'assistant';
+  const parts: MessageEntry['parts'] = [
+    {
+      kind: 'text' as const,
+      id: `lp-${i}-t`,
+      text:
+        i % 5 === 0
+          ? `## Step ${i}\n\nApply the refactor described above and run the affected tests.\n\n- check imports\n- update snapshots`
+          : `Iteration ${i}: applied the suggested change. The diff looks correct and the focused tests pass. Continuing with the next item on the checklist.`,
+    },
+  ];
+  if (role === 'assistant' && i % 4 === 1) {
+    parts.unshift({
+      kind: 'reasoning' as const,
+      id: `lp-${i}-r`,
+      text: 'Comparing the two candidate approaches — the minimal patch wins because it keeps the hot path allocation-free.',
+    });
+    parts.push({
+      kind: 'tool' as const,
+      id: `lp-${i}-tool`,
+      call: {
+        kind: 'exec' as const,
+        command: `npm test -- iteration-${i} --runInBand`,
+      },
+      resolved: true,
+      output: `PASS src/__tests__/iteration-${i}.test.ts (12 tests, ${
+        200 + i
+      }ms)`,
+      outputBytes: 48,
+    });
+  }
+  if (role === 'assistant' && i % 7 === 3) {
+    parts.push({
+      kind: 'text' as const,
+      id: `lp-${i}-code`,
+      text: `\`\`\`ts\nexport const iteration${i} = () => {\n  return applyPatch(files[${i}]);\n};\n\`\`\``,
+    });
+  }
+  return msg(`lm-${i}`, role, parts, now - (120 - i) * min);
+});
+
 const flakyLoginCommands: SessionCommandEntry[] = [
   {
     id: 'cmd-run-1',
@@ -483,6 +544,19 @@ export const enterTestMode = (): void => {
     room: 'caughtUp',
     queueActionsPending: new Set(),
     hostDeviceId: DEV_DESKTOP,
+  });
+
+  getSessionStore('chat-long').setState({
+    entries: longEntries,
+    commands: [],
+    queue: [],
+    meta: { contextUsage: { tokens: 190_000, window: 200_000 } },
+    pendingSends: [],
+    failedSends: [],
+    unsyncedCommandIds: [],
+    room: 'caughtUp',
+    queueActionsPending: new Set(),
+    hostDeviceId: DEV_MACBOOK,
   });
 
   getSessionStore('chat-bench').setState({

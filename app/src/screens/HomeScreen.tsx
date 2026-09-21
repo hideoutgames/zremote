@@ -33,6 +33,7 @@ import {
   useArchivedChats,
   useIndicator,
   useHostForChat,
+  useDerivedNow,
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
 import {
@@ -224,11 +225,9 @@ const ThreadStatus = ({
 const ChatRow = React.memo(function ({
   chat,
   onOpen,
-  now,
 }: {
   chat: Chat;
   onOpen: (id: string) => void;
-  now: number;
 }) {
   const theme = useChromeTheme();
   const runtime = useRuntime();
@@ -236,7 +235,7 @@ const ChatRow = React.memo(function ({
   const session = useStore(workspaceStore, s => s.sessions[chat.id]);
   const host = useHostForChat(chat.id);
   const presenceAt = useStore(workspaceStore, s => s.presence[chat.deviceId]);
-  const hostOnline = isPresenceFresh(presenceAt, now);
+  const hostOnline = useDerivedNow(n => isPresenceFresh(presenceAt, n));
   const unseen = chatUnseen(chat);
   const prTone = useThreadPrDot(chat.id);
   const prAdds = useStore(
@@ -255,18 +254,21 @@ const ChatRow = React.memo(function ({
     undefined,
   );
   const at = chat.lastMessageAt ?? chat.createdAt;
+  const atLabel = useDerivedNow(n => relativeTime(at, n));
+  const workingStarted = session?.startedAt ?? session?.updatedAt;
+  const elapsedLabel = useDerivedNow(n =>
+    workingStarted === undefined
+      ? undefined
+      : formatWorkingElapsed(workingStarted, n),
+  );
   const line = threadStatusLine(
     indicator,
     prTone === null
       ? undefined
       : { tone: prTone, additions: prAdds, deletions: prDels },
-    relativeTime(at, now),
+    atLabel,
   );
-  const workingStarted = session?.startedAt ?? session?.updatedAt;
-  const workingElapsed =
-    line.kind === 'working' && workingStarted !== undefined
-      ? formatWorkingElapsed(workingStarted, now)
-      : undefined;
+  const workingElapsed = line.kind === 'working' ? elapsedLabel : undefined;
 
   const armSuppress = useCallback(() => {
     suppressOpen.current = true;
@@ -517,9 +519,9 @@ export function HomeScreen({
 
   const renderRow = useCallback(
     ({ item }: LegendListRenderItemProps<Chat>) => (
-      <ChatRow chat={item} onOpen={onOpenSession} now={now} />
+      <ChatRow chat={item} onOpen={onOpenSession} />
     ),
-    [onOpenSession, now],
+    [onOpenSession],
   );
 
   const folderLabel =
@@ -663,12 +665,7 @@ export function HomeScreen({
                       {t('home.pinned')}
                     </Text>
                     {pinned.map(c => (
-                      <ChatRow
-                        key={c.id}
-                        chat={c}
-                        onOpen={onOpenSession}
-                        now={now}
-                      />
+                      <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
                     ))}
                   </View>
                 ) : null}
@@ -715,12 +712,7 @@ export function HomeScreen({
                   </Pressable>
                   {archivedOpen
                     ? archived.map(c => (
-                        <ChatRow
-                          key={c.id}
-                          chat={c}
-                          onOpen={onOpenSession}
-                          now={now}
-                        />
+                        <ChatRow key={c.id} chat={c} onOpen={onOpenSession} />
                       ))
                     : null}
                 </View>
