@@ -22,6 +22,11 @@ import type {
   Space,
 } from '../protocol/types';
 import { EngineCapability } from '../protocol/types';
+import {
+  applyBuildPrefix,
+  PLAN_END_MARKER,
+  PLAN_START_MARKER,
+} from '../../components/planMode';
 
 interface TestModeState {
   active: boolean;
@@ -322,6 +327,46 @@ const flakyLoginEntries: MessageEntry[] = [
     DEV_MACBOOK,
     'streaming',
   ),
+  msg(
+    'm-a-plan',
+    'assistant',
+    [
+      {
+        kind: 'text',
+        id: 'p11',
+        text: [
+          'Here is the plan for the login flake fix.',
+          '',
+          PLAN_START_MARKER,
+          '# Login flake fix',
+          '',
+          '1. **Reproduce** — keep the 20x soak running against the patched loop.',
+          '2. **Guard** — re-read the token after every refresh, never cache.',
+          '3. **Regression** — add a test that rotates the token mid-refresh.',
+          '4. **Cleanup** — drop the pre-refresh token param from the retry helper.',
+          '',
+          PLAN_END_MARKER,
+        ].join('\n'),
+      },
+    ],
+    now - 2 * min,
+    DEV_MACBOOK,
+    'complete',
+  ),
+  // A tapped Implement Plan sends the build-prefixed plan name — the
+  // transcript renders it as a Build badge + plan title.
+  msg(
+    'm-u3',
+    'user',
+    [
+      {
+        kind: 'text',
+        id: 'p12',
+        text: applyBuildPrefix('Login flake fix'),
+      },
+    ],
+    now - 1 * min,
+  ),
 ];
 
 const deployEntries: MessageEntry[] = [
@@ -484,6 +529,18 @@ const deployQueue: QueuedMessage[] = [
     text: 'Also add a note about the new health-check endpoint.',
     issuedBy: DEV_DESKTOP,
     issuedAt: now - 10 * min,
+  },
+  {
+    id: 'qmsg-2',
+    text: 'Run the staging smoke tests before the production cutover.',
+    issuedBy: DEV_MACBOOK,
+    issuedAt: now - 8 * min,
+  },
+  {
+    id: 'qmsg-3',
+    text: 'Check whether the canary rollback section is still accurate.',
+    issuedBy: DEV_MACBOOK,
+    issuedAt: now - 5 * min,
   },
 ];
 

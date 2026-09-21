@@ -88,7 +88,7 @@ export function PlanSheet({
         </ScrollView>
         <View
           testID="plan-sheet-footer"
-          style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}
+          style={[styles.footer, { paddingBottom: insets.bottom + 40 }]}
         >
           <Pressable
             onPress={onImplement}
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, flex: 1, minHeight: 0 },
   scrollContent: { paddingBottom: 16 },
   footer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     paddingTop: 12,
   },
   cta: {

@@ -27,6 +27,7 @@ import {
 import {
   COMPOSER_BELOW_PAD,
   COMPOSER_BOTTOM_FADE_BAND,
+  COMPOSER_FADE_LIFT,
 } from '../src/components/TopChromeFade';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 import { railProgressAtY } from '../src/components/agentsKit/messagePreview';
@@ -177,7 +178,7 @@ test('content mask hides the pad below the glass, not the composer box', async (
   });
   const mask = tree!.root.findByProps({ testID: 'content-edge-mask' });
   expect(mask.props.maskElement.props.bottomInset).toBe(
-    34 + COMPOSER_BELOW_PAD,
+    34 + COMPOSER_BELOW_PAD + COMPOSER_FADE_LIFT,
   );
   expect(mask.props.maskElement.props.bottomBand).toBe(
     COMPOSER_BOTTOM_FADE_BAND,

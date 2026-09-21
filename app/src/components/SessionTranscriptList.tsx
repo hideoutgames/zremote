@@ -34,6 +34,7 @@ import {
   ContentEdgeMask,
   CHAT_TOP_FADE_BAND,
   COMPOSER_BOTTOM_FADE_BAND,
+  COMPOSER_FADE_LIFT,
   composerMaskBottomInset,
 } from './TopChromeFade';
 import {
@@ -624,7 +625,10 @@ export const SessionTranscriptList = forwardRef<
       <ContentEdgeMask
         topInset={insetsTop + 58}
         topBand={CHAT_TOP_FADE_BAND}
-        bottomInset={composerMaskBottomInset(keyboardHeight, insetsBottom)}
+        bottomInset={
+          composerMaskBottomInset(keyboardHeight, insetsBottom) +
+          COMPOSER_FADE_LIFT
+        }
         bottomBand={COMPOSER_BOTTOM_FADE_BAND}
       >
         <FlashList

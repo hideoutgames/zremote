@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
+  FadeIn,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -94,6 +95,27 @@ function InFlowSidebar({
       >
         {children}
       </View>
+    </Animated.View>
+  );
+}
+
+/** Keyed wrapper for the iPad detail pane: `key={chatId}` remounts
+ * SessionScreen per thread (a bare chatId-prop swap hot-reloads data into
+ * the live screen — stale transcript/scroll flash) and a short FadeIn
+ * covers the remount frame. */
+function DetailSwap({ children }: { children: React.ReactNode }) {
+  'use no memo';
+  const reduceMotion = useReducedMotion();
+  return (
+    <Animated.View
+      style={styles.detailSwap}
+      entering={
+        reduceMotion
+          ? undefined
+          : FadeIn.duration(160).easing(Easing.out(Easing.quad))
+      }
+    >
+      {children}
     </Animated.View>
   );
 }
@@ -191,16 +213,18 @@ export function AdaptiveShell({
             />
           </AppErrorBoundary>
         ) : chatId !== null ? (
-          <AppErrorBoundary resetKey={chatId}>
-            <SessionScreen
-              chatId={chatId}
-              openGeneration={openGeneration}
-              onBack={toggleSidebar}
-              leadingIcon="sidebar.left"
-              contentMaxWidth={layout.measureCap}
-              composerMaxWidth={layout.composerMaxWidth}
-            />
-          </AppErrorBoundary>
+          <DetailSwap key={chatId}>
+            <AppErrorBoundary resetKey={chatId}>
+              <SessionScreen
+                chatId={chatId}
+                openGeneration={openGeneration}
+                onBack={toggleSidebar}
+                leadingIcon="sidebar.left"
+                contentMaxWidth={layout.measureCap}
+                composerMaxWidth={layout.composerMaxWidth}
+              />
+            </AppErrorBoundary>
+          </DetailSwap>
         ) : (
           <View style={styles.emptyDetail} />
         )}
@@ -261,6 +285,7 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
   },
   detail: { flex: 1 },
+  detailSwap: { flex: 1 },
   emptyDetail: { flex: 1 },
   inspector: { borderLeftWidth: StyleSheet.hairlineWidth },
   tabs: {

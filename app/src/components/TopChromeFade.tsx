@@ -25,6 +25,9 @@ export const CHAT_TOP_FADE_BAND = TOP_CHROME_FADE_BAND / 2;
 export const COMPOSER_BOTTOM_FADE_BAND = 44;
 /** Extra pad below the glass; matches Composer `homeInset`. */
 export const COMPOSER_BELOW_PAD = 8;
+/** Lifts the bottom content mask a little above the glass edge so the fade
+ * tail is not legible through the translucent composer. */
+export const COMPOSER_FADE_LIFT = 12;
 /** Strong blur under chrome so wallpaper remains. */
 export const TOP_CHROME_BLUR_INTENSITY = 90;
 /** Black edge wash when a session wallpaper is set on Home. */
