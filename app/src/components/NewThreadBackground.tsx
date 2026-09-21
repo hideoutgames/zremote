@@ -1,10 +1,13 @@
 // Window-sized session wallpaper: cover-fit artwork behind Home, existing
 // chats, and new-thread compose. Treatments (dither / ASCII / halftone /
-// scanlines) run live on a Skia Canvas in source-image space (thumbnailed
-// to ≤2048, matching desktop) via a static RuntimeEffect, then the
-// treated rect is cover-fitted onto the window. Falls back to the untreated
-// image when the shader or decode fails (Jest, Expo Go, compile errors).
-// Mount once at AdaptiveShell / RootPager so every surface shares the same crop.
+// scanlines) raster offscreen in source-image space (thumbnailed to ≤2048,
+// matching desktop) via a static RuntimeEffect, then the treated snapshot is
+// cover-fitted with ordinary filtered image scaling. Live shading of the
+// destination is not used: the binary Bayer/halftone thresholds resample per
+// device pixel and alias into block artifacts on non-integer scales. Falls
+// back to the untreated image when the shader, decode, or raster fails (Jest,
+// Expo Go, compile errors). Mount once at AdaptiveShell / RootPager so every
+// surface shares the same crop.
 
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -30,7 +33,6 @@ import {
   DITHER_SKSL,
   HALFTONE_SKSL,
   SCANLINES_SKSL,
-  coverFitTransform,
   thumbnailSize,
 } from './backgroundEffects';
 
@@ -63,6 +65,86 @@ const shaderFor = (
   return made;
 };
 
+// useImage can hand back a GPU texture; raster surfaces cannot sample it, so
+// read it back to CPU memory once before thumbnailing and shader-eval.
+const rasterImage = (image: SkiaNS.SkImage): SkiaNS.SkImage =>
+  image.makeNonTextureImage() ?? image;
+
+const thumbnailImage = (image: SkiaNS.SkImage): SkiaNS.SkImage | null => {
+  const srcW = image.width();
+  const srcH = image.height();
+  const { width, height } = thumbnailSize(srcW, srcH);
+  if (width <= 0 || height <= 0) return null;
+  if (width === srcW && height === srcH) return image;
+  const surface = SkiaNS.Skia.Surface.MakeOffscreen(width, height);
+  if (surface == null) return null;
+  surface
+    .getCanvas()
+    .drawImageRectOptions(
+      image,
+      SkiaNS.Skia.XYWHRect(0, 0, srcW, srcH),
+      SkiaNS.Skia.XYWHRect(0, 0, width, height),
+      SkiaNS.FilterMode.Linear,
+      SkiaNS.MipmapMode.None,
+      SkiaNS.Skia.Paint(),
+    );
+  return surface.makeImageSnapshot();
+};
+
+const BLANK_PROBE = 8;
+
+// A rasterized treatment that painted nothing reads back all-zero bytes; the
+// untreated image is a better fallback than an invisible wallpaper.
+const rasterPaintsContent = (image: SkiaNS.SkImage): boolean => {
+  const size = Math.min(BLANK_PROBE, image.width(), image.height());
+  if (size <= 0) return false;
+  const half = Math.floor(size / 2);
+  const x = Math.max(0, Math.floor(image.width() / 2) - half);
+  const y = Math.max(0, Math.floor(image.height() / 2) - half);
+  try {
+    const pixels = image.readPixels(x, y, {
+      width: size,
+      height: size,
+      colorType: SkiaNS.ColorType.RGBA_8888,
+      alphaType: SkiaNS.AlphaType.Unpremul,
+    });
+    if (pixels == null) return true;
+    return pixels.some(value => value !== 0);
+  } catch {
+    return true;
+  }
+};
+
+const rasterizeBackgroundEffect = (
+  image: SkiaNS.SkImage,
+  shader: SkiaNS.SkRuntimeEffect,
+  effect: Exclude<NewThreadBackgroundEffect, 'none'>,
+  light: boolean,
+): SkiaNS.SkImage | null => {
+  const source = thumbnailImage(rasterImage(image));
+  if (source == null) return null;
+  const width = source.width();
+  const height = source.height();
+  if (width <= 0 || height <= 0) return null;
+  const surface = SkiaNS.Skia.Surface.MakeOffscreen(width, height);
+  if (surface == null) return null;
+  const imageShader = source.makeShaderOptions(
+    SkiaNS.TileMode.Clamp,
+    SkiaNS.TileMode.Clamp,
+    SkiaNS.FilterMode.Nearest,
+    SkiaNS.MipmapMode.None,
+  );
+  const uniforms = effect === 'dither' ? [] : [light ? 1 : 0];
+  const paint = SkiaNS.Skia.Paint();
+  paint.setShader(shader.makeShaderWithChildren(uniforms, [imageShader]));
+  surface
+    .getCanvas()
+    .drawRect(SkiaNS.Skia.XYWHRect(0, 0, width, height), paint);
+  const snapshot = surface.makeImageSnapshot();
+  if (snapshot == null || !rasterPaintsContent(snapshot)) return null;
+  return snapshot;
+};
+
 function UntreatedImage({ uri }: { uri: string }) {
   return (
     <ExpoImage
@@ -90,36 +172,43 @@ function TreatedImage({
   const image = SkiaNS.useImage(uri);
   const shader = shaderFor(effect);
   const rasterLight = effect === 'dither' ? false : light;
-  if (image == null || shader == null || width <= 0 || height <= 0) {
+  const [treated, setTreated] = useState<SkiaNS.SkImage | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setTreated(null);
+    if (image == null || shader == null) return;
+    try {
+      const snapshot = rasterizeBackgroundEffect(
+        image,
+        shader,
+        effect,
+        rasterLight,
+      );
+      if (!cancelled) setTreated(snapshot);
+    } catch {
+      if (!cancelled) setTreated(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [image, shader, effect, rasterLight]);
+  if (treated == null || width <= 0 || height <= 0) {
     return <UntreatedImage uri={uri} />;
   }
-  const thumb = thumbnailSize(image.width(), image.height());
-  if (thumb.width <= 0 || thumb.height <= 0) {
-    return <UntreatedImage uri={uri} />;
-  }
-  const transform = coverFitTransform(thumb.width, thumb.height, width, height);
   return (
     <SkiaNS.Canvas
       testID="new-thread-background-treated"
       style={{ width, height }}
       pointerEvents="none"
     >
-      <SkiaNS.Group transform={transform}>
-        <SkiaNS.Rect x={0} y={0} width={thumb.width} height={thumb.height}>
-          <SkiaNS.Shader
-            source={shader}
-            uniforms={effect === 'dither' ? {} : { light: rasterLight ? 1 : 0 }}
-          >
-            <SkiaNS.ImageShader
-              image={image}
-              fit="fill"
-              tx="clamp"
-              ty="clamp"
-              rect={{ x: 0, y: 0, width: thumb.width, height: thumb.height }}
-            />
-          </SkiaNS.Shader>
-        </SkiaNS.Rect>
-      </SkiaNS.Group>
+      <SkiaNS.Image
+        image={treated}
+        fit="cover"
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+      />
     </SkiaNS.Canvas>
   );
 }
