@@ -18,6 +18,12 @@ import { workspaceStore } from '../zeron/state/workspaceStore';
 import { authStore } from '../zeron/state/authStore';
 import { catalogStore } from '../zeron/state/catalogStore';
 import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
+import {
+  APPLY_RESTART_WAIT_MS,
+  APPLY_UPDATE_TIMEOUT_MS,
+  UPDATE_STATUS_RETRY_MS,
+  updateInstalled,
+} from '../zeron/runtime/softwareUpdate';
 import { useAppServices, useRuntime } from '../app/runtimeContext';
 import { isPresenceFresh } from '../zeron/protocol/entities';
 import type { DeviceRow, UpdateStatus } from '../zeron/protocol/types';
@@ -105,6 +111,12 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
   const catalog = useStore(catalogStore, s => s.byDevice[device.id]);
   const [update, setUpdate] = useState<UpdateStatus | undefined>(undefined);
   const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | undefined>(undefined);
+  /** Version ApplyUpdate reported. The spinner stays up until the restarted
+   * host publishes it, or the restart wait expires. */
+  const [pendingVersion, setPendingVersion] = useState<string | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     if (runtime !== null)
@@ -117,23 +129,66 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
     if (runtime === null) return;
     let cancelled = false;
     let stream: { cancel(): void } | undefined;
-    runtime
-      .relayFor(device.id)
-      .stream<UpdateStatus>(METHODS.UPDATE_STATUS, {})
-      .then(async s => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const open = async () => {
+      try {
+        const s = await runtime
+          .relayFor(device.id)
+          .stream<UpdateStatus>(METHODS.UPDATE_STATUS, {});
         if (cancelled) {
           s.cancel();
           return;
         }
         stream = s;
-        for await (const u of s.items) if (!cancelled) setUpdate(u);
-      })
-      .catch(() => {});
+        try {
+          for await (const u of s.items) {
+            if (cancelled) break;
+            setUpdate(u);
+          }
+        } finally {
+          if (stream === s) stream = undefined;
+        }
+      } catch {
+        // The restart drops the relay. Re-subscribe below; status payloads
+        // stay off the log.
+      }
+      if (cancelled) return;
+      retry = setTimeout(() => {
+        retry = undefined;
+        open().catch(() => {});
+      }, UPDATE_STATUS_RETRY_MS);
+    };
+
+    open().catch(() => {});
     return () => {
       cancelled = true;
+      if (retry !== undefined) clearTimeout(retry);
       stream?.cancel();
     };
   }, [runtime, device.id]);
+
+  useEffect(() => {
+    if (
+      pendingVersion === undefined ||
+      update === undefined ||
+      !updateInstalled(update, pendingVersion)
+    ) {
+      return;
+    }
+    setPendingVersion(undefined);
+    setApplyError(undefined);
+    setApplying(false);
+  }, [pendingVersion, update]);
+
+  useEffect(() => {
+    if (pendingVersion === undefined) return;
+    const id = setTimeout(() => {
+      setPendingVersion(undefined);
+      setApplying(false);
+    }, APPLY_RESTART_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [pendingVersion]);
 
   const rename = useCallback(() => {
     Alert.prompt(
@@ -167,11 +222,28 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
           text: t('settings.updateApply'),
           onPress: () => {
             setApplying(true);
+            setApplyError(undefined);
             runtime
               .relayFor(device.id)
-              .call(METHODS.APPLY_UPDATE, {})
-              .catch(e => log.warn(`ApplyUpdate: ${e}`))
-              .finally(() => setApplying(false));
+              .call<{ version?: string }>(
+                METHODS.APPLY_UPDATE,
+                {},
+                { timeoutMs: APPLY_UPDATE_TIMEOUT_MS },
+              )
+              .then(result => {
+                const version = result?.version?.trim();
+                if (version === undefined || version === '') {
+                  setApplying(false);
+                  return;
+                }
+                setPendingVersion(version);
+              })
+              .catch(e => {
+                log.warn(`ApplyUpdate: ${e}`);
+                setPendingVersion(undefined);
+                setApplyError(e instanceof Error ? e.message : String(e));
+                setApplying(false);
+              });
           },
         },
       ],
@@ -201,29 +273,34 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
       </SettingsGroup>
 
       {update !== undefined ? (
-        <SettingsGroup footer={update.error}>
+        <SettingsGroup footer={applyError ?? update.error}>
           <SettingsRow
             title={t('settings.softwareUpdate')}
             value={
-              update.updateAvailable
+              applying
+                ? t('settings.updateApplying')
+                : update.updateAvailable
                 ? t('settings.updateAvailable')
                 : t('settings.upToDate')
             }
             trailing={
-              update.updateAvailable ? (
-                applying ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text style={[styles.apply, { color: theme.accent }]}>
-                    {t('settings.updateApply')}
-                  </Text>
-                )
+              applying ? (
+                <ActivityIndicator
+                  size="small"
+                  accessibilityLabel={t('settings.updateApplying')}
+                  testID="software-update-spinner"
+                />
+              ) : update.updateAvailable ? (
+                <Text style={[styles.apply, { color: theme.accent }]}>
+                  {t('settings.updateApply')}
+                </Text>
               ) : undefined
             }
             onPress={
               update.updateAvailable && !applying ? applyUpdate : undefined
             }
             accessibilityLabel={t('settings.softwareUpdate')}
+            testID="settings-software-update"
           />
         </SettingsGroup>
       ) : null}
