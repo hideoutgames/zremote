@@ -13,6 +13,27 @@ const wallpaper = {
 const fakeImage = {
   width: () => 120,
   height: () => 80,
+  makeNonTextureImage: () => null,
+  makeShaderOptions: () => ({}),
+  readPixels: () => new Uint8Array([255, 255, 255, 255]),
+};
+
+const fakeSnapshot = {
+  width: () => 120,
+  height: () => 80,
+  readPixels: () => new Uint8Array([255, 255, 255, 255]),
+};
+
+const fakeCanvas = {
+  drawImageRect: jest.fn(),
+  drawImageRectOptions: jest.fn(),
+  drawRect: jest.fn(),
+};
+
+const fakeSurface = {
+  getCanvas: () => fakeCanvas,
+  makeImageSnapshot: () => fakeSnapshot,
+  flush: jest.fn(),
 };
 
 let tree: TestRenderer.ReactTestRenderer | undefined;
@@ -29,7 +50,21 @@ const layoutArtwork = async () => {
 };
 
 beforeEach(() => {
-  jest.spyOn(SkiaNS.Skia.RuntimeEffect, 'Make').mockReturnValue({} as never);
+  jest.spyOn(SkiaNS.Skia.RuntimeEffect, 'Make').mockReturnValue({
+    makeShaderWithChildren: jest.fn(() => ({})),
+  } as never);
+  jest
+    .spyOn(SkiaNS.Skia.Surface, 'MakeOffscreen')
+    .mockReturnValue(fakeSurface as never);
+  jest
+    .spyOn(SkiaNS.Skia, 'Paint')
+    .mockReturnValue({ setShader: jest.fn() } as never);
+  jest
+    .spyOn(SkiaNS.Skia, 'XYWHRect')
+    .mockImplementation(
+      (x: number, y: number, width: number, height: number) =>
+        ({ x, y, width, height } as never),
+    );
   jest.spyOn(SkiaNS, 'useImage').mockReturnValue(fakeImage as never);
   uiPrefsStore.setState({
     newThreadComposerBackground: wallpaper,
@@ -62,7 +97,7 @@ test('effect none keeps the untreated ExpoImage after layout', async () => {
   ).toHaveLength(0);
 });
 
-test('treated effects mount a live Shader and ImageShader, not a snapshot image', async () => {
+test('treated effects rasterize offscreen and draw the snapshot cover-fit', async () => {
   uiPrefsStore.setState({ newThreadBackgroundEffect: 'dither' });
   await act(async () => {
     tree = TestRenderer.create(<NewThreadBackground />);
@@ -71,12 +106,34 @@ test('treated effects mount a live Shader and ImageShader, not a snapshot image'
   expect(
     tree!.root.findByProps({ testID: 'new-thread-background-treated' }),
   ).toBeTruthy();
-  expect(tree!.root.findAllByType(SkiaNS.Shader).length).toBeGreaterThan(0);
-  expect(tree!.root.findAllByType(SkiaNS.ImageShader).length).toBeGreaterThan(
-    0,
-  );
-  expect(tree!.root.findAllByType(SkiaNS.Image)).toHaveLength(0);
-  const imageShader = tree!.root.findByType(SkiaNS.ImageShader);
-  expect(imageShader.props.fit).toBe('fill');
-  expect(imageShader.props.image).toBe(fakeImage);
+  // The pattern must be baked at source resolution, then scaled — live
+  // shaders resample the Bayer/halftone thresholds per device pixel and
+  // alias into block artifacts (the cube pattern regression).
+  expect(tree!.root.findAllByType(SkiaNS.Shader)).toHaveLength(0);
+  expect(tree!.root.findAllByType(SkiaNS.ImageShader)).toHaveLength(0);
+  expect(tree!.root.findAllByType(SkiaNS.Image)).toHaveLength(1);
+  const image = tree!.root.findByType(SkiaNS.Image);
+  expect(image.props.fit).toBe('cover');
+  expect(image.props.image).toBe(fakeSnapshot);
+});
+
+test('an empty raster falls back to the untreated image', async () => {
+  jest.spyOn(fakeSurface, 'makeImageSnapshot').mockReturnValue({
+    width: () => 120,
+    height: () => 80,
+    readPixels: () => new Uint8Array(256),
+  } as never);
+  uiPrefsStore.setState({ newThreadBackgroundEffect: 'dither' });
+  await act(async () => {
+    tree = TestRenderer.create(<NewThreadBackground />);
+  });
+  await layoutArtwork();
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'new-thread-background-treated'),
+  ).toHaveLength(0);
+  expect(
+    tree!.root.findAll(
+      n => n.props.testID === 'new-thread-background-untreated',
+    ).length,
+  ).toBeGreaterThan(0);
 });
