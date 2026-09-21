@@ -526,6 +526,9 @@ export const Composer = React.memo(function ({
       return;
     }
     baseRef.current = draft.text;
+    selRef.current = focusedRef.current
+      ? Math.min(selRef.current, draft.text.length)
+      : draft.text.length;
     dictation
       .start(
         { locale: uiPrefsStore.getState().dictationLocale },
