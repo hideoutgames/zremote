@@ -17,6 +17,7 @@ import {
   setVoiceModelId,
   setCleanupModelId,
   setCleanupPromptOverride,
+  setLocalLogsEnabled,
 } from '../uiPrefs';
 import {
   bindBackgroundFs,
@@ -54,6 +55,7 @@ beforeEach(() => {
     colorScheme: 'system',
     pinnedModels: [],
     sessionBackgroundBlur: false,
+    localLogsEnabled: false,
   });
 });
 
@@ -288,6 +290,22 @@ test('togglePinnedModel persists and unpins', async () => {
   ]);
   await togglePinnedModel({ harness: 'claude-code', model: 'sonnet' });
   expect(uiPrefsStore.getState().pinnedModels).toEqual([]);
+});
+
+test('local logs default off and persist', async () => {
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(false);
+  const disk = memDocDisk();
+  await bindUiPrefs(disk, 'org', 'user');
+  await setLocalLogsEnabled(true);
+  expect((await disk.loadUiPrefs('org', 'user'))?.localLogsEnabled).toBe(true);
+  uiPrefsStore.setState({ localLogsEnabled: false });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(true);
+
+  await disk.saveUiPrefs('org', 'user', { hapticsEnabled: true });
+  uiPrefsStore.setState({ localLogsEnabled: false });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().localLogsEnabled).toBe(false);
 });
 
 test('voice prefs default to dictation and migrate missing fields', async () => {

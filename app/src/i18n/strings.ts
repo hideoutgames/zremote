@@ -282,6 +282,16 @@ const en = {
   'settings.syncModeRelay': 'Relay session mode',
   'settings.syncModeHint':
     'Stream transcripts over the host relay instead of syncing session documents. Applies on next sign-in or restart.',
+  'settings.debug': 'Debug',
+  'settings.localLogs': 'Local Logs',
+  'settings.localLogsHint':
+    'While an agent is working, save a redacted text log on this device to share if something goes wrong.',
+  'settings.viewLocalLogs': 'View Local Logs',
+  'settings.localLogsEmpty': 'No local logs yet',
+  'settings.localLogsDisableTitle': 'Disable Local Logs',
+  'settings.localLogsDisableBody':
+    'Warning: Disabling logging deletes the local log files.',
+  'settings.localLogsDisable': 'Disable',
   'settings.updateApply': 'Apply',
   'settings.updateApplying': 'Updating…',
   'settings.updateApplyConfirm':

@@ -3,6 +3,7 @@
 // `baseDir` (the app's document directory):
 //   {baseDir}/zeron/{orgId}/{userId}/chats/{chatId}.chat2
 //   {baseDir}/zeron/{orgId}/{userId}/registry.json
+//   {baseDir}/zeron/{orgId}/{userId}/logs/{chatId}/{stamp}.txt
 // Writes are atomic: temp file + move-overwrite.
 //
 // Pure logic + an injectable fs port — Jest exercises the layout and

@@ -23,6 +23,7 @@ import type {
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { Icon } from '../components/Icon';
+import { CopyTextButton } from '../components/CopyTextButton';
 
 const leaf = (path: string): string =>
   path.split(/[\\/]/).filter(Boolean).pop() ?? path;
@@ -131,6 +132,11 @@ export function FileEditorScreen({
         >
           {leaf(path)}
         </Text>
+        {image !== true ? (
+          <CopyTextButton text={text} disabled={file === undefined} />
+        ) : (
+          <View style={styles.barBtn} />
+        )}
         {image !== true && !readOnly && dirty ? (
           <Pressable
             onPress={() => save()}
@@ -145,9 +151,7 @@ export function FileEditorScreen({
               {t('files.save')}
             </Text>
           </Pressable>
-        ) : (
-          <View style={styles.barBtn} />
-        )}
+        ) : null}
       </View>
       {image === true ? (
         imageUri !== undefined ? (

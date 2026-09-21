@@ -28,12 +28,15 @@ export function GlassSheet({
   children,
   maxContentHeight,
   draggable = true,
+  headerTrailing,
 }: {
   title?: string;
   onDismiss: () => void;
   children: ReactNode;
   maxContentHeight?: number;
   draggable?: boolean;
+  /** Replaces the empty trailing slot. Queue and reasoning sheets omit it. */
+  headerTrailing?: ReactNode;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -84,7 +87,7 @@ export function GlassSheet({
             ) : (
               <View style={styles.titleSpacer} />
             )}
-            <View style={styles.closeButton} />
+            {headerTrailing ?? <View style={styles.closeButton} />}
           </View>
           <View testID="glass-sheet-content" style={styles.bodyFill}>
             {children}

@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
 import { GlassSheet } from './GlassSheet';
+import { CopyTextButton } from './CopyTextButton';
 import { readFileText } from '../zeron/native/fileText';
 import { t } from '../i18n/strings';
 import { useTheme } from '../theme';
@@ -38,7 +39,13 @@ export function TextFileSheet({
   }, [uri]);
 
   return (
-    <GlassSheet title={title} onDismiss={onDismiss}>
+    <GlassSheet
+      title={title}
+      onDismiss={onDismiss}
+      headerTrailing={
+        <CopyTextButton text={body ?? ''} disabled={body === undefined} />
+      }
+    >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}

@@ -49,6 +49,7 @@ import {
   isImageMime,
 } from '../attachments/validate';
 import { sendPlan, type SendPlan } from '../attachments/sendPlan';
+import { noteLocalDiagnostic } from '../diagnostics/localLogs';
 import { RelaySessionSource } from './relaySessionSource';
 import { workspaceStore } from '../state/workspaceStore';
 import { isPresenceFresh } from '../protocol/entities';
@@ -823,6 +824,13 @@ export class SessionController {
       await this.enqueueQueued(text, {
         attachments: pendingRefsFor(transfers),
       });
+      noteLocalDiagnostic(
+        this.chatId,
+        `upload count=${transfers.length} bytes=${transfers.reduce(
+          (n, t) => n + t.size,
+          0,
+        )} result=queued`,
+      );
       this.spawnEscort(transfers);
       return 'queue';
     }
@@ -846,8 +854,10 @@ export class SessionController {
           remoteRef: path,
         });
         paths.push(path);
+        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=ok`);
       } catch (e) {
         updateAttachment(draftId, a.id, { uploadState: 'failed' });
+        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=fail`);
         throw e;
       }
     }
@@ -903,7 +913,14 @@ export class SessionController {
       clock: this.deps.clock,
       relayFor: () => this.hostRelay(),
       nudgeHost: () => this.nudge(),
-      log: this.deps.log,
+      log: line => {
+        this.deps.log?.(line);
+        if (line.startsWith('attachment escort gave up')) {
+          noteLocalDiagnostic(this.chatId, 'upload result=giveup');
+        } else if (line.startsWith('attachment escort failed')) {
+          noteLocalDiagnostic(this.chatId, 'upload result=retry');
+        }
+      },
     }).spawn(transfers);
   }
 

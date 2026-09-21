@@ -44,6 +44,7 @@ import {
   setHapticsEnabled,
   setLiveActivitiesEnabled,
   setLiveActivityShowHost,
+  setLocalLogsEnabled,
   setNotificationsEnabled,
   useCleanupModelId,
   useDictationLocale,
@@ -51,10 +52,14 @@ import {
   useHapticsEnabled,
   useLiveActivitiesEnabled,
   useLiveActivityShowHost,
+  useLocalLogsEnabled,
   useNotificationsEnabled,
   useVoiceInputMode,
   useVoiceModelId,
 } from '../zeron/state/uiPrefs';
+import { deleteLocalLogs } from '../zeron/diagnostics/localLogs';
+import { LocalLogsScreen } from './LocalLogsScreen';
+import { SessionSheet } from '../components/SessionSheet';
 import {
   dictationUnavailable,
   resolveDictationPort,
@@ -356,11 +361,13 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const now = useNow(PRESENCE_TICK_MS);
   const [agentsFor, setAgentsFor] = useState<DeviceRow | undefined>(undefined);
   const [page, setPage] = useState<SettingsPage>('root');
+  const [logsOpen, setLogsOpen] = useState(false);
   const liveActivities = useLiveActivitiesEnabled();
   const liveActivityShowHost = useLiveActivityShowHost();
   const notificationsEnabled = useNotificationsEnabled();
   const hapticsEnabled = useHapticsEnabled();
   const forceRelayMode = useForceRelayMode();
+  const localLogsEnabled = useLocalLogsEnabled();
   const dictationLocale = useDictationLocale();
   const voiceInputMode = useVoiceInputMode();
   const voiceModelId = useVoiceModelId();
@@ -415,6 +422,28 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     status.state === 'signedIn' || status.state === 'needsOrganization'
       ? status.user
       : undefined;
+
+  const onLocalLogsChange = useCallback((next: boolean) => {
+    if (next) {
+      setLocalLogsEnabled(true).catch(() => {});
+      return;
+    }
+    Alert.alert(
+      t('settings.localLogsDisableTitle'),
+      t('settings.localLogsDisableBody'),
+      [
+        { text: t('home.row.cancel'), style: 'cancel' },
+        {
+          text: t('settings.localLogsDisable'),
+          style: 'destructive',
+          onPress: () => {
+            setLocalLogsEnabled(false).catch(() => {});
+            deleteLocalLogs().catch(() => {});
+          },
+        },
+      ],
+    );
+  }, []);
 
   const confirmSignOut = useCallback(() => {
     Alert.alert(t('settings.signOut'), t('settings.signOutConfirm'), [
@@ -720,9 +749,39 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
                   />
                 ) : null}
               </SettingsGroup>
+
+              <SettingsGroup
+                header={t('settings.debug')}
+                footer={t('settings.localLogsHint')}
+              >
+                <SettingsRow
+                  title={t('settings.localLogs')}
+                  trailing={
+                    <Switch
+                      value={localLogsEnabled}
+                      onValueChange={onLocalLogsChange}
+                      accessibilityLabel={t('settings.localLogs')}
+                      testID="settings-local-logs"
+                    />
+                  }
+                />
+                {localLogsEnabled ? (
+                  <SettingsRow
+                    title={t('settings.viewLocalLogs')}
+                    showChevron
+                    onPress={() => setLogsOpen(true)}
+                    testID="settings-view-local-logs"
+                  />
+                ) : null}
+              </SettingsGroup>
             </>
           )}
         </ScrollView>
+        {logsOpen ? (
+          <SessionSheet fill onDismiss={() => setLogsOpen(false)}>
+            <LocalLogsScreen />
+          </SessionSheet>
+        ) : null}
       </View>
     </View>
   );
