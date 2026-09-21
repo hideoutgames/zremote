@@ -1,7 +1,8 @@
-// Desktop-faithful new-thread background treatments. SKSL is generated from
-// the same glyph / Bayer tables the TS helpers use so tests pin both. Dither
-// uses the ordered-quantize variant: the desktop's saturate-or-crush cells
-// collapse every gradient into a coarse square mosaic on mobile canvases.
+// Screen-space new-thread background treatments. Pattern cells are measured
+// in view points and the source image is sampled through cover-fit inside
+// the shader, so a large wallpaper is not filtered down to a faint tint.
+// SKSL is generated from the same glyph / Bayer tables the TS helpers use
+// so tests pin both. Dither is the original 2-point ordered 4-level quantize.
 
 export const BACKGROUND_EFFECT_MAX_EDGE = 2048;
 
@@ -25,6 +26,15 @@ export const DITHER_BAYER: readonly (readonly number[])[] = [
   [3, 11, 1, 9],
   [15, 7, 13, 5],
 ];
+
+/** Bayer matrix cell, in view points. The 4×4 pattern repeats every 8 points. */
+export const DITHER_CELL = 2;
+
+/** Halftone dot pitch, in view points. */
+export const HALFTONE_CELL = 8;
+
+/** Dark scanline gain. One of every three view-point rows. */
+export const SCANLINE_GAIN = 0.32;
 
 export const thumbnailSize = (
   width: number,
@@ -88,7 +98,7 @@ export const asciiInk = (x: number, y: number, level: number): boolean => {
 };
 
 export const halftoneRadius = (luma01: number): number =>
-  2 * (0.3 + 0.7 * Math.sqrt(Math.max(luma01, 0)));
+  (HALFTONE_CELL / 2) * (0.3 + 0.7 * Math.sqrt(Math.max(luma01, 0)));
 
 export const halftoneCoverage = (
   dx: number,
@@ -96,7 +106,8 @@ export const halftoneCoverage = (
   luma01: number,
   alpha01: number,
 ): number => {
-  const distance = Math.hypot(dx - 1.5, dy - 1.5);
+  const center = HALFTONE_CELL / 2;
+  const distance = Math.hypot(dx - center, dy - center);
   const coverage = Math.min(
     1,
     Math.max(0, halftoneRadius(luma01) + 0.5 - distance),
@@ -104,16 +115,17 @@ export const halftoneCoverage = (
   return coverage * alpha01;
 };
 
+/** Full ink-or-paper replacement. The source pixel does not bleed through. */
 export const mixTreatment = (
-  source: number,
   ink: number,
   paper: number,
   coverage: number,
-): number => source * 0.6 + (ink * coverage + paper * (1 - coverage)) * 0.4;
+): number => ink * coverage + paper * (1 - coverage);
 
+/** Bayer index for a 2-point cell: `floor(x / 2)`, `floor(y / 2)`. */
 export const ditherBayerAt = (x: number, y: number): number => {
-  const px = Math.floor(x);
-  const py = Math.floor(y);
+  const px = Math.floor(x / DITHER_CELL);
+  const py = Math.floor(y / DITHER_CELL);
   const row = DITHER_BAYER[((py % 4) + 4) % 4];
   return row[((px % 4) + 4) % 4];
 };
@@ -159,12 +171,23 @@ const bayerLookupSksl = (): string => {
   return lines.join('\n');
 };
 
+const coverUniformsSksl = (light: boolean): string =>
+  `uniform shader image;
+uniform float srcW;
+uniform float srcH;
+uniform float destW;
+uniform float destH;
+${light ? 'uniform float light;\n' : ''}float2 coverUv(float2 p) {
+  float scale = max(destW / srcW, destH / srcH);
+  float2 fitted = float2(destW - srcW * scale, destH - srcH * scale) * 0.5;
+  return (p - fitted) / scale;
+}`;
+
 export const SCANLINES_SKSL = `
-uniform shader image;
-uniform float light;
+${coverUniformsSksl(true)}
 half4 main(float2 xy) {
-  half4 c = image.eval(floor(xy) + float2(0.5));
-  float gain = mod(floor(xy.y), 3.0) < 0.5 ? 0.52 : 1.0;
+  half4 c = image.eval(coverUv(floor(xy) + float2(0.5)));
+  float gain = mod(floor(xy.y), 3.0) < 0.5 ? ${SCANLINE_GAIN} : 1.0;
   half3 rgb = light > 0.5
     ? c.rgb + (half3(1.0) - c.rgb) * (1.0 - gain)
     : c.rgb * gain;
@@ -173,10 +196,12 @@ half4 main(float2 xy) {
 `;
 
 export const DITHER_SKSL = `
-uniform shader image;
+${coverUniformsSksl(false)}
 half4 main(float2 xy) {
-  half4 c = image.eval(floor(xy) + float2(0.5));
-  float2 p = floor(xy);
+  float2 cell = float2(${DITHER_CELL}.0);
+  float2 origin = floor(xy / cell) * cell;
+  half4 c = image.eval(coverUv(origin + cell * 0.5));
+  float2 p = floor(xy / ${DITHER_CELL}.0);
   float bx = mod(p.x, 4.0);
   float by = mod(p.y, 4.0);
 ${bayerLookupSksl()}
@@ -186,34 +211,30 @@ ${bayerLookupSksl()}
 `;
 
 export const HALFTONE_SKSL = `
-uniform shader image;
-uniform float light;
+${coverUniformsSksl(true)}
 half4 main(float2 xy) {
-  float2 origin = floor(xy / 4.0) * 4.0;
-  half4 lumaPix = image.eval(origin + float2(0.5));
-  half4 sample = image.eval(origin + float2(2.5));
-  half4 src = image.eval(floor(xy) + float2(0.5));
-  float luma = dot(lumaPix.rgb, half3(0.299, 0.587, 0.114));
+  float cell = ${HALFTONE_CELL}.0;
+  float2 origin = floor(xy / cell) * cell;
+  float2 center = origin + float2(cell * 0.5);
+  half4 sample = image.eval(coverUv(center));
+  float luma = dot(sample.rgb, half3(0.299, 0.587, 0.114));
   if (light > 0.5) luma = 1.0 - luma;
-  float radius = 2.0 * (0.3 + 0.7 * sqrt(max(luma, 0.0)));
-  float dist = length(xy - (origin + float2(1.5)));
+  float radius = (cell * 0.5) * (0.3 + 0.7 * sqrt(max(luma, 0.0)));
+  float dist = length(xy - center);
   float coverage = clamp(radius + 0.5 - dist, 0.0, 1.0) * sample.a;
   float paper = light > 0.5 ? 1.0 : 0.0;
-  half3 mixed = src.rgb * 0.60
-    + mix(half3(paper), sample.rgb, coverage) * 0.40;
-  return half4(mixed, src.a);
+  half3 rgb = mix(half3(paper), sample.rgb, coverage);
+  return half4(rgb, sample.a);
 }
 `;
 
 export const ASCII_SKSL = `
-uniform shader image;
-uniform float light;
+${coverUniformsSksl(true)}
 ${asciiGlyphRowSksl()}
 half4 main(float2 xy) {
   float2 cell = float2(6.0, 8.0);
   float2 origin = floor(xy / cell) * cell;
-  half4 sample = image.eval(origin + float2(3.5, 4.5));
-  half4 src = image.eval(floor(xy) + float2(0.5));
+  half4 sample = image.eval(coverUv(origin + cell * 0.5));
   float luma = dot(sample.rgb, half3(0.299, 0.587, 0.114));
   if (light > 0.5) luma = 1.0 - luma;
   float level = floor(sqrt(max(luma, 0.0)) * 9.0);
@@ -224,8 +245,7 @@ half4 main(float2 xy) {
   float inkBit = step(0.5, mod(floor(rowBits / mask + 0.0001), 2.0));
   float ink = inGlyph * inkBit;
   float paper = light > 0.5 ? 1.0 : 0.0;
-  half3 mixed = src.rgb * 0.60
-    + mix(half3(paper), sample.rgb, ink) * 0.40;
-  return half4(mixed, src.a);
+  half3 rgb = mix(half3(paper), sample.rgb, ink);
+  return half4(rgb, sample.a);
 }
 `;

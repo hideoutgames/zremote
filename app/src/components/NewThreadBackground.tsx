@@ -1,10 +1,9 @@
 // Window-sized session wallpaper: cover-fit artwork behind Home, existing
 // chats, and new-thread compose. Treatments (dither / ASCII / halftone /
-// scanlines) raster offscreen in source-image space (thumbnailed to ≤2048,
-// matching desktop) via a static RuntimeEffect, then the treated snapshot is
-// cover-fitted with ordinary filtered image scaling. Live shading of the
-// destination is not used: the binary Bayer/halftone thresholds resample per
-// device pixel and alias into block artifacts on non-integer scales. Falls
+// scanlines) raster offscreen at the laid-out view size in points (capped at
+// 2048). The shader samples the source thumbnail through cover-fit, so
+// pattern cells stay a fixed size on screen, then the snapshot is drawn 1:1
+// with fill. Live shading of a fractionally scaled image is not used. Falls
 // back to the untreated image when the shader, decode, or raster fails (Jest,
 // Expo Go, compile errors). Mount once at AdaptiveShell / RootPager so every
 // surface shares the same crop.
@@ -122,12 +121,15 @@ const rasterizeBackgroundEffect = (
   shader: SkiaNS.SkRuntimeEffect,
   effect: Exclude<NewThreadBackgroundEffect, 'none'>,
   light: boolean,
+  destW: number,
+  destH: number,
 ): SkiaNS.SkImage | null => {
   const source = thumbnailImage(rasterImage(image));
   if (source == null) return null;
-  const width = source.width();
-  const height = source.height();
-  if (width <= 0 || height <= 0) return null;
+  const srcW = source.width();
+  const srcH = source.height();
+  const { width, height } = thumbnailSize(destW, destH);
+  if (srcW <= 0 || srcH <= 0 || width <= 0 || height <= 0) return null;
   const surface = SkiaNS.Skia.Surface.MakeOffscreen(width, height);
   if (surface == null) return null;
   const imageShader = source.makeShaderOptions(
@@ -136,7 +138,12 @@ const rasterizeBackgroundEffect = (
     SkiaNS.FilterMode.Nearest,
     SkiaNS.MipmapMode.None,
   );
-  const uniforms = effect === 'dither' ? [] : [light ? 1 : 0];
+  // Shader xy is the raster, which matches the view unless the long edge
+  // was capped. Fill then scales that raster back onto the view.
+  const uniforms =
+    effect === 'dither'
+      ? [srcW, srcH, width, height]
+      : [srcW, srcH, width, height, light ? 1 : 0];
   const paint = SkiaNS.Skia.Paint();
   paint.setShader(shader.makeShaderWithChildren(uniforms, [imageShader]));
   surface
@@ -184,13 +191,15 @@ function TreatedImage({
   useEffect(() => {
     let cancelled = false;
     setTreated(null);
-    if (image == null || shader == null) return;
+    if (image == null || shader == null || width <= 0 || height <= 0) return;
     try {
       const snapshot = rasterizeBackgroundEffect(
         image,
         shader,
         effect,
         rasterLight,
+        width,
+        height,
       );
       if (!cancelled) setTreated(snapshot);
     } catch {
@@ -199,7 +208,7 @@ function TreatedImage({
     return () => {
       cancelled = true;
     };
-  }, [image, shader, effect, rasterLight]);
+  }, [image, shader, effect, rasterLight, width, height]);
   if (treated == null || width <= 0 || height <= 0) {
     return <UntreatedImage uri={uri} />;
   }
@@ -211,7 +220,7 @@ function TreatedImage({
     >
       <SkiaNS.Image
         image={treated}
-        fit="cover"
+        fit="fill"
         x={0}
         y={0}
         width={width}
