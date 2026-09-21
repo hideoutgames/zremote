@@ -297,8 +297,8 @@ describe('SessionDoc.queueCommand', () => {
         reasoning: null,
         modelOptions: { x: 1 },
         cwd: '/repo',
-        sandbox: 'danger-full-access',
-        autoApprove: true,
+        sandbox: 'workspace-write',
+        autoApprove: false,
         resume: null,
       },
     });
@@ -319,17 +319,17 @@ describe('SessionDoc.queueCommand', () => {
     expect(r2.attachments).toEqual(['/a.png']);
     expect(r2.harness).toBeUndefined();
 
-    // Phone always assumes full access; stored sandbox is ignored on send.
+    // Stored sandbox is ignored; the desktop pair is hardcoded on send.
     const approving = buildRunCommand('hi', {
       cwd: '/r',
       config: { sandbox: 'read-only', modelOptions: {} },
     });
     if (approving.kind !== 'run') throw new Error('expected run payload');
     expect((approving.request as { sandbox: string }).sandbox).toBe(
-      'danger-full-access',
+      'workspace-write',
     );
     expect((approving.request as { autoApprove: boolean }).autoApprove).toBe(
-      true,
+      false,
     );
   });
 

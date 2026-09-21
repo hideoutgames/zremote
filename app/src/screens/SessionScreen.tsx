@@ -94,10 +94,7 @@ import {
 import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
-import {
-  FULL_ACCESS_SANDBOX,
-  type MessageEntry,
-} from '../zeron/protocol/types';
+import { DESKTOP_SANDBOX, type MessageEntry } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
@@ -1144,7 +1141,7 @@ function ActiveSessionScreen({
                 model: m,
                 modelOptions: picked.modelOptions,
                 reasoning: picked.reasoning,
-                sandbox: FULL_ACCESS_SANDBOX,
+                sandbox: DESKTOP_SANDBOX,
               });
               rememberModelPick({ harness: h, model: m });
             }}
@@ -1188,7 +1185,7 @@ function ActiveSessionScreen({
                 harness: chat.config?.harness ?? '',
                 model: patch.model,
                 reasoning: patch.reasoning,
-                sandbox: FULL_ACCESS_SANDBOX,
+                sandbox: DESKTOP_SANDBOX,
                 modelOptions: patch.modelOptions,
               });
               if (
@@ -1211,7 +1208,7 @@ function ActiveSessionScreen({
                 harness: chat.config?.harness ?? '',
                 model: patch.model,
                 reasoning: patch.reasoning,
-                sandbox: FULL_ACCESS_SANDBOX,
+                sandbox: DESKTOP_SANDBOX,
                 modelOptions: patch.modelOptions,
               });
               if (
@@ -1261,7 +1258,7 @@ function ActiveSessionScreen({
               model: patch.model,
               modelOptions: patch.modelOptions,
               reasoning: patch.reasoning,
-              sandbox: FULL_ACCESS_SANDBOX,
+              sandbox: DESKTOP_SANDBOX,
             });
             if (chat.config?.harness !== undefined && patch.model !== undefined)
               rememberModelSettings(chat.config.harness, patch.model, {

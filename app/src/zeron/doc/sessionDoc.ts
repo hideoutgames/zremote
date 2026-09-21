@@ -9,8 +9,8 @@
 import { joinContinuations } from '../protocol/messages';
 import {
   COMMAND_DEFAULT_TTL_MS,
-  FULL_ACCESS_AUTO_APPROVE,
-  FULL_ACCESS_SANDBOX,
+  DESKTOP_AUTO_APPROVE,
+  DESKTOP_SANDBOX,
   type ContextUsage,
   type ToolDiff,
   type ToolDiffStat,
@@ -521,7 +521,7 @@ export interface RunChatContext {
 export const buildRunRequest = (
   prompt: string,
   chat: RunChatContext,
-  // Phone assumes unattended full access — no sandbox/auto-approve pickers.
+  // Desktop hardcodes the run; a stored chat sandbox is ignored.
   opts: {
     attachments?: string[];
     worktree?: WorktreeSpec;
@@ -536,8 +536,8 @@ export const buildRunRequest = (
   reasoning: (chat.config?.reasoning ?? null) as RunRequest['reasoning'],
   modelOptions: chat.config?.modelOptions ?? {},
   cwd: chat.cwd ?? '',
-  sandbox: FULL_ACCESS_SANDBOX,
-  autoApprove: opts.autoApprove ?? FULL_ACCESS_AUTO_APPROVE,
+  sandbox: DESKTOP_SANDBOX,
+  autoApprove: opts.autoApprove ?? DESKTOP_AUTO_APPROVE,
   resume: null,
   ...(opts.attachments !== undefined && opts.attachments.length > 0
     ? { attachments: [...opts.attachments] }

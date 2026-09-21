@@ -18,7 +18,7 @@ logic:
   cancelOwnCommand; queue enqueue/send-now/steer-now/remove/move.
 - **Registry writes**: createSpace, deleteSpace, createChat, renameChat,
   archive/unarchive, markSeen, deleteChat, setChatConfig.
-- **Composer logic**: send routing, full-access sandbox + autoApprove,
+- **Composer logic**: send routing, workspace-write sandbox + autoApprove false,
   picker logic incl. provider-bound sessions, drafts, checkout rules +
   version gate.
 - **Transcript projection**, message context menu, a11y labels/roles.
@@ -112,8 +112,6 @@ set superseded by room sync.
 
 - `ModelPickerSheet` is a native Modal (`pageSheet` compact, `formSheet` regular); TrueSheet remains for session tools.
 - `loro-crdt` npm replaced by a Nitro module over loro-swift 1.13.3.
-- Runs always send `sandbox: danger-full-access` and `autoApprove: true`;
-  there is no sandbox/auto-approve picker.
 - Terminal: bespoke ANSI model; LegendList over scrollback+grid.
 - `zeron-split-view` not in package.json deps on purpose.
 - No device screenshots/recordings — no iOS build was possible on this

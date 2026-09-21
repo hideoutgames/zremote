@@ -70,7 +70,7 @@ import {
   type DictationPort,
 } from '../zeron/native/dictation';
 import {
-  FULL_ACCESS_SANDBOX,
+  DESKTOP_SANDBOX,
   type Chat,
   type ChatConfig,
   type DeviceRow,
@@ -306,7 +306,7 @@ export function ComposeComposer({
         harness,
         model: model === '' ? undefined : model,
         reasoning,
-        sandbox: FULL_ACCESS_SANDBOX,
+        sandbox: DESKTOP_SANDBOX,
         modelOptions,
       },
     }),

@@ -124,7 +124,7 @@ test('createThreadFromCompose writes the chat, moves the draft, and sendRun', as
         harness: 'claude-code',
         model: 'sonnet',
         reasoning: 'high',
-        sandbox: 'danger-full-access',
+        sandbox: 'workspace-write',
         modelOptions: {},
       }),
       cwd: '/repo',

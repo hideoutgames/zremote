@@ -2,7 +2,7 @@
 // the session to subscribe, then send the first run with the live draft.
 
 import {
-  FULL_ACCESS_SANDBOX,
+  DESKTOP_SANDBOX,
   type ChatConfig,
   type WorktreeSpec,
 } from '../protocol/types';
@@ -53,7 +53,7 @@ export const createThreadFromCompose = async (
     harness: settings.harness,
     model: settings.model === '' ? undefined : settings.model,
     reasoning: settings.reasoning,
-    sandbox: FULL_ACCESS_SANDBOX,
+    sandbox: DESKTOP_SANDBOX,
     modelOptions: settings.modelOptions ?? {},
   };
   const chatId =
