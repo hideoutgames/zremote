@@ -1,5 +1,7 @@
 // Desktop-faithful new-thread background treatments. SKSL is generated from
-// the same glyph / Bayer tables the TS helpers use so tests pin both.
+// the same glyph / Bayer tables the TS helpers use so tests pin both. Dither
+// uses the ordered-quantize variant: the desktop's saturate-or-crush cells
+// collapse every gradient into a coarse square mosaic on mobile canvases.
 
 export const BACKGROUND_EFFECT_MAX_EDGE = 2048;
 
@@ -110,22 +112,15 @@ export const mixTreatment = (
 ): number => source * 0.6 + (ink * coverage + paper * (1 - coverage)) * 0.4;
 
 export const ditherBayerAt = (x: number, y: number): number => {
-  const cellX = Math.floor(x / 2);
-  const cellY = Math.floor(y / 2);
-  const row = DITHER_BAYER[((cellY % 4) + 4) % 4];
-  return row[((cellX % 4) + 4) % 4];
+  const px = Math.floor(x);
+  const py = Math.floor(y);
+  const row = DITHER_BAYER[((py % 4) + 4) % 4];
+  return row[((px % 4) + 4) % 4];
 };
 
-export const ditherColor = (
-  rgba: readonly [number, number, number, number],
-  threshold: number,
-): [number, number, number, number] => {
-  const [r, g, b, a] = rgba;
-  const peak = Math.max(r, g, b);
-  const bright = peak / 255 > (threshold + 0.5) / 16;
-  const gain = bright ? 255 / Math.max(peak, 1) : 0.08;
-  return [Math.round(r * gain), Math.round(g * gain), Math.round(b * gain), a];
-};
+/** Ordered Bayer dither: 4-level channel quantize stepped by the Bayer offset. */
+export const ditherQuantize = (value01: number, bayer: number): number =>
+  Math.min(1, Math.max(0, Math.floor(value01 * 4 + bayer / 16 - 0.5) / 4));
 
 const asciiGlyphRowSksl = (): string => {
   const lines: string[] = ['float glyphRow(float g, float r) {'];
@@ -180,17 +175,13 @@ half4 main(float2 xy) {
 export const DITHER_SKSL = `
 uniform shader image;
 half4 main(float2 xy) {
-  float2 origin = floor(xy / 2.0) * 2.0;
-  half4 c = image.eval(origin + float2(1.5));
-  float2 p = floor(xy / 2.0);
+  half4 c = image.eval(floor(xy) + float2(0.5));
+  float2 p = floor(xy);
   float bx = mod(p.x, 4.0);
   float by = mod(p.y, 4.0);
 ${bayerLookupSksl()}
-  float peak = max(max(c.r, c.g), c.b);
-  float bright = step((bayer + 0.5) / 16.0, peak);
-  float gain = mix(0.08, 1.0 / max(peak, 1.0 / 255.0), bright);
-  half3 rgb = clamp(floor(c.rgb * gain * 255.0 + 0.5) / 255.0, 0.0, 1.0);
-  return half4(rgb, c.a);
+  half3 q = floor(c.rgb * 4.0 + ((bayer / 16.0) - 0.5)) / 4.0;
+  return half4(clamp(q, 0.0, 1.0), c.a);
 }
 `;
 

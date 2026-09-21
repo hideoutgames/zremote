@@ -807,6 +807,8 @@ export const enterTestMode = (): void => {
   uiPrefsStore.setState(s => ({
     ...s,
     pinnedChatIds: ['chat-flaky-login'],
+    newThreadComposerBackground: { kind: 'preset', id: 'matteo-vella' },
+    newThreadBackgroundEffect: 'dither',
     recentModels: [
       { harness: 'claude-code', model: 'claude-opus-4' },
       { harness: 'codex', model: 'gpt-5-codex' },
