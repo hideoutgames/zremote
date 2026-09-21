@@ -25,6 +25,7 @@ import { parseCallbackUrl } from '../zeron/auth/authKit';
 import { authFailureLog } from '../zeron/auth/authClient';
 import { randomBytes, sha256 } from '../zeron/native/expoCrypto';
 import { useAuthSession } from '../app/runtimeContext';
+import { enterTestMode } from '../zeron/testMode/testMode';
 import { useTheme } from '../theme';
 import { t } from '../i18n/strings';
 import { createLog } from '../zeron/log';
@@ -205,6 +206,19 @@ export function SignInScreen() {
         >
           <Text style={styles.primaryText}>{t('signIn.button')}</Text>
         </Pressable>
+
+        {/* Temporary: offline test mode with synthetic data. */}
+        <Pressable
+          onPress={enterTestMode}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('signIn.testMode')}
+          style={styles.testMode}
+        >
+          <Text style={[styles.testModeText, { color: theme.textSecondary }]}>
+            {t('signIn.testMode')}
+          </Text>
+        </Pressable>
       </View>
     </KeyboardAwareScrollView>
   );
@@ -260,5 +274,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   continueText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  testMode: { paddingVertical: 6, paddingHorizontal: 16 },
+  testModeText: { fontSize: 14 },
   disabled: { opacity: 0.4 },
 });

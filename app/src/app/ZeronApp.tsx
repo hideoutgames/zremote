@@ -15,6 +15,7 @@ import { StatusBar } from 'react-native';
 import { AuthClient } from '../zeron/auth/authClient';
 import { AuthSession } from '../zeron/auth/authSession';
 import { bindAuthSession, useAuthStatus } from '../zeron/state/authStore';
+import { exitTestMode, useTestMode } from '../zeron/testMode/testMode';
 import { expoSecureStore } from '../zeron/native/expoSecureStore';
 import { appConfig } from '../zeron/native/appConfig';
 import { deviceId, deviceName } from '../zeron/native/deviceIdentity';
@@ -109,8 +110,11 @@ export function ZeronApp() {
   const accountRef = useRef<string | null>(null);
 
   const signedIn = status.state === 'signedIn' ? status : undefined;
+  // Temporary test mode: synthetic stores + no runtime (offline).
+  const testMode = useTestMode();
 
   useEffect(() => {
+    if (testMode) return;
     if (signedIn === undefined) {
       // Explicit sign-out already ran clearAccountCaches via signOut(); an
       // account change stops the old runtime without wiping the new account's
@@ -255,6 +259,7 @@ export function ZeronApp() {
   }, [auth, edgeHost, openSession]);
 
   const signOut = useCallback(async () => {
+    exitTestMode();
     await auth.signOut();
     const rt = runtime;
     setRuntime(null);

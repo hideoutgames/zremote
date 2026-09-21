@@ -5,6 +5,7 @@ const en = {
   // Sign in / org gate
   'signIn.logo': 'ZRemote',
   'signIn.button': 'Sign in',
+  'signIn.testMode': 'Open test mode (demo data)',
   'signIn.pasteFallback.placeholder': 'state.code',
   'signIn.pasteFallback.continue': 'Continue',
   'signIn.error.generic': 'Sign-in failed. Try again.',
