@@ -180,6 +180,9 @@ export class VoiceModelManager {
           const base = doneBytes;
           await this.deps.downloader.download(file.url, tmp, {
             onProgress: (received, total) => {
+              // Late bridge events can land after the row moved on to
+              // 'verifying' — only patch while still in 'downloading'.
+              if (this.row(id).state !== 'downloading') return;
               // Progress spans all files: `received` is this file's bytes,
               // `base` is everything already placed.
               const denom = model.bytes > 0 ? model.bytes : total;
