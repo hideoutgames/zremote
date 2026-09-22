@@ -41,7 +41,7 @@ import {
   updateAttachment,
   type StagedAttachment,
 } from '../state/draftStore';
-import { withAttachments } from '../protocol/messages';
+import { ATTACHMENT_ONLY_TEXT, withAttachments } from '../protocol/messages';
 import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
 import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
 import {
@@ -651,12 +651,14 @@ export class SessionController {
     return id;
   }
 
-  /** Awaitable queue write — doc mode is sync; relay waits for the RPC. */
+  /** Awaitable queue write — doc mode is sync; relay waits for the RPC.
+   * Offline relay sends park in the sidecar like queueMessage does. */
   private async enqueueQueued(
     text: string,
     opts: { attachments?: string[]; holdForTurnEnd?: boolean },
   ): Promise<string> {
     if (this.relay !== undefined) {
+      if (this.shouldBackupLocal()) return this.parkRelayLocal(text, opts);
       try {
         return await this.relay.queueMessage(text, opts);
       } catch (e) {
@@ -786,7 +788,12 @@ export class SessionController {
       this.deps.hostCapabilities?.() ?? new Set(),
       staged.length > 0,
     );
-    if (opts.forceQueue === true && staged.length > 0) plan = 'queue';
+    // Host offline: the queue is the only park that survives (legacy
+    // uploads need the host). pending:// refs still require the host's
+    // message-queue-attachments-v1 to resolve — an older host would
+    // forward them verbatim into the prompt, so block instead.
+    if (opts.forceQueue === true && staged.length > 0 && plan !== 'queue')
+      plan = 'blocked';
     if (plan === 'direct') {
       this.sendRun(text, chat, opts);
       return 'direct';
@@ -820,10 +827,15 @@ export class SessionController {
       // The host composes the withAttachments trailer from the row's
       // `attachments` at dispatch (doc_host.rs queued_message_prompt —
       // `message-queue-clean-attachment-text-v1` even strips a client-
-      // expanded trailer), so `text` stays the raw user text.
-      await this.enqueueQueued(text, {
-        attachments: pendingRefsFor(transfers),
-      });
+      // expanded trailer), so `text` stays the raw user text. An empty
+      // text is substituted like withAttachments('', …) — empty-text
+      // rows are dropped by queuedFrom on both ends.
+      await this.enqueueQueued(
+        text.trim().length === 0 ? ATTACHMENT_ONLY_TEXT : text,
+        {
+          attachments: pendingRefsFor(transfers),
+        },
+      );
       noteLocalDiagnostic(
         this.chatId,
         `upload count=${transfers.length} bytes=${transfers.reduce(

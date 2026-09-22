@@ -1,10 +1,14 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { InteractionManager } from 'react-native';
+import { Directory, File, Paths } from 'expo-file-system';
 import {
   afterAttachMenuDismissed,
   pickFilesForChat,
   PICKER_MENU_DELAY_MS,
   stageDocumentPickerResult,
+  stagePastedFileUri,
+  stagePastedImage,
+  stagePastedText,
 } from '../src/hooks/useAttachments';
 import {
   draftStore,
@@ -25,6 +29,11 @@ const file = (name: string, size = 10) => ({
 beforeEach(() => {
   resetDrafts();
   getDocumentAsync.mockReset();
+  (
+    global as typeof global & {
+      __expoFSFiles: Map<string, string | Uint8Array>;
+    }
+  ).__expoFSFiles.clear();
 });
 
 afterEach(() => {
@@ -118,6 +127,47 @@ test('stageAttachments concatenates batches instead of replacing', () => {
     'b.txt',
     'c.txt',
   ]);
+});
+
+test('stagePastedText writes pasted.txt into the cache and stages it', () => {
+  const result = stagePastedText('c1', 'x'.repeat(3000));
+  expect(result.rejected).toEqual([]);
+  const [staged] = result.staged;
+  expect(staged.kind).toBe('file');
+  expect(staged.name).toBe('pasted.txt');
+  expect(staged.mimeType).toBe('text/plain');
+  expect(staged.size).toBe(3000);
+  expect(staged.localUri).toMatch(/^file:\/\/\/cache\/zeron\/pasted\//);
+  // The file is real on the (mock) filesystem — upload reads from localUri.
+  expect(new File(staged.localUri).exists).toBe(true);
+  expect(draftStore.getState().byChat.c1.attachments).toHaveLength(1);
+});
+
+test('stagePastedImage decodes base64 into pasted.png', () => {
+  const result = stagePastedImage('c1', 'iVBORw0KGgo='); // 8 bytes
+  const [staged] = result.staged;
+  expect(staged.kind).toBe('image');
+  expect(staged.name).toBe('pasted.png');
+  expect(staged.mimeType).toBe('image/png');
+  expect(staged.size).toBe(8);
+  expect(new File(staged.localUri).exists).toBe(true);
+});
+
+test('stagePastedFileUri stages a readable file; unreadable stages nothing', () => {
+  const dir = new Directory(Paths.cache, 'src');
+  const f = new File(dir, 'notes.md');
+  f.create();
+  f.write('hello');
+  const ok = stagePastedFileUri('c1', f.uri);
+  expect(ok.staged).toHaveLength(1);
+  expect(ok.staged[0]).toMatchObject({
+    kind: 'file',
+    name: 'notes.md',
+    mimeType: 'text/markdown',
+    size: 5,
+    localUri: f.uri,
+  });
+  expect(stagePastedFileUri('c1', 'file:///nope/x.bin').staged).toEqual([]);
 });
 
 test('afterAttachMenuDismissed waits for interactions and the menu delay', async () => {

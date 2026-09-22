@@ -25,6 +25,11 @@ import {
   type RelayLike,
 } from '../src/zeron/attachments/upload';
 import { AttachmentEscort } from '../src/zeron/attachments/escort';
+import {
+  splitTextEdit,
+  mimeForFileName,
+  PASTE_FILE_THRESHOLD,
+} from '../src/zeron/attachments/paste';
 import { FakeClock } from '../src/zeron/transport/clock';
 import { memDisk, flush } from '../src/zeron/testing/memDisk';
 
@@ -330,4 +335,53 @@ test('escort dedupes concurrent spawn on the same uploadId', async () => {
     escort.spawn([{ uploadId: 'up1', name: 'a.png', size: 4 }]),
   ]);
   expect(relay.calls.filter(c => c.method === 'UploadCommit').length).toBe(1);
+});
+
+// ── Paste ────────────────────────────────────────────────────────────────
+
+test('splitTextEdit: pure insert mid-string', () => {
+  expect(splitTextEdit('helloworld', 'helloBRAVEworld')).toEqual({
+    prefix: 'hello',
+    removed: '',
+    inserted: 'BRAVE',
+    suffix: 'world',
+  });
+});
+
+test('splitTextEdit: selection replace and tail insert', () => {
+  // Selecting 'there' and pasting 'you'
+  expect(splitTextEdit('hi there!', 'hi you!')).toEqual({
+    prefix: 'hi ',
+    removed: 'there',
+    inserted: 'you',
+    suffix: '!',
+  });
+  // Cursor at end
+  expect(splitTextEdit('abc', 'abcXYZ')).toEqual({
+    prefix: 'abc',
+    removed: '',
+    inserted: 'XYZ',
+    suffix: '',
+  });
+});
+
+test('splitTextEdit: pure delete and full replace', () => {
+  expect(splitTextEdit('abcdef', 'acf')).toEqual({
+    prefix: 'a',
+    removed: 'bcde',
+    inserted: 'c',
+    suffix: 'f',
+  });
+  expect(
+    splitTextEdit('', 'x'.repeat(PASTE_FILE_THRESHOLD + 1)).inserted,
+  ).toHaveLength(PASTE_FILE_THRESHOLD + 1);
+});
+
+test('mimeForFileName: images, docs, fallback', () => {
+  expect(mimeForFileName('a.png')).toBe('image/png');
+  expect(mimeForFileName('photo.HEIC')).toBe('image/heic');
+  expect(mimeForFileName('doc.PDF')).toBe('application/pdf');
+  expect(mimeForFileName('notes.md')).toBe('text/markdown');
+  expect(mimeForFileName('archive.tar.gz')).toBe('application/octet-stream');
+  expect(mimeForFileName('noext')).toBe('application/octet-stream');
 });

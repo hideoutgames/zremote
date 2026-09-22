@@ -21,10 +21,15 @@ import {
   resetQueuedLocal,
 } from '../src/zeron/state/queuedLocalStore';
 import { queuedLocalPath } from '../src/zeron/native/docDisk';
+import { stageAttachments, resetDrafts } from '../src/zeron/state/draftStore';
+import { ATTACHMENT_ONLY_TEXT } from '../src/zeron/protocol/messages';
 
 const cfg = { baseUrl: 'https://edge.test' };
 
-const make = (relay?: RelayLike) => {
+const make = (
+  relay?: RelayLike,
+  extra: Partial<ConstructorParameters<typeof SessionController>[1]> = {},
+) => {
   const clock = new FakeClock(1_000_000);
   const hub = new FakeWsHub();
   const { fs, disk } = memDisk();
@@ -41,6 +46,7 @@ const make = (relay?: RelayLike) => {
     fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
     chatMeta: () => ({ hostDeviceId: 'host1', roomGen: 2 }),
     relayFor: () => relay,
+    ...extra,
   });
   return { c, clock, disk, fs };
 };
@@ -48,6 +54,7 @@ const make = (relay?: RelayLike) => {
 beforeEach(() => {
   resetSessionStores();
   resetQueuedLocal();
+  resetDrafts();
   workspaceStore.setState({
     presence: { host1: 1_000_000 },
     devices: [],
@@ -279,5 +286,147 @@ test('relay parks locally when the host is offline and flushes on reconnect', as
   expect(calls[0]?.method).toBe('QueueMessage');
   expect(localQueuedFor('c1')).toEqual([]);
   expect(fs.files.get(queuedLocalPath('/docs', 'o1', 'u1'))).toBe('{}');
+  c.stop();
+});
+
+// ── sendWithAttachments (pending:// queue flow) ───────────────────────────
+
+const QUEUE_CAPS = new Set([
+  'message-queue-v1',
+  'message-queue-attachments-v1',
+]);
+
+const stagedPng = (chatId = 'c1') =>
+  stageAttachments(chatId, [
+    {
+      kind: 'file',
+      name: 'a.png',
+      mimeType: 'image/png',
+      size: 4,
+      localUri: 'file:///cache/a.png',
+    },
+  ]);
+
+test('sendWithAttachments on a queue-capable host → queue row with pending refs', async () => {
+  const { c, disk } = make(undefined, {
+    hostCapabilities: () => QUEUE_CAPS,
+    readFileBase64: async () => 'AAA=',
+  });
+  const staged = stagedPng();
+  const plan = await c.sendWithAttachments('see this', {}, staged, {
+    phase: 'idle',
+  });
+  expect(plan).toBe('queue');
+  const row = getSessionStore('c1').getState().queue[0];
+  // The row keeps the raw text — the host expands the trailer at drain.
+  expect(row.text).toBe('see this');
+  expect(row.attachments).toEqual([`pending://${staged[0].id}/a.png`]);
+  // The stash holds the bytes for the escort.
+  expect(await disk.loadUpload('o1', 'u1', staged[0].id)).toBeDefined();
+  c.stop();
+});
+
+test('attachment-only queue send substitutes the fallback text', async () => {
+  const { c } = make(undefined, {
+    hostCapabilities: () => QUEUE_CAPS,
+    readFileBase64: async () => 'AAA=',
+  });
+  const staged = stagedPng();
+  const plan = await c.sendWithAttachments('', {}, staged, {
+    phase: 'idle',
+  });
+  expect(plan).toBe('queue');
+  const queue = getSessionStore('c1').getState().queue;
+  // queuedFrom drops empty-text rows on both ends — an attachment-only
+  // message must land a body (same as withAttachments('', …)).
+  expect(queue).toHaveLength(1);
+  expect(queue[0].text).toBe(ATTACHMENT_ONLY_TEXT);
+  c.stop();
+});
+
+test('forceQueue on a host without queue-attachments caps blocks instead of leaking pending:// refs', async () => {
+  const clock = new FakeClock(1_000_000);
+  const { disk } = memDisk();
+  const c = new SessionController('c1', {
+    cfg,
+    tokenSource: staticTokenSource('u@o1'),
+    deviceId: 'phone1',
+    orgId: 'o1',
+    userId: 'u1',
+    wsFactory: new FakeWsHub().factory,
+    clock,
+    docDisk: disk,
+    loro: () => new LoroCrdtAdapter(),
+    fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
+    chatMeta: () => ({ hostDeviceId: 'host1', roomGen: 2 }),
+    readFileBase64: async () => 'AAA=',
+    // No hostCapabilities → sendPlan('idle', ∅, attachments) → 'legacy'.
+  });
+  const staged = stagedPng();
+  const plan = await c.sendWithAttachments('hi', {}, staged, {
+    phase: 'idle',
+    forceQueue: true,
+  });
+  expect(plan).toBe('blocked');
+  // Nothing parked: no queue row, no upload stash.
+  expect(getSessionStore('c1').getState().queue).toEqual([]);
+  expect(await disk.listUploads('o1', 'u1')).toEqual([]);
+  c.stop();
+});
+
+test('forceQueue on a capable offline host still takes the queue path', async () => {
+  const { c } = make(undefined, {
+    hostCapabilities: () => QUEUE_CAPS,
+    readFileBase64: async () => 'AAA=',
+  });
+  const staged = stagedPng();
+  const plan = await c.sendWithAttachments('hi', {}, staged, {
+    phase: 'idle',
+    forceQueue: true,
+  });
+  expect(plan).toBe('queue');
+  const row = getSessionStore('c1').getState().queue[0];
+  expect(row.attachments).toEqual([`pending://${staged[0].id}/a.png`]);
+  c.stop();
+});
+
+test('relay-mode offline send parks the attachment row in the sidecar', async () => {
+  const clock = new FakeClock(1_000_000);
+  const { disk } = memDisk();
+  await bindQueuedLocal(disk, 'o1', 'u1');
+  workspaceStore.setState({ presence: {} });
+  const c = new SessionController('c1', {
+    cfg,
+    tokenSource: staticTokenSource('u@o1'),
+    deviceId: 'phone1',
+    orgId: 'o1',
+    userId: 'u1',
+    wsFactory: new FakeWsHub().factory,
+    clock,
+    docDisk: disk,
+    loro: () => {
+      throw new Error('no loro in relay mode');
+    },
+    fetchImpl: fakeFetch(() => ({ status: 500 })).fetchImpl,
+    chatMeta: () => ({ hostDeviceId: 'host1', roomGen: 2 }),
+    relayFor: () => undefined,
+    readFileBase64: async () => 'AAA=',
+    hostCapabilities: () => QUEUE_CAPS,
+    sessionMode: 'relay',
+  });
+  const staged = stagedPng();
+  // Without the sidecar guard this threw 'host offline' and orphaned the
+  // stash; now it parks like queueMessage does.
+  const plan = await c.sendWithAttachments('', {}, staged, {
+    phase: 'idle',
+    forceQueue: true,
+  });
+  expect(plan).toBe('queue');
+  await flush();
+  const rows = localQueuedFor('c1');
+  expect(rows).toHaveLength(1);
+  expect(rows[0].text).toBe(ATTACHMENT_ONLY_TEXT);
+  expect(rows[0].attachments).toEqual([`pending://${staged[0].id}/a.png`]);
+  expect(await disk.loadUpload('o1', 'u1', staged[0].id)).toBeDefined();
   c.stop();
 });

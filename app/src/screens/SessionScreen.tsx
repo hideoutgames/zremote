@@ -604,8 +604,14 @@ function ActiveSessionScreen({
   );
 
   const onSendBlocked = useCallback(() => {
-    Alert.alert(t('session.attachmentsBlocked'));
-  }, []);
+    Alert.alert(
+      t(
+        hostOnline
+          ? 'session.attachmentsBlocked'
+          : 'session.attachmentsBlockedOffline',
+      ),
+    );
+  }, [hostOnline]);
 
   const onRename = useCallback(() => {
     Alert.prompt(
