@@ -3,7 +3,11 @@ import { File } from 'expo-file-system';
 import { resolveVoiceCapture } from '../zeron/native/voiceCapture';
 import { resolveTranscriptionEngine } from '../zeron/native/transcription';
 import { resolveCleanupEngine } from '../zeron/native/cleanup';
-import { getVoiceModelManager, type LocalVoiceRuntime } from '../zeron/voice';
+import {
+  catalogEntry,
+  getVoiceModelManager,
+  type LocalVoiceRuntime,
+} from '../zeron/voice';
 import { useCleanupModelId, useVoiceModelId } from '../zeron/state/uiPrefs';
 
 const deleteAudio = async (uri: string): Promise<void> => {
@@ -44,7 +48,9 @@ export const useLocalVoiceRuntime = (
       }
       const [capture, transcription, cleanup] = await Promise.all([
         resolveVoiceCapture(),
-        resolveTranscriptionEngine(),
+        resolveTranscriptionEngine(
+          catalogEntry(voiceModelId)?.runtime ?? 'whisper',
+        ),
         resolveCleanupEngine(),
       ]);
       if (!mounted) return;

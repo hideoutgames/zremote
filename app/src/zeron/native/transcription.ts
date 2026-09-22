@@ -1,7 +1,8 @@
-// Local transcription engine port. App-owned adapter around whisper.rn
-// (or a Nitro whisper.cpp fallback) after the Mac compile spike.
+// Local transcription engine port. App-owned adapter dispatching on the
+// catalog runtime: whisper.rn for Whisper models, react-native-sherpa-onnx
+// for Parakeet (NeMo transducer) models.
 
-import type { TranscriptionEngine } from '../voice/types';
+import type { TranscriptionEngine, VoiceModelRuntime } from '../voice/types';
 
 export const transcriptionUnavailable: TranscriptionEngine = {
   isAvailable: () => Promise.resolve(false),
@@ -10,17 +11,22 @@ export const transcriptionUnavailable: TranscriptionEngine = {
   abort: () => Promise.resolve(),
 };
 
-export const resolveTranscriptionEngine =
-  async (): Promise<TranscriptionEngine> => {
-    try {
-      const mod = (await import('./transcriptionNative')) as {
-        createTranscriptionEngine?: () => TranscriptionEngine;
-      };
-      if (mod.createTranscriptionEngine === undefined) {
-        return transcriptionUnavailable;
-      }
-      return mod.createTranscriptionEngine();
-    } catch {
+export const resolveTranscriptionEngine = async (
+  runtime: VoiceModelRuntime = 'whisper',
+): Promise<TranscriptionEngine> => {
+  try {
+    const mod = (
+      runtime === 'sherpa'
+        ? await import('./sherpaTranscriptionNative')
+        : await import('./transcriptionNative')
+    ) as {
+      createTranscriptionEngine?: () => TranscriptionEngine;
+    };
+    if (mod.createTranscriptionEngine === undefined) {
       return transcriptionUnavailable;
     }
-  };
+    return mod.createTranscriptionEngine();
+  } catch {
+    return transcriptionUnavailable;
+  }
+};

@@ -1,7 +1,7 @@
 // expo-file-system binding for the device-local voice model manager.
 // Weights stay out of account-scoped uiPrefs and CRDT state.
 
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as LegacyFS from 'expo-file-system/legacy';
 import { sha256 } from 'js-sha256';
 import {
@@ -20,9 +20,11 @@ const tmpDir = (): Directory =>
 
 const toFile = (path: string): File => new File(path);
 
+const dirExists = (path: string): boolean => new Directory(path).exists;
+
 export const expoVoiceModelFs: VoiceModelFs = {
   async exists(path) {
-    return toFile(path).exists === true;
+    return toFile(path).exists === true || dirExists(path);
   },
   async size(path) {
     const f = toFile(path);
@@ -91,22 +93,33 @@ export const expoVoiceModelFs: VoiceModelFs = {
   },
 };
 
+// Chunk size for streamed hashing. Small enough that each js-sha256 update
+// only stalls the JS thread for a moment; the await between chunks lets the
+// run loop service UI work so the app stays responsive during verify.
+const HASH_CHUNK_BYTES = 4 * 1024 * 1024;
+
+const yieldToRunLoop = (): Promise<void> =>
+  new Promise(resolve => setTimeout(resolve, 0));
+
 export const expoVoiceHasher: VoiceHasher = {
   async sha256File(path) {
     // Streamed SHA-256 — model files are hundreds of MB, so the file is
-    // never materialized as a single ArrayBuffer.
+    // never materialized as a single ArrayBuffer. File.stream() pulls in
+    // 1KB chunks (hundreds of thousands of bridge calls per model), so a
+    // FileHandle reads 4MB at a time instead.
     const file = toFile(path);
     if (!file.exists) throw new Error('missing model file');
+    const handle = file.open(FileMode.ReadOnly);
     const hash = sha256.create();
-    const reader = file.stream().getReader();
     try {
       for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value !== undefined) hash.update(value);
+        const chunk = handle.readBytes(HASH_CHUNK_BYTES);
+        if (chunk.byteLength === 0) break;
+        hash.update(chunk);
+        await yieldToRunLoop();
       }
     } finally {
-      reader.releaseLock();
+      handle.close();
     }
     return hash.hex();
   },
@@ -137,39 +150,55 @@ export const expoVoiceDownloader: VoiceDownloader = {
     } else {
       await expoVoiceModelFs.delete(dest);
     }
-    const task = LegacyFS.createDownloadResumable(
-      url,
-      dest,
-      {},
-      p => {
-        opts.onProgress(p.totalBytesWritten, p.totalBytesExpectedToWrite);
-      },
-      resumeData,
-    );
-    const onAbort = () => {
-      // Pause (not cancel) so the session yields resumable bytes; the
-      // rejection still propagates to the manager as an abort.
-      task
-        .pauseAsync()
-        .then(async state => {
-          if (state?.resumeData !== undefined) {
-            await expoVoiceModelFs.writeText(
-              resumeStatePath(dest),
-              JSON.stringify(state),
-            );
-          }
-        })
-        .catch(() => {});
+
+    const onProgress = (p: {
+      totalBytesWritten: number;
+      totalBytesExpectedToWrite: number;
+    }) => opts.onProgress(p.totalBytesWritten, p.totalBytesExpectedToWrite);
+
+    // Pause (not cancel) on abort so the session yields resumable bytes;
+    // the rejection still propagates to the manager as an abort.
+    const run = async (data: string | undefined) => {
+      const task = LegacyFS.createDownloadResumable(
+        url,
+        dest,
+        {},
+        onProgress,
+        data,
+      );
+      const onAbort = () => {
+        task
+          .pauseAsync()
+          .then(async state => {
+            if (state?.resumeData !== undefined) {
+              await expoVoiceModelFs.writeText(
+                resumeStatePath(dest),
+                JSON.stringify(state),
+              );
+            }
+          })
+          .catch(() => {});
+      };
+      opts.signal.addEventListener('abort', onAbort);
+      try {
+        if (data === undefined) await task.downloadAsync();
+        else await task.resumeAsync();
+      } finally {
+        opts.signal.removeEventListener('abort', onAbort);
+      }
     };
-    opts.signal.addEventListener('abort', onAbort);
+
     try {
-      await (resumeData !== undefined
-        ? task.resumeAsync()
-        : task.downloadAsync());
+      await run(resumeData);
+    } catch (e) {
+      // A stale/corrupt resume state must not wedge Retry forever: discard
+      // the partial artifacts and fetch the file from the start.
+      if (opts.signal.aborted || resumeData === undefined) throw e;
+      await expoVoiceModelFs.delete(dest);
       await expoVoiceModelFs.delete(resumeStatePath(dest));
-    } finally {
-      opts.signal.removeEventListener('abort', onAbort);
+      await run(undefined);
     }
+    await expoVoiceModelFs.delete(resumeStatePath(dest));
   },
 };
 

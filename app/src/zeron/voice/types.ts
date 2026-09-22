@@ -21,6 +21,18 @@ export type VoicePipelineStage =
 
 export type VoiceModelKind = 'transcription' | 'cleanup';
 
+export type VoiceModelRuntime = 'whisper' | 'llama' | 'sherpa';
+
+/** One pinned artifact of a model. Multi-file engines (sherpa-onnx model
+ * directories) list every required file; single-file models list exactly
+ * one entry installed as `${id}.bin`. */
+export interface VoiceModelFile {
+  name: string;
+  url: string;
+  bytes: number;
+  sha256: string;
+}
+
 export type VoiceModelInstallState =
   | 'notDownloaded'
   | 'downloading'
@@ -39,11 +51,11 @@ export interface VoiceModelCatalogEntry {
   name: string;
   description: string;
   revision: string;
-  url: string;
+  /** Total install size (sum of files[].bytes) — display + free-space check. */
   bytes: number;
-  sha256: string;
+  files: readonly VoiceModelFile[];
   license: string;
-  runtime: 'whisper' | 'llama';
+  runtime: VoiceModelRuntime;
   requiredRuntimeVersion: string;
   capabilities: VoiceModelCapabilities;
   /** False until a Mac spike pins production artifacts. */
