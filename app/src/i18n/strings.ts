@@ -178,6 +178,7 @@ const en = {
   'accounts.pasteCode': 'Paste the code shown in the browser',
   'accounts.completeLogin': 'Complete sign-in',
   'accounts.cancelLogin': 'Cancel',
+  'accounts.retry': 'Retry',
   'accounts.used': 'used',
   'accounts.active': 'Active',
 

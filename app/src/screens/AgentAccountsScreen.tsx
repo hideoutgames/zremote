@@ -49,6 +49,12 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
   const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  /** Last login URL opened — polls re-open only when it changes. */
+  const openedUrl = useRef<string | undefined>(undefined);
+  const loginRef = useRef<AgentLoginStart | undefined>(undefined);
+  const clientRef = useRef<ReturnType<typeof agentAccountsClient> | undefined>(
+    undefined,
+  );
 
   const client = useMemo(
     () =>
@@ -56,6 +62,24 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
         ? undefined
         : agentAccountsClient(runtime.relayFor(deviceId)),
     [runtime, deviceId],
+  );
+
+  useEffect(() => {
+    loginRef.current = login;
+  }, [login]);
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
+
+  // Leaving the screen mid-flow abandons the host-side login.
+  useEffect(
+    () => () => {
+      if (pollTimer.current !== undefined) clearTimeout(pollTimer.current);
+      const l = loginRef.current;
+      if (l !== undefined)
+        clientRef.current?.cancelLogin(l.loginId).catch(() => {});
+    },
+    [],
   );
 
   const refresh = useCallback(
@@ -78,6 +102,7 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
   const cancelLogin = useCallback(() => {
     if (pollTimer.current !== undefined) clearTimeout(pollTimer.current);
     if (login !== undefined) client?.cancelLogin(login.loginId).catch(() => {});
+    openedUrl.current = undefined;
     setLogin(undefined);
     setCode('');
   }, [client, login]);
@@ -98,8 +123,10 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
               setLogin(undefined);
               return;
             }
-            if (p.url !== undefined)
+            if (p.url !== undefined && p.url !== openedUrl.current) {
+              openedUrl.current = p.url;
               WebBrowser.openBrowserAsync(p.url).catch(() => {});
+            }
             pollTimer.current = setTimeout(tick, 2000);
           })
           .catch(() => {
@@ -117,8 +144,9 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
         ?.startLogin(harness)
         .then(start => {
           setLogin(start);
+          openedUrl.current = start.url;
+          WebBrowser.openBrowserAsync(start.url).catch(() => {});
           if (start.mode === 'browser') {
-            WebBrowser.openBrowserAsync(start.url).catch(() => {});
             poll(start.loginId);
           }
         })
@@ -171,7 +199,20 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
     // View, not ScrollView — embedded inside the Settings page scroll.
     <View style={styles.root}>
       {error !== undefined ? (
-        <Text style={[styles.err, { color: theme.danger }]}>{error}</Text>
+        <View style={styles.errRow}>
+          <Text style={[styles.err, { color: theme.danger }]}>{error}</Text>
+          <Pressable
+            onPress={() => refresh('retry')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('accounts.retry')}
+            style={styles.smallBtn}
+          >
+            <Text style={[styles.linkText, { color: theme.accent }]}>
+              {t('accounts.retry')}
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
       {snapshot?.warnings.map((w, i) => (
         <Text key={i} style={[styles.warn, { color: theme.textSecondary }]}>
@@ -344,7 +385,8 @@ export function AgentAccountsScreen({ deviceId }: { deviceId: string }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, padding: 12 },
-  err: { fontSize: 13, padding: 8 },
+  err: { fontSize: 13, padding: 8, flex: 1 },
+  errRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   warn: { fontSize: 12, padding: 4 },
   card: {
     borderRadius: 10,
