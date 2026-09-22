@@ -31,12 +31,18 @@ import { createLog } from '../zeron/log';
 const log = createLog();
 
 const driver: LiveActivityDriver = {
-  start: (props, url, staleDate) =>
-    SessionActivity.start(
-      props,
-      url,
-      staleDate,
-    ) as unknown as LiveActivityHandle,
+  start: (props, url, staleDate) => {
+    try {
+      return SessionActivity.start(
+        props,
+        url,
+        staleDate,
+      ) as unknown as LiveActivityHandle;
+    } catch (e) {
+      log.warn(`live activity start failed: ${e}`);
+      throw e;
+    }
+  },
   getInstances: () =>
     SessionActivity.getInstances() as unknown as LiveActivityHandle[],
   after: date => after(date),
@@ -89,6 +95,17 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
     },
     selectedChatId: deps.selectedChatId,
   });
+
+  // Relaunch cleanup: handles are per-process, so any activity still alive
+  // from a previous launch is an orphan — ending it keeps one activity per
+  // chat instead of stacking a duplicate every time the app reopens.
+  try {
+    for (const inst of driver.getInstances()) {
+      inst.end('immediate').catch(() => {});
+    }
+  } catch (e) {
+    log.warn(`live activity instance sweep: ${e}`);
+  }
 
   let pushToStart: { remove(): void } = { remove() {} };
   try {
