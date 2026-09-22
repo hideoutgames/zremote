@@ -30,6 +30,11 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { KeyboardController } from 'react-native-keyboard-controller';
+import {
+  ClipboardPasteButton,
+  isPasteButtonAvailable,
+  type PasteEventPayload,
+} from 'expo-clipboard';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
@@ -47,7 +52,16 @@ import { ContextUsageChip } from './agentsKit/ContextUsage';
 import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
-import { useAttachments } from '../hooks/useAttachments';
+import {
+  stagePastedFileUri,
+  stagePastedImage,
+  stagePastedText,
+  useAttachments,
+} from '../hooks/useAttachments';
+import {
+  PASTE_FILE_THRESHOLD,
+  splitTextEdit,
+} from '../zeron/attachments/paste';
 import { isImageMime } from '../zeron/attachments/validate';
 import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
@@ -588,6 +602,57 @@ export const Composer = React.memo(function ({
     setVoiceNotice(null);
   }, [voiceNotice, chatId]);
 
+  const insertDraftText = useCallback(
+    (inserted: string) => {
+      const before = draftTextRef.current;
+      const at = selRef.current;
+      setDraftText(chatId, before.slice(0, at) + inserted + before.slice(at));
+    },
+    [chatId],
+  );
+
+  /** A single insert past the file threshold can only come from a paste —
+   * stage it as pasted.txt instead of flooding the draft. */
+  const handleChangeText = useCallback(
+    (text: string) => {
+      const split = splitTextEdit(draftTextRef.current, text);
+      if (split.inserted.length > PASTE_FILE_THRESHOLD) {
+        const result = stagePastedText(chatId, split.inserted);
+        setDraftText(
+          chatId,
+          result.staged.length > 0 ? split.prefix + split.suffix : text,
+        );
+        return;
+      }
+      setDraftText(chatId, text);
+    },
+    [chatId],
+  );
+
+  /** UIPasteControl payload → stage image/file, or insert plain text at
+   * the caret (long text follows the same .txt rule). */
+  const handlePaste = useCallback(
+    (data: PasteEventPayload) => {
+      if (data.type === 'image') {
+        stagePastedImage(
+          chatId,
+          data.data.replace(/^data:image\/\w+;base64,/, ''),
+        );
+        return;
+      }
+      const text = data.text;
+      if (text.startsWith('file://')) {
+        const result = stagePastedFileUri(chatId, text.trim());
+        if (result.staged.length > 0) return;
+      }
+      if (text.length > PASTE_FILE_THRESHOLD) {
+        if (stagePastedText(chatId, text).staged.length > 0) return;
+      }
+      insertDraftText(text);
+    },
+    [chatId, insertDraftText],
+  );
+
   const submit = useCallback(() => {
     if (dictating || processing || localVoiceBusy) return;
     setVoiceNotice(null);
@@ -595,13 +660,17 @@ export const Composer = React.memo(function ({
     if (hasAttachments) {
       // Routes per sendPlan; 'blocked' surfaces onSendBlocked — the draft
       // and attachments stay put (nothing silently dropped).
-      onSendAttachments(text).then(plan => {
-        if (plan === 'blocked') {
-          onSendBlocked();
-        } else if (plan !== 'direct') {
-          clearDraft(chatId);
-        }
-      });
+      onSendAttachments(text)
+        .then(plan => {
+          if (plan === 'blocked') {
+            onSendBlocked();
+          } else if (plan !== 'direct') {
+            clearDraft(chatId);
+          }
+        })
+        // Failures already surface (queueActionError on the enqueue;
+        // a 'failed' state on the strip for legacy uploads).
+        .catch(() => {});
       return;
     }
     if (text === '') return;
@@ -737,7 +806,7 @@ export const Composer = React.memo(function ({
               ref={inputRef}
               value={draft.text}
               autoFocus={autoFocus}
-              onChangeText={text => setDraftText(chatId, text)}
+              onChangeText={handleChangeText}
               onSelectionChange={e =>
                 (selRef.current = e.nativeEvent.selection.start)
               }
@@ -782,6 +851,19 @@ export const Composer = React.memo(function ({
                 planEnabled={planMode}
                 onTogglePlan={on => setPlanMode(chatId, on)}
               />
+              {isPasteButtonAvailable ? (
+                <ClipboardPasteButton
+                  onPress={handlePaste}
+                  acceptedContentTypes={['plain-text', 'image', 'url']}
+                  imageOptions={{ format: 'png' }}
+                  displayMode="iconOnly"
+                  cornerStyle="capsule"
+                  backgroundColor={theme.inputBackground}
+                  foregroundColor={theme.text}
+                  style={styles.pasteButton}
+                  accessibilityLabel={t('composer.paste')}
+                />
+              ) : null}
 
               {showLivePill ? (
                 <DropdownMenu.Root>
@@ -1137,6 +1219,8 @@ const styles = StyleSheet.create({
     gap: 8,
     minWidth: 0,
   },
+  // 32pt UIPasteControl matching the attach button beside it.
+  pasteButton: { width: 32, height: 32 },
   chipsWrap: {
     flex: 1,
     minWidth: 0,

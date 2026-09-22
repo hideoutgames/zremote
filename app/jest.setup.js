@@ -277,44 +277,67 @@ jest.mock('expo-web-browser', () => ({
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'cancel' })),
   maybeCompleteAuthSession: jest.fn(),
 }));
-jest.mock('expo-file-system', () => ({
-  File: class {
-    constructor(uri, name) {
-      this.uri =
-        typeof uri === 'string'
-          ? name !== undefined
-            ? `${uri.replace(/\/$/, '')}/${name}`
-            : uri
-          : uri?.uri !== undefined && name !== undefined
-          ? `${String(uri.uri).replace(/\/$/, '')}/${name}`
-          : uri?.uri ?? uri;
-    }
-    exists = false;
-    base64() {
-      return Promise.resolve('');
-    }
-    text() {
-      return Promise.resolve('');
-    }
-    copy() {}
-    delete() {}
-    create() {}
-  },
-  Directory: class {
-    constructor(base, name) {
-      this.uri =
-        typeof base === 'string'
-          ? `${base.replace(/\/$/, '')}/${name ?? ''}`
-          : `${String(base?.uri ?? 'file:///docs').replace(/\/$/, '')}/${
-              name ?? ''
-            }`;
-      this.exists = false;
-    }
-    create() {}
-    delete() {}
-  },
-  Paths: { document: { uri: 'file:///docs' }, cache: { uri: 'file:///cache' } },
-}));
+jest.mock('expo-file-system', () => {
+  // Shared in-memory file registry — `new File(uri)` can't reach the
+  // factory scope, so it lives on `global`.
+  global.__expoFSFiles ??= new Map();
+  const files = global.__expoFSFiles;
+  return {
+    File: class {
+      constructor(...uris) {
+        this.uri = uris
+          .map(u => String(u?.uri ?? u))
+          .join('/')
+          .replace(/\/+/g, '/')
+          .replace('file:/', 'file:///');
+      }
+      get name() {
+        return String(this.uri).split('/').pop() ?? '';
+      }
+      get exists() {
+        return files.has(this.uri);
+      }
+      get size() {
+        return files.get(this.uri)?.length ?? 0;
+      }
+      write(content) {
+        files.set(
+          this.uri,
+          typeof content === 'string' ? content : content ?? new Uint8Array(),
+        );
+      }
+      base64() {
+        return Promise.resolve('');
+      }
+      text() {
+        return Promise.resolve('');
+      }
+      copy() {}
+      delete() {
+        files.delete(this.uri);
+      }
+      create() {
+        files.set(this.uri, files.get(this.uri) ?? '');
+      }
+    },
+    Directory: class {
+      constructor(...uris) {
+        this.uri = uris
+          .map(u => String(u?.uri ?? u))
+          .join('/')
+          .replace(/\/+/g, '/')
+          .replace('file:/', 'file:///');
+        this.exists = false;
+      }
+      create() {}
+      delete() {}
+    },
+    Paths: {
+      document: { uri: 'file:///docs' },
+      cache: { uri: 'file:///cache' },
+    },
+  };
+});
 jest.mock('expo-file-system/legacy', () => ({
   createDownloadResumable: jest.fn(() => ({
     downloadAsync: jest.fn(() => Promise.resolve({})),
@@ -329,6 +352,8 @@ jest.mock('expo-document-picker', () => ({
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve()),
+  ClipboardPasteButton: () => null,
+  isPasteButtonAvailable: false,
 }));
 
 // Voice engines are native-only; the voice resolvers probe these lazily and

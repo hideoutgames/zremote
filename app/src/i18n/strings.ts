@@ -72,6 +72,8 @@ const en = {
   'session.send': 'Send',
   'session.attachmentsBlocked':
     'Attachments can\u2019t be sent while the agent is working on this host — stop it or wait.',
+  'session.attachmentsBlockedOffline':
+    'Attachments can\u2019t be sent while this host is offline.',
   'session.queue': 'Queue',
   'session.queuePlaceholder': 'Queue a message…',
   'session.workingHint': 'Agent is working — stop it or wait',
@@ -342,6 +344,7 @@ const en = {
   'composer.photos': 'Photos',
   'composer.files': 'Files',
   'composer.attach': 'Add attachment',
+  'composer.paste': 'Paste',
   'composer.dictate': 'Dictate',
   'composer.stopDictation': 'Stop dictation',
   'composer.dictationProcessing': 'Processing…',

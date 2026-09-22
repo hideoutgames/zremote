@@ -7,6 +7,7 @@ import { useCallback } from 'react';
 import { InteractionManager } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { Directory, File, Paths } from 'expo-file-system';
 import {
   stageAttachments,
   removeAttachment,
@@ -17,6 +18,9 @@ import {
   FILE_PICKER_MIME,
   validateStagedAttachment,
 } from '../zeron/attachments/validate';
+import { mimeForFileName } from '../zeron/attachments/paste';
+import { base64ToBytes } from '../zeron/util/base64';
+import { newId } from '../zeron/doc/sessionDoc';
 
 export interface StageResult {
   staged: StagedAttachment[];
@@ -93,6 +97,78 @@ export const pickFilesForChat = async (
     copyToCacheDirectory: true,
   });
   return stageDocumentPickerResult(chatId, result);
+};
+
+/** Pasted content lands in the cache dir as a real file so the staged
+ * attachment's `localUri` reads like any other (picker) asset. Names are
+ * unique per paste — a second paste never clobbers a still-staged file. */
+const writePastedFile = (
+  name: string,
+  content: string | Uint8Array,
+): { uri: string; size: number } => {
+  const dir = new Directory(Paths.cache, 'zeron', 'pasted');
+  dir.create({ intermediates: true, idempotent: true });
+  const file = new File(dir, name);
+  file.create({ intermediates: true, overwrite: true });
+  file.write(content);
+  return { uri: file.uri, size: file.size };
+};
+
+/** A long text paste staged as `pasted.txt` (paste.ts threshold). */
+export const stagePastedText = (chatId: string, text: string): StageResult => {
+  const id = newId();
+  const { uri, size } = writePastedFile(`pasted-${id}.txt`, text);
+  return collectAndStage(chatId, [
+    {
+      id,
+      kind: 'file',
+      name: 'pasted.txt',
+      mimeType: 'text/plain',
+      size,
+      localUri: uri,
+    },
+  ]);
+};
+
+/** A clipboard image paste (UIPasteControl / `getImageAsync` base64). */
+export const stagePastedImage = (
+  chatId: string,
+  base64: string,
+): StageResult => {
+  const id = newId();
+  const { uri, size } = writePastedFile(
+    `pasted-${id}.png`,
+    base64ToBytes(base64),
+  );
+  return collectAndStage(chatId, [
+    {
+      id,
+      kind: 'image',
+      name: 'pasted.png',
+      mimeType: 'image/png',
+      size,
+      localUri: uri,
+    },
+  ]);
+};
+
+/** A copied file pasted as a `file://` URL. Stages nothing when the path
+ * isn't readable (other-app sandbox) — the caller falls back to text. */
+export const stagePastedFileUri = (
+  chatId: string,
+  uri: string,
+): StageResult => {
+  const file = new File(uri);
+  if (!file.exists) return { staged: [], rejected: [] };
+  return collectAndStage(chatId, [
+    {
+      kind: 'file',
+      name: file.name,
+      mimeType: mimeForFileName(file.name),
+      size: file.size,
+      localUri: file.uri,
+    },
+  ]);
 };
 
 export function useAttachments(chatId: string): {
