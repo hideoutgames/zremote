@@ -17,6 +17,7 @@ import {
   BUBBLE_BLUR_INTENSITY,
   BUBBLE_SHADOW_ELEVATION,
   BUBBLE_SHADOW_OPACITY,
+  FrostedBubble,
 } from '../src/components/transcript/FrostedBubble';
 import { InputCard } from '../src/components/transcript/InputCard';
 import {
@@ -283,8 +284,9 @@ test('AssistantMessage shows a plan card and turn changes', async () => {
     if (typeof n.props.testID === 'string') testIds.push(n.props.testID);
     return false;
   });
+  // The plan card is a turn-level artifact — it trails the tool group.
   expect(testIds.indexOf('plan-card')).toBeGreaterThanOrEqual(0);
-  expect(testIds.indexOf('plan-card')).toBeLessThan(
+  expect(testIds.indexOf('plan-card')).toBeGreaterThan(
     testIds.indexOf('tool-group'),
   );
 });
@@ -401,8 +403,12 @@ test('AssistantMessage groups the tool parts into one rail', async () => {
       <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
     );
   });
+  // the two exec calls collapse into the work group summary
+  expect(textOf(tree!.root)).toContain('Ran 2 commands · 1 step');
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
+  });
   const texts = textOf(tree!.root);
-  // the two exec calls collapse into the group summary
   expect(texts).toContain('Ran 2 commands');
   expect(
     tree!.root.findAll(n => n.props.testID === 'tool-group-toggle')[0]?.props
@@ -932,5 +938,108 @@ test('AssistantMessage puts tools, changes, and working inside the bubble', asyn
   expect(
     bubble.findAll(n => n.props.testID === 'working-status-strip').length,
   ).toBeGreaterThan(0);
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
+  });
   expect(textOf(tree!.root)).toContain('Ran 2 commands');
+});
+
+const bubblesOf = (root: TestRenderer.ReactTestInstance, testID: string) =>
+  root.findAll(n => n.type === FrostedBubble && n.props.testID === testID);
+
+test('streaming splits the turn into individual agent messages', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
+    );
+  });
+  // text + tool group + text each render in their own bubble.
+  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(3);
+  expect(tree!.root.findAll(n => n.props.testID === 'work-toggle').length).toBe(
+    0,
+  );
+});
+
+test('streaming appends the working strip as its own message', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {}}
+        showWorking
+        workingChatId="c1"
+        workingStartedAt={Date.now()}
+      />,
+    );
+  });
+  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(4);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
+  ).toBeGreaterThan(0);
+});
+
+test('completed turn collapses the work behind a toggle', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
+    );
+  });
+  // The final message stays visible; the earlier messages sit behind the
+  // collapsed work bubble until expanded.
+  expect(tree!.root.findByProps({ testID: 'work-toggle' })).toBeTruthy();
+  expect(tree!.root.findAll(n => n.props.testID === 'tool-group').length).toBe(
+    0,
+  );
+  expect(
+    tree!.root.findAll(
+      n =>
+        n.props.markdown ===
+        '## Streaming pipeline\n\nEvery turn flows through the same path:',
+    ).length,
+  ).toBe(0);
+  expect(
+    tree!.root.findByProps({
+      markdown: 'Synced to every device through the session room.',
+    }),
+  ).toBeTruthy();
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
+  });
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'tool-group').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree!.root.findByProps({
+      markdown:
+        '## Streaming pipeline\n\nEvery turn flows through the same path:',
+    }),
+  ).toBeTruthy();
+});
+
+test('single-message turn has no work toggle', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    parts: [{ kind: 'text', id: 't0', text: 'Just a reply.' }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
+    );
+  });
+  expect(tree!.root.findAll(n => n.props.testID === 'work-toggle').length).toBe(
+    0,
+  );
+  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(1);
 });
