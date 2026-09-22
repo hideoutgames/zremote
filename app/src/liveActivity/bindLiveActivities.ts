@@ -7,14 +7,15 @@
 
 import { addPushToStartTokenListener, after } from 'expo-widgets';
 import { SessionActivity } from './SessionActivity';
-import type { SessionActivityProps } from './SessionActivity';
 import {
   LiveActivityManager,
   type LiveActivityDriver,
   type LiveActivityHandle,
 } from './liveActivityManager';
 import { activityAccent } from './activityAccent';
+import { activityPhase } from './activityPhase';
 import { planAwaitingReview } from './planAwaitingReview';
+import { openQuestion } from '../zeron/protocol/detectQuestion';
 import {
   registerLiveActivityToken,
   unregisterLiveActivityToken,
@@ -25,7 +26,6 @@ import { getSessionStore, runPhase } from '../zeron/state/sessionStores';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { threadPrDot } from '../components/prBadge';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
-import type { RunPhase } from '../zeron/state/sessionStores';
 import { createLog } from '../zeron/log';
 
 const log = createLog();
@@ -40,27 +40,6 @@ const driver: LiveActivityDriver = {
   getInstances: () =>
     SessionActivity.getInstances() as unknown as LiveActivityHandle[],
   after: date => after(date),
-};
-
-const phaseFor = (
-  phase: RunPhase,
-  planReady: boolean,
-): SessionActivityProps['phase'] => {
-  if (planReady) return 'planReady';
-  switch (phase) {
-    case 'awaitingInput':
-      return 'awaitingInput';
-    case 'stopping':
-      return 'stopping';
-    case 'stale':
-      return 'stale';
-    case 'errored':
-      return 'errored';
-    case 'idle':
-      return 'completed';
-    default:
-      return 'working';
-  }
 };
 
 export type BindDeps = {
@@ -155,7 +134,8 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
       const s = getSessionStore(session.chatId).getState();
       const rawPhase = runPhase(s, session, chat, deps.phoneDeviceId, now);
       const planReady = planAwaitingReview(s.entries, rawPhase);
-      const phase = phaseFor(rawPhase, planReady);
+      const open = openQuestion(s.entries, s.answeredQuestionIds);
+      const phase = activityPhase(rawPhase, planReady, open !== undefined);
       const host = devices.find(d => d.id === session.deviceId);
       const space =
         chat?.spaceId !== undefined
@@ -165,7 +145,7 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
         changeRequestStore.getState().byChat[session.chatId]?.changeRequest,
       );
       const accent = activityAccent({
-        awaitingInput: rawPhase === 'awaitingInput',
+        awaitingInput: phase === 'awaitingInput',
         planReady,
         prTone,
       });

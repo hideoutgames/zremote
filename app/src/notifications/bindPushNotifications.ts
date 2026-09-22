@@ -15,6 +15,8 @@ import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { createLog } from '../zeron/log';
 import { chatIdFromData, shouldPresentBanner } from './presentation';
 import { shouldLocalQuestionBanner } from './questionAlert';
+import { openQuestion } from '../zeron/protocol/detectQuestion';
+import { getSessionStore, runPhase } from '../zeron/state/sessionStores';
 import { t } from '../i18n/strings';
 import { workspaceStore } from '../zeron/state/workspaceStore';
 
@@ -142,6 +144,9 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
   tick();
 
   const lastStatus = new Map<string, string | undefined>();
+  /** chatId → last-seen open-question id; the app-detected counterpart of
+   * lastStatus (host flips). Absence of a key marks the first observation. */
+  const lastQuestion = new Map<string, string | undefined>();
   const presentQuestion = (chatId: string, title: string): void => {
     Notifications.scheduleNotificationAsync({
       content: {
@@ -155,9 +160,16 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
   const scanQuestions = (): void => {
     if (cancelled || !uiPrefsStore.getState().notificationsEnabled) return;
     const { sessions, chats } = workspaceStore.getState();
+    const now = Date.now();
     for (const row of Object.values(sessions)) {
       const prev = lastStatus.get(row.chatId);
       lastStatus.set(row.chatId, row.status);
+      const chat = chats.find(c => c.id === row.chatId);
+      const s = getSessionStore(row.chatId).getState();
+      const open = openQuestion(s.entries, s.answeredQuestionIds);
+      const observed = lastQuestion.has(row.chatId);
+      const prevQuestion = lastQuestion.get(row.chatId);
+      lastQuestion.set(row.chatId, open?.id);
       if (
         shouldLocalQuestionBanner({
           prevStatus: prev,
@@ -167,18 +179,53 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
           chatId: row.chatId,
         })
       ) {
-        const chat = chats.find(c => c.id === row.chatId);
+        presentQuestion(row.chatId, chat?.title ?? 'Session');
+        continue;
+      }
+      // App-detected questions never flip the row — the host mints no
+      // `input` part for unbrokered ask tools (opencode `question`, hermes
+      // `clarify`, grok's ACP method, …). Mirror the Live Activity parity:
+      // a new open-question id fires the same "needs input" banner when the
+      // phase machine flags the run (awaitingInput), or when an already
+      // observed idle thread surfaces one — first-seen idle questions seed
+      // silently (a stale transcript tail is not fresh input need).
+      const phase = runPhase(s, row, chat, deps.phoneDeviceId, now);
+      const fresh = phase === 'awaitingInput' || (phase === 'idle' && observed);
+      if (
+        open !== undefined &&
+        open.id !== prevQuestion &&
+        fresh &&
+        shouldPresentBanner({
+          appState: AppState.currentState,
+          selectedChatId: deps.selectedChatId(),
+          notificationChatId: row.chatId,
+        })
+      ) {
         presentQuestion(row.chatId, chat?.title ?? 'Session');
       }
     }
   };
-  const unsubWorkspace = workspaceStore.subscribe(scanQuestions);
+  let sessionUnsubs: (() => void)[] = [];
+  const resubSessions = (): void => {
+    for (const u of sessionUnsubs) u();
+    // openQuestion reads per-chat entries — workspace ticks alone never
+    // re-scan when a room's doc updates.
+    sessionUnsubs = Object.keys(workspaceStore.getState().sessions).map(id =>
+      getSessionStore(id).subscribe(scanQuestions),
+    );
+  };
+  const unsubWorkspace = workspaceStore.subscribe(() => {
+    resubSessions();
+    scanQuestions();
+  });
+  resubSessions();
   scanQuestions();
 
   return () => {
     cancelled = true;
     unsubPrefs();
     unsubWorkspace();
+    for (const u of sessionUnsubs) u();
     responseSub.remove();
     tokenSub.remove();
     unregister();
