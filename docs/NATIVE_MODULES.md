@@ -59,17 +59,27 @@ local, not CRDT, not `uiPrefs` paths). JS ports:
 - `zeron/native/transcription.ts` — file transcription adapter.
 - `zeron/native/cleanup.ts` — optional cleanup adapter (`supportsCustomPrompt`).
 
-**Mac spike (not done in this environment):** compile `whisper.rn` +
-`llama.rn` together against Expo 57 / RN 0.86 / Nitro static linking. Reject
-them if they require `ios.useFrameworks`. Fallback is first-party Nitro
-modules wrapping whisper.cpp / llama.cpp, same pattern as `zeron-dictation`.
-Do not set `productionPinned: true` or fill SHA-256 until a device build
-transcribes, unloads, and passes the cleanup fixture suite. Candidate
-catalog entries (Whisper Tiny/Base, Qwen2.5-0.5B-Instruct GGUF) stay
-unpinned so the UI cannot mark a partial/unverified file installed.
+Runtimes: `whisper.rn` for Whisper `.bin` models,
+`react-native-sherpa-onnx` (`/stt` subpath, `nemo_transducer`) for Parakeet
+TDT model directories, `llama.rn` for GGUF cleanup models. Parakeet
+artifacts install as a directory of `encoder/decoder/joiner/tokens`
+files under `zeron/models/<id>/`; single-file models stay `${id}.bin`.
+`react-native.config.js` keeps the sherpa peer
+`@kesha-antonov/react-native-background-downloader` out of autolinking —
+only its `./stt` subpath is used, nothing references that module's native
+code. sherpa-onnx's podspec downloads a prebuilt iOS framework during
+`pod install` (`scripts/setup-ios-framework.sh`).
 
-Cleanup licenses: Whisper MIT; Qwen2.5 Apache-2.0. Microphone audio and
-cleanup inference stay on-device. Never log transcripts, prompts, or audio.
+Remaining verification (needs a Mac/device): compile `whisper.rn` +
+`llama.rn` + `react-native-sherpa-onnx` together against Expo 57 /
+RN 0.86 / Nitro static linking, then confirm device transcription,
+unload, and the cleanup fixture suite. Catalog SHA-256s are pinned from
+the published artifacts; bump `files[].bytes` and `files[].sha256`
+together on any revision change.
+
+Cleanup licenses: Whisper MIT; Parakeet CC-BY-4.0; Qwen2.5 + SmolLM2
+Apache-2.0. Microphone audio and cleanup inference stay on-device. Never
+log transcripts, prompts, or audio.
 
 ### Live Activities
 

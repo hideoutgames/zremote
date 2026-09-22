@@ -158,17 +158,19 @@ export function VoiceModelPicker({
         (kind === 'transcription' && selectedVoice === model.id) ||
         (kind === 'cleanup' && selectedCleanup === model.id);
       const del = () => {
-        manager
-          .delete(model.id)
-          .then(() => {
-            if (kind === 'transcription' && selectedVoice === model.id) {
-              setVoiceModelId(null);
-            }
-            if (kind === 'cleanup' && selectedCleanup === model.id) {
-              setCleanupModelId(null);
-            }
-          })
-          .catch(() => {});
+        if (affects) {
+          // Deselect first: the mounted runtime holds an in-use mark until
+          // its effect re-runs — drop it now or delete() throws 'in use'.
+          if (kind === 'transcription') setVoiceModelId(null);
+          else setCleanupModelId(null);
+          manager.release(model.id);
+        }
+        manager.delete(model.id).catch(() => {
+          Alert.alert(
+            t('settings.voiceDeleteTitle'),
+            t('settings.voiceFailed'),
+          );
+        });
       };
       if (!affects) {
         del();

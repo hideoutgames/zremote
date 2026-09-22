@@ -8,7 +8,12 @@ export class MemoryVoiceFs implements VoiceModelFs {
   diskFree = Number.MAX_SAFE_INTEGER;
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path);
+    if (this.files.has(path)) return true;
+    const prefix = `${path}/`;
+    for (const k of this.files.keys()) {
+      if (k.startsWith(prefix)) return true;
+    }
+    return false;
   }
 
   async size(path: string): Promise<number> {
