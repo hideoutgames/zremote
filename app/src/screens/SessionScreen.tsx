@@ -35,6 +35,7 @@ import {
   useSessionQueueLength,
   useRunPhase,
   dismissFailedSend,
+  markQuestionAnswered,
   moveQueuedInStore,
   appendSentMessage,
 } from '../zeron/state/sessionStores';
@@ -61,6 +62,10 @@ import {
   useVoiceInputMode,
 } from '../zeron/state/uiPrefs';
 import { sessionTitle } from '../zeron/state/sessionTruth';
+import {
+  formatQuestionAnswer,
+  type OpenQuestion,
+} from '../zeron/protocol/detectQuestion';
 import { useLocalQueuedIds } from '../zeron/state/queuedLocalStore';
 import {
   bindPendingWorkedDuration,
@@ -545,6 +550,27 @@ function ActiveSessionScreen({
     (requestId: string, answers: { questionId: string; labels: string[] }[]) =>
       controller?.respondInput(requestId, answers),
     [controller],
+  );
+  // App-detected questions (question tool calls, prose questions) carry no
+  // host request id — respondInput would reject it — so answers ship as a
+  // steer; the host steers a live run or takes it as the next turn. Dismiss
+  // first so a never-resolving signal can't re-open the panel.
+  const doAnswerQuestion = useCallback(
+    (
+      question: OpenQuestion,
+      answers: { questionId: string; labels: string[] }[],
+    ) => {
+      if (controller === undefined) return;
+      markQuestionAnswered(chatId, question.id);
+      const text = formatQuestionAnswer(question.questions, answers);
+      if (!hostOnline) {
+        controller.queueMessage(text);
+        alertHostNotConnectedQueue();
+        return;
+      }
+      controller.sendSteer(text);
+    },
+    [controller, hostOnline, chatId],
   );
 
   const doSendAttachments = useCallback(
@@ -1230,6 +1256,7 @@ function ActiveSessionScreen({
             onCancel={doCancel}
             onSendAttachments={doSendAttachments}
             onRespondInput={doRespond}
+            onAnswerQuestion={doAnswerQuestion}
             onSendBlocked={onSendBlocked}
           />
         </View>
