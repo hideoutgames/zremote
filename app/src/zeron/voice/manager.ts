@@ -174,6 +174,9 @@ export class VoiceModelManager {
         // A fully-downloaded .part goes straight to verify — asking for
         // `bytes=<size>-` returns 416 and would fail an otherwise valid resume.
         if (existing < file.bytes) {
+          // Dir models keep parts under tmpDir/<id>/ — the downloader
+          // does not create intermediate directories.
+          await this.deps.fs.mkdir(this.parentDir(tmp));
           const base = doneBytes;
           await this.deps.downloader.download(file.url, tmp, {
             onProgress: (received, total) => {
