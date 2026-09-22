@@ -104,6 +104,56 @@ describe('openQuestion — question tool calls', () => {
     }
   });
 
+  it('covers the supported harnesses’ ask-user tools', () => {
+    // claude-code · codex · cursor · opencode · hermes · pi · grok ·
+    // generic spellings — all name-only, all must surface a question.
+    for (const name of [
+      'AskUserQuestion', // claude-code
+      'ask_user_question', // codex variant / grok method leaf
+      'request_user_input', // codex
+      'AskQuestion', // cursor
+      'ask_question', // pi
+      'question', // opencode
+      'clarify', // hermes
+      'ask_user',
+      'user_input',
+      'user_question',
+      'ask_human',
+      'human_input',
+      'get_user_input',
+      'prompt_user',
+      'query_user',
+      'elicitInput',
+    ]) {
+      const q = openQuestion([
+        entry('e1', [tool('tc', { kind: 'unknown', name })]),
+      ]);
+      expect(q?.kind).toBe('tool');
+    }
+  });
+
+  it('strips vendor/namespace prefixes from method-style names', () => {
+    for (const name of [
+      'cursor/ask_question',
+      'x.ai/ask_user_question',
+      '_x.ai/ask_user_question',
+      'mcp__srv__ask_user_question',
+      'mcp__srv__askQuestion',
+    ]) {
+      const q = openQuestion([
+        entry('e1', [tool('tc', { kind: 'unknown', name })]),
+      ]);
+      expect(q?.kind).toBe('tool');
+    }
+  });
+
+  it('reads the tool name from the doc kind when no name field exists', () => {
+    const q = openQuestion([
+      entry('e1', [tool('tc', { kind: 'AskUserQuestion' })]),
+    ]);
+    expect(q?.kind).toBe('tool');
+  });
+
   it('parses questions + options from the call args bag', () => {
     const q = openQuestion([
       entry('e1', [

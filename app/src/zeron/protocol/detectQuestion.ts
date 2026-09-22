@@ -3,12 +3,17 @@
 // Coverage ladder (first match wins):
 //  1. `input` — the host's structured request (claude-code, ACP harnesses,
 //     codex item/tool/requestUserInput); answered via `respondInput`.
-//  2. `tool` — an unresolved question-shaped tool call. Cursor's askQuestion
-//     is disallowed at the shim and lands (if at all) as a name-only unknown
-//     part; codex variants surface request_user_input / AskUserQuestion /
-//     MCP elicitations the engine doesn't broker. Args ride the same
-//     input/arguments/args bags detectPlan reads, when the host preserved
-//     them; a name-only call still yields one free-text question.
+//  2. `tool` — an unresolved question-shaped tool call. Every supported
+//     harness has one, but only some are brokered into `input` parts:
+//     claude-code AskUserQuestion, codex request_user_input /
+//     ask_user_question, cursor AskQuestion (disallowed at the shim, lands
+//     name-only) / cursor/ask_question ACP method, opencode question,
+//     hermes clarify, pi ask_question, grok x.ai/ask_user_question
+//     (+_x.ai/ variant), generic ask_user/AskHuman/human_input spellings,
+//     and MCP elicitations (elicitation/create, elicitInput, elicit).
+//     Args ride the same input/arguments/args bags detectPlan reads, when
+//     the host preserved them; a name-only call still yields one free-text
+//     question.
 //  3. `text` — a settled assistant entry whose tail paragraph asks a
 //     question (the fallback for agents with no usable ask tool: the model
 //     asks in prose and ends the turn).
@@ -49,33 +54,83 @@ export type OpenQuestion =
 
 // ── tool-call name matching ─────────────────────────────────────────────
 
-/** Always a question, even with no args to parse (name-only unknown calls). */
+/** Always a question, even with no args to parse (name-only unknown calls).
+ * Covers every supported harness's ask-user tool plus the common generic
+ * spellings (normalized: lowercase, alphanumerics only). */
 const QUESTION_TOOL_NAMES = new Set([
-  'askquestion',
+  // claude-code AskUserQuestion; codex ask_user_question variant; grok's
+  // ACP method leaf (x.ai/ask_user_question)
   'askuserquestion',
+  // cursor AskQuestion / cursor/ask_question; pi ask_question
+  'askquestion',
+  // cline/roo-style spelling
   'askfollowupquestion',
+  // codex request_user_input / requestInput
   'requestuserinput',
   'requestinput',
+  // opencode question
+  'question',
+  'questions',
+  // hermes clarify
+  'clarify',
+  // MCP elicitation methods (elicitation/create — leaf is `create`, so the
+  // WHOLE normalized name is what matches)
   'elicitationcreate',
   'elicitinput',
+  // generic ask-the-user spellings agents emit
+  'askuser',
+  'userinput',
+  'userquestion',
+  'askhuman',
+  'humaninput',
+  'getuserinput',
+  'promptuser',
+  'queryuser',
 ]);
 
 /** Question-shaped only when the args actually parse into questions. */
 const GENERIC_QUESTION_NAMES = new Set([
   'ask',
-  'askuser',
   'elicit',
   'elicitation',
+  'requestfeedback',
+  'inputrequest',
 ]);
 
 const normName = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-const toolName = (call: Record<string, unknown>): string => {
-  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-  if (str(call.kind) === 'mcp')
-    return str(call.tool).trim() || str(call.name).trim();
-  return str(call.name).trim() || str(call.tool).trim();
+/** Vendor/namespace prefixes ride the method name — ACP extensions
+ * (`cursor/ask_question`, `_x.ai/ask_user_question`) and MCP
+ * double-underscore tool names (`mcp__srv__ask_user`). Reducing to the leaf
+ * keeps the curated sets honest without enumerating every prefix. */
+const nameLeaves = (name: string): string[] => {
+  const leaves = [name];
+  const slash = name.lastIndexOf('/');
+  if (slash >= 0) leaves.push(name.slice(slash + 1));
+  const dunder = name.lastIndexOf('__');
+  if (dunder >= 0) leaves.push(name.slice(dunder + 2));
+  return leaves;
+};
+
+/** All normalized name candidates for a call: `tool`/`name` fields (mcp
+ * calls prefer `tool`), each with its stripped leaves, plus the doc `kind`
+ * itself — provider shims may surface the tool name AS the kind. */
+const toolNames = (call: Record<string, unknown>): string[] => {
+  const out = new Set<string>();
+  const push = (v: unknown): void => {
+    if (typeof v !== 'string' || v.trim() === '') return;
+    for (const leaf of nameLeaves(v.trim())) out.add(normName(leaf));
+  };
+  if (call.kind === 'mcp') {
+    push(call.tool);
+    push(call.name);
+  } else {
+    push(call.name);
+    push(call.tool);
+  }
+  push(call.kind);
+  return [...out];
 };
 
 // ── question parsing (detectPlan-style field bags) ──────────────────────
@@ -225,15 +280,15 @@ const questionTool = (
       const part = entry.parts[j];
       if (part.kind !== 'tool' || part.resolved) continue;
       const call = part.call as Record<string, unknown>;
-      const name = normName(toolName(call));
-      if (QUESTION_TOOL_NAMES.has(name)) {
+      const names = toolNames(call);
+      if (names.some(n => QUESTION_TOOL_NAMES.has(n))) {
         return {
           entry,
           part,
           questions: questionsFromCall(call) ?? [...FALLBACK_QUESTION],
         };
       }
-      if (GENERIC_QUESTION_NAMES.has(name)) {
+      if (names.some(n => GENERIC_QUESTION_NAMES.has(n))) {
         const questions = questionsFromCall(call);
         if (questions !== undefined) return { entry, part, questions };
       }
