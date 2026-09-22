@@ -82,7 +82,11 @@ Needs a Mac build, a device, or a host in the right state:
 - Finish-banner alerts when a run completes — patch `0002-*` + same
   `APNS_*` credentials.
 - Question-alert banners when a run asks for input — patch `0003-*` + same
-  `APNS_*` credentials.
+  `APNS_*` credentials. Covers `input`-part questions only (the edge sees
+  registry row flips, not chat doc contents). Questions the app detects
+  itself (unresolved ask-question tool parts, trailing prose) can't emit a
+  dedicated push until the host mints an `input` part for them — prose
+  questions still trigger the finish-banner alert when the turn ends.
 
 ## Blocked (`blocked`)
 

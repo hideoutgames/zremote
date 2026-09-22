@@ -59,7 +59,7 @@ import {
   type StagedAttachment,
 } from '../zeron/state/draftStore';
 import {
-  useOpenInputRequest,
+  useOpenQuestion,
   useContextUsage,
   type RoomState,
   type RunPhase,
@@ -85,6 +85,7 @@ import {
   endComposerResize,
 } from './composerExtraHeight';
 import type { HarnessDescriptor, ModelOption } from '../zeron/protocol/types';
+import type { OpenQuestion } from '../zeron/protocol/detectQuestion';
 import {
   composerAction,
   harnessSteers,
@@ -185,6 +186,13 @@ export interface ComposerProps {
     requestId: string,
     answers: { questionId: string; labels: string[] }[],
   ) => void;
+  /** App-detected questions (unresolved question tool calls, trailing prose
+   * questions) — no host request id, so answers ship as a steer. Optional:
+   * compose mode has no session store and never produces a question. */
+  onAnswerQuestion?: (
+    question: OpenQuestion,
+    answers: { questionId: string; labels: string[] }[],
+  ) => void;
   /** The send was refused (e.g. attachments while live without queue
    * support) — the parent surfaces it; nothing is silently dropped. */
   onSendBlocked: () => void;
@@ -229,6 +237,7 @@ export const Composer = React.memo(function ({
   onCancel,
   onSendAttachments,
   onRespondInput,
+  onAnswerQuestion = () => {},
   onSendBlocked,
   composerRef,
   onLayout,
@@ -306,7 +315,7 @@ export const Composer = React.memo(function ({
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
   const [preview, setPreview] = useState<StagedAttachment | null>(null);
-  const question = useOpenInputRequest(chatId);
+  const question = useOpenQuestion(chatId);
   const contextUsage = useContextUsage(chatId);
   const prefersSteer = useLiveActionPrefersSteer();
   const hasAttachments = draft.attachments.length > 0;
@@ -710,9 +719,13 @@ export const Composer = React.memo(function ({
             glass; the input stays mounted, de-emphasized. */}
           {question !== undefined ? (
             <QuestionPanel
-              requestId={question.requestId}
+              requestId={question.id}
               questions={question.questions}
-              onSubmit={onRespondInput}
+              onSubmit={(_id, answers) =>
+                question.kind === 'input'
+                  ? onRespondInput(question.requestId, answers)
+                  : onAnswerQuestion(question, answers)
+              }
             />
           ) : null}
 

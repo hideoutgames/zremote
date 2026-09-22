@@ -7,6 +7,11 @@ import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { effectiveStatus } from '../protocol/entities';
+import {
+  openQuestion,
+  sameOpenQuestion,
+  type OpenQuestion,
+} from '../protocol/detectQuestion';
 import type {
   Chat,
   ContextUsage,
@@ -52,6 +57,11 @@ export interface SessionState {
   /** Queue rows with an in-flight host action (sendNow/steerNow/remove) —
    * SessionQueue.swift queueActionsPending. */
   queueActionsPending: Set<string>;
+  /** Question ids the user already answered through the panel. App-detected
+   * tool/text questions may keep signalling after the answer ships (a dead
+   * run's tool never resolves, the trailing text stays last until the reply
+   * lands), so they're suppressed until a new question id appears. */
+  answeredQuestionIds: Set<string>;
   queueActionError?: string;
   lastError?: string;
   hostDeviceId?: string;
@@ -67,6 +77,7 @@ const EMPTY_SESSION: SessionState = {
   unsyncedCommandIds: [],
   room: 'idle',
   queueActionsPending: new Set(),
+  answeredQuestionIds: new Set(),
 };
 
 const stores = new Map<string, StoreApi<SessionState>>();
@@ -102,6 +113,19 @@ export const recordFailedSend = (chatId: string, failed: FailedSend): void => {
 export const dismissFailedSend = (chatId: string, messageId: string): void => {
   getSessionStore(chatId).setState(s => ({
     failedSends: s.failedSends.filter(f => f.messageId !== messageId),
+  }));
+};
+
+/** Record a question the panel already answered so openQuestion stops
+ * surfacing it (tool/text signals can outlive the answer). */
+export const markQuestionAnswered = (
+  chatId: string,
+  questionId: string,
+): void => {
+  const store = getSessionStore(chatId);
+  if (store.getState().answeredQuestionIds.has(questionId)) return;
+  store.setState(s => ({
+    answeredQuestionIds: new Set([...s.answeredQuestionIds, questionId]),
   }));
 };
 
@@ -228,12 +252,18 @@ export const runPhase = (
 
   if (s.commands.some(c => c.kind === 'interrupt' && pending(c)))
     return 'stopping';
-  if (openInputRequest(s.entries) !== undefined) return 'awaitingInput';
 
   const live = effectiveStatus(row, now);
   const streaming = s.entries.some(e => e.status === 'streaming');
-  if (live === 'working' || live === 'awaitingInput' || streaming)
-    return 'working';
+  const runLive = live === 'working' || live === 'awaitingInput' || streaming;
+  const open = openQuestion(s.entries, s.answeredQuestionIds);
+  // Host input parts stay open until answered regardless of run state;
+  // app-detected tool/text questions only mark a live run awaiting input —
+  // an idle thread keeps its phase even while the panel stays up.
+  if (open !== undefined && (open.kind === 'input' || runLive))
+    return 'awaitingInput';
+
+  if (runLive) return 'working';
 
   const ownRunPending = s.commands.find(
     c => (c.kind === 'run' || c.kind === 'steer') && pending(c),
@@ -285,6 +315,16 @@ export const useOpenInputRequest = (
     getSessionStore(chatId),
     s => openInputRequest(s.entries),
     sameOpenInput,
+  );
+
+/** The question to surface in the composer: host input parts, unresolved
+ * question-shaped tool calls, and trailing prose questions (detectQuestion).
+ * Already-answered ids are filtered via `answeredQuestionIds`. */
+export const useOpenQuestion = (chatId: string): OpenQuestion | undefined =>
+  useStoreWithEqualityFn<StoreApi<SessionState>, OpenQuestion | undefined>(
+    getSessionStore(chatId),
+    s => openQuestion(s.entries, s.answeredQuestionIds),
+    sameOpenQuestion,
   );
 
 export const useRunPhase = (
