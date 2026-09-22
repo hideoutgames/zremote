@@ -127,6 +127,7 @@ const stubTab = (input: (bytes: Uint8Array) => void) => {
       },
       input,
       subscribe: jest.fn(() => Promise.resolve()),
+      setOnEvent: jest.fn(),
       resize: jest.fn(),
       detach: jest.fn(),
       close: jest.fn(),

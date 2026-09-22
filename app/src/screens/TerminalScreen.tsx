@@ -188,6 +188,22 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const bump = useCallback(() => setFrame(f => f + 1), []);
   const restoredRef = useRef(false);
 
+  // Tabs outlive a sheet mount (module-level store): every mount hands each
+  // tab's client a fresh sink bound to this mount's bump — the previous
+  // mount's closure would set state on a dead component.
+  const tabEvents = useCallback(
+    (tb: TerminalTab) => (e: TerminalEvent) => {
+      if (e.type === 'data') {
+        tb.screen.write(base64Decode(e.data));
+      } else {
+        tb.exited = true;
+        tb.exitCode = e.exitCode;
+      }
+      bump();
+    },
+    [bump],
+  );
+
   const commitTabs = useCallback(
     (next: TerminalTab[], activeIndex?: number) => {
       tabsRef.current = next;
@@ -212,19 +228,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           screen,
           exited: false,
         };
-        const client = new TerminalClient(
-          relay,
-          session,
-          (e: TerminalEvent) => {
-            if (e.type === 'data') {
-              screen.write(base64Decode(e.data));
-            } else {
-              tab.exited = true;
-              tab.exitCode = e.exitCode;
-            }
-            bump();
-          },
-        );
+        const client = new TerminalClient(relay, session, tabEvents(tab));
         tab.client = client;
         client.subscribe().catch(e => setError(String(e?.message ?? e)));
         client.resize(cols, rows);
@@ -232,7 +236,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
         commitTabs(next, next.length - 1);
       })
       .catch(e => setError(String(e?.message ?? e)));
-  }, [runtime, chat?.deviceId, chatId, cols, rows, bump, commitTabs]);
+  }, [runtime, chat?.deviceId, chatId, cols, rows, tabEvents, commitTabs]);
 
   // Restore detached tabs for this chat, then wait for layout before
   // OpenTerminal so a first shell is not sized to a collapsed sheet.
@@ -248,11 +252,12 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
       setTabs(existing);
       setActive(0);
       for (const tb of existing) {
+        tb.client.setOnEvent(tabEvents(tb));
         if (!tb.exited)
           tb.client.subscribe().catch(e => setError(String(e?.message ?? e)));
       }
     }
-  }, [runtime, chat?.deviceId, chatId]);
+  }, [runtime, chat?.deviceId, chatId, tabEvents]);
 
   useEffect(() => {
     if (runtime === null || chat?.deviceId === undefined) return;
@@ -329,9 +334,14 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
 
   const screen = tab?.screen;
   // Scrollback + visible grid as one virtualized list; follow-tail unless the
-  // user scrolls up more than the re-engage band (~2 rows).
+  // user scrolls up more than the re-engage band (~2 rows). LegendList only
+  // repaints items whose reference changed, and AnsiScreen mutates cells in
+  // place — so grid rows go in as fresh copies each frame. Scrollback rows
+  // are append-only and keep their identities.
   const lineData =
-    screen === undefined ? [] : [...screen.scrollback, ...screen.grid];
+    screen === undefined
+      ? []
+      : [...screen.scrollback, ...screen.grid.map(r => r.slice())];
   const cursorRow = (screen?.scrollback.length ?? 0) + (screen?.y ?? 0);
   const listRef = useRef<LegendListRef>(null);
   const follow = useRef(true);
