@@ -87,6 +87,7 @@ const SF_TO_MDI: Record<string, string> = {
   trash: 'trash-can-outline',
   'arrow.right.doc.on.clipboard': 'clipboard-arrow-right-outline',
   'slider.horizontal.3': 'tune',
+  command: 'apple-keyboard-command',
   bolt: 'lightning-bolt-outline',
   'bolt.fill': 'lightning-bolt',
 };
