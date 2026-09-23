@@ -28,7 +28,13 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useReducedMotion } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import {
   ClipboardPasteButton,
@@ -133,6 +139,8 @@ const INPUT_MAX_HEIGHT_REGULAR = 214;
 const INPUT_MIN_HEIGHT = 60;
 const THUMBS_ANIM_MS = 220;
 const CHIP_FADE = 28;
+const VOICE_NOTICE_TIMEOUT_MS = 20_000;
+const VOICE_NOTICE_FADE_MS = 800;
 
 function ChipRowMask({ children }: { children: React.ReactNode }) {
   return (
@@ -496,6 +504,30 @@ export const Composer = React.memo(function ({
     setVoiceNotice(null);
   }, [chatId, voiceInputMode]);
 
+  // Voice notices are transient: fade then clear them so a stale
+  // "Kept original voice text" / "Restore Original Voice Text" prompt
+  // never lingers. A new notice re-arms the timer.
+  const reduceMotion = useReducedMotion();
+  const noticeOpacity = useSharedValue(1);
+  const noticeAnimStyle = useAnimatedStyle(() => ({
+    opacity: noticeOpacity.value,
+  }));
+  useEffect(() => {
+    if (voiceNotice === null) return;
+    noticeOpacity.value = 1;
+    if (!reduceMotion) {
+      noticeOpacity.value = withDelay(
+        VOICE_NOTICE_TIMEOUT_MS - VOICE_NOTICE_FADE_MS,
+        withTiming(0, { duration: VOICE_NOTICE_FADE_MS }),
+      );
+    }
+    const timer = setTimeout(
+      () => setVoiceNotice(null),
+      VOICE_NOTICE_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [voiceNotice, noticeOpacity, reduceMotion]);
+
   // Stop capture on background / unmount (never leak the mic).
   useEffect(() => {
     const sub = AppState.addEventListener('change', s => {
@@ -722,7 +754,6 @@ export const Composer = React.memo(function ({
   ]);
 
   // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
-  const reduceMotion = useReducedMotion();
   const stripH = hasAttachments ? ATTACHMENT_TILE + 8 : 0;
   const stripO = hasAttachments ? 1 : 0;
   const stripDur = reduceMotion ? 0 : THUMBS_ANIM_MS;
@@ -1102,36 +1133,38 @@ export const Composer = React.memo(function ({
       {voiceNotice?.kind === 'cleanupFailed' ||
       voiceNotice?.kind === 'transcribeFailed' ||
       voiceNotice?.kind === 'restore' ? (
-        <Glass
-          style={[
-            styles.voiceBanner,
-            { backgroundColor: theme.glassFallbackBackground },
-          ]}
-        >
-          {voiceNotice.kind === 'restore' ? (
-            <Pressable
-              onPress={restoreVoiceText}
-              accessibilityRole="button"
-              accessibilityLabel={t('composer.voiceRestore')}
-              testID="composer-restore-voice"
-              hitSlop={6}
-              style={styles.voiceBannerPress}
-            >
-              <Text style={[styles.voiceBannerAction, { color: theme.text }]}>
-                {t('composer.voiceRestore')}
+        <Animated.View style={noticeAnimStyle}>
+          <Glass
+            style={[
+              styles.voiceBanner,
+              { backgroundColor: theme.glassFallbackBackground },
+            ]}
+          >
+            {voiceNotice.kind === 'restore' ? (
+              <Pressable
+                onPress={restoreVoiceText}
+                accessibilityRole="button"
+                accessibilityLabel={t('composer.voiceRestore')}
+                testID="composer-restore-voice"
+                hitSlop={6}
+                style={styles.voiceBannerPress}
+              >
+                <Text style={[styles.voiceBannerAction, { color: theme.text }]}>
+                  {t('composer.voiceRestore')}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text
+                style={[styles.voiceBannerText, { color: theme.text }]}
+                accessibilityLiveRegion="polite"
+              >
+                {voiceNotice.kind === 'cleanupFailed'
+                  ? t('composer.voiceCleanupFailed')
+                  : t('composer.voiceTranscribeFailed')}
               </Text>
-            </Pressable>
-          ) : (
-            <Text
-              style={[styles.voiceBannerText, { color: theme.text }]}
-              accessibilityLiveRegion="polite"
-            >
-              {voiceNotice.kind === 'cleanupFailed'
-                ? t('composer.voiceCleanupFailed')
-                : t('composer.voiceTranscribeFailed')}
-            </Text>
-          )}
-        </Glass>
+            )}
+          </Glass>
+        </Animated.View>
       ) : null}
 
       <View
