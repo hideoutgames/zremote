@@ -1,4 +1,8 @@
-import { updateInstalled } from '../softwareUpdate';
+import {
+  isRemoteApplyUnsupported,
+  remoteApplySupported,
+  updateInstalled,
+} from '../softwareUpdate';
 import type { UpdateStatus } from '../../protocol/types';
 
 const status = (patch: Partial<UpdateStatus>): UpdateStatus => ({
@@ -41,5 +45,29 @@ describe('updateInstalled', () => {
         '0.2.73',
       ),
     ).toBe(true);
+  });
+});
+
+describe('remoteApplySupported', () => {
+  // crates/update managed_updates_supported: symlink-managed installs exist
+  // only on Unix — Windows hosts always refuse ApplyUpdate.
+  test('is false on Windows hosts only', () => {
+    expect(remoteApplySupported('windows')).toBe(false);
+    expect(remoteApplySupported('macos')).toBe(true);
+    expect(remoteApplySupported('linux')).toBe(true);
+    expect(remoteApplySupported('darwin')).toBe(true);
+    expect(remoteApplySupported('')).toBe(true);
+  });
+});
+
+describe('isRemoteApplyUnsupported', () => {
+  test('matches the host bail for non-managed installs', () => {
+    expect(
+      isRemoteApplyUnsupported(
+        'this install is not update-managed — the desktop app updates from its UI; source builds update via git',
+      ),
+    ).toBe(true);
+    expect(isRemoteApplyUnsupported('updates unavailable')).toBe(false);
+    expect(isRemoteApplyUnsupported("The device didn't respond")).toBe(false);
   });
 });

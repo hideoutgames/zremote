@@ -303,6 +303,9 @@ const en = {
   'settings.updateApplying': 'Updating…',
   'settings.updateApplyConfirm':
     'Download and apply the update on this host? The Zeron service restarts.',
+  'settings.updateApplyUnsupported':
+    'This host reported it can’t be updated remotely. Updates install from its own app or installer.',
+  'settings.updateApplyAnyway': 'Apply Anyway',
   'settings.agentAccounts': 'Agent Accounts',
   'settings.appearance': 'Appearance',
   'settings.theme': 'Theme',

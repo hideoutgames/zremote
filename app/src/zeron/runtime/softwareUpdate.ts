@@ -27,3 +27,19 @@ export const updateInstalled = (
   status: UpdateStatus,
   version: string,
 ): boolean => status.currentVersion === version;
+
+/**
+ * `managed_updates_supported` (crates/update): a symlink-managed install
+ * exists only on Unix — a Windows host's `ApplyUpdate` always refuses, so
+ * the Apply affordance is hidden rather than offered to fail.
+ */
+export const remoteApplySupported = (devicePlatform: string): boolean =>
+  devicePlatform.toLowerCase() !== 'windows';
+
+/**
+ * The host's refusal for install kinds `ApplyUpdate` can't drive — desktop
+ * bundles and unmanaged builds (`Updater::apply` bail). The first refusal is
+ * recorded so Apply stays hidden on that device until a retry succeeds.
+ */
+export const isRemoteApplyUnsupported = (message: string): boolean =>
+  message.includes('not update-managed');

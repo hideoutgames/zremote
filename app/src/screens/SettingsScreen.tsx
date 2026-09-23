@@ -21,6 +21,8 @@ import { loadCatalog, setHarnessEnabled } from '../zeron/runtime/catalog';
 import {
   APPLY_RESTART_WAIT_MS,
   APPLY_UPDATE_TIMEOUT_MS,
+  isRemoteApplyUnsupported,
+  remoteApplySupported,
   UPDATE_STATUS_RETRY_MS,
   updateInstalled,
 } from '../zeron/runtime/softwareUpdate';
@@ -46,6 +48,7 @@ import {
   setLiveActivityShowHost,
   setLocalLogsEnabled,
   setNotificationsEnabled,
+  setRemoteApplyUnsupported,
   useCleanupModelId,
   useDictationLocale,
   useForceRelayMode,
@@ -54,6 +57,7 @@ import {
   useLiveActivityShowHost,
   useLocalLogsEnabled,
   useNotificationsEnabled,
+  useRemoteApplyUnsupported,
   useVoiceInputMode,
   useVoiceModelId,
 } from '../zeron/state/uiPrefs';
@@ -122,6 +126,9 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
   const [pendingVersion, setPendingVersion] = useState<string | undefined>(
     undefined,
   );
+  /** True once this host has refused ApplyUpdate as not update-managed
+   * (persisted — survives restarts; cleared by a successful retry). */
+  const applyUnsupported = useRemoteApplyUnsupported(device.id);
 
   useEffect(() => {
     if (runtime !== null)
@@ -216,44 +223,70 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
     );
   }, [runtime, device.id, device.name]);
 
-  const applyUpdate = useCallback(() => {
+  const runApply = useCallback(() => {
     if (runtime === null || applying) return;
+    setApplying(true);
+    setApplyError(undefined);
+    runtime
+      .relayFor(device.id)
+      .call<{ version?: string }>(
+        METHODS.APPLY_UPDATE,
+        {},
+        { timeoutMs: APPLY_UPDATE_TIMEOUT_MS },
+      )
+      .then(result => {
+        const version = result?.version?.trim();
+        if (version === undefined || version === '') {
+          setApplying(false);
+          return;
+        }
+        // A successful apply means the earlier refusal no longer holds (the
+        // host was reinstalled as a managed service under the same device id).
+        setRemoteApplyUnsupported(device.id, false);
+        setPendingVersion(version);
+      })
+      .catch(e => {
+        log.warn(`ApplyUpdate: ${e}`);
+        const message = e instanceof Error ? e.message : String(e);
+        if (isRemoteApplyUnsupported(message)) {
+          setRemoteApplyUnsupported(device.id, true);
+        }
+        setPendingVersion(undefined);
+        setApplyError(message);
+        setApplying(false);
+      });
+  }, [runtime, device.id, applying]);
+
+  const applyUpdate = useCallback(() => {
     Alert.alert(
       t('settings.softwareUpdate'),
       t('settings.updateApplyConfirm'),
       [
         { text: t('home.row.cancel'), style: 'cancel' },
-        {
-          text: t('settings.updateApply'),
-          onPress: () => {
-            setApplying(true);
-            setApplyError(undefined);
-            runtime
-              .relayFor(device.id)
-              .call<{ version?: string }>(
-                METHODS.APPLY_UPDATE,
-                {},
-                { timeoutMs: APPLY_UPDATE_TIMEOUT_MS },
-              )
-              .then(result => {
-                const version = result?.version?.trim();
-                if (version === undefined || version === '') {
-                  setApplying(false);
-                  return;
-                }
-                setPendingVersion(version);
-              })
-              .catch(e => {
-                log.warn(`ApplyUpdate: ${e}`);
-                setPendingVersion(undefined);
-                setApplyError(e instanceof Error ? e.message : String(e));
-                setApplying(false);
-              });
-          },
-        },
+        { text: t('settings.updateApply'), onPress: runApply },
       ],
     );
-  }, [runtime, device.id, applying]);
+  }, [runApply]);
+
+  /** Row tap on a refused device: explain the hidden Apply and leave a retry
+   * open — a host reinstalled as managed under the same device id recovers. */
+  const explainUnsupported = useCallback(() => {
+    Alert.alert(
+      t('settings.softwareUpdate'),
+      t('settings.updateApplyUnsupported'),
+      [
+        { text: t('home.row.cancel'), style: 'cancel' },
+        { text: t('settings.updateApplyAnyway'), onPress: runApply },
+      ],
+    );
+  }, [runApply]);
+
+  const applyBlocked =
+    !remoteApplySupported(device.platform) || applyUnsupported;
+  /** A retry is worth offering only where refusal isn't structural: Windows
+   * hosts can never be update-managed (crates/update). */
+  const applyRetryable =
+    applyUnsupported && remoteApplySupported(device.platform);
 
   const toggle = useCallback(
     (harnessId: string, enabled: boolean) => {
@@ -295,14 +328,20 @@ const AgentsPage = ({ device }: { device: DeviceRow }) => {
                   accessibilityLabel={t('settings.updateApplying')}
                   testID="software-update-spinner"
                 />
-              ) : update.updateAvailable ? (
+              ) : update.updateAvailable && !applyBlocked ? (
                 <Text style={[styles.apply, { color: theme.accent }]}>
                   {t('settings.updateApply')}
                 </Text>
               ) : undefined
             }
             onPress={
-              update.updateAvailable && !applying ? applyUpdate : undefined
+              update.updateAvailable && !applying
+                ? applyBlocked
+                  ? applyRetryable
+                    ? explainUnsupported
+                    : undefined
+                  : applyUpdate
+                : undefined
             }
             accessibilityLabel={t('settings.softwareUpdate')}
             testID="settings-software-update"
