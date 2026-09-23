@@ -37,7 +37,7 @@ const sampleAccounts = (): AgentAccountsSnapshot => ({
   accounts: [
     {
       id: 'acct-claude',
-      harness: 'claude',
+      harness: 'claude-code',
       email: 'demo@example.test',
       planLabel: 'Demo plan',
       active: true,

@@ -61,9 +61,10 @@ export const formatReset = (
   })}`;
 };
 
-/** Provider cards in desktop order (accounts.rs PROVIDERS). */
+/** Provider cards in desktop order (accounts.rs PROVIDERS). `harness` is the
+ * engine's kebab-case harness id (proto HarnessId); `cli` is the binary name. */
 export const PROVIDERS = [
-  { harness: 'claude', name: 'Claude Code', cli: 'claude' },
+  { harness: 'claude-code', name: 'Claude Code', cli: 'claude' },
   { harness: 'codex', name: 'Codex', cli: 'codex' },
   { harness: 'cursor', name: 'Cursor', cli: 'cursor-agent' },
 ] as const;
