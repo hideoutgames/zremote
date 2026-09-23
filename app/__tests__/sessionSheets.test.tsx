@@ -177,7 +177,11 @@ beforeEach(() => {
       connection: 'connected',
       lastSyncAt: undefined,
     });
-    changeRequestStore.setState({ byChat: {}, diffByChat: {} });
+    changeRequestStore.setState({
+      byChat: {},
+      diffByChat: {},
+      detectedByChat: {},
+    });
     getSessionStore('c1').setState({
       entries: [],
       commands: [],

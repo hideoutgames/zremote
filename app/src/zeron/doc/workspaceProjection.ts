@@ -14,6 +14,7 @@ import {
 import type {
   Chat,
   ChatConfig,
+  ConversationSourceContext,
   DeviceRow,
   SessionRow,
   SessionStatus,
@@ -71,6 +72,41 @@ export const chatConfigToFields = (
   modelOptions: (config.modelOptions ?? {}) as Record<string, FieldValue>,
   ...(config.sandbox !== undefined ? { sandbox: config.sandbox } : {}),
 });
+
+/** Registry `sourceContext` value → typed snapshot. Unknown/missing fields
+ * drop the whole context like upstream serde: a partial stamp is never
+ * trusted for PR watches. */
+const sourceContextFromFields = (
+  o: Record<string, FieldValue>,
+): ConversationSourceContext | undefined => {
+  const str = (key: string): string | undefined => {
+    const v = o[key];
+    return typeof v === 'string' ? v : undefined;
+  };
+  const checkoutId = str('checkoutId');
+  const repoRoot = str('repoRoot');
+  const cwd = str('cwd');
+  const branch = str('branch');
+  const observedAt = str('observedAt');
+  if (
+    checkoutId === undefined ||
+    repoRoot === undefined ||
+    cwd === undefined ||
+    branch === undefined ||
+    observedAt === undefined
+  ) {
+    return undefined;
+  }
+  const headSha = str('headSha');
+  return {
+    checkoutId,
+    repoRoot,
+    cwd,
+    branch,
+    ...(headSha !== undefined ? { headSha } : {}),
+    observedAt,
+  };
+};
 
 const chatConfigFromFields = (o: Record<string, FieldValue>): ChatConfig => ({
   harness: typeof o.harness === 'string' ? o.harness : 'claude-code',
@@ -148,6 +184,9 @@ export const projectWorkspace = (doc: RegistryDoc): WorkspaceProjection => {
     const deviceId = fstr(row, 'deviceId');
     if (deviceId === undefined) return [];
     const cfg = fobj(row, 'config');
+    const src = fobj(row, 'sourceContext');
+    const sourceContext =
+      src !== undefined ? sourceContextFromFields(src) : undefined;
     const chat: Chat = {
       id: fstr(row, 'id') ?? row.id,
       deviceId,
@@ -162,6 +201,7 @@ export const projectWorkspace = (doc: RegistryDoc): WorkspaceProjection => {
       ...(fstr(row, 'checkoutId') !== undefined
         ? { checkoutId: fstr(row, 'checkoutId') }
         : {}),
+      ...(sourceContext !== undefined ? { sourceContext } : {}),
       ...(cfg !== undefined ? { config: chatConfigFromFields(cfg) } : {}),
       ...(fstr(row, 'lastMessagePreview') !== undefined
         ? { lastMessagePreview: fstr(row, 'lastMessagePreview') }

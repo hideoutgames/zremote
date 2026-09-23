@@ -1,6 +1,6 @@
-// Collect change requests visible in a thread from the checkout stream
-// (WatchCheckoutChangeRequest). Host has no "list PRs for chat" RPC and we
-// do not scrape provider URLs out of transcript text.
+// Collect change requests visible in a thread: the checkout stream
+// (WatchCheckoutChangeRequest) first, then PR/MR URLs scanned out of the
+// transcript (detectChangeRequest.ts) for providers the host can't resolve.
 
 import type { ChangeRequestSummary } from '../zeron/protocol/types';
 import {
@@ -37,21 +37,29 @@ export const badgeFromSummary = (
 export const collectThreadPrs = (
   checkout?: ChangeRequestSummary | null,
   diff?: PrDiffCounts,
+  detected?: readonly ChangeRequestSummary[],
 ): PrBadgeModel[] => {
-  if (checkout == null) return [];
-  return [badgeFromSummary(checkout, diff)];
+  const out: PrBadgeModel[] = [];
+  if (checkout != null) out.push(badgeFromSummary(checkout, diff));
+  for (const pr of detected ?? []) {
+    if (out.some(p => p.url === pr.url)) continue;
+    out.push(badgeFromSummary(pr));
+  }
+  return out;
 };
 
 const hasPrIdentity = (badge: PrBadgeModel): boolean =>
   badge.url !== '' || badge.number > 0;
 
 /** Composer chrome pill: a real, non-closed checkout CR (draft, open, or
- * merged). Closed-only and placeholder summaries stay hidden. History still
- * lists closed checkout CRs via `collectThreadPrs`. */
+ * merged) or the newest detected thread PR when the host resolved none.
+ * Closed-only and placeholder summaries stay hidden. History still lists
+ * closed checkout CRs via `collectThreadPrs`. */
 export const composerPrBadge = (
   checkout?: ChangeRequestSummary | null,
   diff?: PrDiffCounts,
+  detected?: readonly ChangeRequestSummary[],
 ): PrBadgeModel | undefined =>
-  collectThreadPrs(checkout, diff).find(
+  collectThreadPrs(checkout, diff, detected).find(
     p => p.state !== 'closed' && hasPrIdentity(p),
   );

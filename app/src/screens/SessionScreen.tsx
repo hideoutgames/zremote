@@ -96,7 +96,11 @@ import {
   resolveModelTraits,
   selectionForModel,
 } from '../components/modelTraits';
-import { useCheckoutWatches } from '../hooks/useCheckoutWatches';
+import {
+  chatCheckoutTarget,
+  useCheckoutWatches,
+  useDetectedChangeRequests,
+} from '../hooks/useCheckoutWatches';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
 import { DESKTOP_SANDBOX, type MessageEntry } from '../zeron/protocol/types';
@@ -815,22 +819,31 @@ function ActiveSessionScreen({
       loadModels(runtime, hostDeviceId, chat.config.harness).catch(() => {});
   }, [runtime, hostDeviceId, chat?.config?.harness, catalogTick]);
 
+  const checkoutTarget = chatCheckoutTarget(
+    chat ?? {},
+    chat?.cwd === undefined ? space?.path : undefined,
+  );
   useCheckoutWatches(
     runtime,
     chatId,
     hostDeviceId,
-    chat?.cwd ?? space?.path,
-    chat?.branch,
-    chat?.checkoutId,
+    checkoutTarget?.cwd,
+    checkoutTarget?.branch,
+    checkoutTarget?.checkoutId,
   );
+  useDetectedChangeRequests(chatId);
   const checkoutSummary = useStore(
     changeRequestStore,
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
+  const detectedPrs = useStore(
+    changeRequestStore,
+    s => s.detectedByChat[chatId],
+  );
   const checkoutDiff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
   const prBadge = useMemo(
-    () => composerPrBadge(checkoutSummary, checkoutDiff),
-    [checkoutSummary, checkoutDiff],
+    () => composerPrBadge(checkoutSummary, checkoutDiff, detectedPrs),
+    [checkoutSummary, checkoutDiff, detectedPrs],
   );
   const keyboardOffset = useMemo(
     () => composerKeyboardStickyOffset(insets.bottom),

@@ -234,8 +234,12 @@ These are thin screens over host-relayed RPCs — nothing runs on the phone.
   mapping to byte sequences. Tabs allow multiple shells per session; exited
   shells stay listed (dimmed, with `[exit N]`) until the host TTL expires.
 - **History** (`screens/HistoryScreen.tsx`, `components/threadPrs.ts`):
-  change requests for this thread from `WatchCheckoutChangeRequest` only
-  (no provider URL scraping). Tapping a row opens `PrSheet` filled from
+  change requests for this thread from `WatchCheckoutChangeRequest`, plus
+  transcript-scanned PR/MR URLs (`zeron/protocol/detectChangeRequest.ts`) for
+  providers the host lookup can't reach — the engine resolves only through
+  `gh`, so GitLab/Bitbucket/Azure DevOps/Gitea threads would otherwise show
+  nothing. Host results always win; detected rows render `state: 'open'`.
+  Tapping a row opens `PrSheet` filled from
   Zeron data (Open/Draft/Merged badge, checkout `+/-` and file count,
   Overview / Discussion / Commits). Overview is the change-request body
   plus checkout diffs (`ChangesScreen`); Discussion and Commits show
