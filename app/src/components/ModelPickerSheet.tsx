@@ -12,12 +12,12 @@ import React, {
 import {
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import type { AppRuntime } from '../zeron/runtime/appRuntime';
@@ -25,6 +25,7 @@ import {
   DESKTOP_SANDBOX,
   type Chat,
   type ChatConfig,
+  type HarnessDescriptor,
   type Model,
 } from '../zeron/protocol/types';
 import {
@@ -88,6 +89,21 @@ const CLOSE = 44;
 /** Dark check on the orange Done glass (matches PlanSheet CTA label). */
 const DONE_CHECK = '#1C1204';
 
+/** Flat list items: provider heads + model rows. Rows are heavy (a native
+ * context menu plus up to two dropdown menus each), so the list windows
+ * them — a plain ScrollView mounts every row at once. */
+type PickerItem =
+  | { key: string; type: 'pinned-head' }
+  | { key: string; type: 'head'; h: HarnessDescriptor }
+  | {
+      key: string;
+      type: 'row';
+      h: HarnessDescriptor;
+      m: Model;
+      last: boolean;
+      pinned: boolean;
+    };
+
 function ModelRow({
   label,
   selected,
@@ -110,7 +126,6 @@ function ModelRow({
   secondaryColor,
   dangerColor,
   accentColor,
-  onLayout,
   harnessId,
   providerName,
   pin,
@@ -136,7 +151,6 @@ function ModelRow({
   secondaryColor: string;
   dangerColor: string;
   accentColor: string;
-  onLayout?: (y: number) => void;
   harnessId?: string;
   providerName?: string;
   pin: {
@@ -181,7 +195,6 @@ function ModelRow({
       : label;
   return (
     <View
-      onLayout={e => onLayout?.(e.nativeEvent.layout.y)}
       style={[
         styles.row,
         last
@@ -317,9 +330,7 @@ export function ModelPickerSheet({
     model: string;
     levels: string[];
   }>();
-  const scrollRef = useRef<ScrollView>(null);
-  const rowY = useRef<Record<string, number>>({});
-  const groupY = useRef<Record<string, number>>({});
+  const listRef = useRef<FlashListRef<PickerItem>>(null);
   const scrolled = useRef(false);
 
   const harnesses = useMemo(
@@ -414,27 +425,74 @@ export function ModelPickerSheet({
   });
 
   const live = phase === 'working' || phase === 'stopping';
-  const selectedKey =
-    harnessId !== undefined && config?.model !== undefined
-      ? modelRowKey(harnessId, config.model)
-      : undefined;
 
-  const scrollToSelected = useCallback(() => {
-    if (
-      selectedKey === undefined ||
-      harnessId === undefined ||
-      scrolled.current
-    )
-      return;
-    const y = rowY.current[selectedKey];
-    const groupTop = groupY.current[harnessId];
-    if (y === undefined || groupTop === undefined) return;
+  const items = useMemo(() => {
+    const out: PickerItem[] = [];
+    if (pinnedVisible.length > 0) {
+      out.push({ key: 'pinned-head', type: 'pinned-head' });
+      const resolved = pinnedVisible.flatMap(ref => {
+        const h = harnesses.find(x => x.id === ref.harness);
+        const m = modelsFor(deviceId, ref.harness).find(
+          x => x.id === ref.model,
+        );
+        return h !== undefined && m !== undefined ? [{ h, m }] : [];
+      });
+      resolved.forEach(({ h, m }, i) =>
+        out.push({
+          key: `pinned:${h.id}:${m.id}`,
+          type: 'row',
+          h,
+          m,
+          last: i === resolved.length - 1,
+          pinned: true,
+        }),
+      );
+    }
+    for (const { harness: h, models } of grouped) {
+      out.push({ key: `head:${h.id}`, type: 'head', h });
+      models.forEach((m, i) =>
+        out.push({
+          key: `${h.id}:${m.id}`,
+          type: 'row',
+          h,
+          m,
+          last: i === models.length - 1,
+          pinned: false,
+        }),
+      );
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grouped, pinnedVisible, harnesses, deviceId, catalogTick]);
+
+  /** The live row inside its provider group — the pinned copy does not
+   * count, matching the old layout-probe scroll target. */
+  const selectedIndex = useMemo(
+    () =>
+      items.findIndex(
+        it =>
+          it.type === 'row' &&
+          !it.pinned &&
+          it.h.id === harnessId &&
+          it.m.id === config?.model,
+      ),
+    [items, harnessId, config?.model],
+  );
+
+  useEffect(() => {
+    if (scrolled.current || selectedIndex < 0) return;
     scrolled.current = true;
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, groupTop + y - 12),
-      animated: false,
-    });
-  }, [selectedKey, harnessId]);
+    listRef.current
+      ?.scrollToIndex({ index: selectedIndex, animated: false })
+      ?.catch(() => {
+        // Unmeasured row: retry once layout exists (transcript pattern).
+        requestAnimationFrame(() => {
+          listRef.current
+            ?.scrollToIndex({ index: selectedIndex, animated: false })
+            ?.catch(() => {});
+        });
+      });
+  }, [selectedIndex]);
 
   const apply = useCallback(
     (patch: Partial<ChatConfig>) => {
@@ -528,23 +586,120 @@ export function ModelPickerSheet({
     </View>
   );
 
-  const content = (
-    <ScrollView
-      ref={scrollRef}
-      style={styles.scroll}
-      contentContainerStyle={[
-        styles.content,
-        { paddingBottom: insets.bottom + 24 },
-      ]}
-      keyboardShouldPersistTaps="handled"
-      onContentSizeChange={scrollToSelected}
-    >
+  const renderModelRow = (item: Extract<PickerItem, { type: 'row' }>) => {
+    const { h, m } = item;
+    const selected = m.id === config?.model && h.id === harnessId;
+    const stored = modelSettings[modelRowKey(h.id, m.id)];
+    const siblings = modelsFor(deviceId, h.id);
+    const traits = resolveModelTraits(
+      m,
+      siblings,
+      h.reasoningLevels,
+      selected
+        ? {
+            reasoning: config?.reasoning,
+            modelOptions: config?.modelOptions,
+          }
+        : {
+            reasoning: stored?.reasoning,
+            modelOptions: stored?.modelOptions,
+          },
+    );
+    const effortSupported = (traits.effort?.levels.length ?? 0) > 0;
+    const rowOptions = rememberedModelOptions(
+      stored,
+      m.options,
+      selected ? config?.modelOptions : undefined,
+    );
+    return (
+      <ModelRow
+        label={m.label}
+        selected={selected}
+        unavailable={selected && !health.modelOk}
+        effortSupported={effortSupported}
+        effortLabel={
+          effortSupported && traits.effort?.value !== undefined
+            ? capitalizeLevel(traits.effort.value)
+            : undefined
+        }
+        onSelect={() => pickModel(h.id, m)}
+        onOpenEffort={() => {
+          pickModel(h.id, m);
+          setEffort({
+            harness: h.id,
+            model: m.id,
+            levels: traits.effort?.levels ?? [],
+          });
+        }}
+        fastSupported={traits.fast !== undefined}
+        fastOption={traits.fast?.option}
+        fastEnabled={traits.fast?.enabled ?? false}
+        fastChoice={traits.fast?.choice}
+        onSelectFast={choiceId => {
+          const patch = applyFastChoice(
+            traits,
+            choiceId,
+            {
+              model: m.id,
+              reasoning: selected ? config?.reasoning : stored?.reasoning,
+              modelOptions: rowOptions,
+            },
+            siblings,
+          );
+          pickModel(h.id, m, {
+            model: patch.model,
+            reasoning: patch.reasoning,
+            modelOptions: patch.modelOptions,
+          });
+        }}
+        contextOption={traits.context?.option}
+        contextChoice={traits.context?.choice}
+        onSelectContext={choiceId => {
+          const patch = applyContextChoice(traits, choiceId, {
+            model: m.id,
+            reasoning: selected ? config?.reasoning : stored?.reasoning,
+            modelOptions: rowOptions,
+          });
+          pickModel(h.id, m, {
+            model: patch.model,
+            reasoning: patch.reasoning,
+            modelOptions: patch.modelOptions,
+          });
+        }}
+        last={item.last}
+        borderColor={theme.border}
+        textColor={theme.text}
+        secondaryColor={theme.textSecondary}
+        dangerColor={theme.danger}
+        accentColor={theme.accent}
+        harnessId={h.id}
+        providerName={h.name}
+        pin={pinFor(h.id, m.id)}
+      />
+    );
+  };
+
+  const renderItem = ({ item }: { item: PickerItem }) => {
+    if (item.type === 'row') return renderModelRow(item);
+    const title = item.type === 'pinned-head' ? t('home.pinned') : item.h.name;
+    return (
+      <Text
+        style={[styles.groupHead, { color: theme.textSecondary }]}
+        accessibilityRole="header"
+        accessibilityLabel={title}
+      >
+        {title}
+      </Text>
+    );
+  };
+
+  const listHeader = (
+    <View style={styles.listHeader}>
       {live ? (
         <Text style={[styles.note, { color: theme.textSecondary }]}>
           {t('picker.appliesNext')}
         </Text>
       ) : null}
-
       <View
         style={[styles.searchWrap, { backgroundColor: theme.inputBackground }]}
       >
@@ -558,233 +713,26 @@ export function ModelPickerSheet({
           accessibilityLabel={t('picker.search')}
         />
       </View>
+    </View>
+  );
 
-      {pinnedVisible.length > 0 ? (
-        <View key="pinned">
-          <Text
-            style={[styles.groupHead, { color: theme.textSecondary }]}
-            accessibilityRole="header"
-            accessibilityLabel={t('home.pinned')}
-          >
-            {t('home.pinned')}
-          </Text>
-          {pinnedVisible.map((ref, i) => {
-            const h = harnesses.find(x => x.id === ref.harness);
-            const siblings = modelsFor(deviceId, ref.harness);
-            const m = siblings.find(x => x.id === ref.model);
-            if (h === undefined || m === undefined) return null;
-            const selected = m.id === config?.model && h.id === harnessId;
-            const stored = modelSettings[modelRowKey(h.id, m.id)];
-            const traits = resolveModelTraits(
-              m,
-              siblings,
-              h.reasoningLevels,
-              selected
-                ? {
-                    reasoning: config?.reasoning,
-                    modelOptions: config?.modelOptions,
-                  }
-                : {
-                    reasoning: stored?.reasoning,
-                    modelOptions: stored?.modelOptions,
-                  },
-            );
-            const effortSupported = (traits.effort?.levels.length ?? 0) > 0;
-            const rowOptions = rememberedModelOptions(
-              stored,
-              m.options,
-              selected ? config?.modelOptions : undefined,
-            );
-            return (
-              <ModelRow
-                key={`pinned:${h.id}:${m.id}`}
-                label={m.label}
-                selected={selected}
-                unavailable={selected && !health.modelOk}
-                effortSupported={effortSupported}
-                effortLabel={
-                  effortSupported && traits.effort?.value !== undefined
-                    ? capitalizeLevel(traits.effort.value)
-                    : undefined
-                }
-                onSelect={() => pickModel(h.id, m)}
-                onOpenEffort={() => {
-                  pickModel(h.id, m);
-                  setEffort({
-                    harness: h.id,
-                    model: m.id,
-                    levels: traits.effort?.levels ?? [],
-                  });
-                }}
-                fastSupported={traits.fast !== undefined}
-                fastOption={traits.fast?.option}
-                fastEnabled={traits.fast?.enabled ?? false}
-                fastChoice={traits.fast?.choice}
-                onSelectFast={choiceId => {
-                  const patch = applyFastChoice(
-                    traits,
-                    choiceId,
-                    {
-                      model: m.id,
-                      reasoning: selected
-                        ? config?.reasoning
-                        : stored?.reasoning,
-                      modelOptions: rowOptions,
-                    },
-                    siblings,
-                  );
-                  pickModel(h.id, m, {
-                    model: patch.model,
-                    reasoning: patch.reasoning,
-                    modelOptions: patch.modelOptions,
-                  });
-                }}
-                contextOption={traits.context?.option}
-                contextChoice={traits.context?.choice}
-                onSelectContext={choiceId => {
-                  const patch = applyContextChoice(traits, choiceId, {
-                    model: m.id,
-                    reasoning: selected ? config?.reasoning : stored?.reasoning,
-                    modelOptions: rowOptions,
-                  });
-                  pickModel(h.id, m, {
-                    model: patch.model,
-                    reasoning: patch.reasoning,
-                    modelOptions: patch.modelOptions,
-                  });
-                }}
-                last={i === pinnedVisible.length - 1}
-                borderColor={theme.border}
-                textColor={theme.text}
-                secondaryColor={theme.textSecondary}
-                dangerColor={theme.danger}
-                accentColor={theme.accent}
-                harnessId={h.id}
-                providerName={h.name}
-                pin={pinFor(h.id, m.id)}
-              />
-            );
-          })}
-        </View>
-      ) : null}
-
-      {grouped.map(({ harness: h, models }) => (
-        <View
-          key={h.id}
-          onLayout={e => {
-            groupY.current[h.id] = e.nativeEvent.layout.y;
-            if (selectedKey?.startsWith(`${h.id}:`)) scrollToSelected();
-          }}
-        >
-          <Text
-            style={[styles.groupHead, { color: theme.textSecondary }]}
-            accessibilityRole="header"
-            accessibilityLabel={h.name}
-          >
-            {h.name}
-          </Text>
-          {models.map((m, i) => {
-            const selected = m.id === config?.model && h.id === harnessId;
-            const stored = modelSettings[modelRowKey(h.id, m.id)];
-            const siblings = modelsFor(deviceId, h.id);
-            const traits = resolveModelTraits(
-              m,
-              siblings,
-              h.reasoningLevels,
-              selected
-                ? {
-                    reasoning: config?.reasoning,
-                    modelOptions: config?.modelOptions,
-                  }
-                : {
-                    reasoning: stored?.reasoning,
-                    modelOptions: stored?.modelOptions,
-                  },
-            );
-            const effortSupported = (traits.effort?.levels.length ?? 0) > 0;
-            const rowOptions = rememberedModelOptions(
-              stored,
-              m.options,
-              selected ? config?.modelOptions : undefined,
-            );
-            const key = modelRowKey(h.id, m.id);
-            return (
-              <ModelRow
-                key={m.id}
-                label={m.label}
-                selected={selected}
-                unavailable={selected && !health.modelOk}
-                effortSupported={effortSupported}
-                effortLabel={
-                  effortSupported && traits.effort?.value !== undefined
-                    ? capitalizeLevel(traits.effort.value)
-                    : undefined
-                }
-                onSelect={() => pickModel(h.id, m)}
-                onOpenEffort={() => {
-                  pickModel(h.id, m);
-                  setEffort({
-                    harness: h.id,
-                    model: m.id,
-                    levels: traits.effort?.levels ?? [],
-                  });
-                }}
-                fastSupported={traits.fast !== undefined}
-                fastOption={traits.fast?.option}
-                fastEnabled={traits.fast?.enabled ?? false}
-                fastChoice={traits.fast?.choice}
-                onSelectFast={choiceId => {
-                  const patch = applyFastChoice(
-                    traits,
-                    choiceId,
-                    {
-                      model: m.id,
-                      reasoning: selected
-                        ? config?.reasoning
-                        : stored?.reasoning,
-                      modelOptions: rowOptions,
-                    },
-                    siblings,
-                  );
-                  pickModel(h.id, m, {
-                    model: patch.model,
-                    reasoning: patch.reasoning,
-                    modelOptions: patch.modelOptions,
-                  });
-                }}
-                contextOption={traits.context?.option}
-                contextChoice={traits.context?.choice}
-                onSelectContext={choiceId => {
-                  const patch = applyContextChoice(traits, choiceId, {
-                    model: m.id,
-                    reasoning: selected ? config?.reasoning : stored?.reasoning,
-                    modelOptions: rowOptions,
-                  });
-                  pickModel(h.id, m, {
-                    model: patch.model,
-                    reasoning: patch.reasoning,
-                    modelOptions: patch.modelOptions,
-                  });
-                }}
-                last={i === models.length - 1}
-                borderColor={theme.border}
-                textColor={theme.text}
-                secondaryColor={theme.textSecondary}
-                dangerColor={theme.danger}
-                accentColor={theme.accent}
-                harnessId={h.id}
-                providerName={h.name}
-                pin={pinFor(h.id, m.id)}
-                onLayout={y => {
-                  rowY.current[key] = y;
-                  if (key === selectedKey) scrollToSelected();
-                }}
-              />
-            );
-          })}
-        </View>
-      ))}
-    </ScrollView>
+  const content = (
+    <FlashList
+      ref={listRef}
+      style={styles.scroll}
+      data={items}
+      extraData={{ config, modelSettings, pinnedModels, theme, health }}
+      keyExtractor={item => item.key}
+      getItemType={item => (item.type === 'row' ? 'row' : 'head')}
+      renderItem={renderItem}
+      ListHeaderComponent={listHeader}
+      initialScrollIndex={selectedIndex > 0 ? selectedIndex : undefined}
+      contentContainerStyle={[
+        styles.content,
+        { paddingBottom: insets.bottom + 24 },
+      ]}
+      keyboardShouldPersistTaps="handled"
+    />
   );
 
   const effortLevels = effort?.levels ?? [];
@@ -897,7 +845,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   title: { fontSize: 20, fontWeight: '600' },
-  content: { paddingHorizontal: 8, paddingBottom: 24, gap: 4 },
+  content: { paddingHorizontal: 8, paddingBottom: 24 },
+  listHeader: { gap: 4 },
   note: { fontSize: 12, paddingHorizontal: 12, marginBottom: 4 },
   searchWrap: {
     flexDirection: 'row',
@@ -917,6 +866,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     paddingHorizontal: 12,
+    marginTop: 4,
     paddingTop: 16,
     paddingBottom: 2,
   },
