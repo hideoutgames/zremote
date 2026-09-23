@@ -42,6 +42,7 @@ test('multiSelect accumulates; single-select replaces; submit payload', async ()
         requestId="r1"
         questions={questions}
         onSubmit={onSubmit}
+        onDismiss={() => {}}
       />,
     );
   });
@@ -70,6 +71,7 @@ test('multiSelect toggles an option off', async () => {
         requestId="r1"
         questions={questions}
         onSubmit={onSubmit}
+        onDismiss={() => {}}
       />,
     );
   });
@@ -94,6 +96,7 @@ test('custom text alone can submit and is appended to labels', async () => {
         requestId="r1"
         questions={questions}
         onSubmit={onSubmit}
+        onDismiss={() => {}}
       />,
     );
   });
@@ -107,4 +110,23 @@ test('custom text alone can submit and is appended to labels', async () => {
     { questionId: 'q-sync', labels: ['write my own'] },
     { questionId: 'q-gates', labels: ['also this'] },
   ]);
+});
+
+test('dismiss fires onDismiss without submitting', async () => {
+  const onSubmit = jest.fn();
+  const onDismiss = jest.fn();
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <QuestionPanel
+        requestId="r1"
+        questions={questions}
+        onSubmit={onSubmit}
+        onDismiss={onDismiss}
+      />,
+    );
+  });
+  await press(tree!.root, 'Dismiss');
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  expect(onSubmit).not.toHaveBeenCalled();
 });

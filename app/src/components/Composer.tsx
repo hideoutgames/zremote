@@ -79,6 +79,7 @@ import {
   type StagedAttachment,
 } from '../zeron/state/draftStore';
 import {
+  markQuestionAnswered,
   useOpenQuestion,
   useContextUsage,
   type RoomState,
@@ -273,6 +274,11 @@ export const Composer = React.memo(function ({
     useComposerExtraHeight(),
     extraMax,
   );
+  const question = useOpenQuestion(chatId);
+  // An open question owns the composer surface: drop the user's extra height
+  // to its minimum and hide the resize grabber so the panel stays on screen.
+  // The stored value is untouched, so both return once the question closes.
+  const effectiveExtra = question !== undefined ? 0 : extraHeight;
   const extraRef = useRef(extraHeight);
   extraRef.current = extraHeight;
   const extraStartRef = useRef(0);
@@ -328,7 +334,7 @@ export const Composer = React.memo(function ({
   ).current;
   const inputMaxHeight =
     (windowWidth >= 700 ? INPUT_MAX_HEIGHT_REGULAR : INPUT_MAX_HEIGHT_COMPACT) +
-    extraHeight;
+    effectiveExtra;
   const inputRef = useRef<TextInput>(null);
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -337,7 +343,6 @@ export const Composer = React.memo(function ({
   const draft = useDraft(chatId);
   const { pickImages, pickCamera, pickFiles } = useAttachments(chatId);
   const [preview, setPreview] = useState<StagedAttachment | null>(null);
-  const question = useOpenQuestion(chatId);
   const contextUsage = useContextUsage(chatId);
   const prefersSteer = useLiveActionPrefersSteer();
   const hasAttachments = draft.attachments.length > 0;
@@ -784,16 +789,21 @@ export const Composer = React.memo(function ({
         }
       >
         <Glass style={styles.glass}>
-          <View
-            style={styles.grabberHit}
-            accessibilityRole="adjustable"
-            accessibilityLabel={t('composer.resize')}
-            {...grabberPan.panHandlers}
-          >
+          {question === undefined ? (
             <View
-              style={[styles.grabber, { backgroundColor: theme.textSecondary }]}
-            />
-          </View>
+              style={styles.grabberHit}
+              accessibilityRole="adjustable"
+              accessibilityLabel={t('composer.resize')}
+              {...grabberPan.panHandlers}
+            >
+              <View
+                style={[
+                  styles.grabber,
+                  { backgroundColor: theme.textSecondary },
+                ]}
+              />
+            </View>
+          ) : null}
           {mode === 'compose' && checkout !== undefined ? (
             <CheckoutChips {...checkout} />
           ) : null}
@@ -826,13 +836,14 @@ export const Composer = React.memo(function ({
                   ? onRespondInput(question.requestId, answers)
                   : onAnswerQuestion(question, answers)
               }
+              onDismiss={() => markQuestionAnswered(chatId, question.id)}
             />
           ) : null}
 
           {/* minHeight spacer: layout grows by extraHeight 1:1, independent
             of iOS multiline TextInput intrinsic size. Text can still fill
             the extra via maxHeight. */}
-          <View style={{ minHeight: INPUT_MIN_HEIGHT + extraHeight }}>
+          <View style={{ minHeight: INPUT_MIN_HEIGHT + effectiveExtra }}>
             <TextInput
               ref={inputRef}
               value={draft.text}

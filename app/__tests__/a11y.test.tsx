@@ -3,7 +3,7 @@
 
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Dimensions, TextInput, StyleSheet } from 'react-native';
+import { Dimensions, Text, TextInput, StyleSheet } from 'react-native';
 import { Composer } from '../src/components/Composer';
 import { ComposerChromeRow } from '../src/components/ComposerChromeRow';
 import { QuestionPanel } from '../src/components/agentsKit/QuestionPanel';
@@ -488,12 +488,87 @@ test('question panel: options are labelled buttons', async () => {
     },
   ];
   const mounted = await render(
-    <QuestionPanel requestId="r1" questions={questions} onSubmit={() => {}} />,
+    <QuestionPanel
+      requestId="r1"
+      questions={questions}
+      onSubmit={() => {}}
+      onDismiss={() => {}}
+    />,
   );
   const labels = labelled(mounted.root);
   expect(
     labels.filter(l => l.role === 'button' || l.role === 'checkbox').length,
-  ).toBeGreaterThanOrEqual(3); // two options + submit
+  ).toBeGreaterThanOrEqual(4); // two options + dismiss + submit
+});
+
+test('composer: open question hides the grabber and collapses extra height', async () => {
+  act(() => uiPrefsStore.setState({ composerExtraHeight: 120 }));
+  try {
+    const mounted = await render(<Composer {...composerProps} />);
+    const spacerMinHeight = () =>
+      mounted.root
+        .findAll(n => typeof n.props.style?.minHeight === 'number')
+        .map(n => n.props.style.minHeight as number);
+    const grabber = () =>
+      mounted.root.findAll(
+        n => n.props.accessibilityLabel === 'Resize composer',
+      );
+    expect(grabber().length).toBeGreaterThan(0);
+    expect(spacerMinHeight()).toContain(180);
+
+    act(() => {
+      getSessionStore('c1').setState({
+        entries: [
+          {
+            id: 'e1',
+            role: 'assistant',
+            createdAt: 1,
+            deviceId: 'host',
+            parts: [
+              {
+                kind: 'input',
+                id: 'p1',
+                requestId: 'req-1',
+                questions: [
+                  {
+                    id: 'q1',
+                    header: 'Q',
+                    question: 'Pick one',
+                    options: ['A', 'B'],
+                  },
+                ],
+                resolved: false,
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    // Grabber hidden; the stored extra height collapses to the minimum.
+    expect(grabber()).toHaveLength(0);
+    expect(spacerMinHeight()).not.toContain(180);
+    expect(spacerMinHeight()).toContain(60);
+    expect(
+      mounted.root.findAll(n => n.props.children === 'Pick one').length,
+    ).toBeGreaterThan(0);
+
+    // Dismiss suppresses the question — height and grabber return.
+    const dismiss = mounted.root
+      .findAll(n => typeof n.props.onPress === 'function')
+      .find(p =>
+        p.findAllByType(Text).some(t => t.props.children === 'Dismiss'),
+      );
+    expect(dismiss).toBeDefined();
+    await act(async () => dismiss!.props.onPress());
+    expect(grabber().length).toBeGreaterThan(0);
+    expect(spacerMinHeight()).toContain(180);
+    expect(
+      mounted.root.findAll(n => n.props.children === 'Pick one'),
+    ).toHaveLength(0);
+  } finally {
+    act(() => uiPrefsStore.setState({ composerExtraHeight: 0 }));
+  }
 });
 
 test('model picker: search, provider groups, effort, and fast are labelled', async () => {
