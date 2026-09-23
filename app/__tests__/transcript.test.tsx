@@ -1043,3 +1043,146 @@ test('single-message turn has no work toggle', async () => {
   );
   expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(1);
 });
+
+// A long-press for the copy context menu doesn't cancel the in-flight press —
+// the release still lands on the row, so elements like Thinking, the plan
+// card, and the work toggle must not also fire their own action.
+const longPress = async (props: {
+  onPressIn?: () => void;
+  onLongPress?: () => void;
+  onPress?: () => void;
+}) => {
+  await act(async () => {
+    props.onPressIn?.();
+    props.onLongPress?.();
+    props.onPress?.();
+  });
+};
+
+const tap = async (props: { onPressIn?: () => void; onPress?: () => void }) => {
+  await act(async () => {
+    props.onPressIn?.();
+    props.onPress?.();
+  });
+};
+
+test('long-press on the Thinking row does not open the thought process', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+    parts: [
+      { kind: 'reasoning', id: 'r0', text: '**Weighing options**\nDetails.' },
+      { kind: 'text', id: 't0', text: 'Answer.' },
+    ],
+  };
+  let opened = 0;
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage
+        entry={entry}
+        onOpenReasoning={() => {
+          opened += 1;
+        }}
+      />,
+    );
+  });
+  const row = () => tree!.root.findByProps({ testID: 'reasoning-row' }).props;
+  await longPress(row());
+  expect(opened).toBe(0);
+  await tap(row());
+  expect(opened).toBe(1);
+});
+
+test('long-press on a plan card does not open the plan', async () => {
+  const plan = { name: 'Rollout plan', markdown: '# Plan\n\nSteps.' };
+  let opened = 0;
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <PlanCard
+        plan={plan}
+        onOpen={() => {
+          opened += 1;
+        }}
+      />,
+    );
+  });
+  const card = () => tree!.root.findByProps({ testID: 'plan-card' }).props;
+  await longPress(card());
+  expect(opened).toBe(0);
+  await tap(card());
+  expect(opened).toBe(1);
+});
+
+test('long-press on the work toggle does not expand the work bubble', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
+    );
+  });
+  await longPress(tree!.root.findByProps({ testID: 'work-toggle' }).props);
+  expect(tree!.root.findAll(n => n.props.testID === 'tool-group').length).toBe(
+    0,
+  );
+  await tap(tree!.root.findByProps({ testID: 'work-toggle' }).props);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'tool-group').length,
+  ).toBeGreaterThan(0);
+});
+
+test('long-press on Show more does not unfold the prompt', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [{ kind: 'text', id: 't0', text: 'x'.repeat(1200) }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  const fold = () =>
+    tree!.root.findByProps({ testID: 'user-bubble-fold' }).props;
+  await longPress(fold());
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'user-bubble-scroll').length,
+  ).toBe(0);
+  await tap(fold());
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'user-bubble-scroll').length,
+  ).toBeGreaterThan(0);
+});
+
+test('long-press on a tool row does not expand it', async () => {
+  const entry: MessageEntry = {
+    ...assistantEntry,
+    status: 'streaming',
+    parts: [
+      {
+        kind: 'tool',
+        id: 'tool-1',
+        call: { command: 'cargo test', kind: 'exec' },
+        output: 'all tests passed',
+        isError: false,
+        resolved: true,
+      },
+      { kind: 'text', id: 't1', text: 'Done.' },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
+    );
+  });
+  await longPress(
+    tree!.root.findByProps({ testID: 'tool-group-toggle' }).props,
+  );
+  expect(tree!.root.findAll(n => n.props.testID === 'tool-chip').length).toBe(
+    0,
+  );
+  await tap(tree!.root.findByProps({ testID: 'tool-group-toggle' }).props);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'tool-chip').length,
+  ).toBeGreaterThan(0);
+});

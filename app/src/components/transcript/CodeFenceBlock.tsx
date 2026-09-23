@@ -4,9 +4,11 @@ import * as Clipboard from 'expo-clipboard';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
+import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
 
 export function CodeFenceBlock({ lang, text }: { lang: string; text: string }) {
   const theme = useTheme();
+  const lp = useSuppressAfterLongPress();
   const [copied, setCopied] = useState(false);
   const onCopy = useCallback(() => {
     Clipboard.setStringAsync(text).catch(() => {});
@@ -41,7 +43,12 @@ export function CodeFenceBlock({ lang, text }: { lang: string; text: string }) {
       </Text>
       <Pressable
         testID="code-fence-copy"
-        onPress={onCopy}
+        onPress={() => {
+          if (lp.isSuppressed()) return;
+          onCopy();
+        }}
+        onPressIn={lp.onPressIn}
+        onLongPress={lp.onLongPress}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={t('common.copy')}

@@ -52,6 +52,7 @@ import { FrostedBubble } from './FrostedBubble';
 import { MarkdownWithCopy } from './MarkdownWithCopy';
 import { WorkingStatusRow } from '../WorkingStatus';
 import { inputAnswers } from './inputAnswers';
+import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
 
 const NO_COMMANDS: SessionCommandEntry[] = [];
 
@@ -165,6 +166,7 @@ const PartView = ({
   consumedIds: ReadonlySet<string>;
 }) => {
   const theme = useTheme();
+  const lp = useSuppressAfterLongPress();
   switch (part.kind) {
     case 'text': {
       if (consumedIds.has(part.id)) return null;
@@ -181,9 +183,15 @@ const PartView = ({
     case 'reasoning':
       return (
         <Pressable
+          testID="reasoning-row"
           style={styles.traceRow}
           hitSlop={6}
-          onPress={() => onOpenReasoning(part.text)}
+          onPress={() => {
+            if (lp.isSuppressed()) return;
+            onOpenReasoning(part.text);
+          }}
+          onPressIn={lp.onPressIn}
+          onLongPress={lp.onLongPress}
         >
           <Icon name="clock" size={15} color={theme.textSecondary} />
           <Text
@@ -280,6 +288,7 @@ export const AssistantMessage = React.memo(function ({
   // settled turn always starts collapsed.
   const [workOpenId, setWorkOpenId] = useState<string | undefined>(undefined);
   const workOpen = workOpenId === entry.id;
+  const lp = useSuppressAfterLongPress();
 
   const renderItem = (item: Item, key: string, isLast: boolean) =>
     item.kind === 'tools' ? (
@@ -411,7 +420,12 @@ export const AssistantMessage = React.memo(function ({
             <Pressable
               testID="work-toggle"
               style={styles.workHeader}
-              onPress={() => setWorkOpenId(workOpen ? undefined : entry.id)}
+              onPress={() => {
+                if (lp.isSuppressed()) return;
+                setWorkOpenId(workOpen ? undefined : entry.id);
+              }}
+              onPressIn={lp.onPressIn}
+              onLongPress={lp.onLongPress}
               hitSlop={4}
               accessibilityRole="button"
               accessibilityState={{ expanded: workOpen }}

@@ -25,6 +25,7 @@ import {
   toolDetail,
   type ToolDetail,
 } from '../transcript/toolDetail';
+import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
 
 export type ToolPart = Extract<MessagePart, { kind: 'tool' }>;
 
@@ -161,6 +162,7 @@ const ToolChipRow = ({
   onFetchBlob?: FetchToolBlob;
 }) => {
   const theme = useTheme();
+  const lp = useSuppressAfterLongPress();
   const [expanded, setExpanded] = useState(false);
   const [ready, setReady] = useState<Partial<Record<BlobKind, ToolDetail>>>({});
   const [loading, setLoading] = useState<BlobKind | undefined>(undefined);
@@ -248,8 +250,15 @@ const ToolChipRow = ({
     <View>
       <Pressable
         style={styles.chip}
-        onPress={toggle}
-        onLongPress={copyDetails}
+        onPress={() => {
+          if (lp.isSuppressed()) return;
+          toggle();
+        }}
+        onPressIn={lp.onPressIn}
+        onLongPress={() => {
+          lp.onLongPress();
+          copyDetails();
+        }}
         hitSlop={4}
         accessibilityRole="button"
         accessibilityLabel={`${label}${detail === '' ? '' : `, ${detail}`}`}
@@ -311,7 +320,12 @@ const ToolChipRow = ({
           {result !== undefined ? <DetailBody detail={result} /> : null}
           {offered !== undefined && onFetchBlob !== undefined ? (
             <Pressable
-              onPress={onAffordance}
+              onPress={() => {
+                if (lp.isSuppressed()) return;
+                onAffordance();
+              }}
+              onPressIn={lp.onPressIn}
+              onLongPress={lp.onLongPress}
               hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={affordanceLabel(
@@ -348,6 +362,7 @@ export const ToolActivity = React.memo(function ({
   autoOpen?: boolean;
 }) {
   const theme = useTheme();
+  const lp = useSuppressAfterLongPress();
   const [userOpen, setUserOpen] = useState<boolean | undefined>(undefined);
   const open = userOpen ?? autoOpen;
   const anyError = parts.some(p => p.isError === true);
@@ -356,7 +371,12 @@ export const ToolActivity = React.memo(function ({
     <View style={styles.group} testID="tool-group">
       <Pressable
         style={styles.groupHeader}
-        onPress={() => setUserOpen(!(userOpen ?? autoOpen))}
+        onPress={() => {
+          if (lp.isSuppressed()) return;
+          setUserOpen(!(userOpen ?? autoOpen));
+        }}
+        onPressIn={lp.onPressIn}
+        onLongPress={lp.onLongPress}
         hitSlop={4}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
