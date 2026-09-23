@@ -40,6 +40,7 @@ export {
   spliceVoiceText,
 } from './draftInsert';
 export {
+  VoiceDownloadPausedError,
   VoiceModelManager,
   bindVoiceModelManager,
   getVoiceModelManager,

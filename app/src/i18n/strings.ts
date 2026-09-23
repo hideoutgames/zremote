@@ -264,6 +264,7 @@ const en = {
   'settings.voiceRequired': 'Choose a model',
   'settings.voiceDownload': 'Download',
   'settings.voiceDownloading': 'Downloading',
+  'settings.voiceQueued': 'Waiting for another download…',
   'settings.voiceVerifying': 'Verifying…',
   'settings.voiceRetry': 'Retry',
   'settings.voiceDelete': 'Delete',

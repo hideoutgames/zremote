@@ -42,6 +42,7 @@ import { MenuDismissShield } from '../components/menus/MenuDismissShield';
 import { bindBackgroundFs } from '../zeron/state/newThreadBackground';
 import { expoBackgroundFs } from '../zeron/native/expoBackgroundFs';
 import { bindExpoVoiceModelManager } from '../zeron/native/expoVoiceModels';
+import { unbindVoiceModelManager } from '../zeron/voice';
 import { bindRunFinishedHaptic } from '../notifications/runFinishedHaptic';
 import { bindWorkedDuration } from '../zeron/state/workedDuration';
 import { bindLocalLogs } from '../zeron/diagnostics/bindLocalLogs';
@@ -93,6 +94,7 @@ export function ZeronApp() {
   useEffect(() => {
     bindBackgroundFs(expoBackgroundFs);
     bindExpoVoiceModelManager();
+    return () => unbindVoiceModelManager();
   }, []);
 
   useEffect(() => {
