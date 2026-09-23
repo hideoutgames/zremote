@@ -192,7 +192,12 @@ jest.mock('@shopify/flash-list', () => {
       scrollToIndex,
       scrollToOffset,
     }));
-    return ReactLib.createElement(RN.FlatList, props);
+    // A real initialScrollIndex hides cells before it — tests assert on the
+    // whole tree, so always render from the top.
+    return ReactLib.createElement(RN.FlatList, {
+      ...props,
+      initialScrollIndex: 0,
+    });
   });
   return {
     FlashList,
