@@ -52,6 +52,7 @@ import {
 } from './agentsKit/PreviewRail';
 import {
   buildRailItems,
+  entryPreviewText,
   pickActiveRailId,
   type RailItem,
 } from './agentsKit/messagePreview';
@@ -63,7 +64,6 @@ export const RAIL_RIGHT = 4;
  *  jump re-anchors only when already following the live edge — FlashList
  *  stays mounted so collapse does not rebuild rows mid-slide. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
-const VIEWABILITY = { itemVisiblePercentThreshold: 40 };
 export const END_THRESHOLD = 1;
 
 export const listEndDistance = (
@@ -170,7 +170,6 @@ export const SessionTranscriptList = forwardRef<
     progress?: number;
   } | null>(null);
   const railJumpRafRef = useRef<number | null>(null);
-  const viewableIdsRef = useRef<string[]>([]);
   const atEndRef = useRef(false);
   const [initialInset] = useState(seedComposerInset);
   const extraContentPadding = useSharedValue(initialInset);
@@ -210,6 +209,17 @@ export const SessionTranscriptList = forwardRef<
     return rows;
   }, [entries, working]);
 
+  // Preview text is keyed by entry identity (stable across projections via
+  // reuseById): streaming updates only re-collapse the rows that changed
+  // instead of re-folding the whole transcript per doc update.
+  const previewTextCache = useRef(new WeakMap<MessageEntry, string>());
+  const previewText = useCallback((entry: MessageEntry): string => {
+    const cached = previewTextCache.current.get(entry);
+    if (cached !== undefined) return cached;
+    const text = entryPreviewText(entry);
+    previewTextCache.current.set(entry, text);
+    return text;
+  }, []);
   const railItems = useMemo(
     () =>
       buildRailItems(entries, {
@@ -219,8 +229,9 @@ export const SessionTranscriptList = forwardRef<
             .replace('{role}', role)
             .replace('{n}', String(n))
             .replace('{total}', String(total)),
+        previewText,
       }),
-    [entries],
+    [entries, previewText],
   );
   const itemIds = useMemo(() => railItems.map(item => item.id), [railItems]);
   const itemIdsRef = useRef(itemIds);
@@ -238,7 +249,6 @@ export const SessionTranscriptList = forwardRef<
           offset: m.offset,
           viewportHeight: m.viewportHeight || listHeightRef.current,
           contentHeight: m.contentHeight || contentHeightRef.current,
-          viewableIds: viewableIdsRef.current,
         });
     railIdStore.current.setState({ id: next });
   }, []);
@@ -385,20 +395,6 @@ export const SessionTranscriptList = forwardRef<
     [chatId, startedAt, renderEntry],
   );
 
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: Array<{ item: TranscriptRow }> }) => {
-      const ids = viewableItems.flatMap(v =>
-        v.item.kind === 'entry' ? [v.item.entry.id] : [],
-      );
-      const prev = viewableIdsRef.current;
-      const same =
-        ids.length === prev.length && ids.every((id, i) => id === prev[i]);
-      if (same) return;
-      viewableIdsRef.current = ids;
-      recomputeRailId();
-    },
-  ).current;
-
   const applyEndVisible = useCallback((atEnd: boolean) => {
     if (atEnd === atEndRef.current) return;
     atEndRef.current = atEnd;
@@ -517,8 +513,8 @@ export const SessionTranscriptList = forwardRef<
       railJumpRafRef.current = requestAnimationFrame(() => {
         railJumpRafRef.current = null;
         const next = pendingRailJumpRef.current;
-        if (!next || followingRef.current) return;
         pendingRailJumpRef.current = null;
+        if (!next || followingRef.current) return;
         if (next.progress != null) {
           performRailScrub(next.progress);
           return;
@@ -532,7 +528,16 @@ export const SessionTranscriptList = forwardRef<
   }, [performRailJump, performRailScrub]);
 
   useEffect(() => {
-    if (following) return;
+    if (following) {
+      // Re-latching to the live edge makes any queued rail jump stale —
+      // drop it so it cannot fire on a later unrelated scroll.
+      pendingRailJumpRef.current = null;
+      if (railJumpRafRef.current != null) {
+        cancelAnimationFrame(railJumpRafRef.current);
+        railJumpRafRef.current = null;
+      }
+      return;
+    }
     flushPendingRailJump();
   }, [following, flushPendingRailJump]);
 
@@ -636,7 +641,6 @@ export const SessionTranscriptList = forwardRef<
           ref={listRef}
           style={styles.fill}
           data={data}
-          extraData={following}
           keyExtractor={(item: TranscriptRow) =>
             item.kind === 'working' ? WORKING_STATUS_ID : item.entry.id
           }
@@ -652,8 +656,6 @@ export const SessionTranscriptList = forwardRef<
             setDismissKey(key => key + 1);
           }}
           onScroll={onScroll}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={VIEWABILITY}
           onContentSizeChange={(_w: number, height: number) => {
             const grew = height > contentHeightRef.current;
             contentHeightRef.current = height;

@@ -108,7 +108,6 @@ test('pickActiveRailId pins first/last near the edges', () => {
       offset: FOLLOW_THRESHOLD,
       viewportHeight: 400,
       contentHeight: 2000,
-      viewableIds: ['b'],
     }),
   ).toBe('a');
   expect(
@@ -117,7 +116,6 @@ test('pickActiveRailId pins first/last near the edges', () => {
       offset: 2000 - 400 - FOLLOW_THRESHOLD,
       viewportHeight: 400,
       contentHeight: 2000,
-      viewableIds: ['b'],
     }),
   ).toBe('c');
   expect(
@@ -126,7 +124,26 @@ test('pickActiveRailId pins first/last near the edges', () => {
       offset: 800,
       viewportHeight: 400,
       contentHeight: 2000,
-      viewableIds: ['a', 'b', 'c'],
+    }),
+  ).toBe('b');
+});
+
+test('pickActiveRailId tracks scroll position proportionally', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e'];
+  const mid = pickActiveRailId({
+    itemIds: ids,
+    offset: 800,
+    viewportHeight: 400,
+    contentHeight: 2000,
+  });
+  expect(mid).toBe('c');
+  // Quarter-way down → second tick, not the first.
+  expect(
+    pickActiveRailId({
+      itemIds: ids,
+      offset: 400,
+      viewportHeight: 400,
+      contentHeight: 2000,
     }),
   ).toBe('b');
 });

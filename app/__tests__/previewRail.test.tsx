@@ -2,9 +2,11 @@ import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { PreviewRail } from '../src/components/agentsKit/PreviewRail';
 import {
-  RAIL_ITEM_SIZE,
+  PreviewRail,
+  RAIL_HIT_PAD_Y,
+} from '../src/components/agentsKit/PreviewRail';
+import {
   railItemSize,
   railProgressAtY,
   type RailItem,
@@ -29,17 +31,20 @@ const items: RailItem[] = [
 
 const RAIL_HEIGHT = 400;
 
-const stackTop = (): number => {
-  const itemSize = railItemSize(items.length, RAIL_HEIGHT);
-  const stackHeight = itemSize * items.length;
-  return items.length * RAIL_ITEM_SIZE <= RAIL_HEIGHT
-    ? Math.max(0, (RAIL_HEIGHT - stackHeight) / 2)
-    : 0;
-};
+// The responder track hugs the tick stack, so stack-relative y in touch
+// space starts at the pad, not the rail's visual centering offset.
+const stackTop = (): number => RAIL_HIT_PAD_Y;
 
 const yForIndex = (index: number): number => {
   const itemSize = railItemSize(items.length, RAIL_HEIGHT);
   return stackTop() + index * itemSize + itemSize / 2;
+};
+
+// Dead zones above/below the stack must not be hittable — a touch there
+// used to clamp to the first/last tick and read as a jump to top/bottom.
+const deadZoneHeight = (): number => {
+  const itemSize = railItemSize(items.length, RAIL_HEIGHT);
+  return (RAIL_HEIGHT - itemSize * items.length) / 2 - RAIL_HIT_PAD_Y;
 };
 
 const touch = (locationY: number, pageY = locationY) => ({
@@ -121,6 +126,25 @@ test('overlay passes touches through; only the track is hittable', async () => {
   expect(
     tree.root.findAll(n => n.props.testID === 'preview-rail-dismiss'),
   ).toHaveLength(0);
+  await act(async () => {
+    tree.unmount();
+  });
+});
+
+test('the track hugs the tick stack, leaving dead zones untouchable', async () => {
+  const tree = await renderRail();
+  const track = tree.root.findByProps({ testID: 'preview-rail-track' });
+  const style = Object.assign(
+    {},
+    ...(Array.isArray(track.props.style)
+      ? track.props.style.flat()
+      : [track.props.style]),
+  );
+  // Two 14pt ticks centered in a 400pt rail sit 186pt down; the track
+  // starts RAIL_HIT_PAD_Y above them and ends RAIL_HIT_PAD_Y below.
+  expect(style.top).toBe(40 + 186 - RAIL_HIT_PAD_Y);
+  expect(style.height).toBe(28 + RAIL_HIT_PAD_Y * 2);
+  expect(deadZoneHeight()).toBeGreaterThan(0);
   await act(async () => {
     tree.unmount();
   });
