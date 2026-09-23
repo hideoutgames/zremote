@@ -57,10 +57,11 @@ export interface SessionState {
   /** Queue rows with an in-flight host action (sendNow/steerNow/remove) —
    * SessionQueue.swift queueActionsPending. */
   queueActionsPending: Set<string>;
-  /** Question ids the user already answered through the panel. App-detected
-   * tool/text questions may keep signalling after the answer ships (a dead
-   * run's tool never resolves, the trailing text stays last until the reply
-   * lands), so they're suppressed until a new question id appears. */
+  /** Question ids the user answered or dismissed through the panel.
+   * App-detected tool/text questions may keep signalling after the answer
+   * ships (a dead run's tool never resolves, the trailing text stays last
+   * until the reply lands), so they're suppressed until a new question id
+   * appears. */
   answeredQuestionIds: Set<string>;
   queueActionError?: string;
   lastError?: string;
@@ -116,8 +117,9 @@ export const dismissFailedSend = (chatId: string, messageId: string): void => {
   }));
 };
 
-/** Record a question the panel already answered so openQuestion stops
- * surfacing it (tool/text signals can outlive the answer). */
+/** Record a question the panel answered or dismissed so openQuestion stops
+ * surfacing it (tool/text signals can outlive the answer; a host input part
+ * may stay unresolved). */
 export const markQuestionAnswered = (
   chatId: string,
   questionId: string,

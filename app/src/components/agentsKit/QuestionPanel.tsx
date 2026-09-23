@@ -20,6 +20,9 @@ export interface QuestionPanelProps {
   requestId: string;
   questions: UserInputQuestion[];
   onSubmit: (requestId: string, answers: UserInputAnswer[]) => void;
+  /** Hide the panel without answering — the question id is suppressed until
+   * a different one appears (the host request may stay unresolved). */
+  onDismiss: () => void;
 }
 
 const labelsFor = (
@@ -36,6 +39,7 @@ export const QuestionPanel = React.memo(function ({
   requestId,
   questions,
   onSubmit,
+  onDismiss,
 }: QuestionPanelProps) {
   const theme = useTheme();
   // questionId → selected labels (multiSelect toggles, single-select replaces)
@@ -134,22 +138,34 @@ export const QuestionPanel = React.memo(function ({
           />
         </View>
       ))}
-      <Pressable
-        onPress={submit}
-        disabled={!complete}
-        accessibilityRole="button"
-        accessibilityLabel={t('session.submit')}
-        accessibilityState={{ disabled: !complete }}
-        style={[
-          styles.submit,
-          { backgroundColor: complete ? theme.sendActive : theme.border },
-        ]}
-      >
-        <Icon name="arrow.up" size={14} color={submitFg} />
-        <Text style={[styles.submitText, { color: submitFg }]}>
-          {t('session.submit')}
-        </Text>
-      </Pressable>
+      <View style={styles.footer}>
+        <Pressable
+          onPress={onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.question.dismiss')}
+          style={[styles.dismiss, { borderColor: theme.border }]}
+        >
+          <Text style={[styles.dismissText, { color: theme.textSecondary }]}>
+            {t('session.question.dismiss')}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={submit}
+          disabled={!complete}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.submit')}
+          accessibilityState={{ disabled: !complete }}
+          style={[
+            styles.submit,
+            { backgroundColor: complete ? theme.sendActive : theme.border },
+          ]}
+        >
+          <Icon name="arrow.up" size={14} color={submitFg} />
+          <Text style={[styles.submitText, { color: submitFg }]}>
+            {t('session.submit')}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 });
@@ -179,7 +195,18 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     fontSize: 15,
   },
+  footer: { flexDirection: 'row', gap: 8 },
+  dismiss: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dismissText: { fontSize: 15, fontWeight: '600' },
   submit: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

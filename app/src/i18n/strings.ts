@@ -100,6 +100,7 @@ const en = {
   'session.interrupted': 'Interrupted',
   'session.submit': 'Submit',
   'session.question.custom': 'Your answer',
+  'session.question.dismiss': 'Dismiss',
   'session.working': 'Working',
   'session.work': 'Work',
   'session.workStep': '1 step',
