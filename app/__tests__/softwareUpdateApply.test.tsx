@@ -29,6 +29,8 @@ const device: DeviceRow = {
   version: '0.2.72',
 };
 
+const windowsDevice: DeviceRow = { ...device, platform: 'windows' };
+
 const available: UpdateStatus = {
   currentVersion: '0.2.72',
   latestVersion: '0.2.73',
@@ -159,6 +161,7 @@ beforeEach(() => {
     voiceModelId: null,
     cleanupModelId: null,
     cleanupPromptOverride: null,
+    remoteApplyUnsupportedByDevice: {},
   });
   resetCatalog();
 });
@@ -308,9 +311,142 @@ test('a host refusal stops the throbber and shows the error', async () => {
 
   const text = allText(mounted.root);
   expect(text).toContain(message);
-  expect(text).toContain('Apply');
+  // A "not update-managed" refusal is structural — the row still reports the
+  // update but Apply is hidden (retry lives behind a tap on the row).
+  expect(text).toContain('Update Available');
+  expect(text).not.toContain('Apply');
   expect(text).not.toContain('Updating…');
   expect(spinnerCount(mounted.root)).toBe(0);
+  expect(
+    mounted.root.findByProps({ testID: 'settings-software-update' }).props
+      .onPress,
+  ).toEqual(expect.any(Function));
+});
+
+test('a Windows device reports availability without offering Apply', async () => {
+  workspaceStore.setState({ devices: [windowsDevice] });
+  const feed = createFeed();
+  feed.push(available);
+  const call = jest.fn((method: string) => {
+    if (method === METHODS.LIST_HARNESSES) return Promise.resolve([]);
+    if (method === METHODS.LIST_AGENT_ACCOUNTS) {
+      return Promise.resolve({ accounts: [], warnings: [] });
+    }
+    return Promise.resolve(undefined);
+  });
+  const mounted = await renderDevicePage(call, feed);
+
+  const text = allText(mounted.root);
+  expect(text).toContain('Update Available');
+  expect(text).not.toContain('Apply');
+  expect(
+    mounted.root.findByProps({ testID: 'settings-software-update' }).props
+      .onPress,
+  ).toBeUndefined();
+});
+
+test('a refusal hides Apply until a retry succeeds', async () => {
+  const feed = createFeed();
+  feed.push(available);
+  let rejectApply: (error: Error) => void = () => {};
+  const call = jest.fn((method: string) => {
+    if (method === METHODS.APPLY_UPDATE) {
+      return new Promise((_resolve, reject) => {
+        rejectApply = reject;
+      });
+    }
+    if (method === METHODS.LIST_HARNESSES) return Promise.resolve([]);
+    if (method === METHODS.LIST_AGENT_ACCOUNTS) {
+      return Promise.resolve({ accounts: [], warnings: [] });
+    }
+    return Promise.resolve(undefined);
+  });
+  const mounted = await renderDevicePage(call, feed);
+  await pressApply(mounted);
+
+  const message =
+    'this install is not update-managed — the desktop app updates from its UI';
+  await act(async () => {
+    rejectApply(new Error(message));
+  });
+  await flush();
+
+  // The refusal is recorded: the row still reports the update but the Apply
+  // affordance is gone.
+  let text = allText(mounted.root);
+  expect(text).toContain(message);
+  expect(text).toContain('Update Available');
+  expect(text).not.toContain('Apply');
+
+  // Tapping the row explains the hidden button and offers a retry.
+  let resolveRetry: (value: {
+    ok: boolean;
+    version: string;
+  }) => void = () => {};
+  call.mockImplementation((method: string) => {
+    if (method === METHODS.APPLY_UPDATE) {
+      return new Promise(resolve => {
+        resolveRetry = resolve;
+      });
+    }
+    return Promise.resolve(undefined);
+  });
+  const alert = jest
+    .spyOn(Alert, 'alert')
+    .mockImplementation((_title, body, buttons) => {
+      expect(String(body)).toContain('can’t be updated remotely');
+      buttons?.find(b => b.text === 'Apply Anyway')?.onPress?.();
+    });
+  const row = mounted.root.findByProps({
+    testID: 'settings-software-update',
+  });
+  await act(async () => {
+    row.props.onPress();
+  });
+  await flush();
+  expect(alert).toHaveBeenCalled();
+  expect(allText(mounted.root)).toContain('Updating…');
+
+  // A retry that reports a version clears the recorded refusal — Apply is
+  // offered again (the host was reinstalled as managed under the same id).
+  await act(async () => {
+    resolveRetry({ ok: true, version: '0.2.73' });
+  });
+  await flush();
+  await act(async () => {
+    feed.push({
+      currentVersion: '0.2.73',
+      latestVersion: '0.2.73',
+      updateAvailable: false,
+    });
+  });
+  await flush();
+
+  expect(
+    uiPrefsStore.getState().remoteApplyUnsupportedByDevice['host1'],
+  ).toBeUndefined();
+  text = allText(mounted.root);
+  expect(text).toContain('Up to Date');
+
+  alert.mockRestore();
+});
+
+test('a device flagged earlier mounts with Apply hidden', async () => {
+  uiPrefsStore.setState({ remoteApplyUnsupportedByDevice: { host1: true } });
+  const feed = createFeed();
+  feed.push(available);
+  const call = jest.fn((method: string) => {
+    if (method === METHODS.LIST_HARNESSES) return Promise.resolve([]);
+    if (method === METHODS.LIST_AGENT_ACCOUNTS) {
+      return Promise.resolve({ accounts: [], warnings: [] });
+    }
+    return Promise.resolve(undefined);
+  });
+  const mounted = await renderDevicePage(call, feed);
+
+  const text = allText(mounted.root);
+  expect(text).toContain('Update Available');
+  expect(text).not.toContain('Apply');
   expect(
     mounted.root.findByProps({ testID: 'settings-software-update' }).props
       .onPress,

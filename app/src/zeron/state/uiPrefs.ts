@@ -77,6 +77,9 @@ export interface UiPrefs {
   sessionBackgroundBlur: boolean;
   /** Settings → Debug. Off: no local diagnostic files are created. */
   localLogsEnabled: boolean;
+  /** Devices whose host refused ApplyUpdate as not update-managed (desktop
+   * bundles, unmanaged builds) — Apply stays hidden until a retry succeeds. */
+  remoteApplyUnsupportedByDevice: Record<string, boolean>;
 }
 
 export interface ComposeDefaults {
@@ -112,6 +115,7 @@ export const uiPrefsStore = createStore<UiPrefs>(() => ({
   colorScheme: 'system',
   sessionBackgroundBlur: false,
   localLogsEnabled: false,
+  remoteApplyUnsupportedByDevice: {},
 }));
 
 let persist: { disk: DocDisk; orgId: string; userId: string } | undefined;
@@ -251,6 +255,25 @@ export const setHapticsEnabled = (v: boolean): void => {
 
 export const useHapticsEnabled = (): boolean =>
   useStore(uiPrefsStore, s => s.hapticsEnabled);
+
+export const setRemoteApplyUnsupported = (
+  deviceId: string,
+  unsupported: boolean,
+): void => {
+  uiPrefsStore.setState(s => {
+    const next = { ...s.remoteApplyUnsupportedByDevice };
+    if (unsupported) next[deviceId] = true;
+    else delete next[deviceId];
+    return { remoteApplyUnsupportedByDevice: next };
+  });
+  save();
+};
+
+export const useRemoteApplyUnsupported = (deviceId: string): boolean =>
+  useStore(
+    uiPrefsStore,
+    s => s.remoteApplyUnsupportedByDevice[deviceId] === true,
+  );
 
 export const setLocalLogsEnabled = (v: boolean): Promise<void> => {
   uiPrefsStore.setState({ localLogsEnabled: v });
