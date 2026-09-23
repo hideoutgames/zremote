@@ -5,6 +5,7 @@ import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import type { TurnChange } from './turnChanges';
 import { fileKindIcon } from './turnChanges';
+import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
 
 const leaf = (path: string): string =>
   path.split(/[\\/]/).filter(Boolean).pop() ?? path;
@@ -19,6 +20,7 @@ export function TurnChangesCard({
   embedded?: boolean;
 }) {
   const theme = useTheme();
+  const lp = useSuppressAfterLongPress();
   if (files.length === 0) return null;
   return (
     <View
@@ -42,7 +44,12 @@ export function TurnChangesCard({
       {files.map(file => (
         <Pressable
           key={file.path}
-          onPress={() => onOpenFile(file)}
+          onPress={() => {
+            if (lp.isSuppressed()) return;
+            onOpenFile(file);
+          }}
+          onPressIn={lp.onPressIn}
+          onLongPress={lp.onLongPress}
           accessibilityRole="button"
           accessibilityLabel={leaf(file.path)}
           style={styles.row}

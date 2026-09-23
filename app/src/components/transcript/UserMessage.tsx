@@ -28,6 +28,7 @@ import { stripPlanPrefix, type PromptBadgeKind } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
 import { FrostedBubble } from './FrostedBubble';
 import { messageCopyContent } from './MessageCopyMenu';
+import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
 
 export const FOLD_CHARS = 1000;
 /** Extra end pad so glyph ink that overshoots advance width is not clipped. */
@@ -130,6 +131,7 @@ export const UserMessage = React.memo(function UserMessageInner({
   'use no memo';
   const theme = useTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const lp = useSuppressAfterLongPress();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
   const { kind, text: visible } = stripPlanPrefix(text);
@@ -214,7 +216,12 @@ export const UserMessage = React.memo(function UserMessageInner({
                   {foldable ? (
                     <Pressable
                       testID="user-bubble-fold"
-                      onPress={() => setExpanded(e => !e)}
+                      onPress={() => {
+                        if (lp.isSuppressed()) return;
+                        setExpanded(e => !e);
+                      }}
+                      onPressIn={lp.onPressIn}
+                      onLongPress={lp.onLongPress}
                       hitSlop={6}
                       accessibilityRole="button"
                       accessibilityLabel={

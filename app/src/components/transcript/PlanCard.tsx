@@ -4,6 +4,7 @@ import { Icon } from '../Icon';
 import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import type { PlanArtifact } from './detectPlan';
+import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
 
 export function PlanCard({
   plan,
@@ -15,6 +16,7 @@ export function PlanCard({
   embedded?: boolean;
 }) {
   const theme = useTheme();
+  const lp = useSuppressAfterLongPress();
   const subtitle =
     plan.markdown.trim() !== ''
       ? t('session.planReady')
@@ -22,7 +24,12 @@ export function PlanCard({
   return (
     <Pressable
       testID="plan-card"
-      onPress={onOpen}
+      onPress={() => {
+        if (lp.isSuppressed()) return;
+        onOpen();
+      }}
+      onPressIn={lp.onPressIn}
+      onLongPress={lp.onLongPress}
       accessibilityRole="button"
       accessibilityLabel={`${plan.name}. ${subtitle}`}
       style={[
