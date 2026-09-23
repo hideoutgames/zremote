@@ -14,6 +14,7 @@ import {
   AccessibilityInfo,
   Alert,
   Keyboard,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -108,6 +109,9 @@ import { Icon } from '../components/Icon';
 import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
 import { ComposeComposer } from '../components/ComposeComposer';
+import type { WorkspaceCommand } from '../zeron/composer/completion';
+import { ChangesScreen } from './ChangesScreen';
+import { SettingsScreen } from './SettingsScreen';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
 import { composerPrBadge } from '../components/threadPrs';
 import {
@@ -247,8 +251,16 @@ function ComposeSessionScreen({
   const chrome = useChromeTheme();
   const insets = useSafeAreaInsets();
   const [composerH, setComposerH] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const dismissPan = useKeyboardDismissPan();
   const wallpaper = useNewThreadComposerBackground() !== undefined;
+  const onWorkspaceCommand = useCallback(
+    (command: WorkspaceCommand) => {
+      if (command === 'settings') setSettingsOpen(true);
+      else if (command === 'resume') onBack();
+    },
+    [onBack],
+  );
   return (
     <View
       style={[
@@ -273,6 +285,7 @@ function ComposeSessionScreen({
           composerMaxWidth={composerMaxWidth}
           onCreated={id => onCreated?.(id)}
           onLayout={e => setComposerH(e.nativeEvent.layout.height)}
+          onWorkspaceCommand={onWorkspaceCommand}
         />
       </ComposeKeyboardShift>
       <View
@@ -302,6 +315,17 @@ function ComposeSessionScreen({
           </GlassControl>
         </View>
       </View>
+      {settingsOpen ? (
+        <Modal
+          visible
+          animationType="slide"
+          presentationStyle="pageSheet"
+          allowSwipeDismissal
+          onRequestClose={() => setSettingsOpen(false)}
+        >
+          <SettingsScreen onClose={() => setSettingsOpen(false)} />
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -671,6 +695,7 @@ function ActiveSessionScreen({
       : s.spaces.find(sp => sp.id === chat.spaceId),
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
   const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
@@ -693,8 +718,42 @@ function ActiveSessionScreen({
   } | null>(null);
   const [fileDiff, setFileDiff] = useState<FileDiffRequest | null>(null);
   const [toolSheet, setToolSheet] = useState<
-    'files' | 'terminal' | 'history' | null
+    'files' | 'terminal' | 'history' | 'changes' | null
   >(null);
+  const onWorkspaceCommand = useCallback(
+    (command: WorkspaceCommand) => {
+      switch (command) {
+        case 'model':
+          setPickerOpen(true);
+          break;
+        case 'new':
+          onBack();
+          break;
+        case 'resume':
+          setToolSheet('history');
+          break;
+        case 'settings':
+          setSettingsOpen(true);
+          break;
+        case 'diff':
+          setToolSheet('changes');
+          break;
+        case 'files':
+          setToolSheet('files');
+          break;
+        case 'terminal':
+          setToolSheet('terminal');
+          break;
+        case 'rename':
+          onRename();
+          break;
+        case 'stop':
+          doStop();
+          break;
+      }
+    },
+    [onBack, onRename, doStop],
+  );
 
   // Announce run-phase transitions for VoiceOver (working → awaiting
   // input / completed / failed).
@@ -1280,6 +1339,12 @@ function ActiveSessionScreen({
                 });
             }}
             onFocusChange={setComposerFocused}
+            completion={{
+              deviceId: hostDeviceId,
+              chatId,
+              cwd: chat?.cwd,
+            }}
+            onWorkspaceCommand={onWorkspaceCommand}
             dictation={dictation}
             voiceRuntime={voiceRuntime}
             onSend={doSend}
@@ -1475,6 +1540,22 @@ function ActiveSessionScreen({
         >
           <TerminalScreen chatId={chatId} />
         </SessionSheet>
+      ) : null}
+      {toolSheet === 'changes' ? (
+        <SessionSheet fill onDismiss={() => setToolSheet(null)}>
+          <ChangesScreen chatId={chatId} embedded />
+        </SessionSheet>
+      ) : null}
+      {settingsOpen ? (
+        <Modal
+          visible
+          animationType="slide"
+          presentationStyle="pageSheet"
+          allowSwipeDismissal
+          onRequestClose={() => setSettingsOpen(false)}
+        >
+          <SettingsScreen onClose={() => setSettingsOpen(false)} />
+        </Modal>
       ) : null}
     </View>
   );

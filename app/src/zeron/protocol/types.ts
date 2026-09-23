@@ -205,6 +205,19 @@ export interface FolderListing {
   truncated: boolean;
 }
 
+/** agent.rs `SlashCommand` — ACP `availableCommands` row. */
+export interface SlashCommand {
+  name: string;
+  description: string;
+  inputHint?: string;
+}
+
+/** entities.rs `FileSearchMatch` — workspace-relative `SearchFiles` row. */
+export interface FileSearchMatch {
+  path: string;
+  isDir: boolean;
+}
+
 /** entities.rs engine capabilities (the five declared in Entities.swift). */
 export const EngineCapability = {
   messageQueueV1: 'message-queue-v1',
@@ -212,6 +225,8 @@ export const EngineCapability = {
   messageQueueAttachmentsV1: 'message-queue-attachments-v1',
   messageQueueCleanAttachmentTextV1: 'message-queue-clean-attachment-text-v1',
   messageQueueEditLeaseV1: 'message-queue-edit-lease-v1',
+  /** Engine decodes `zeron-invoke:`/`zeron-file:` canonical composer links. */
+  composerReferencesV1: 'composer-references-v1',
 } as const;
 export type EngineCapability =
   (typeof EngineCapability)[keyof typeof EngineCapability];

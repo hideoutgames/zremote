@@ -9,7 +9,13 @@
 // attachment sends go through onSendAttachments (queued `pending://` flow or
 // legacy upload-first — never a device-local URI on the wire).
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -71,6 +77,40 @@ import {
 import { isImageMime } from '../zeron/attachments/validate';
 import { useChromeTheme } from '../chromeTheme';
 import { t } from '../i18n/strings';
+import { AppServicesContext } from '../app/runtimeContext';
+import { METHODS } from '../zeron/protocol/rpc';
+import { EngineCapability } from '../zeron/protocol/types';
+import type { FileSearchMatch, SlashCommand } from '../zeron/protocol/types';
+import {
+  localFileLink,
+  localPathIsSafe,
+  type Skill,
+} from '../zeron/protocol/references';
+import {
+  completionTrigger,
+  filterIndices,
+  invocationInsertion,
+  mentionErrorMessage,
+  mentionToken,
+  menuStep,
+  removeCompletionToken,
+  replaceCompletionToken,
+  referencesRequireUpdate,
+  skillDisplayName,
+  skillPrefsForHarness,
+  slashErrorMessage,
+  mergeInvocationResults,
+  withWorkspaceCommands,
+  workspaceCommandForText,
+  type CompletionToken,
+  type InvocationCandidate,
+  type WorkspaceCommand,
+} from '../zeron/composer/completion';
+import {
+  ComposerAutocomplete,
+  type CompletionRowData,
+} from './ComposerAutocomplete';
+import { useDeviceOnline } from '../zeron/state/workspaceStore';
 import {
   clearDraft,
   removeAttachment,
@@ -142,6 +182,17 @@ const THUMBS_ANIM_MS = 220;
 const CHIP_FADE = 28;
 const VOICE_NOTICE_TIMEOUT_MS = 20_000;
 const VOICE_NOTICE_FADE_MS = 800;
+
+const sameToken = (
+  a: CompletionToken | undefined,
+  b: CompletionToken | undefined,
+) =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.start === b.start &&
+    a.end === b.end &&
+    a.query === b.query);
 
 function ChipRowMask({ children }: { children: React.ReactNode }) {
   return (
@@ -221,6 +272,19 @@ export interface ComposerProps {
   onSendBlocked: () => void;
   composerRef?: React.RefObject<View | null>;
   onLayout?: (event: LayoutChangeEvent) => void;
+  /**
+   * Completion target: which device/workspace `/`, `$`, `@` lookups hit.
+   * Absent → completion still lists Zeron's workspace commands (plain text
+   * inserts only where they apply) but never calls the relay.
+   */
+  completion?: {
+    deviceId?: string;
+    chatId?: string;
+    spaceId?: string;
+    cwd?: string;
+  };
+  /** Workspace-command rows (`/files`, `/terminal`, …) resolve to this action. */
+  onWorkspaceCommand?: (command: WorkspaceCommand) => void;
 }
 
 export const Composer = React.memo(function ({
@@ -264,6 +328,8 @@ export const Composer = React.memo(function ({
   onSendBlocked,
   composerRef,
   onLayout,
+  completion,
+  onWorkspaceCommand,
 }: ComposerProps) {
   'use no memo';
   const theme = useChromeTheme();
@@ -367,10 +433,556 @@ export const Composer = React.memo(function ({
   const [voiceNotice, setVoiceNotice] = useState<VoiceNotice | null>(null);
   const baseRef = useRef('');
   const selRef = useRef(0);
+  const selEndRef = useRef(0);
   const draftTextRef = useRef(draft.text);
   draftTextRef.current = draft.text;
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
+
+  // ── Completion (/, $, @) — desktop composer.rs slash/mention parity ────
+  const services = useContext(AppServicesContext);
+  const runtime = services?.runtime ?? null;
+  const completionDevice = completion?.deviceId;
+  const completionOnline = useDeviceOnline(completionDevice ?? '');
+  const refsSupported = capabilities.has(EngineCapability.composerReferencesV1);
+  const inChat = mode === 'session';
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const slashCacheRef = useRef(new Map<string, InvocationCandidate[]>());
+  const slashMetaRef = useRef({
+    request: 0,
+    loading: false,
+    context: '',
+    catalogContext: '',
+    supported: true,
+    skill: false,
+    token: undefined as CompletionToken | undefined,
+    error: undefined as string | undefined,
+    dismissed: undefined as
+      | { start: number; end: number; text: string }
+      | undefined,
+  });
+  const [slashUI, setSlashUI] = useState<{
+    token: CompletionToken;
+    skill: boolean;
+    rows: InvocationCandidate[];
+    filtered: number[];
+    active: number | undefined;
+    loading: boolean;
+    error: string | undefined;
+    context: string;
+  } | null>(null);
+  const mentionMetaRef = useRef({
+    request: 0,
+    context: '',
+    token: undefined as CompletionToken | undefined,
+    results: [] as FileSearchMatch[],
+    active: undefined as number | undefined,
+    loading: false,
+    error: undefined as string | undefined,
+    dismissed: undefined as
+      | { start: number; end: number; text: string }
+      | undefined,
+  });
+  const [mentionUI, setMentionUI] = useState<{
+    token: CompletionToken;
+    results: FileSearchMatch[];
+    active: number | undefined;
+    loading: boolean;
+    error: string | undefined;
+  } | null>(null);
+  const mentionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Enter/Tab with an open menu: onKeyPress flags the caret, handleChangeText
+  // strips the '\n'/'\t' RN inserts anyway, then accepts the row.
+  const acceptAtRef = useRef<number | null>(null);
+
+  const publishSlash = useCallback(() => {
+    const meta = slashMetaRef.current;
+    const token = meta.token;
+    if (token === undefined) {
+      setSlashUI(null);
+      return;
+    }
+    const rows = slashCacheRef.current.get(meta.context) ?? [];
+    const filtered = filterIndices(
+      token.query,
+      rows.map(r => r.name),
+    );
+    setSlashUI({
+      token,
+      skill: meta.skill,
+      rows,
+      filtered,
+      active: filtered.length > 0 ? 0 : undefined,
+      loading: meta.loading,
+      error: meta.error,
+      context: meta.context,
+    });
+  }, []);
+
+  const resetSlash = useCallback(
+    (dismissed?: { start: number; end: number; text: string }) => {
+      const meta = slashMetaRef.current;
+      if (meta.error !== undefined) slashCacheRef.current.delete(meta.context);
+      meta.request += 1;
+      meta.loading = false;
+      meta.token = undefined;
+      meta.dismissed = dismissed;
+      setSlashUI(null);
+    },
+    [],
+  );
+
+  const publishMention = useCallback(() => {
+    const m = mentionMetaRef.current;
+    setMentionUI(
+      m.token === undefined
+        ? null
+        : {
+            token: m.token,
+            results: m.results,
+            active: m.active,
+            loading: m.loading,
+            error: m.error,
+          },
+    );
+  }, []);
+
+  const resetMention = useCallback(
+    (dismissed?: { start: number; end: number; text: string }) => {
+      if (mentionDebounceRef.current !== null) {
+        clearTimeout(mentionDebounceRef.current);
+        mentionDebounceRef.current = null;
+      }
+      const m = mentionMetaRef.current;
+      m.request += 1;
+      m.token = undefined;
+      m.results = [];
+      m.active = undefined;
+      m.loading = false;
+      m.error = undefined;
+      m.dismissed = dismissed;
+      setMentionUI(null);
+    },
+    [],
+  );
+
+  const catalogParams = useCallback((): Record<string, unknown> => {
+    const params: Record<string, unknown> = { harness: harnessId ?? null };
+    if (completion?.chatId !== undefined) {
+      params.chatId = completion.chatId;
+      params.targetDeviceId = completion.deviceId;
+      params.cwd = completion.cwd ?? null;
+    } else if (completion?.spaceId !== undefined) {
+      params.spaceId = completion.spaceId;
+      params.targetDeviceId = completion.deviceId;
+      params.cwd = completion.cwd ?? null;
+    } else if (completion?.deviceId !== undefined) {
+      params.targetDeviceId = completion.deviceId;
+    }
+    return params;
+  }, [
+    completion?.chatId,
+    completion?.deviceId,
+    completion?.cwd,
+    completion?.spaceId,
+    harnessId,
+  ]);
+
+  const fileSearchParams = useCallback(
+    (query: string): Record<string, unknown> | undefined => {
+      if (completion?.deviceId === undefined || completion.deviceId === '')
+        return undefined;
+      const params: Record<string, unknown> = { query };
+      if (completion.chatId !== undefined) {
+        params.chatId = completion.chatId;
+        params.cwd = completion.cwd ?? null;
+      } else if (completion.spaceId !== undefined) {
+        params.spaceId = completion.spaceId;
+        params.cwd = completion.cwd ?? null;
+      } else {
+        return undefined;
+      }
+      params.targetDeviceId = completion.deviceId;
+      return params;
+    },
+    [
+      completion?.chatId,
+      completion?.deviceId,
+      completion?.cwd,
+      completion?.spaceId,
+    ],
+  );
+
+  const connectionKey = useCallback(
+    () =>
+      `${runtime === null ? 0 : 1}:${
+        completionDevice ?? ''
+      }:${completionOnline}`,
+    [runtime, completionDevice, completionOnline],
+  );
+
+  const applyCompletionEdit = useCallback(
+    (text: string, cursor: number) => {
+      setDraftText(chatId, text);
+      selRef.current = cursor;
+      selEndRef.current = cursor;
+      // The controlled value lands first; move the native caret after it.
+      setTimeout(() => inputRef.current?.setSelection(cursor, cursor), 0);
+    },
+    [chatId],
+  );
+
+  const acceptSlash = useCallback(
+    (index?: number) => {
+      const meta = slashMetaRef.current;
+      const token = meta.token;
+      if (token === undefined) return;
+      const active = index ?? slashUI?.active;
+      if (active === undefined || slashUI === null) return;
+      const row = slashUI.rows[slashUI.filtered[active]];
+      if (row === undefined) return;
+      if (row.workspaceCommand !== undefined) {
+        resetSlash();
+        setDraftText(
+          chatId,
+          removeCompletionToken(draftTextRef.current, token),
+        );
+        onWorkspaceCommand?.(row.workspaceCommand);
+        return;
+      }
+      const insertion = invocationInsertion(row.invocation, refsSupported);
+      const next = replaceCompletionToken(
+        draftTextRef.current,
+        token,
+        insertion,
+      );
+      resetSlash();
+      applyCompletionEdit(next.text, next.cursor);
+    },
+    [
+      slashUI,
+      chatId,
+      refsSupported,
+      onWorkspaceCommand,
+      resetSlash,
+      applyCompletionEdit,
+    ],
+  );
+
+  const acceptMention = useCallback(
+    (index?: number) => {
+      const m = mentionMetaRef.current;
+      const token = m.token;
+      if (token === undefined) return;
+      const active = index ?? m.active;
+      if (active === undefined) return;
+      const row = m.results[active];
+      if (row === undefined) return;
+      const next = replaceCompletionToken(
+        draftTextRef.current,
+        token,
+        localFileLink(row.path, row.isDir),
+      );
+      resetMention();
+      applyCompletionEdit(next.text, next.cursor);
+    },
+    [resetMention, applyCompletionEdit],
+  );
+
+  const acceptCompletion = useCallback(() => {
+    if (slashMetaRef.current.token !== undefined) acceptSlash();
+    else acceptMention();
+  }, [acceptSlash, acceptMention]);
+
+  const dismissCompletion = useCallback(() => {
+    const slashTokenNow = slashMetaRef.current.token;
+    if (slashTokenNow !== undefined) {
+      resetSlash({
+        start: slashTokenNow.start,
+        end: slashTokenNow.end,
+        text: draftTextRef.current.slice(
+          slashTokenNow.start,
+          slashTokenNow.end,
+        ),
+      });
+      return;
+    }
+    const mtok = mentionMetaRef.current.token;
+    if (mtok !== undefined)
+      resetMention({
+        start: mtok.start,
+        end: mtok.end,
+        text: draftTextRef.current.slice(mtok.start, mtok.end),
+      });
+  }, [resetSlash, resetMention]);
+
+  const navigateCompletion = useCallback(
+    (delta: number) => {
+      if (slashUI !== null) {
+        const active = menuStep(slashUI.active, slashUI.filtered.length, delta);
+        setSlashUI(s => (s === null ? s : { ...s, active }));
+        return;
+      }
+      const m = mentionMetaRef.current;
+      if (m.token !== undefined) {
+        m.active = menuStep(m.active, m.results.length, delta);
+        publishMention();
+      }
+    },
+    [slashUI, publishMention],
+  );
+
+  /** Recompute both completions for the current text+caret. */
+  const syncCompletion = useCallback(
+    (text: string, cursor: number) => {
+      if (completion === undefined) {
+        if (slashMetaRef.current.token !== undefined) resetSlash();
+        if (mentionMetaRef.current.token !== undefined) resetMention();
+        return;
+      }
+      const prefs = skillPrefsForHarness(harnessId);
+      const trig = completionTrigger(text, cursor, prefs);
+      const connKey = connectionKey();
+      const params = catalogParams();
+      const catalogContext = `${prefs.dollar}:${
+        prefs.separateFromSlash
+      }:${connKey}:${JSON.stringify(params)}`;
+      const context = `${trig.skill ? 'skill' : 'command'}:${
+        trig.includeSkills
+      }:${trig.commandsAllowed}:${catalogContext}`;
+      const meta = slashMetaRef.current;
+      const token = trig.token;
+
+      if (token === undefined) {
+        resetSlash();
+      } else {
+        const contextChanged = meta.context !== context;
+        const dismissed =
+          !contextChanged &&
+          meta.dismissed !== undefined &&
+          token.start === meta.dismissed.start &&
+          token.end === meta.dismissed.end &&
+          text.slice(token.start, token.end) === meta.dismissed.text;
+        if (dismissed) {
+          meta.token = undefined;
+          setSlashUI(null);
+        } else if (!contextChanged && sameToken(meta.token, token)) {
+          // Token unchanged — keep the current list/selection as is.
+        } else {
+          const refresh = contextChanged || meta.token === undefined;
+          meta.dismissed = undefined;
+          if (contextChanged) {
+            meta.request += 1;
+            meta.loading = false;
+            if (meta.catalogContext !== catalogContext)
+              slashCacheRef.current.clear();
+            else if (meta.error !== undefined || !meta.supported)
+              slashCacheRef.current.delete(meta.context);
+            meta.catalogContext = catalogContext;
+            meta.context = context;
+            meta.skill = trig.skill;
+            meta.supported = true;
+            meta.error = undefined;
+          }
+          meta.token = token;
+          const deviceId = completion.deviceId;
+          const relay =
+            runtime !== null && deviceId !== undefined && deviceId !== ''
+              ? runtime.relayFor(deviceId)
+              : undefined;
+          if (harnessId === undefined && !trig.skill && trig.commandsAllowed)
+            slashCacheRef.current.set(
+              context,
+              withWorkspaceCommands([], inChat),
+            );
+          if (
+            harnessId === undefined ||
+            (slashCacheRef.current.has(context) && !refresh) ||
+            meta.loading
+          ) {
+            publishSlash();
+          } else if (relay === undefined) {
+            if (!trig.skill && trig.commandsAllowed) {
+              slashCacheRef.current.set(
+                context,
+                withWorkspaceCommands([], inChat),
+              );
+              meta.error = t('composer.autocomplete.noConnection');
+            }
+            publishSlash();
+          } else {
+            meta.request += 1;
+            const request = meta.request;
+            meta.loading = true;
+            meta.error = undefined;
+            publishSlash();
+            const callParams = params;
+            const listCommands: Promise<SlashCommand[]> =
+              trig.skill || !trig.commandsAllowed
+                ? Promise.resolve([])
+                : relay.call<SlashCommand[]>(METHODS.LIST_COMMANDS, callParams);
+            const listSkills = relay.call<Skill[] | null>(
+              METHODS.LIST_SKILLS,
+              callParams,
+            );
+            Promise.allSettled([listCommands, listSkills]).then(settled => {
+              const m = slashMetaRef.current;
+              if (m.request !== request || m.context !== context) return;
+              m.loading = false;
+              const commands =
+                settled[0].status === 'fulfilled'
+                  ? settled[0].value
+                  : settled[0].reason;
+              const skills =
+                settled[1].status === 'fulfilled'
+                  ? settled[1].value ?? undefined
+                  : settled[1].reason;
+              const merged = mergeInvocationResults(
+                commands,
+                skills,
+                trig.skill,
+              );
+              if (merged instanceof Error) {
+                slashCacheRef.current.delete(context);
+                m.error = slashErrorMessage(merged, trig.skill);
+                if (!trig.skill && trig.commandsAllowed)
+                  slashCacheRef.current.set(
+                    context,
+                    withWorkspaceCommands([], inChat),
+                  );
+              } else {
+                m.supported = merged.supported;
+                m.error = merged.warning;
+                let rows = merged.candidates;
+                if (!trig.includeSkills)
+                  rows = rows.filter(r => r.invocation.kind === 'command');
+                if (!trig.skill && trig.commandsAllowed)
+                  rows = withWorkspaceCommands(rows, inChat);
+                slashCacheRef.current.set(context, rows);
+              }
+              publishSlash();
+            });
+          }
+        }
+      }
+
+      // ── @ file mentions (independent trigger) ──────────────────────────
+      const m = mentionMetaRef.current;
+      const fileParams = fileSearchParams('');
+      const mContext =
+        fileParams === undefined
+          ? ''
+          : `${connKey}:${JSON.stringify(fileParams)}`;
+      if (m.context !== mContext) {
+        resetMention();
+        m.context = mContext;
+      }
+      const mtok = mentionToken(text, cursor);
+      const stillDismissed =
+        mtok !== undefined &&
+        m.dismissed !== undefined &&
+        mtok.start === m.dismissed.start &&
+        mtok.end === m.dismissed.end &&
+        text.slice(mtok.start, mtok.end) === m.dismissed.text;
+      if (stillDismissed) {
+        m.token = undefined;
+        setMentionUI(null);
+      } else if (!sameToken(m.token, mtok)) {
+        m.dismissed = undefined;
+        m.request += 1;
+        const request = m.request;
+        const refining = m.token !== undefined && mtok !== undefined;
+        m.token = mtok;
+        if (!refining) {
+          m.results = [];
+          m.active = undefined;
+        }
+        m.error = undefined;
+        m.loading = mtok !== undefined;
+        publishMention();
+        if (mtok === undefined) return;
+        const searchParams = fileSearchParams(mtok.query);
+        const deviceId = completion.deviceId;
+        if (
+          runtime === null ||
+          searchParams === undefined ||
+          deviceId === undefined ||
+          deviceId === ''
+        ) {
+          m.loading = false;
+          publishMention();
+          return;
+        }
+        if (mentionDebounceRef.current !== null)
+          clearTimeout(mentionDebounceRef.current);
+        mentionDebounceRef.current = setTimeout(() => {
+          const relay = runtime.relayFor(deviceId);
+          const call = (): Promise<FileSearchMatch[]> =>
+            relay.call<FileSearchMatch[]>(METHODS.SEARCH_FILES, searchParams);
+          call()
+            .catch(err => {
+              // One retry rides out a cold relay dial (desktop parity).
+              const unreachable =
+                err instanceof Error &&
+                'kind' in err &&
+                (err.kind === 'notConnected' || err.kind === 'hostOffline');
+              if (!unreachable) throw err;
+              return new Promise<FileSearchMatch[]>((resolve, reject) =>
+                setTimeout(() => call().then(resolve, reject), 250),
+              );
+            })
+            .then(results => {
+              const mm = mentionMetaRef.current;
+              if (mm.request !== request || mm.token === undefined) return;
+              mm.loading = false;
+              mm.error = undefined;
+              mm.results = results.filter(r => localPathIsSafe(r.path));
+              mm.active = mm.results.length > 0 ? 0 : undefined;
+              publishMention();
+            })
+            .catch(err => {
+              const mm = mentionMetaRef.current;
+              if (mm.request !== request || mm.token === undefined) return;
+              mm.loading = false;
+              mm.results = [];
+              mm.active = undefined;
+              mm.error = mentionErrorMessage(err);
+              publishMention();
+            });
+        }, 80);
+      }
+    },
+    [
+      completion,
+      runtime,
+      harnessId,
+      inChat,
+      connectionKey,
+      catalogParams,
+      fileSearchParams,
+      resetSlash,
+      resetMention,
+      publishSlash,
+      publishMention,
+    ],
+  );
+
+  // Re-run on every draft edit; caret moves are handled in onSelectionChange.
+  const completionContextKey = `${connectionKey()}:${JSON.stringify(
+    catalogParams(),
+  )}:${JSON.stringify(fileSearchParams(''))}`;
+  useEffect(() => {
+    syncCompletion(draft.text, selRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.text, runtime, completionContextKey]);
+  useEffect(
+    () => () => {
+      if (mentionDebounceRef.current !== null)
+        clearTimeout(mentionDebounceRef.current);
+    },
+    [],
+  );
   const voiceSessionRef = useRef<LocalVoiceSession | null>(null);
   const processingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearProcessingCooldown = useCallback(() => {
@@ -652,6 +1264,20 @@ export const Composer = React.memo(function ({
    * stage it as pasted.txt instead of flooding the draft. */
   const handleChangeText = useCallback(
     (text: string) => {
+      setSendError(null);
+      const acceptAt = acceptAtRef.current;
+      if (acceptAt !== null) {
+        // Hardware Enter/Tab with an open completion menu: RN inserts the
+        // key anyway — remove it and accept the highlighted row instead.
+        acceptAtRef.current = null;
+        const removed = text[acceptAt];
+        if (removed === '\n' || removed === '\t') {
+          const without = text.slice(0, acceptAt) + text.slice(acceptAt + 1);
+          setDraftText(chatId, without);
+        }
+        acceptCompletion();
+        return;
+      }
       const split = splitTextEdit(draftTextRef.current, text);
       if (split.inserted.length > PASTE_FILE_THRESHOLD) {
         const result = stagePastedText(chatId, split.inserted);
@@ -663,7 +1289,7 @@ export const Composer = React.memo(function ({
       }
       setDraftText(chatId, text);
     },
-    [chatId],
+    [chatId, acceptCompletion],
   );
 
   /** UIPasteControl payload → stage image/file, or insert plain text at
@@ -694,6 +1320,22 @@ export const Composer = React.memo(function ({
     if (dictating || processing || localVoiceBusy) return;
     setVoiceNotice(null);
     const text = withPlanPrefixIf(planMode, draft.text.trim());
+    // Zeron's own commands consume their trigger before any send path.
+    const workspaceRows =
+      slashCacheRef.current.get(slashMetaRef.current.context) ?? [];
+    const workspaceAction = workspaceCommandForText(draft.text, workspaceRows);
+    if (workspaceAction !== undefined && onWorkspaceCommand !== undefined) {
+      resetSlash();
+      resetMention();
+      setDraftText(chatId, '');
+      onWorkspaceCommand(workspaceAction);
+      return;
+    }
+    // Canonical references need a host that decodes them; the draft stays.
+    if (referencesRequireUpdate(text, refsSupported)) {
+      setSendError(t('composer.autocomplete.referencesBlocked'));
+      return;
+    }
     if (hasAttachments) {
       // Routes per sendPlan; 'blocked' surfaces onSendBlocked — the draft
       // and attachments stay put (nothing silently dropped).
@@ -756,6 +1398,10 @@ export const Composer = React.memo(function ({
     dictating,
     processing,
     localVoiceBusy,
+    onWorkspaceCommand,
+    refsSupported,
+    resetSlash,
+    resetMention,
   ]);
 
   // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
@@ -776,6 +1422,57 @@ export const Composer = React.memo(function ({
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
   const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
+
+  // Autocomplete rows — slash takes precedence when both tokens are live.
+  const popupRows: CompletionRowData[] =
+    slashUI !== null
+      ? slashUI.filtered.map((rowIx, ix) => {
+          const c = slashUI.rows[rowIx];
+          const isSkill = c.invocation.kind === 'skill';
+          const detail =
+            c.inputHint !== undefined && c.inputHint !== ''
+              ? c.description === ''
+                ? `<${c.inputHint}>`
+                : `${c.description} · <${c.inputHint}>`
+              : c.description;
+          return {
+            key: `${ix}`,
+            icon: isSkill ? 'sparkles' : 'command',
+            label: isSkill ? skillDisplayName(c.name) : `/${c.name}`,
+            detail,
+          };
+        })
+      : (mentionUI?.results ?? []).map((r, ix) => {
+          const slashIx = r.path.lastIndexOf('/');
+          return {
+            key: `${ix}`,
+            icon: r.isDir ? 'folder' : 'doc',
+            label: r.path.slice(slashIx + 1),
+            detail: slashIx >= 0 ? r.path.slice(0, slashIx) : '',
+          };
+        });
+  const popupActive = slashUI?.active ?? mentionUI?.active;
+  const popupLoading = slashUI?.loading ?? mentionUI?.loading ?? false;
+  const popupError = slashUI?.error ?? mentionUI?.error;
+  const separateSkills = skillPrefsForHarness(harnessId).separateFromSlash;
+  const popupEmpty =
+    slashUI !== null
+      ? slashUI.skill
+        ? slashUI.rows.length === 0
+          ? slashMetaRef.current.supported
+            ? t('composer.autocomplete.noSkills')
+            : t('composer.autocomplete.skillsNotAdvertised')
+          : t('composer.autocomplete.noMatchingSkills')
+        : slashUI.rows.length === 0
+        ? separateSkills
+          ? t('composer.autocomplete.noCommands')
+          : t('composer.autocomplete.noCommandsOrSkills')
+        : separateSkills
+        ? t('composer.autocomplete.noMatchingCommands')
+        : t('composer.autocomplete.noMatchingCommandsOrSkills')
+      : mentionUI !== null && mentionUI.token.query === ''
+      ? t('composer.autocomplete.noFiles')
+      : t('composer.autocomplete.noMatchingFiles');
 
   return (
     <View ref={composerRef} onLayout={onLayout} style={styles.container}>
@@ -849,15 +1546,47 @@ export const Composer = React.memo(function ({
               value={draft.text}
               autoFocus={autoFocus}
               onChangeText={handleChangeText}
-              onSelectionChange={e =>
-                (selRef.current = e.nativeEvent.selection.start)
-              }
+              onSelectionChange={e => {
+                const { start, end } = e.nativeEvent.selection;
+                selRef.current = start;
+                selEndRef.current = end;
+                // A non-empty selection has no caret → no completion.
+                if (start !== end) {
+                  resetSlash();
+                  resetMention();
+                } else {
+                  syncCompletion(draftTextRef.current, start);
+                }
+              }}
+              onKeyPress={e => {
+                const key = e.nativeEvent.key;
+                if (key === 'Escape' || key === 'escape') {
+                  dismissCompletion();
+                  return;
+                }
+                const open = slashUI !== null || mentionUI !== null;
+                const hasSelection =
+                  (slashUI?.active ?? mentionUI?.active) !== undefined;
+                if (!open) return;
+                if (key === 'ArrowDown' || key === 'UIKeyInputDownArrow') {
+                  navigateCompletion(1);
+                } else if (key === 'ArrowUp' || key === 'UIKeyInputUpArrow') {
+                  navigateCompletion(-1);
+                } else if (
+                  hasSelection &&
+                  (key === 'Enter' || key === 'Return' || key === 'Tab')
+                ) {
+                  acceptAtRef.current = selRef.current;
+                }
+              }}
               onFocus={() => {
                 focusedRef.current = true;
                 onFocusChange?.(true);
               }}
               onBlur={() => {
                 focusedRef.current = false;
+                resetSlash();
+                resetMention();
                 onFocusChange?.(false);
               }}
               placeholder={
@@ -1120,6 +1849,20 @@ export const Composer = React.memo(function ({
             </View>
           </View>
         </Glass>
+        {slashUI !== null || mentionUI !== null ? (
+          <ComposerAutocomplete
+            testID="composer-autocomplete"
+            rows={popupRows}
+            activeIndex={popupActive}
+            loading={popupLoading}
+            error={popupError}
+            emptyLabel={popupEmpty}
+            onPick={ix => {
+              if (slashUI !== null) acceptSlash(ix);
+              else acceptMention(ix);
+            }}
+          />
+        ) : null}
         <BorderBeam
           width={glassSize.w}
           height={glassSize.h}
@@ -1130,6 +1873,9 @@ export const Composer = React.memo(function ({
         />
       </View>
 
+      {sendError !== null ? (
+        <Text style={[styles.hint, { color: theme.danger }]}>{sendError}</Text>
+      ) : null}
       {right === 'stopping' ? (
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
           {t('session.stopping')}

@@ -383,6 +383,46 @@ const en = {
   'composer.context.percentUnknown': '\u2014',
   'composer.resize': 'Resize composer',
   'composer.dismissKeyboard': 'Dismiss keyboard',
+
+  // Composer autocomplete (/ commands, $ skills, @ files)
+  'composer.autocomplete.suggestions': 'Suggestions',
+  'composer.autocomplete.noFiles': 'No files available',
+  'composer.autocomplete.noMatchingFiles': 'No matching files',
+  'composer.autocomplete.noCommandsOrSkills': 'No commands or skills available',
+  'composer.autocomplete.noCommands': 'No slash commands available',
+  'composer.autocomplete.noMatchingCommandsOrSkills':
+    'No matching commands or skills',
+  'composer.autocomplete.noMatchingCommands': 'No matching commands',
+  'composer.autocomplete.noSkills': 'No skills available for this project',
+  'composer.autocomplete.skillsNotAdvertised':
+    'This agent does not advertise skills',
+  'composer.autocomplete.noMatchingSkills': 'No matching skills',
+  'composer.autocomplete.filesOldHost':
+    'The session’s device runs an older Zeron — update it to search its files',
+  'composer.autocomplete.deviceUnreachable':
+    'The session’s device is unreachable',
+  'composer.autocomplete.fileSearchFailed': 'File search failed',
+  'composer.autocomplete.commandsOldHost':
+    'Commands require an updated engine on the selected device. Restart that device’s Zeron after updating.',
+  'composer.autocomplete.skillsOldHost':
+    'Skills require an updated engine on the selected device. Restart that device’s Zeron after updating.',
+  'composer.autocomplete.commandsFailed': 'Couldn’t load this agent’s commands',
+  'composer.autocomplete.skillsFailed': 'Couldn’t load this agent’s skills',
+  'composer.autocomplete.noConnection':
+    'Agent command discovery requires a connection',
+  'composer.autocomplete.referencesBlocked':
+    'Update the selected device’s Zeron to send file, command, or skill references. Your draft is preserved.',
+
+  // Workspace commands
+  'composer.cmd.model': 'Zeron: choose agent, model, and reasoning',
+  'composer.cmd.new': 'Zeron: start a new conversation',
+  'composer.cmd.resume': 'Zeron: search and open conversations',
+  'composer.cmd.settings': 'Zeron: open settings',
+  'composer.cmd.diff': 'Zeron: open changes',
+  'composer.cmd.files': 'Zeron: open project files',
+  'composer.cmd.terminal': 'Zeron: open a terminal',
+  'composer.cmd.rename': 'Zeron: rename this conversation',
+  'composer.cmd.stop': 'Zeron: stop the active run',
   'session.details': 'Details',
   'session.usage': 'Usage',
   'session.usage.empty': 'No usage reported for accounts on this desktop.',

@@ -47,6 +47,7 @@ import {
 } from '../zeron/state/catalogStore';
 import {
   COMPOSE_DRAFT_ID,
+  clearDraft,
   setDraftPendingWorktree,
   useDraft,
 } from '../zeron/state/draftStore';
@@ -80,6 +81,7 @@ import {
 import type { SendPlan } from '../zeron/attachments/sendPlan';
 import { t } from '../i18n/strings';
 import { useLocalVoiceRuntime } from '../hooks/useLocalVoiceRuntime';
+import type { WorkspaceCommand } from '../zeron/composer/completion';
 
 export function ComposeComposer({
   onCreated,
@@ -87,12 +89,15 @@ export function ComposeComposer({
   sticky = false,
   composerMaxWidth,
   onLayout,
+  onWorkspaceCommand,
 }: {
   onCreated: (chatId: string) => void;
   autoFocus?: boolean;
   sticky?: boolean;
   composerMaxWidth?: number;
   onLayout?: (event: LayoutChangeEvent) => void;
+  /** `/model`, `/new` resolve here; the rest delegate to the screen. */
+  onWorkspaceCommand?: (command: WorkspaceCommand) => void;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const runtime = useRuntime();
@@ -124,6 +129,15 @@ export function ComposeComposer({
   );
   const [branch, setBranch] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // /model and /new resolve inside compose; the rest go to the screen.
+  const onComposerWorkspaceCommand = useCallback(
+    (command: WorkspaceCommand) => {
+      if (command === 'model') setPickerOpen(true);
+      else if (command === 'new') clearDraft(COMPOSE_DRAFT_ID);
+      else onWorkspaceCommand?.(command);
+    },
+    [onWorkspaceCommand],
+  );
   const [effortOpen, setEffortOpen] = useState(false);
   const [effortOrigin, setEffortOrigin] = useState<EffortOrigin | undefined>(
     undefined,
@@ -590,6 +604,8 @@ export function ComposeComposer({
             });
         }}
         checkout={checkout}
+        completion={{ deviceId, spaceId, cwd: space?.path }}
+        onWorkspaceCommand={onComposerWorkspaceCommand}
         dictation={dictation}
         voiceRuntime={voiceRuntime}
         onSend={onSend}

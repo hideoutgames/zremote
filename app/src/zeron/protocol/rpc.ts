@@ -35,6 +35,8 @@ export const METHODS = {
   SET_HARNESS_ENABLED: 'SetHarnessEnabled',
   LIST_MODELS: 'ListModels',
   LIST_COMMANDS: 'ListCommands',
+  /** Agent skills for composer `$` completion. Replies `null` when unsupported. */
+  LIST_SKILLS: 'ListSkills',
   QUEUE_COMMAND: 'QueueCommand',
   /** P2P delivery fallback: forward a queued command entry over the device-room link. */
   RELAY_COMMAND: 'RelayCommand',
