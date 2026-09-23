@@ -845,7 +845,11 @@ export const exitTestMode = (): void => {
     connection: 'disconnected',
   });
   catalogStore.setState({ byDevice: {} });
-  changeRequestStore.setState({ byChat: {}, diffByChat: {} });
+  changeRequestStore.setState({
+    byChat: {},
+    diffByChat: {},
+    detectedByChat: {},
+  });
   uiPrefsStore.setState(s => ({ ...s, pinnedChatIds: [] }));
   authStore.setState({ status: { state: 'signedOut' } });
 };

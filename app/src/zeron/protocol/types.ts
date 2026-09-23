@@ -144,6 +144,20 @@ export interface ChatConfig {
   sandbox?: string;
 }
 
+/** entities.rs ConversationSourceContext — the repo identity the host
+ * stamped on the conversation right before its harness dispatch. Unlike the
+ * legacy `branch` scalar, another chat can never overwrite it when a shared
+ * checkout changes branches. */
+export interface ConversationSourceContext {
+  checkoutId: string;
+  repoRoot: string;
+  cwd: string;
+  branch: string;
+  headSha?: string;
+  /** RFC3339 timestamp (serde chrono), unlike the millis fields elsewhere. */
+  observedAt: string;
+}
+
 export interface Chat {
   id: string;
   deviceId: string;
@@ -152,6 +166,7 @@ export interface Chat {
   cwd?: string;
   branch?: string;
   checkoutId?: string;
+  sourceContext?: ConversationSourceContext;
   config?: ChatConfig;
   lastMessagePreview?: string;
   lastMessageAt?: number;

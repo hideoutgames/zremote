@@ -1,5 +1,6 @@
-// Thread History — change requests for this session from
-// WatchCheckoutChangeRequest. Tapping a row opens PrSheet.
+// Thread History — change requests for this session: the host's
+// WatchCheckoutChangeRequest plus transcript-detected PR/MR links.
+// Tapping a row opens PrSheet.
 
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -26,8 +27,12 @@ export function HistoryScreen({
     changeRequestStore,
     s => s.byChat[chatId]?.changeRequest ?? undefined,
   );
+  const detected = useStore(changeRequestStore, s => s.detectedByChat[chatId]);
   const diff = useStore(changeRequestStore, s => s.diffByChat[chatId]);
-  const prs = useMemo(() => collectThreadPrs(summary, diff), [summary, diff]);
+  const prs = useMemo(
+    () => collectThreadPrs(summary, diff, detected),
+    [summary, diff, detected],
+  );
 
   return (
     <View style={styles.root}>

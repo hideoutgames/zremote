@@ -23,7 +23,10 @@ import {
 import type { TokenSource } from '../zeron/transport/tokenSource';
 import { workspaceStore } from '../zeron/state/workspaceStore';
 import { getSessionStore, runPhase } from '../zeron/state/sessionStores';
-import { changeRequestStore } from '../zeron/state/changeRequestStore';
+import {
+  changeRequestStore,
+  effectiveChangeRequest,
+} from '../zeron/state/changeRequestStore';
 import { threadPrDot } from '../components/prBadge';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { createLog } from '../zeron/log';
@@ -159,7 +162,7 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
           ? spaces.find(sp => sp.id === chat.spaceId)
           : undefined;
       const prTone = threadPrDot(
-        changeRequestStore.getState().byChat[session.chatId]?.changeRequest,
+        effectiveChangeRequest(changeRequestStore.getState(), session.chatId),
       );
       const accent = activityAccent({
         awaitingInput: phase === 'awaitingInput',
