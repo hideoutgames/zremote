@@ -267,19 +267,6 @@ export class LiveActivityManager {
     this.cb.onUnregister(chatId);
   }
 
-  /** Relaunch recovery: rebind to OS-surviving instances. */
-  recover(chatIds: readonly string[]): void {
-    for (const inst of this.driver.getInstances()) {
-      const id = inst.getId();
-      const known = [...this.handles.entries()].find(
-        ([, h]) => h.getId() === id,
-      );
-      if (known === undefined && chatIds.length === 1) {
-        this.handles.set(chatIds[0], inst);
-      }
-    }
-  }
-
   endAll(): void {
     for (const chatId of [...this.states.keys()]) {
       this.end(chatId, 'immediate');
