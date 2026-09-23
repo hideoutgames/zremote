@@ -5,6 +5,7 @@ import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as LegacyFS from 'expo-file-system/legacy';
 import { sha256 } from 'js-sha256';
 import {
+  VoiceDownloadPausedError,
   VoiceModelManager,
   bindVoiceModelManager,
   type VoiceDownloader,
@@ -102,20 +103,27 @@ const yieldToRunLoop = (): Promise<void> =>
   new Promise(resolve => setTimeout(resolve, 0));
 
 export const expoVoiceHasher: VoiceHasher = {
-  async sha256File(path) {
+  async sha256File(path, onProgress, signal) {
     // Streamed SHA-256 — model files are hundreds of MB, so the file is
     // never materialized as a single ArrayBuffer. File.stream() pulls in
     // 1KB chunks (hundreds of thousands of bridge calls per model), so a
     // FileHandle reads 4MB at a time instead.
     const file = toFile(path);
     if (!file.exists) throw new Error('missing model file');
+    const total = typeof file.size === 'number' ? file.size : 0;
     const handle = file.open(FileMode.ReadOnly);
     const hash = sha256.create();
+    let done = 0;
     try {
       for (;;) {
+        // A Cancel during verify must break out — otherwise the hash
+        // finishes anyway and the model installs despite the cancel.
+        if (signal?.aborted === true) throw new Error('aborted');
         const chunk = handle.readBytes(HASH_CHUNK_BYTES);
         if (chunk.byteLength === 0) break;
         hash.update(chunk);
+        done += chunk.byteLength;
+        onProgress?.(done, total);
         await yieldToRunLoop();
       }
     } finally {
@@ -132,22 +140,21 @@ export const expoVoiceDownloader: VoiceDownloader = {
     if (opts.signal.aborted) throw new Error('aborted');
     // DownloadResumable streams to disk and can resume via persisted
     // resumeData — no whole-file ArrayBuffer or Range-append needed.
+    // The blob is consulted unconditionally: URLSession buffers partial
+    // bodies in its own sandbox, so `dest` holds no committed bytes until
+    // completion and `opts.existingBytes` is 0 for every paused attempt.
     let resumeData: string | undefined;
-    if (opts.existingBytes > 0) {
-      const saved = await expoVoiceModelFs.readText(resumeStatePath(dest));
-      if (saved !== undefined) {
-        try {
-          resumeData = (JSON.parse(saved) as { resumeData?: string })
-            .resumeData;
-        } catch {
-          resumeData = undefined;
-        }
+    const saved = await expoVoiceModelFs.readText(resumeStatePath(dest));
+    if (saved !== undefined) {
+      try {
+        resumeData = (JSON.parse(saved) as { resumeData?: string }).resumeData;
+      } catch {
+        resumeData = undefined;
       }
-      if (resumeData === undefined) {
-        // Partial file without session state can't be resumed natively.
-        await expoVoiceModelFs.delete(dest);
-      }
-    } else {
+    }
+    if (resumeData === undefined) {
+      // Partial committed bytes without session state can't be resumed
+      // natively — start clean rather than trust an unknown offset.
       await expoVoiceModelFs.delete(dest);
     }
 
@@ -156,9 +163,12 @@ export const expoVoiceDownloader: VoiceDownloader = {
       totalBytesExpectedToWrite: number;
     }) => opts.onProgress(p.totalBytesWritten, p.totalBytesExpectedToWrite);
 
-    // Pause (not cancel) on abort so the session yields resumable bytes;
-    // the rejection still propagates to the manager as an abort.
-    const run = async (data: string | undefined) => {
+    // 'done' when the bytes are committed to `dest`; 'paused' when the
+    // task was cancelled (user abort or system suspend) mid-flight. Pause
+    // — not cancel — on abort so the session yields resumable bytes.
+    const run = async (
+      data: string | undefined,
+    ): Promise<'done' | 'paused'> => {
       const task = LegacyFS.createDownloadResumable(
         url,
         dest,
@@ -166,8 +176,9 @@ export const expoVoiceDownloader: VoiceDownloader = {
         onProgress,
         data,
       );
+      let pauseWrite: Promise<unknown> | undefined;
       const onAbort = () => {
-        task
+        pauseWrite = task
           .pauseAsync()
           .then(async state => {
             if (state?.resumeData !== undefined) {
@@ -181,23 +192,58 @@ export const expoVoiceDownloader: VoiceDownloader = {
       };
       opts.signal.addEventListener('abort', onAbort);
       try {
-        if (data === undefined) await task.downloadAsync();
-        else await task.resumeAsync();
+        const result =
+          data === undefined
+            ? await task.downloadAsync()
+            : await task.resumeAsync();
+        if (result === undefined) {
+          // Cancelled tasks resolve with undefined — wait for the pause to
+          // land so `.resume` is on disk before the caller moves on.
+          await pauseWrite;
+          return 'paused';
+        }
+        if (typeof result.status === 'number' && result.status >= 400) {
+          // HTTP failures resolve (not reject) with the error body as the
+          // "download" — never let that reach the checksum stage.
+          await expoVoiceModelFs.delete(dest).catch(() => {});
+          throw new Error(`http ${result.status}`);
+        }
+        return 'done';
       } finally {
         opts.signal.removeEventListener('abort', onAbort);
       }
     };
 
     try {
-      await run(resumeData);
+      if ((await run(resumeData)) === 'paused') {
+        throw new VoiceDownloadPausedError();
+      }
     } catch (e) {
       // A stale/corrupt resume state must not wedge Retry forever: discard
       // the partial artifacts and fetch the file from the start.
-      if (opts.signal.aborted || resumeData === undefined) throw e;
+      if (
+        opts.signal.aborted ||
+        resumeData === undefined ||
+        e instanceof VoiceDownloadPausedError
+      ) {
+        throw e;
+      }
       await expoVoiceModelFs.delete(dest);
       await expoVoiceModelFs.delete(resumeStatePath(dest));
-      await run(undefined);
+      if ((await run(undefined)) === 'paused') {
+        throw new VoiceDownloadPausedError();
+      }
     }
+    await expoVoiceModelFs.delete(resumeStatePath(dest));
+  },
+
+  async hasResumable(dest) {
+    return (
+      (await expoVoiceModelFs.readText(resumeStatePath(dest))) !== undefined
+    );
+  },
+
+  async discard(dest) {
     await expoVoiceModelFs.delete(resumeStatePath(dest));
   },
 };

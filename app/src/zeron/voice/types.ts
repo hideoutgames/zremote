@@ -35,6 +35,7 @@ export interface VoiceModelFile {
 
 export type VoiceModelInstallState =
   | 'notDownloaded'
+  | 'queued'
   | 'downloading'
   | 'verifying'
   | 'installed'

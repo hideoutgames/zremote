@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useStore } from 'zustand';
 import { File } from 'expo-file-system';
 import { resolveVoiceCapture } from '../zeron/native/voiceCapture';
 import { resolveTranscriptionEngine } from '../zeron/native/transcription';
@@ -6,6 +7,7 @@ import { resolveCleanupEngine } from '../zeron/native/cleanup';
 import {
   catalogEntry,
   getVoiceModelManager,
+  voiceModelStore,
   type LocalVoiceRuntime,
 } from '../zeron/voice';
 import { useCleanupModelId, useVoiceModelId } from '../zeron/state/uiPrefs';
@@ -20,11 +22,24 @@ export const useLocalVoiceRuntime = (
 ): LocalVoiceRuntime | undefined => {
   const voiceModelId = useVoiceModelId();
   const cleanupModelId = useCleanupModelId();
+  // Rebuild when a selected model finishes installing — the pref id itself
+  // doesn't change on install completion, so without this the runtime keeps
+  // reporting missingModel until the user re-selects or restarts the app.
+  const installedTick = useStore(
+    voiceModelStore,
+    s =>
+      `${s.byId[voiceModelId ?? '']?.state === 'installed'}:${
+        s.byId[cleanupModelId ?? '']?.state === 'installed'
+      }`,
+  );
   const [runtime, setRuntime] = useState<LocalVoiceRuntime | undefined>(
     undefined,
   );
 
   useEffect(() => {
+    // installedTick is a dep so install completion rebuilds the runtime —
+    // read it here so exhaustive-deps doesn't flag it as unnecessary.
+    void installedTick;
     if (!enabled) {
       setRuntime(undefined);
       return;
@@ -76,7 +91,7 @@ export const useLocalVoiceRuntime = (
       if (voiceModelId != null) manager?.release(voiceModelId);
       if (cleanupModelId != null) manager?.release(cleanupModelId);
     };
-  }, [enabled, voiceModelId, cleanupModelId]);
+  }, [enabled, voiceModelId, cleanupModelId, installedTick]);
 
   return runtime;
 };

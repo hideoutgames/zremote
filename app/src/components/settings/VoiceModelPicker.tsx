@@ -48,7 +48,10 @@ function RowActions({
 }) {
   const theme = useTheme();
   const installed = row.state === 'installed';
-  const downloading = row.state === 'downloading' || row.state === 'verifying';
+  const downloading =
+    row.state === 'downloading' ||
+    row.state === 'verifying' ||
+    row.state === 'queued';
   const canDownload = !installed && !downloading && model.productionPinned;
 
   // One action per row-state.
@@ -127,6 +130,9 @@ const subtitleFor = (
     return `${t('settings.voiceDownloading')} · ${size}`;
   }
   if (row.state === 'verifying') return t('settings.voiceVerifying');
+  if (row.state === 'queued') {
+    return `${t('settings.voiceQueued')} · ${size}`;
+  }
   if (row.state === 'installed') {
     return `${t('settings.voiceInstalled')} · ${size}`;
   }
@@ -241,7 +247,11 @@ export function VoiceModelPicker({
               key={model.id}
               title={model.name}
               subtitle={subtitleFor(model, row)}
-              progress={row.state === 'downloading' ? row.progress : undefined}
+              progress={
+                row.state === 'downloading' || row.state === 'verifying'
+                  ? row.progress
+                  : undefined
+              }
               trailing={trailing}
               onPress={
                 installed

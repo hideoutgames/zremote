@@ -1,6 +1,10 @@
 import { createHash } from 'crypto';
 import type { VoiceModelCatalogEntry } from '../types';
-import { VoiceModelManager } from '../manager';
+import {
+  VoiceDownloadPausedError,
+  VoiceModelManager,
+  voiceModelStore,
+} from '../manager';
 import { MemoryVoiceFs } from '../memVoiceFs';
 
 const waitFor = async (pred: () => boolean, label: string): Promise<void> => {
@@ -255,7 +259,9 @@ test('cancel leaves the model not downloaded', async () => {
     'downloading',
   );
   manager.cancelDownload('whisper-tiny');
-  await pending;
+  // A cancelled download must reject — resolving would fire the callers'
+  // `.then(onInstalled)` and select a model that isn't installed.
+  await expect(pending).rejects.toThrow('aborted');
   expect(manager.row('whisper-tiny').state).toBe('notDownloaded');
   hanging();
 });
@@ -300,4 +306,296 @@ test('unpinned catalog entries cannot be installed', async () => {
   await manager.waitReady();
   await expect(manager.download('whisper-tiny')).rejects.toThrow(/pinned/);
   expect(manager.row('whisper-tiny').error).toBe('unpinned');
+});
+
+const PAYLOAD2 = ENC.encode('base-model');
+const MODEL2: VoiceModelCatalogEntry = {
+  ...MODEL,
+  id: 'whisper-base',
+  name: 'Whisper Base',
+  files: [
+    {
+      name: 'whisper-base.bin',
+      url: 'mem://base',
+      bytes: PAYLOAD2.byteLength,
+      sha256: sha256(PAYLOAD2),
+    },
+  ],
+};
+
+test('a second download call joins the in-flight job', async () => {
+  const fs = new MemoryVoiceFs();
+  let calls = 0;
+  let release: () => void = () => {};
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL],
+    hasher: {
+      sha256File: async path => sha256((await fs.readBytes(path))!),
+    },
+    downloader: {
+      download: async (_url, dest, opts) => {
+        calls += 1;
+        await new Promise<void>(resolve => {
+          release = resolve;
+        });
+        if (opts.signal.aborted) throw new Error('aborted');
+        await fs.writeBytes(dest, PAYLOAD);
+      },
+    },
+  });
+  await manager.waitReady();
+  const first = manager.download('whisper-tiny');
+  await waitFor(() => calls === 1, 'downloader started');
+  const second = manager.download('whisper-tiny');
+  release();
+  await expect(first).resolves.toBeUndefined();
+  await expect(second).resolves.toBeUndefined();
+  expect(calls).toBe(1);
+});
+
+test('downloads run one at a time and queued rows report queued', async () => {
+  const fs = new MemoryVoiceFs();
+  const payloads = new Map<string, Uint8Array>([
+    ['mem://tiny', PAYLOAD],
+    ['mem://base', PAYLOAD2],
+  ]);
+  const started: string[] = [];
+  const gates = new Map<string, () => void>();
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL, MODEL2],
+    hasher: {
+      sha256File: async path => {
+        const bytes = await fs.readBytes(path);
+        if (bytes === undefined) throw new Error('missing');
+        return sha256(bytes);
+      },
+    },
+    downloader: {
+      download: async (url, dest, opts) => {
+        started.push(url);
+        const payload = payloads.get(url);
+        if (payload === undefined) throw new Error('unknown url');
+        await new Promise<void>(resolve => gates.set(url, resolve));
+        if (opts.signal.aborted) throw new Error('aborted');
+        await fs.writeBytes(dest, payload);
+        opts.onProgress(payload.byteLength, payload.byteLength);
+      },
+    },
+  });
+  await manager.waitReady();
+  const first = manager.download('whisper-tiny');
+  await waitFor(() => started.length === 1, 'first started');
+  const second = manager.download('whisper-base');
+  await waitFor(
+    () => manager.row('whisper-base').state === 'queued',
+    'second queued',
+  );
+  expect(started).toEqual(['mem://tiny']);
+  gates.get('mem://tiny')!();
+  await first;
+  // The second job only starts after the first fully installs.
+  await waitFor(() => started.length === 2, 'second started');
+  expect(started).toEqual(['mem://tiny', 'mem://base']);
+  gates.get('mem://base')!();
+  await second;
+  expect(manager.row('whisper-tiny').state).toBe('installed');
+  expect(manager.row('whisper-base').state).toBe('installed');
+});
+
+test('cancelling a queued download resets the row without starting it', async () => {
+  const fs = new MemoryVoiceFs();
+  const payloads = new Map<string, Uint8Array>([
+    ['mem://tiny', PAYLOAD],
+    ['mem://base', PAYLOAD2],
+  ]);
+  const started: string[] = [];
+  let release: () => void = () => {};
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL, MODEL2],
+    hasher: {
+      sha256File: async path => sha256((await fs.readBytes(path))!),
+    },
+    downloader: {
+      download: async (url, dest, opts) => {
+        started.push(url);
+        const payload = payloads.get(url);
+        if (payload === undefined) throw new Error('unknown url');
+        await new Promise<void>(resolve => {
+          release = resolve;
+        });
+        if (opts.signal.aborted) throw new Error('aborted');
+        await fs.writeBytes(dest, payload);
+      },
+    },
+  });
+  await manager.waitReady();
+  const first = manager.download('whisper-tiny');
+  await waitFor(() => started.length === 1, 'first started');
+  const second = manager.download('whisper-base');
+  await waitFor(
+    () => manager.row('whisper-base').state === 'queued',
+    'second queued',
+  );
+  manager.cancelDownload('whisper-base');
+  expect(manager.row('whisper-base').state).toBe('notDownloaded');
+  release();
+  await first;
+  await expect(second).rejects.toThrow('aborted');
+  expect(started).toEqual(['mem://tiny']);
+});
+
+test('a paused download reports interrupted and keeps the partial', async () => {
+  const fs = new MemoryVoiceFs();
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL],
+    hasher: { sha256File: async () => sha256(PAYLOAD) },
+    downloader: {
+      download: async (_url, dest) => {
+        await fs.writeBytes(dest, PAYLOAD);
+        throw new VoiceDownloadPausedError();
+      },
+    },
+  });
+  await manager.waitReady();
+  await expect(manager.download('whisper-tiny')).rejects.toThrow('paused');
+  expect(manager.row('whisper-tiny')).toEqual({
+    state: 'failed',
+    progress: 0,
+    error: 'interrupted',
+  });
+  expect(fs.files.has('/tmp/whisper-tiny.part')).toBe(true);
+});
+
+test('cancel during verify keeps the downloaded part for a fast retry', async () => {
+  const fs = new MemoryVoiceFs();
+  let downloadCalls = 0;
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL],
+    hasher: {
+      sha256File: async path => {
+        const bytes = await fs.readBytes(path);
+        if (bytes === undefined) throw new Error('missing');
+        return sha256(bytes);
+      },
+    },
+    downloader: {
+      download: async (_url, dest, opts) => {
+        downloadCalls += 1;
+        await fs.writeBytes(dest, PAYLOAD);
+        opts.onProgress(PAYLOAD.byteLength, PAYLOAD.byteLength);
+      },
+    },
+  });
+  await manager.waitReady();
+  const pending = manager.download('whisper-tiny');
+  await waitFor(
+    () => manager.row('whisper-tiny').state === 'verifying',
+    'verifying',
+  );
+  manager.cancelDownload('whisper-tiny');
+  await expect(pending).rejects.toThrow('aborted');
+  expect(manager.row('whisper-tiny').state).toBe('notDownloaded');
+  expect(fs.files.has('/tmp/whisper-tiny.part')).toBe(true);
+  // Retry: the committed .part goes straight to verify — no re-download.
+  await manager.download('whisper-tiny');
+  expect(manager.row('whisper-tiny').state).toBe('installed');
+  expect(downloadCalls).toBe(1);
+});
+
+test('verify reports progress through the row', async () => {
+  const fs = new MemoryVoiceFs();
+  const seen: number[] = [];
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL],
+    hasher: {
+      sha256File: async (_path, onProgress) => {
+        onProgress?.(4, 8);
+        onProgress?.(8, 8);
+        return sha256(PAYLOAD);
+      },
+    },
+    downloader: {
+      download: async (_url, dest) => {
+        await fs.writeBytes(dest, PAYLOAD);
+      },
+    },
+  });
+  await manager.waitReady();
+  const unsub = voiceModelStore.subscribe(s => {
+    const row = s.byId['whisper-tiny'];
+    if (row?.state === 'verifying') seen.push(row.progress);
+  });
+  await manager.download('whisper-tiny');
+  unsub();
+  expect(manager.row('whisper-tiny').state).toBe('installed');
+  expect(seen.length).toBeGreaterThan(0);
+  expect(seen.every(p => p >= 0 && p <= 1)).toBe(true);
+});
+
+test('reconcile flags a persisted resume blob as interrupted', async () => {
+  const fs = new MemoryVoiceFs();
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL],
+    hasher: { sha256File: async () => sha256(PAYLOAD) },
+    downloader: {
+      download: async () => {
+        throw new Error('should not fetch');
+      },
+      hasResumable: async () => true,
+    },
+  });
+  await manager.waitReady();
+  expect(manager.row('whisper-tiny')).toEqual({
+    state: 'failed',
+    progress: 0,
+    error: 'interrupted',
+  });
+});
+
+test('delete drops persisted resume state alongside the model', async () => {
+  const fs = new MemoryVoiceFs();
+  const discarded: string[] = [];
+  const manager = new VoiceModelManager({
+    fs,
+    modelsDir: '/models',
+    tmpDir: '/tmp',
+    catalog: [MODEL],
+    hasher: {
+      sha256File: async path => sha256((await fs.readBytes(path))!),
+    },
+    downloader: {
+      download: async (_url, dest) => {
+        await fs.writeBytes(dest, PAYLOAD);
+      },
+      discard: async dest => {
+        discarded.push(dest);
+      },
+    },
+  });
+  await manager.waitReady();
+  await manager.download('whisper-tiny');
+  await manager.delete('whisper-tiny');
+  expect(discarded).toContain('/tmp/whisper-tiny.part');
+  expect(manager.row('whisper-tiny').state).toBe('notDownloaded');
 });

@@ -34,10 +34,28 @@ export interface VoiceDownloader {
       existingBytes: number;
     },
   ): Promise<void>;
+  /** True when resumable partial state exists for `dest` (e.g. a paused
+   * download whose bytes live in a session blob rather than the file). */
+  hasResumable?(dest: string): Promise<boolean>;
+  /** Drop any persisted partial/resume state for `dest`. */
+  discard?(dest: string): Promise<void>;
 }
 
 export interface VoiceHasher {
-  sha256File(path: string): Promise<string>;
+  sha256File(
+    path: string,
+    onProgress?: (hashedBytes: number, totalBytes: number) => void,
+    signal?: AbortSignal,
+  ): Promise<string>;
+}
+
+/** Thrown when a download task ends paused/cancelled before completing —
+ * any resumable state is preserved so the next attempt can continue. */
+export class VoiceDownloadPausedError extends Error {
+  constructor(message = 'download paused') {
+    super(message);
+    this.name = 'VoiceDownloadPausedError';
+  }
 }
 
 export interface VoiceModelInventoryEntry {
@@ -79,6 +97,8 @@ const isDirModel = (model: VoiceModelCatalogEntry): boolean =>
 
 interface Job {
   abort: AbortController;
+  started: boolean;
+  promise: Promise<void>;
 }
 
 export class VoiceModelManager {
@@ -87,10 +107,15 @@ export class VoiceModelManager {
   private jobs = new Map<string, Job>();
   private inUse = new Set<string>();
   private ready: Promise<void>;
+  /** Serializes jobs — concurrent multi-hundred-MB downloads contend for
+   * bandwidth and JS-thread time, and each failure then costs more. */
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(deps: VoiceModelManagerDeps) {
     this.deps = deps;
-    this.ready = this.reconcile();
+    // Reconcile is best-effort repair; a bad record or dead fs entry must
+    // not wedge `waitReady` (and every download behind it) forever.
+    this.ready = this.reconcile().catch(() => {});
   }
 
   catalog(): readonly VoiceModelCatalogEntry[] {
@@ -128,12 +153,20 @@ export class VoiceModelManager {
     await this.ready;
     const model = this.find(id);
     if (model === undefined) throw new Error('unknown model');
-    if (this.jobs.has(id)) return;
+    // A second download() for the same model joins the in-flight job — a
+    // silent `return` here both hid real progress and resolved the caller's
+    // `.then` before anything was installed.
+    const existing = this.jobs.get(id);
+    if (existing !== undefined) return existing.promise;
     if (
       this.inventory.has(id) &&
       (await this.deps.fs.exists(this.modelPath(id)))
-    )
+    ) {
+      // Inventory already counts it installed — converge the row instead
+      // of leaving a stale 'failed'/'interrupted' label behind.
+      this.patch(id, { state: 'installed', progress: 1, error: undefined });
       return;
+    }
     if (
       !model.productionPinned ||
       model.files.length === 0 ||
@@ -156,12 +189,31 @@ export class VoiceModelManager {
       throw new Error('insufficient storage');
     }
     const abort = new AbortController();
-    this.jobs.set(id, { abort });
-    this.patch(id, { state: 'downloading', progress: 0, error: undefined });
-    let doneBytes = 0;
+    const job: Job = { abort, started: false, promise: Promise.resolve() };
+    job.promise = this.enqueue(job, model);
+    this.jobs.set(id, job);
+    this.patch(id, { state: 'queued', progress: 0, error: undefined });
+    return job.promise;
+  }
+
+  private enqueue(job: Job, model: VoiceModelCatalogEntry): Promise<void> {
+    const run = this.queue.then(() => this.runJob(job, model));
+    // The chain itself must not reject — a failed job would stall every
+    // queued download behind it.
+    this.queue = run.catch(() => {});
+    return run;
+  }
+
+  private async runJob(job: Job, model: VoiceModelCatalogEntry): Promise<void> {
+    const id = model.id;
     let lastPatch = 0;
     try {
+      if (job.abort.signal.aborted) throw new Error('aborted');
+      job.started = true;
+      this.patch(id, { state: 'downloading', progress: 0, error: undefined });
+      let doneBytes = 0;
       for (const file of model.files) {
+        if (job.abort.signal.aborted) throw new Error('aborted');
         const dest = this.filePath(model, file);
         if (await this.deps.fs.exists(dest)) {
           doneBytes += file.bytes;
@@ -187,8 +239,11 @@ export class VoiceModelManager {
               // `base` is everything already placed.
               const denom = model.bytes > 0 ? model.bytes : total;
               const now = Date.now();
-              if (received < total && lastPatch !== 0 && now - lastPatch < 200)
-                return;
+              // `total` is -1 when the server doesn't declare a length —
+              // only a known-complete event may bypass the throttle, or
+              // every progress callback hits setState.
+              const isFinal = total > 0 && received >= total;
+              if (!isFinal && now - lastPatch < 200) return;
               lastPatch = now;
               this.patch(id, {
                 state: 'downloading',
@@ -196,14 +251,30 @@ export class VoiceModelManager {
                   denom > 0 ? Math.min(1, (base + received) / denom) : 0,
               });
             },
-            signal: abort.signal,
+            signal: job.abort.signal,
             existingBytes: existing,
           });
         }
-        this.patch(id, { state: 'verifying', progress: 1 });
-        const digest = await this.deps.hasher.sha256File(tmp);
+        if (job.abort.signal.aborted) throw new Error('aborted');
+        this.patch(id, { state: 'verifying', progress: 0 });
+        const digest = await this.deps.hasher.sha256File(
+          tmp,
+          (hashed, size) => {
+            if (this.row(id).state !== 'verifying') return;
+            const now = Date.now();
+            if (now - lastPatch < 200) return;
+            lastPatch = now;
+            this.patch(id, {
+              state: 'verifying',
+              progress: size > 0 ? Math.min(1, hashed / size) : 0,
+            });
+          },
+          job.abort.signal,
+        );
+        if (job.abort.signal.aborted) throw new Error('aborted');
         if (digest.toLowerCase() !== file.sha256.toLowerCase()) {
           await this.deps.fs.delete(tmp);
+          await this.deps.downloader.discard?.(tmp);
           this.patch(id, {
             state: 'failed',
             progress: 0,
@@ -217,6 +288,7 @@ export class VoiceModelManager {
         await this.deps.fs.excludeFromBackup(dest);
         doneBytes += file.bytes;
       }
+      if (job.abort.signal.aborted) throw new Error('aborted');
       await this.deps.fs.mkdir(this.deps.modelsDir);
       await this.deps.fs.excludeFromBackup(this.deps.modelsDir);
       const rec: VoiceModelInventoryEntry = {
@@ -230,20 +302,21 @@ export class VoiceModelManager {
       await this.saveInventory();
       this.patch(id, { state: 'installed', progress: 1, error: undefined });
     } catch (e) {
-      if (abort.signal.aborted) {
+      if (job.abort.signal.aborted) {
         this.patch(id, {
           state: 'notDownloaded',
           progress: 0,
           error: undefined,
         });
-        return;
+        throw e;
       }
       const cur = this.row(id);
       if (cur.state !== 'failed') {
         this.patch(id, {
           state: 'failed',
           progress: 0,
-          error: 'failed',
+          error:
+            e instanceof VoiceDownloadPausedError ? 'interrupted' : 'failed',
         });
       }
       throw e;
@@ -253,7 +326,17 @@ export class VoiceModelManager {
   }
 
   cancelDownload(id: string): void {
-    this.jobs.get(id)?.abort.abort();
+    const job = this.jobs.get(id);
+    if (job === undefined) return;
+    job.abort.abort();
+    if (!job.started) {
+      // Still queued — reset the row now; its turn no-ops on the signal.
+      this.patch(id, {
+        state: 'notDownloaded',
+        progress: 0,
+        error: undefined,
+      });
+    }
   }
 
   async delete(id: string): Promise<void> {
@@ -266,7 +349,9 @@ export class VoiceModelManager {
     if (model !== undefined) {
       await this.deps.fs.delete(this.modelPath(id));
       for (const file of model.files) {
-        await this.deps.fs.delete(this.tmpFilePath(model, file));
+        const tmp = this.tmpFilePath(model, file);
+        await this.deps.downloader.discard?.(tmp);
+        await this.deps.fs.delete(tmp);
       }
       if (isDirModel(model)) {
         await this.deps.fs.delete(join(this.deps.tmpDir, id));
@@ -274,7 +359,9 @@ export class VoiceModelManager {
     } else {
       await this.deps.fs.delete(join(this.deps.modelsDir, `${id}.bin`));
       await this.deps.fs.delete(join(this.deps.modelsDir, id));
-      await this.deps.fs.delete(join(this.deps.tmpDir, `${id}.part`));
+      const tmp = join(this.deps.tmpDir, `${id}.part`);
+      await this.deps.downloader.discard?.(tmp);
+      await this.deps.fs.delete(tmp);
       await this.deps.fs.delete(join(this.deps.tmpDir, id));
     }
     this.inventory.delete(id);
@@ -368,7 +455,11 @@ export class VoiceModelManager {
 
   private async anyTmpPresent(model: VoiceModelCatalogEntry): Promise<boolean> {
     for (const file of model.files) {
-      if (await this.deps.fs.exists(this.tmpFilePath(model, file))) {
+      const tmp = this.tmpFilePath(model, file);
+      if (await this.deps.fs.exists(tmp)) return true;
+      // A persisted resume blob means the last attempt ended interrupted —
+      // the partial bytes live in the session blob, not a .part file.
+      if ((await this.deps.downloader.hasResumable?.(tmp)) === true) {
         return true;
       }
     }
