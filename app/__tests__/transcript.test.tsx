@@ -404,7 +404,7 @@ test('AssistantMessage groups the tool parts into one rail', async () => {
     );
   });
   // the two exec calls collapse into the work group summary
-  expect(textOf(tree!.root)).toContain('Ran 2 commands · 1 step');
+  expect(textOf(tree!.root)).toContain('Ran 2 commands');
   await act(async () => {
     tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
   });
@@ -456,6 +456,9 @@ test('expanding a tool chip shows invocation and output', async () => {
     );
   });
   await act(async () => {
+    tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
+  });
+  await act(async () => {
     tree!.root.findByProps({ testID: 'tool-group-toggle' }).props.onPress();
   });
   expect(textOf(tree!.root)).toContain('cargo test --workspace');
@@ -489,6 +492,9 @@ test('expanded edit chip shows diff stats', async () => {
     tree = TestRenderer.create(
       <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
     );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
   });
   await act(async () => {
     tree!.root.findByProps({ testID: 'tool-group-toggle' }).props.onPress();
@@ -530,6 +536,9 @@ test('Show full output fetch upgrades the chip body', async () => {
         }}
       />,
     );
+  });
+  await act(async () => {
+    tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
   });
   await act(async () => {
     tree!.root.findByProps({ testID: 'tool-group-toggle' }).props.onPress();
@@ -773,8 +782,11 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(flatStyle(row.props.style).some(s => s.alignSelf === 'stretch')).toBe(
     true,
   );
-  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
-  expect(row.findByProps({ testID: 'assistant-bubble' })).toBeTruthy();
+  const bubble = tree!.root.findAllByProps({ testID: 'assistant-bubble' })[0];
+  expect(bubble).toBeTruthy();
+  expect(
+    row.findAllByProps({ testID: 'assistant-bubble' }).length,
+  ).toBeGreaterThan(0);
   const style = Array.isArray(bubble.props.style)
     ? bubble.props.style.flat()
     : [bubble.props.style];
@@ -792,7 +804,8 @@ test('AssistantMessage wraps text in a chat bubble', async () => {
   expect(bubbleFlat.elevation).toBe(BUBBLE_SHADOW_ELEVATION);
   expect(
     StyleSheet.flatten(
-      tree!.root.findByProps({ testID: 'assistant-bubble-clip' }).props.style,
+      tree!.root.findAllByProps({ testID: 'assistant-bubble-clip' })[0].props
+        .style,
     ).overflow,
   ).toBe('hidden');
 });
@@ -876,10 +889,10 @@ test('AssistantMessage shows Worked for on a completed turn', async () => {
     );
   });
   expect(textOf(tree!.root)).toContain('Worked for 14m 38s');
-  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
-  expect(
-    bubble.findAll(n => n.props.testID === 'worked-for').length,
-  ).toBeGreaterThan(0);
+  const bubble = tree!.root
+    .findAllByProps({ testID: 'assistant-bubble' })
+    .find(b => b.findAll(n => n.props.testID === 'worked-for').length > 0);
+  expect(bubble).toBeTruthy();
 });
 
 test('AssistantMessage hides Worked for while the live strip is showing', async () => {
@@ -934,10 +947,12 @@ test('AssistantMessage puts tools, changes, and working inside the bubble', asyn
       />,
     );
   });
-  const bubble = tree!.root.findByProps({ testID: 'assistant-bubble' });
-  expect(
-    bubble.findAll(n => n.props.testID === 'working-status-strip').length,
-  ).toBeGreaterThan(0);
+  const bubble = tree!.root
+    .findAllByProps({ testID: 'assistant-bubble' })
+    .find(
+      b => b.findAll(n => n.props.testID === 'working-status-strip').length > 0,
+    );
+  expect(bubble).toBeTruthy();
   await act(async () => {
     tree!.root.findByProps({ testID: 'work-toggle' }).props.onPress();
   });
@@ -958,11 +973,13 @@ test('streaming splits the turn into individual agent messages', async () => {
       <AssistantMessage entry={entry} onOpenReasoning={() => {}} />,
     );
   });
-  // text + tool group + text each render in their own bubble.
-  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(3);
-  expect(tree!.root.findAll(n => n.props.testID === 'work-toggle').length).toBe(
-    0,
-  );
+  // Each text is its own message bubble; the tool group shares one work
+  // bubble that streams open.
+  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(2);
+  expect(bubblesOf(tree!.root, 'assistant-work-bubble').length).toBe(1);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'tool-group').length,
+  ).toBeGreaterThan(0);
 });
 
 test('streaming appends the working strip as its own message', async () => {
@@ -982,7 +999,7 @@ test('streaming appends the working strip as its own message', async () => {
       />,
     );
   });
-  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(4);
+  expect(bubblesOf(tree!.root, 'assistant-bubble').length).toBe(3);
   expect(
     tree!.root.findAll(n => n.props.testID === 'working-status-strip').length,
   ).toBeGreaterThan(0);
@@ -995,19 +1012,18 @@ test('completed turn collapses the work behind a toggle', async () => {
       <AssistantMessage entry={assistantEntry} onOpenReasoning={() => {}} />,
     );
   });
-  // The final message stays visible; the earlier messages sit behind the
-  // collapsed work bubble until expanded.
+  // Each message stays visible; only the work sits behind the collapsed
+  // work bubble until expanded.
   expect(tree!.root.findByProps({ testID: 'work-toggle' })).toBeTruthy();
   expect(tree!.root.findAll(n => n.props.testID === 'tool-group').length).toBe(
     0,
   );
   expect(
-    tree!.root.findAll(
-      n =>
-        n.props.markdown ===
+    tree!.root.findByProps({
+      markdown:
         '## Streaming pipeline\n\nEvery turn flows through the same path:',
-    ).length,
-  ).toBe(0);
+    }),
+  ).toBeTruthy();
   expect(
     tree!.root.findByProps({
       markdown: 'Synced to every device through the session room.',
@@ -1019,12 +1035,6 @@ test('completed turn collapses the work behind a toggle', async () => {
   expect(
     tree!.root.findAll(n => n.props.testID === 'tool-group').length,
   ).toBeGreaterThan(0);
-  expect(
-    tree!.root.findByProps({
-      markdown:
-        '## Streaming pipeline\n\nEvery turn flows through the same path:',
-    }),
-  ).toBeTruthy();
 });
 
 test('single-message turn has no work toggle', async () => {

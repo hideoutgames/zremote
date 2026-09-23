@@ -42,11 +42,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { KeyboardController } from 'react-native-keyboard-controller';
-import {
-  ClipboardPasteButton,
-  isPasteButtonAvailable,
-  type PasteEventPayload,
-} from 'expo-clipboard';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { AttachmentStrip, ATTACHMENT_TILE } from './AttachmentStrip';
@@ -64,12 +59,7 @@ import { ContextUsageChip } from './agentsKit/ContextUsage';
 import type { EffortOrigin } from './EffortOverlay';
 import type { CatalogModelRef } from '../zeron/state/recentModels';
 import { withPlanPrefixIf } from './planMode';
-import {
-  stagePastedFileUri,
-  stagePastedImage,
-  stagePastedText,
-  useAttachments,
-} from '../hooks/useAttachments';
+import { stagePastedText, useAttachments } from '../hooks/useAttachments';
 import {
   PASTE_FILE_THRESHOLD,
   splitTextEdit,
@@ -1251,15 +1241,6 @@ export const Composer = React.memo(function ({
     setVoiceNotice(null);
   }, [voiceNotice, chatId]);
 
-  const insertDraftText = useCallback(
-    (inserted: string) => {
-      const before = draftTextRef.current;
-      const at = selRef.current;
-      setDraftText(chatId, before.slice(0, at) + inserted + before.slice(at));
-    },
-    [chatId],
-  );
-
   /** A single insert past the file threshold can only come from a paste —
    * stage it as pasted.txt instead of flooding the draft. */
   const handleChangeText = useCallback(
@@ -1290,30 +1271,6 @@ export const Composer = React.memo(function ({
       setDraftText(chatId, text);
     },
     [chatId, acceptCompletion],
-  );
-
-  /** UIPasteControl payload → stage image/file, or insert plain text at
-   * the caret (long text follows the same .txt rule). */
-  const handlePaste = useCallback(
-    (data: PasteEventPayload) => {
-      if (data.type === 'image') {
-        stagePastedImage(
-          chatId,
-          data.data.replace(/^data:image\/\w+;base64,/, ''),
-        );
-        return;
-      }
-      const text = data.text;
-      if (text.startsWith('file://')) {
-        const result = stagePastedFileUri(chatId, text.trim());
-        if (result.staged.length > 0) return;
-      }
-      if (text.length > PASTE_FILE_THRESHOLD) {
-        if (stagePastedText(chatId, text).staged.length > 0) return;
-      }
-      insertDraftText(text);
-    },
-    [chatId, insertDraftText],
   );
 
   const submit = useCallback(() => {
@@ -1622,20 +1579,6 @@ export const Composer = React.memo(function ({
                 planEnabled={planMode}
                 onTogglePlan={on => setPlanMode(chatId, on)}
               />
-              {isPasteButtonAvailable ? (
-                <ClipboardPasteButton
-                  onPress={handlePaste}
-                  acceptedContentTypes={['plain-text', 'image', 'url']}
-                  imageOptions={{ format: 'png' }}
-                  displayMode="iconOnly"
-                  cornerStyle="capsule"
-                  backgroundColor={theme.inputBackground}
-                  foregroundColor={theme.text}
-                  style={styles.pasteButton}
-                  accessibilityLabel={t('composer.paste')}
-                />
-              ) : null}
-
               {showLivePill ? (
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger>
@@ -2009,8 +1952,6 @@ const styles = StyleSheet.create({
     gap: 8,
     minWidth: 0,
   },
-  // 32pt UIPasteControl matching the attach button beside it.
-  pasteButton: { width: 32, height: 32 },
   chipsWrap: {
     flex: 1,
     minWidth: 0,

@@ -1,8 +1,9 @@
-// Assistant transcript row. While the turn streams, each grouped part is its
-// own agent message bubble; once the turn settles, the work before the final
-// message collapses into a single expandable bubble. The final message keeps
-// the plan card, the interrupted note, file changes, the live working strip,
-// and the Worked-for caption.
+// Assistant transcript row. Each message part is its own agent message
+// bubble — streaming or settled — with a per-bubble long-press copy menu.
+// The work in between (tool calls, thinking, todos) folds into one shared
+// bubble that stays open while the turn streams and collapses once it
+// settles. The last bubble carries the plan card, the interrupted note,
+// file changes, the live working strip, and the Worked-for caption.
 
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -116,8 +117,40 @@ const itemVisible = (item: Item, consumedIds: ReadonlySet<string>): boolean => {
   return true;
 };
 
+/** A part the user reads as a message gets its own bubble and its own
+ *  copy menu; everything else — tool rails, thinking, todos — is work
+ *  that shares a single collapsible bubble per turn. */
+const isWorkItem = (item: Item): boolean =>
+  item.kind === 'tools' ||
+  item.part.kind === 'reasoning' ||
+  (item.part.kind === 'tool' && !isSubagentSpawn(item.part));
+
+/** Ordered layout: one work group at the position of the first work item,
+ *  each message part at its own position. */
+type FlowSeg = { kind: 'work' } | { kind: 'msg'; item: Item; index: number };
+
+/** The text an individual message's copy menu puts on the pasteboard. */
+const messageCopyText = (item: Item): string => {
+  if (item.kind !== 'part') return '';
+  const part = item.part;
+  switch (part.kind) {
+    case 'text':
+      return stripPlanMarkers(part.text);
+    case 'error':
+      return part.message;
+    case 'image':
+      return part.name;
+    case 'input':
+      return part.questions.map(q => q.question).join('\n');
+    case 'tool':
+      return isSubagentSpawn(part) ? subagentView(part).title : '';
+    default:
+      return '';
+  }
+};
+
 /** Collapsed-work header: tool calls summarized like the tool rail, other
- *  messages counted as steps — "Ran 2 commands · 1 step". */
+ *  work parts (thinking, todos) counted as steps — "Ran 2 commands · 1 step". */
 const workSummary = (items: Item[]): string => {
   const tools: ToolPart[] = [];
   let steps = 0;
@@ -284,10 +317,29 @@ export const AssistantMessage = React.memo(function ({
     () => items.filter(item => itemVisible(item, consumedIds)),
     [items, consumedIds],
   );
-  // Rows recycle across entries — key the open state by entry id so a newly
-  // settled turn always starts collapsed.
-  const [workOpenId, setWorkOpenId] = useState<string | undefined>(undefined);
-  const workOpen = workOpenId === entry.id;
+  // One work group at the position of the first work item; every message
+  // part keeps its own slot in doc order.
+  const { workItems, flow } = useMemo(() => {
+    const work: Item[] = [];
+    const seq: FlowSeg[] = [];
+    visibleItems.forEach((item, index) => {
+      if (isWorkItem(item)) {
+        if (work.length === 0) seq.push({ kind: 'work' });
+        work.push(item);
+      } else {
+        seq.push({ kind: 'msg', item, index });
+      }
+    });
+    return { workItems: work, flow: seq };
+  }, [visibleItems]);
+  const lastVisibleItem = visibleItems[visibleItems.length - 1];
+  // Rows recycle across entries — key the toggle by entry id. The work group
+  // stays open while the turn streams and collapses once it settles; an
+  // explicit tap overrides either default.
+  const [workToggled, setWorkToggled] = useState<
+    { id: string; open: boolean } | undefined
+  >(undefined);
+  const workOpen = workToggled?.id === entry.id ? workToggled.open : streaming;
   const lp = useSuppressAfterLongPress();
 
   const renderItem = (item: Item, key: string, isLast: boolean) =>
@@ -320,15 +372,71 @@ export const AssistantMessage = React.memo(function ({
       ? `tools-${item.parts[0]?.id ?? index}`
       : `part-${item.part.id}`;
 
-  const itemBubble = (item: Item, index: number, isLast: boolean) => (
-    <FrostedBubble
+  const messageBubble = (
+    item: Item,
+    index: number,
+    tailContent?: React.ReactNode,
+  ) => (
+    <ContextMenuRoot
       key={itemKey(item, index)}
-      testID="assistant-bubble"
+      __unsafeIosProps={{ style: styles.triggerFill }}
+    >
+      <ContextMenu.Trigger style={styles.triggerFill}>
+        <FrostedBubble
+          testID="assistant-bubble"
+          style={styles.bubble}
+          contentStyle={styles.bubblePad}
+          tintColor={theme.assistantBubbleBackground}
+        >
+          {renderItem(item, `item-${index}`, item === lastVisibleItem)}
+          {tailContent}
+        </FrostedBubble>
+      </ContextMenu.Trigger>
+      {messageCopyContent(messageCopyText(item), entry.createdAt)}
+    </ContextMenuRoot>
+  );
+
+  const workBubble = (tailContent?: React.ReactNode) => (
+    <FrostedBubble
+      key="work"
+      testID="assistant-work-bubble"
       style={styles.bubble}
       contentStyle={styles.bubblePad}
       tintColor={theme.assistantBubbleBackground}
     >
-      {renderItem(item, `item-${index}`, isLast)}
+      <Pressable
+        testID="work-toggle"
+        style={styles.workHeader}
+        onPress={() => {
+          if (lp.isSuppressed()) return;
+          setWorkToggled({ id: entry.id, open: !workOpen });
+        }}
+        onPressIn={lp.onPressIn}
+        onLongPress={lp.onLongPress}
+        hitSlop={4}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: workOpen }}
+        accessibilityLabel={workSummary(workItems)}
+      >
+        <Icon
+          name="chevron.right"
+          size={11}
+          color={theme.textSecondary}
+          style={workOpen ? styles.chevronOpen : undefined}
+        />
+        <Text
+          style={[styles.workLabel, { color: theme.textSecondary }]}
+          numberOfLines={2}
+        >
+          {workSummary(workItems)}
+        </Text>
+      </Pressable>
+      {workOpen
+        ? workItems.map((item, i) =>
+            renderItem(item, `work-${i}`, item === lastVisibleItem),
+          )
+        : null}
+      {tailContent}
     </FrostedBubble>
   );
 
@@ -361,17 +469,22 @@ export const AssistantMessage = React.memo(function ({
     </>
   );
 
+  const planNode =
+    plan !== undefined ? (
+      <PlanCardOpen plan={plan} onOpenPlan={onOpenPlan} />
+    ) : null;
+
   let body: React.ReactNode;
   if (streaming) {
-    // Working: every part is its own agent message.
+    // Working: each message is its own bubble; the work shares one.
     body = (
       <>
-        {visibleItems.map((item, i) =>
-          itemBubble(item, i, i === visibleItems.length - 1),
+        {flow.map(seg =>
+          seg.kind === 'work'
+            ? workBubble()
+            : messageBubble(seg.item, seg.index),
         )}
-        {plan !== undefined ? (
-          <PlanCardOpen plan={plan} onOpenPlan={onOpenPlan} />
-        ) : null}
+        {planNode}
         {showWorking ? (
           <FrostedBubble
             testID="assistant-bubble"
@@ -389,82 +502,41 @@ export const AssistantMessage = React.memo(function ({
       </>
     );
   } else {
-    const workItems = visibleItems.slice(0, -1);
-    const finalItem = visibleItems[visibleItems.length - 1];
-    const finalBubble = (
-      <FrostedBubble
-        key="final"
-        testID="assistant-bubble"
-        style={styles.bubble}
-        contentStyle={styles.bubblePad}
-        tintColor={theme.assistantBubbleBackground}
-      >
-        {finalItem !== undefined ? renderItem(finalItem, 'final', false) : null}
-        {plan !== undefined ? (
-          <PlanCardOpen plan={plan} onOpenPlan={onOpenPlan} />
-        ) : null}
+    const lastSeg = flow.length - 1;
+    const trailing = (
+      <>
+        {planNode}
         {tail}
-      </FrostedBubble>
+      </>
     );
     body =
-      workItems.length === 0 ? (
-        finalBubble
+      flow.length === 0 ? (
+        <FrostedBubble
+          testID="assistant-bubble"
+          style={styles.bubble}
+          contentStyle={styles.bubblePad}
+          tintColor={theme.assistantBubbleBackground}
+        >
+          {trailing}
+        </FrostedBubble>
       ) : (
         <>
-          <FrostedBubble
-            testID="assistant-work-bubble"
-            style={styles.bubble}
-            contentStyle={styles.bubblePad}
-            tintColor={theme.assistantBubbleBackground}
-          >
-            <Pressable
-              testID="work-toggle"
-              style={styles.workHeader}
-              onPress={() => {
-                if (lp.isSuppressed()) return;
-                setWorkOpenId(workOpen ? undefined : entry.id);
-              }}
-              onPressIn={lp.onPressIn}
-              onLongPress={lp.onLongPress}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: workOpen }}
-              accessibilityLabel={workSummary(workItems)}
-            >
-              <Icon
-                name="chevron.right"
-                size={11}
-                color={theme.textSecondary}
-                style={workOpen ? styles.chevronOpen : undefined}
-              />
-              <Text
-                style={[styles.workLabel, { color: theme.textSecondary }]}
-                numberOfLines={2}
-              >
-                {workSummary(workItems)}
-              </Text>
-            </Pressable>
-            {workOpen
-              ? workItems.map((item, i) => renderItem(item, `work-${i}`, false))
-              : null}
-          </FrostedBubble>
-          {finalBubble}
+          {flow.map((seg, i) =>
+            seg.kind === 'work'
+              ? workBubble(i === lastSeg ? trailing : undefined)
+              : messageBubble(
+                  seg.item,
+                  seg.index,
+                  i === lastSeg ? trailing : undefined,
+                ),
+          )}
         </>
       );
   }
 
-  const fullText = entry.parts
-    .filter(p => p.kind === 'text')
-    .map(p => (p as { text: string }).text)
-    .join('\n');
   return (
     <View testID="assistant-message" style={styles.row}>
-      <ContextMenuRoot __unsafeIosProps={{ style: styles.triggerFill }}>
-        <ContextMenu.Trigger style={styles.triggerFill}>
-          <View style={styles.stack}>{body}</View>
-        </ContextMenu.Trigger>
-        {messageCopyContent(fullText, entry.createdAt)}
-      </ContextMenuRoot>
+      <View style={styles.stack}>{body}</View>
     </View>
   );
 });
