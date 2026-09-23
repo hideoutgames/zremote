@@ -79,18 +79,25 @@ export function buildRailItems(
   opts: {
     emptyLabel: string;
     goToLabel: (role: string, index: number, total: number) => string;
+    /** Text-extraction hook — lets callers cache per-entry collapse work. */
+    previewText?: (entry: MessageEntry) => string;
   },
 ): RailItem[] {
+  const textFor = opts.previewText ?? entryPreviewText;
+  // Index of the next assistant entry after each index, in one pass.
+  const nextAssistant = new Array<number>(entries.length);
+  let assistantAt = -1;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    nextAssistant[i] = assistantAt;
+    if (entries[i]?.role === 'assistant') assistantAt = i;
+  }
   return entries.map((entry, index) => {
+    const responseIndex = entry.role === 'user' ? nextAssistant[index] : -1;
     const assistantResponse =
-      entry.role === 'user'
-        ? entries
-            .slice(index + 1)
-            .find(candidate => candidate.role === 'assistant')
-        : undefined;
+      responseIndex >= 0 ? entries[responseIndex] : undefined;
     const preview = getMessagePreview(
-      entryPreviewText(entry),
-      assistantResponse ? entryPreviewText(assistantResponse) : undefined,
+      textFor(entry),
+      assistantResponse ? textFor(assistantResponse) : undefined,
       opts.emptyLabel,
     );
     return {
@@ -166,21 +173,27 @@ export function railYFromPage(
   return pageY - originY;
 }
 
+/** Pick the rail tick matching scroll position — proportional, the inverse
+ *  of the scrub mapping (`offsetForRailIndex`), so the highlight tracks the
+ *  same position a scrub writes. Edge thresholds pin the first/last tick
+ *  like a scrollbar. */
 export function pickActiveRailId(opts: {
   itemIds: string[];
   offset: number;
   viewportHeight: number;
   contentHeight: number;
-  viewableIds: string[];
   threshold?: number;
 }): string {
-  const { itemIds, viewableIds } = opts;
+  const { itemIds } = opts;
   if (itemIds.length === 0) return '';
   const threshold = opts.threshold ?? FOLLOW_THRESHOLD;
   if (opts.offset <= threshold) return itemIds[0] ?? '';
-  const distanceFromEnd =
-    opts.contentHeight - opts.offset - opts.viewportHeight;
-  if (distanceFromEnd <= threshold) return itemIds[itemIds.length - 1] ?? '';
-  if (viewableIds.length === 0) return itemIds[0] ?? '';
-  return viewableIds[Math.floor(viewableIds.length / 2)] ?? itemIds[0] ?? '';
+  const maxOffset = opts.contentHeight - opts.viewportHeight;
+  if (maxOffset - opts.offset <= threshold)
+    return itemIds[itemIds.length - 1] ?? '';
+  if (maxOffset <= 0) return itemIds[0] ?? '';
+  const progress = opts.offset / maxOffset;
+  return (
+    itemIds[Math.round(progress * (itemIds.length - 1))] ?? itemIds[0] ?? ''
+  );
 }

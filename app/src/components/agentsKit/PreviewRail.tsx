@@ -41,6 +41,10 @@ export type PreviewRailSelectOpts = {
 const RAIL_WIDTH = 28;
 /** Extra grab strip on the content side of the ticks. */
 const RAIL_HIT_EXTRA = 12;
+/** Extra grab strip above/below the tick stack. Larger than this and dead
+ *  zones start swallowing transcript scrolls (they clamp to the first or
+ *  last entry — reads as a random jump to top/bottom). */
+export const RAIL_HIT_PAD_Y = 8;
 const TICK_WIDTH = 16;
 const TICK_HEIGHT = StyleSheet.hairlineWidth < 1 ? 1 : StyleSheet.hairlineWidth;
 const PREVIEW_WIDTH = 256;
@@ -82,13 +86,66 @@ function RailTick({
   );
 }
 
+/** Memoized rail row: the highlight moves per scroll frame, and only the ~5
+ *  ticks near it change scale — far ticks sit at constant 0.25 and skip the
+ *  re-render entirely. */
+const RailItem = React.memo(function RailItemInner({
+  item,
+  itemSize,
+  scale,
+  highlighted,
+  selected,
+  color,
+  dimColor,
+  reduceMotion,
+  onSelect,
+}: {
+  item: RailItem;
+  itemSize: number;
+  scale: number;
+  highlighted: boolean;
+  selected: boolean;
+  color: string;
+  dimColor: string;
+  reduceMotion: boolean;
+  onSelect: (item: RailItem) => void;
+}) {
+  const tickColor = highlighted ? color : dimColor;
+  return (
+    <Pressable
+      testID={`preview-rail-item-${item.id}`}
+      pointerEvents="none"
+      onPress={() => onSelect(item)}
+      accessibilityRole="button"
+      accessibilityLabel={item.ariaLabel}
+      accessibilityState={{ selected }}
+      style={[styles.item, { height: itemSize }]}
+    >
+      {scale > 0.25 ? (
+        <RailTick scale={scale} color={tickColor} reduceMotion={reduceMotion} />
+      ) : (
+        // tickScale(>=3) is constant 0.25 — a plain view avoids mounting a
+        // Reanimated node for every rail item.
+        <View
+          pointerEvents="none"
+          style={[
+            styles.tick,
+            { backgroundColor: tickColor },
+            { transform: [{ scaleX: 0.25 }] },
+          ]}
+        />
+      )}
+    </Pressable>
+  );
+});
+
 export function PreviewRail({
   items,
   label,
   activeId,
   onItemSelect,
   top,
-  bottom,
+  bottom: _bottom,
   right,
   railHeight,
   dismissKey = 0,
@@ -118,8 +175,10 @@ export function PreviewRail({
       : 0;
   const itemSizeRef = useRef(itemSize);
   itemSizeRef.current = itemSize;
-  const stackTopRef = useRef(stackTop);
-  stackTopRef.current = stackTop;
+  // The responder track wraps the stack plus a small pad, so touches are
+  // already inside stack-relative space offset by the pad.
+  const stackTopRef = useRef(RAIL_HIT_PAD_Y);
+  stackTopRef.current = RAIL_HIT_PAD_Y;
   const onItemSelectRef = useRef(onItemSelect);
   onItemSelectRef.current = onItemSelect;
   const trackRef = useRef<View>(null);
@@ -242,11 +301,22 @@ export function PreviewRail({
       testID="preview-rail"
       accessibilityLabel={label}
     >
+      {/* The track only spans the tick stack (+pad): touches above/below
+          the stack fall through to the transcript instead of clamping to
+          the first/last entry. */}
       <View
         ref={trackRef}
         testID="preview-rail-track"
         pointerEvents="auto"
-        style={[styles.rail, { top, bottom, right, width: trackWidth }]}
+        style={[
+          styles.rail,
+          {
+            top: top + stackTop - RAIL_HIT_PAD_Y,
+            height: stackHeight + RAIL_HIT_PAD_Y * 2,
+            right,
+            width: trackWidth,
+          },
+        ]}
         accessibilityRole="adjustable"
         accessibilityLabel={label}
         onLayout={syncRailOrigin}
@@ -265,45 +335,26 @@ export function PreviewRail({
       >
         <View
           pointerEvents="none"
-          style={[styles.stack, { marginTop: stackTop }]}
+          style={[styles.stack, { marginTop: RAIL_HIT_PAD_Y }]}
         >
           {items.map((item, index) => {
             const distance =
               highlightedIndex < 0
                 ? Number.POSITIVE_INFINITY
                 : Math.abs(index - highlightedIndex);
-            const highlighted = item.id === highlightedId;
-            const color = highlighted ? theme.text : theme.textSecondary;
             return (
-              <Pressable
+              <RailItem
                 key={item.id}
-                testID={`preview-rail-item-${item.id}`}
-                pointerEvents="none"
-                onPress={() => selectA11y(item)}
-                accessibilityRole="button"
-                accessibilityLabel={item.ariaLabel}
-                accessibilityState={{ selected: item.id === selectedId }}
-                style={[styles.item, { height: itemSize }]}
-              >
-                {distance <= 2 ? (
-                  <RailTick
-                    scale={tickScale(distance)}
-                    color={color}
-                    reduceMotion={reduceMotion === true}
-                  />
-                ) : (
-                  // tickScale(>=3) is constant 0.25 — a plain view avoids
-                  // mounting a Reanimated node for every rail item.
-                  <View
-                    pointerEvents="none"
-                    style={[
-                      styles.tick,
-                      { backgroundColor: color },
-                      { transform: [{ scaleX: 0.25 }] },
-                    ]}
-                  />
-                )}
-              </Pressable>
+                item={item}
+                itemSize={itemSize}
+                scale={tickScale(distance)}
+                highlighted={item.id === highlightedId}
+                selected={item.id === selectedId}
+                color={theme.text}
+                dimColor={theme.textSecondary}
+                reduceMotion={reduceMotion === true}
+                onSelect={selectA11y}
+              />
             );
           })}
         </View>

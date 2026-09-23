@@ -31,6 +31,7 @@ import {
 } from '../src/components/TopChromeFade';
 import { flavourSeed, flavourWord } from '../src/components/workingMotion';
 import { railProgressAtY } from '../src/components/agentsKit/messagePreview';
+import { RAIL_HIT_PAD_Y } from '../src/components/agentsKit/PreviewRail';
 
 const flashMock = jest.requireMock('@shopify/flash-list') as {
   __scrollToEnd: jest.Mock;
@@ -60,7 +61,11 @@ function listProps(tree: TestRenderer.ReactTestRenderer) {
 }
 
 function followingOn(tree: TestRenderer.ReactTestRenderer) {
-  return listProps(tree).extraData === true;
+  // Following is observable via the auto-stick threshold the list applies.
+  return (
+    listProps(tree).maintainVisibleContentPosition
+      ?.autoscrollToBottomThreshold != null
+  );
 }
 
 function leaveEnd(tree: TestRenderer.ReactTestRenderer) {
@@ -831,9 +836,9 @@ test('dragging the rail scrubs without animation once follow is off', async () =
   scrollToOffset.mockClear();
 
   const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
-  const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
   const itemSize = 14;
-  const stackTop = (railHeight - itemSize * 4) / 2;
+  // The track hugs the stack, so stack-relative y starts at the pad.
+  const stackTop = RAIL_HIT_PAD_Y;
   const yFor = (index: number) => stackTop + index * itemSize + itemSize / 2;
   const touch = (index: number) => ({
     nativeEvent: { locationY: yFor(index), pageY: yFor(index) },
@@ -890,9 +895,8 @@ test('dragging inside a tick still scrolls proportionally', async () => {
     listProps(tree!).onScrollBeginDrag();
   });
   const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
-  const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
   const itemSize = 14;
-  const stackTop = (railHeight - itemSize * 4) / 2;
+  const stackTop = RAIL_HIT_PAD_Y;
   const maxOffset = 2000 - 844;
   const y0 = stackTop + itemSize * 0.2;
   const y1 = stackTop + itemSize * 0.8;
@@ -939,9 +943,8 @@ test('dragging onto the last tick follows the live edge', async () => {
   });
   expect(followingOn(tree!)).toBe(false);
   const track = tree!.root.findByProps({ testID: 'preview-rail-track' });
-  const railHeight = 844 - (47 + 96) - COMPOSER_INSET_FALLBACK;
   const itemSize = 14;
-  const stackTop = (railHeight - itemSize * 4) / 2;
+  const stackTop = RAIL_HIT_PAD_Y;
   const yFor = (index: number) => stackTop + index * itemSize + itemSize / 2;
   const touch = (index: number) => ({
     nativeEvent: { locationY: yFor(index), pageY: yFor(index) },

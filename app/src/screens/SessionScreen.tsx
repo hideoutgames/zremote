@@ -380,6 +380,9 @@ function ActiveSessionScreen({
   const [reasoning, setReasoning] = useState<string | null>(null);
   const composerRef = useRef<View>(null);
   const transcriptRef = useRef<SessionTranscriptListHandle>(null);
+  // Stable fallback for `startedAt` — a fresh Date.now() per render would
+  // defeat memoization on every transcript row.
+  const mountTimeRef = useRef(Date.now());
 
   const entries = session.entries;
   const openKey = `${chatId}:${openGeneration}`;
@@ -405,6 +408,16 @@ function ActiveSessionScreen({
   }, []);
 
   const openReasoning = useCallback((text: string) => setReasoning(text), []);
+  const openPlan = useCallback(
+    (name: string, markdown: string) => setPlanSheet({ name, markdown }),
+    [],
+  );
+  const openFileDiff = useCallback(
+    (file: FileDiffRequest) => setFileDiff(file),
+    [],
+  );
+  const workingStartedAt =
+    row?.startedAt ?? row?.updatedAt ?? mountTimeRef.current;
 
   const onFetchBlob = useCallback(
     async (partId: string): Promise<string> => {
@@ -440,12 +453,12 @@ function ActiveSessionScreen({
           entry={item}
           onOpenReasoning={openReasoning}
           onFetchBlob={onFetchBlob}
-          onOpenPlan={(name, markdown) => setPlanSheet({ name, markdown })}
-          onOpenFileDiff={file => setFileDiff(file)}
+          onOpenPlan={openPlan}
+          onOpenFileDiff={openFileDiff}
           commands={commands}
           showWorking={agentWorking && item.id === lastEntryId}
           workingChatId={chatId}
-          workingStartedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+          workingStartedAt={workingStartedAt}
           workedFor={workedForCaption(
             item,
             agentWorking && item.id === lastEntryId,
@@ -456,13 +469,14 @@ function ActiveSessionScreen({
     [
       openReasoning,
       onFetchBlob,
+      openPlan,
+      openFileDiff,
       chatId,
       onUserMessageEntered,
       commands,
       agentWorking,
       lastEntryId,
-      row?.startedAt,
-      row?.updatedAt,
+      workingStartedAt,
       workedByMessage,
     ],
   );
@@ -863,7 +877,7 @@ function ActiveSessionScreen({
         onShowScrollDown={setShowScrollDown}
         working={agentWorking}
         chatId={chatId}
-        startedAt={row?.startedAt ?? row?.updatedAt ?? Date.now()}
+        startedAt={workingStartedAt}
       />
 
       {/* Header: back, title (tap → session menu), overflow.
