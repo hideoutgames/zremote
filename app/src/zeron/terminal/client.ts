@@ -94,11 +94,15 @@ export class TerminalClient {
   private coalescer: InputCoalescer;
   private resizer: ResizeDebouncer;
   private streamCancel?: () => void;
+  /** Bumped by subscribe() and detach(): a stream resolving after either
+   * is stale (superseded resubscribe or a detach during connect) and is
+   * cancelled instead of tailing into a dead/unmounted consumer. */
+  private subscribeGen = 0;
 
   constructor(
     private readonly relay: RelayLike,
     session: TerminalSession,
-    private readonly onEvent: (e: TerminalEvent) => void,
+    private onEvent: (e: TerminalEvent) => void,
     clock: Clock = realClock,
   ) {
     this.handle = { session, lastSeq: 0, exited: false };
@@ -125,6 +129,7 @@ export class TerminalClient {
   async subscribe(): Promise<void> {
     if (this.relay.stream === undefined)
       throw new Error('relay does not support streams');
+    const gen = ++this.subscribeGen;
     const stream = await this.relay.stream<TerminalEvent>(
       METHODS.SUBSCRIBE_TERMINAL,
       {
@@ -132,6 +137,10 @@ export class TerminalClient {
         afterSeq: this.handle.lastSeq,
       },
     );
+    if (gen !== this.subscribeGen) {
+      stream.cancel();
+      return;
+    }
     this.streamCancel = stream.cancel;
     for await (const e of stream.items) {
       this.handle.lastSeq = Math.max(this.handle.lastSeq, e.seq);
@@ -155,8 +164,15 @@ export class TerminalClient {
     this.resizer.push(cols, rows);
   }
 
+  /** Rebind the event sink — a restored tab's old closure points at the
+   * previous sheet mount's dead state setters. */
+  setOnEvent(cb: (e: TerminalEvent) => void): void {
+    this.onEvent = cb;
+  }
+
   /** Detach: cancel the stream; the PTY keeps running on the host. */
   detach(): void {
+    this.subscribeGen += 1;
     this.streamCancel?.();
     this.streamCancel = undefined;
   }
