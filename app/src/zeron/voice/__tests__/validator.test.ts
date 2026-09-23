@@ -52,6 +52,15 @@ test('rejects added, substituted, and reordered words', () => {
   ).toBe(false);
 });
 
+test('accepts casing-only changes to retained words', () => {
+  expect(
+    validateCleanupOutput('um i open the settings', 'I open the settings').ok,
+  ).toBe(true);
+  expect(
+    validateCleanupOutput('meet andre at noON', 'meet Andre at noon').ok,
+  ).toBe(true);
+});
+
 test('rejects commentary and truncated generation', () => {
   expect(
     validateCleanupOutput('open the settings', 'Output: open the settings').ok,

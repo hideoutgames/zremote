@@ -30,22 +30,33 @@ export const createCleanupEngine = (): CleanupEngine => {
       return Promise.resolve(context);
     }
     if (loading !== undefined) return loading;
-    loading = initLlama({
-      model: toFsPath(modelPath),
-      // Cleanup inputs are capped at 4k chars; 2048 tokens of context is
-      // enough headroom for prompt + rewrite on a 0.5B model.
-      n_ctx: 2048,
-      n_gpu_layers: 99,
-    }).then(ctx => {
-      context = ctx;
-      contextPath = modelPath;
-      loading = undefined;
-      return ctx;
-    });
-    return loading.catch(err => {
-      loading = undefined;
-      throw err;
-    });
+    // Switching models: drop the resident context first — keeping both
+    // alive is what OOMs the init on memory-tight devices.
+    const stale = context;
+    context = undefined;
+    contextPath = '';
+    loading = (async () => {
+      await stale?.release().catch(() => {});
+      return initLlama({
+        model: toFsPath(modelPath),
+        // Inputs are capped at 4k chars (~1.3k tokens); prompt + rewrite
+        // need ~3k — 2048 overflowed into context_full failures.
+        n_ctx: 4096,
+        n_gpu_layers: 99,
+      });
+    })().then(
+      ctx => {
+        context = ctx;
+        contextPath = modelPath;
+        loading = undefined;
+        return ctx;
+      },
+      err => {
+        loading = undefined;
+        throw err;
+      },
+    );
+    return loading;
   };
 
   return {
@@ -58,13 +69,19 @@ export const createCleanupEngine = (): CleanupEngine => {
           { role: 'system', content: req.systemPrompt },
           { role: 'user', content: req.transcript },
         ],
-        n_predict: 1024,
+        // The rewrite is at most the input length plus whitespace; 1024
+        // truncated 4k-char transcripts into stopped_limit failures.
+        n_predict: 2048,
         temperature: 0.2,
         stop: STOP_WORDS,
       });
       return {
         text: result.text.trim(),
-        truncated: result.stopped_limit > 0 || result.context_full,
+        truncated:
+          result.stopped_limit > 0 ||
+          result.context_full ||
+          result.truncated ||
+          result.interrupted,
       };
     },
     async unload() {

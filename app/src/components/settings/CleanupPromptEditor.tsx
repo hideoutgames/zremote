@@ -52,7 +52,9 @@ export function CleanupPromptEditor({ onClose }: { onClose: () => void }) {
           onPress={() => {
             const trimmed = draft.trim();
             setCleanupPromptOverride(
-              trimmed === DEFAULT_CLEANUP_PROMPT.trim() ? null : draft,
+              trimmed === '' || trimmed === DEFAULT_CLEANUP_PROMPT.trim()
+                ? null
+                : draft,
             );
             onClose();
           }}

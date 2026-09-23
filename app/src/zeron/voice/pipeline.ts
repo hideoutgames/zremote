@@ -197,7 +197,11 @@ export class LocalVoiceSession {
       out = await Promise.race([
         this.host.cleanup!.clean({
           transcript: raw,
-          systemPrompt: this.host.cleanupPrompt ?? DEFAULT_CLEANUP_PROMPT,
+          systemPrompt:
+            this.host.cleanupPrompt === undefined ||
+            this.host.cleanupPrompt.trim() === ''
+              ? DEFAULT_CLEANUP_PROMPT
+              : this.host.cleanupPrompt,
           modelPath: cleanupPath,
         }),
         this.abortGate(),

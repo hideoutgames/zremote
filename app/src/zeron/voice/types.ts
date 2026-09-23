@@ -130,7 +130,7 @@ export const isVoiceBusy = (stage: VoicePipelineStage): boolean =>
 export const transcriptionWatchdogMs = (durationMs: number): number =>
   Math.max(30_000, 4 * Math.max(0, durationMs));
 
-export const CLEANUP_WATCHDOG_MS = 45_000;
+export const CLEANUP_WATCHDOG_MS = 90_000;
 
 /** Rough token budget for Qwen 0.5B cleanup. Over this, skip cleanup. */
 export const CLEANUP_MAX_INPUT_CHARS = 4_000;

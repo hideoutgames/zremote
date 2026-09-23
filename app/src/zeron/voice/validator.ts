@@ -36,7 +36,8 @@ const isSubsequence = (
 ): boolean => {
   let i = 0;
   for (const word of output) {
-    while (i < input.length && input[i] !== word) i += 1;
+    const lower = word.toLowerCase();
+    while (i < input.length && input[i].toLowerCase() !== lower) i += 1;
     if (i >= input.length) return false;
     i += 1;
   }

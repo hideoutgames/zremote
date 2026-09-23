@@ -54,10 +54,15 @@ export const useLocalVoiceRuntime = (
         resolveCleanupEngine(),
       ]);
       if (!mounted) return;
+      // A cleanup engine that reports unavailable (native module not
+      // linked) fails every cleanup — keep the raw transcript instead.
+      const cleanupUsable =
+        cleanupPath !== undefined &&
+        (await cleanup.isAvailable().catch(() => false));
       setRuntime({
         capture,
         transcription,
-        cleanup: cleanupPath ? cleanup : undefined,
+        cleanup: cleanupUsable ? cleanup : undefined,
         transcriptionPath,
         cleanupPath,
         deleteAudio,
