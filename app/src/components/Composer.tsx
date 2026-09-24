@@ -100,6 +100,15 @@ import {
   ComposerAutocomplete,
   type CompletionRowData,
 } from './ComposerAutocomplete';
+import { ComposerReferenceText } from './ComposerReferenceText';
+import {
+  applyDisplayEdit,
+  canonicalToDisplay,
+  commitExactReferences,
+  composerSurface,
+  displayToCanonical,
+  type CommitExactOptions,
+} from '../zeron/composer/badges';
 import { useDeviceOnline } from '../zeron/state/workspaceStore';
 import {
   clearDraft,
@@ -424,6 +433,7 @@ export const Composer = React.memo(function ({
   const baseRef = useRef('');
   const selRef = useRef(0);
   const selEndRef = useRef(0);
+  const displaySelRef = useRef(0);
   const draftTextRef = useRef(draft.text);
   draftTextRef.current = draft.text;
   const chatIdRef = useRef(chatId);
@@ -617,10 +627,45 @@ export const Composer = React.memo(function ({
       setDraftText(chatId, text);
       selRef.current = cursor;
       selEndRef.current = cursor;
+      const displayCursor = canonicalToDisplay(composerSurface(text), cursor);
+      displaySelRef.current = displayCursor;
       // The controlled value lands first; move the native caret after it.
-      setTimeout(() => inputRef.current?.setSelection(cursor, cursor), 0);
+      setTimeout(
+        () => inputRef.current?.setSelection(displayCursor, displayCursor),
+        0,
+      );
     },
     [chatId],
+  );
+
+  const commitOptions = useCallback(
+    (atEnd: boolean, caret?: number): CommitExactOptions => {
+      const prefs = skillPrefsForHarness(harnessId);
+      const rows: InvocationCandidate[] = [];
+      const seen = new Set<string>();
+      for (const list of slashCacheRef.current.values()) {
+        for (const row of list) {
+          const key = `${row.invocation.kind}:${row.name}:${
+            row.workspaceCommand ?? ''
+          }`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          rows.push(row);
+        }
+      }
+      const mention = mentionMetaRef.current;
+      return {
+        rows,
+        includeSkillsInSlash: !prefs.separateFromSlash,
+        dollarSkills: prefs.dollar,
+        mentionResults: mention.results,
+        mentionQuery: mention.token?.query,
+        atEnd,
+        supported: refsSupported,
+        caret,
+      };
+    },
+    [harnessId, refsSupported],
   );
 
   const acceptSlash = useCallback(
@@ -1254,29 +1299,61 @@ export const Composer = React.memo(function ({
         const removed = text[acceptAt];
         if (removed === '\n' || removed === '\t') {
           const without = text.slice(0, acceptAt) + text.slice(acceptAt + 1);
-          setDraftText(chatId, without);
+          const current = composerSurface(draftTextRef.current).display;
+          if (without !== current)
+            setDraftText(
+              chatId,
+              applyDisplayEdit(draftTextRef.current, without),
+            );
         }
         acceptCompletion();
         return;
       }
-      const split = splitTextEdit(draftTextRef.current, text);
+      const prevDisplay = composerSurface(draftTextRef.current).display;
+      const split = splitTextEdit(prevDisplay, text);
       if (split.inserted.length > PASTE_FILE_THRESHOLD) {
         const result = stagePastedText(chatId, split.inserted);
+        const nextDisplay =
+          result.staged.length > 0 ? split.prefix + split.suffix : text;
         setDraftText(
           chatId,
-          result.staged.length > 0 ? split.prefix + split.suffix : text,
+          applyDisplayEdit(draftTextRef.current, nextDisplay),
         );
         return;
       }
-      setDraftText(chatId, text);
+      const edited = applyDisplayEdit(draftTextRef.current, text);
+      const editedSurface = composerSurface(edited);
+      const displayCaret = split.prefix.length + split.inserted.length;
+      const canonicalCaret =
+        editedSurface.display === text
+          ? displayToCanonical(editedSurface, displayCaret)
+          : displayToCanonical(
+              editedSurface,
+              Math.min(displayCaret, editedSurface.display.length),
+            );
+      const committed = commitExactReferences(
+        edited,
+        commitOptions(false, canonicalCaret),
+      );
+      setDraftText(chatId, committed.text);
+      const painted = composerSurface(committed.text).display;
+      if (painted !== text) {
+        const caret = canonicalToDisplay(
+          composerSurface(committed.text),
+          committed.caret,
+        );
+        selRef.current = committed.caret;
+        selEndRef.current = committed.caret;
+        displaySelRef.current = caret;
+        setTimeout(() => inputRef.current?.setSelection(caret, caret), 0);
+      }
     },
-    [chatId, acceptCompletion],
+    [chatId, acceptCompletion, commitOptions],
   );
 
   const submit = useCallback(() => {
     if (dictating || processing || localVoiceBusy) return;
     setVoiceNotice(null);
-    const text = withPlanPrefixIf(planMode, draft.text.trim());
     // Zeron's own commands consume their trigger before any send path.
     const workspaceRows =
       slashCacheRef.current.get(slashMetaRef.current.context) ?? [];
@@ -1288,6 +1365,11 @@ export const Composer = React.memo(function ({
       onWorkspaceCommand(workspaceAction);
       return;
     }
+    const committed = commitExactReferences(
+      draft.text,
+      commitOptions(true, draft.text.length),
+    );
+    const text = withPlanPrefixIf(planMode, committed.text.trim());
     // Canonical references need a host that decodes them; the draft stays.
     if (referencesRequireUpdate(text, refsSupported)) {
       setSendError(t('composer.autocomplete.referencesBlocked'));
@@ -1359,6 +1441,7 @@ export const Composer = React.memo(function ({
     refsSupported,
     resetSlash,
     resetMention,
+    commitOptions,
   ]);
 
   // Reduce Motion: thumbs/strip animate instantly (no swell/shrink).
@@ -1379,6 +1462,7 @@ export const Composer = React.memo(function ({
   // Beam geometry = the glass's own bounds; Reduce Motion collapses the
   // sweep to a static ring.
   const [glassSize, setGlassSize] = useState({ w: 0, h: 0 });
+  const draftSurface = composerSurface(draft.text);
 
   // Autocomplete rows — slash takes precedence when both tokens are live.
   const popupRows: CompletionRowData[] =
@@ -1500,19 +1584,21 @@ export const Composer = React.memo(function ({
           <View style={{ minHeight: INPUT_MIN_HEIGHT + effectiveExtra }}>
             <TextInput
               ref={inputRef}
-              value={draft.text}
+              value={draftSurface.display}
               autoFocus={autoFocus}
               onChangeText={handleChangeText}
               onSelectionChange={e => {
                 const { start, end } = e.nativeEvent.selection;
-                selRef.current = start;
-                selEndRef.current = end;
+                displaySelRef.current = start;
+                const surface = composerSurface(draftTextRef.current);
+                selRef.current = displayToCanonical(surface, start);
+                selEndRef.current = displayToCanonical(surface, end);
                 // A non-empty selection has no caret → no completion.
                 if (start !== end) {
                   resetSlash();
                   resetMention();
                 } else {
-                  syncCompletion(draftTextRef.current, start);
+                  syncCompletion(draftTextRef.current, selRef.current);
                 }
               }}
               onKeyPress={e => {
@@ -1533,7 +1619,7 @@ export const Composer = React.memo(function ({
                   hasSelection &&
                   (key === 'Enter' || key === 'Return' || key === 'Tab')
                 ) {
-                  acceptAtRef.current = selRef.current;
+                  acceptAtRef.current = displaySelRef.current;
                 }
               }}
               onFocus={() => {
@@ -1560,6 +1646,9 @@ export const Composer = React.memo(function ({
                   color: theme.text,
                   maxHeight: inputMaxHeight,
                 },
+                draftSurface.spans.length > 0
+                  ? styles.inputTransparent
+                  : undefined,
                 question !== undefined ? styles.inputDimmed : undefined,
               ]}
               multiline
@@ -1568,6 +1657,22 @@ export const Composer = React.memo(function ({
               // flags on iOS — handled in the parent where available; the
               // modifier gap is documented in docs/ARCHITECTURE.md.
             />
+            {draftSurface.spans.length > 0 ? (
+              <Text
+                pointerEvents="none"
+                style={[
+                  styles.input,
+                  styles.inputOverlay,
+                  { maxHeight: inputMaxHeight },
+                  question !== undefined ? styles.inputDimmed : undefined,
+                ]}
+              >
+                <ComposerReferenceText
+                  canonical={draft.text}
+                  color={theme.text}
+                />
+              </Text>
+            ) : null}
           </View>
 
           <View style={styles.lowerRow}>
@@ -1944,6 +2049,13 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   inputDimmed: { opacity: 0.45 },
+  inputOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+  },
+  inputTransparent: { color: 'transparent' },
   stripClip: { overflow: 'hidden' },
   leftCluster: {
     flex: 1,
