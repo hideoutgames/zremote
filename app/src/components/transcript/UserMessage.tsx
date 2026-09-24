@@ -26,6 +26,7 @@ import { useTheme } from '../../theme';
 import { t } from '../../i18n/strings';
 import { stripPlanPrefix, type PromptBadgeKind } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
+import { ComposerReferenceText } from '../ComposerReferenceText';
 import { FrostedBubble } from './FrostedBubble';
 import { messageCopyContent } from './MessageCopyMenu';
 import { useSuppressAfterLongPress } from '../../hooks/useSuppressAfterLongPress';
@@ -88,11 +89,22 @@ export const chunkPromptText = (
   return chunks.length > 0 ? chunks : [''];
 };
 
-const promptBody = (kind: PromptBadgeKind | null, shown: string): ReactNode => {
-  if (kind === null) return shown;
+const promptBody = (
+  kind: PromptBadgeKind | null,
+  shown: string,
+  color: string,
+): ReactNode => {
+  const hasRef =
+    shown.includes('zeron-invoke:') || shown.includes('zeron-file:');
+  const body = hasRef ? (
+    <ComposerReferenceText key="refs" canonical={shown} color={color} />
+  ) : (
+    shown
+  );
+  if (kind === null) return body;
   const badge = <PlanBadge key="badge" kind={kind} variant="inline" />;
   if (shown === '') return badge;
-  return [badge, ' ', shown];
+  return [badge, ' ', body];
 };
 
 function EnteringStack({
@@ -147,7 +159,9 @@ export const UserMessage = React.memo(function UserMessageInner({
       testID={i === 0 ? 'user-bubble-prompt' : `user-bubble-prompt-${i}`}
       style={[styles.text, { color: theme.userBubbleText }]}
     >
-      {i === 0 ? promptBody(kind, chunk) : chunk}
+      {i === 0
+        ? promptBody(kind, chunk, theme.userBubbleText)
+        : promptBody(null, chunk, theme.userBubbleText)}
     </Text>
   ));
 
