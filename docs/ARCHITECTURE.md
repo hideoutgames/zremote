@@ -59,11 +59,14 @@ the real entry with that id the pending echo is dropped, never duplicated.
 ## Attachments
 
 Bytes never ride the doc. Images and documents are staged on the **host device**
-over the relay (`UploadChunk` → `UploadCommit` → durable path) or, on hosts that
-advertise `message-queue-attachments-v1`, referenced as `pending://{uploadId}/{name}`
-while the bytes chase the command. The run request carries both the
-`attachments` paths and the `Attached files (local files …)` prompt trailer,
-matching desktop. Device-local URIs are never sent to a host. Composer Attach
+over the relay (`UploadChunk` → `UploadCommit` → durable path). Queue rows
+(`message-queue-attachments-v1`) store those committed paths: the host copies
+`attachments` into the user prompt at drain and does not rewrite `pending://`
+refs there (that rewrite is only for Run commands). The phone uploads before
+the row is written, or parks the bytes locally until a relay exists, so the
+transcript never shows a pending link. The visible bubble strips the
+`Attached images|files (local files …)` trailer and paints each file. Device-local
+URIs are never sent to a host. Composer Attach
 → Files presents the system document picker with `multiple: true` after the
 menu has dismissed; every returned asset is batch-staged into the draft
 (24MB cap per file, oversized siblings rejected without dropping the rest).

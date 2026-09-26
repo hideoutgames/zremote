@@ -78,6 +78,25 @@ describe('queuedLocalStore', () => {
     expect(saved.c1.map(q => q.id)).toEqual(['q2']);
   });
 
+  it('reconcile keeps awaitingUpload rows that are not on the doc yet', async () => {
+    const { fs, disk } = memDisk();
+    await bindQueuedLocal(disk, 'o1', 'u1');
+    await addLocalQueued('c1', {
+      id: 'parked',
+      text: 'hi',
+      issuedBy: 'phone',
+      issuedAt: 1,
+      attachments: ['pending://up/a.png'],
+      awaitingUpload: true,
+    });
+    await reconcileLocalQueued('c1', new Set());
+    expect(localQueuedFor('c1').map(q => q.id)).toEqual(['parked']);
+    const saved = JSON.parse(
+      fs.files.get(queuedLocalPath('/docs', 'o1', 'u1'))!,
+    ) as Record<string, { awaitingUpload?: boolean }[]>;
+    expect(saved.c1[0].awaitingUpload).toBe(true);
+  });
+
   it('reconcile drops ids that left the live queue and keeps the rest', async () => {
     const { disk } = memDisk();
     await bindQueuedLocal(disk, 'o1', 'u1');

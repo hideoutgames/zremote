@@ -6,7 +6,7 @@
 //   action row: [+] · live Queue/Steer · Plan · model · effort · fast · context window · usage · voice · send.
 // Host / repo / origin live on the thread Details sheet for existing sessions.
 // All decisions route through composerAction/liveAction + the draftStore;
-// attachment sends go through onSendAttachments (queued `pending://` flow or
+// attachment sends go through onSendAttachments (upload, then queue or
 // legacy upload-first — never a device-local URI on the wire).
 
 import React, {

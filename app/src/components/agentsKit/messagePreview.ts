@@ -2,6 +2,7 @@
 // `message-scroller` / `preview-rail` (MIT) — see AGENTS_KIT_PROVENANCE.md.
 
 import type { MessageEntry } from '../../zeron/protocol/types';
+import { userMessageRailText } from '../../zeron/protocol/messages';
 
 export const PREVIEW_TITLE_LENGTH = 56;
 export const PREVIEW_DESCRIPTION_LENGTH = 88;
@@ -20,15 +21,14 @@ export function collapseMessageText(text: string): string {
 }
 
 export function entryPreviewText(entry: MessageEntry): string {
-  return collapseMessageText(
-    entry.parts
-      .filter(
-        (p): p is { kind: 'text'; id: string; text: string } =>
-          p.kind === 'text',
-      )
-      .map(p => p.text)
-      .join(' '),
-  );
+  const raw = entry.parts
+    .filter(
+      (p): p is { kind: 'text'; id: string; text: string } => p.kind === 'text',
+    )
+    .map(p => p.text)
+    .join(' ');
+  const text = entry.role === 'user' ? userMessageRailText(raw) : raw;
+  return collapseMessageText(text);
 }
 
 export function truncateMessageText(text: string, limit: number): string {

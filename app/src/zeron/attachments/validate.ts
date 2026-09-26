@@ -7,6 +7,8 @@
 // (device URI), and the agent opens committed filesystem paths from the
 // prompt trailer, so documents (text/pdf/json/…) are legal to stage and send.
 
+import { mimeForFileName } from './paste';
+
 /** use-attachments.ts / Attachments.swift `maxAttachmentBytes`. */
 export const MAX_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 
@@ -33,6 +35,9 @@ export type ValidationResult = { ok: true } | { ok: false; reason: 'tooLarge' };
 
 export const isImageMime = (mimeType: string): boolean =>
   mimeType.toLowerCase().startsWith('image/');
+
+export const isImageFileName = (name: string): boolean =>
+  isImageMime(mimeForFileName(name));
 
 export const validateStagedAttachment = (a: {
   name: string;

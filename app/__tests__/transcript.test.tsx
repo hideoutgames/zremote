@@ -693,6 +693,33 @@ const shadowedHost = (
     return typeof opacity === 'number';
   })[0] ?? node;
 
+test('UserMessage shows an attachment chip instead of a pending link', async () => {
+  const entry: MessageEntry = {
+    ...userEntry,
+    parts: [
+      {
+        kind: 'text',
+        id: 't0',
+        text: [
+          'look at this',
+          '',
+          'Attached images (local files — open them to view):',
+          '- pending://up-1/photo.png',
+        ].join('\n'),
+      },
+    ],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(<UserMessage entry={entry} />);
+  });
+  const texts = textOf(tree!.root);
+  expect(texts.join('\n')).toContain('look at this');
+  expect(texts.join('\n')).not.toContain('pending:');
+  expect(texts).toContain('photo.png');
+  expect(tree!.root.findByProps({ testID: 'user-attachment' })).toBeTruthy();
+});
+
 test('UserMessage shows the sent text inside a bubble sized to content', async () => {
   let tree: TestRenderer.ReactTestRenderer | undefined;
   await act(async () => {

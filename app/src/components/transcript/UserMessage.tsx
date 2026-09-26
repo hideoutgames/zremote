@@ -21,8 +21,9 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import type { MessageEntry } from '../../zeron/protocol/types';
-import { Icon } from '../Icon';
+import { parseUserMessageAttachments } from '../../zeron/protocol/messages';
 import { useTheme } from '../../theme';
+import { UserAttachments, type LoadAttachment } from './UserAttachments';
 import { t } from '../../i18n/strings';
 import { stripPlanPrefix, type PromptBadgeKind } from '../planMode';
 import { PlanBadge } from '../PlanBadge';
@@ -134,11 +135,15 @@ export const UserMessage = React.memo(function UserMessageInner({
   entry,
   animateEnter = false,
   onEntered,
+  loadAttachment,
 }: {
   entry: MessageEntry;
   chatId?: string;
   animateEnter?: boolean;
   onEntered?: (id: string) => void;
+  /** Host `ReadAttachmentChunk` for a thumbnail when this phone doesn't
+   * still have the file. */
+  loadAttachment?: LoadAttachment;
 }) {
   'use no memo';
   const theme = useTheme();
@@ -146,8 +151,17 @@ export const UserMessage = React.memo(function UserMessageInner({
   const lp = useSuppressAfterLongPress();
   const [expanded, setExpanded] = useState(false);
   const text = textOf(entry);
-  const { kind, text: visible } = stripPlanPrefix(text);
-  const images = entry.parts.filter(p => p.kind === 'image');
+  const parsed = parseUserMessageAttachments(text);
+  const { kind, text: visible } = stripPlanPrefix(parsed.text);
+  const seen = new Set(parsed.attachments.map(a => a.path));
+  const attachments = [
+    ...parsed.attachments,
+    ...entry.parts.flatMap(p =>
+      p.kind === 'image' && !seen.has(p.path)
+        ? [{ path: p.path, name: p.name }]
+        : [],
+    ),
+  ];
   const foldable = visible.length > FOLD_CHARS;
   const shown =
     expanded || !foldable ? visible : `${visible.slice(0, FOLD_CHARS)}…`;
@@ -175,36 +189,10 @@ export const UserMessage = React.memo(function UserMessageInner({
         <ContextMenu.Root>
           <ContextMenu.Trigger>
             <EnteringStack animate={animateEnter}>
-              {images.length > 0 ? (
-                <View style={styles.attachmentRow}>
-                  {images.map(p =>
-                    p.kind === 'image' ? (
-                      <View
-                        key={p.id}
-                        style={[
-                          styles.attachmentChip,
-                          {
-                            backgroundColor: theme.surface,
-                            borderColor: theme.border,
-                          },
-                        ]}
-                      >
-                        <Icon
-                          name="photo"
-                          size={13}
-                          color={theme.textSecondary}
-                        />
-                        <Text
-                          style={[styles.attachmentName, { color: theme.text }]}
-                          numberOfLines={1}
-                        >
-                          {p.name}
-                        </Text>
-                      </View>
-                    ) : null,
-                  )}
-                </View>
-              ) : null}
+              <UserAttachments
+                attachments={attachments}
+                loadAttachment={loadAttachment}
+              />
               {showBubble ? (
                 <FrostedBubble
                   testID="user-bubble"
@@ -280,24 +268,6 @@ const styles = StyleSheet.create({
   stack: {
     alignItems: 'flex-end',
   },
-  attachmentRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: 6,
-    marginBottom: 4,
-  },
-  attachmentChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    maxWidth: 180,
-  },
-  attachmentName: { fontSize: 12 },
   bubble: {
     maxWidth: '100%',
     borderRadius: 20,
