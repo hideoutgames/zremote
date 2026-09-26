@@ -4,6 +4,7 @@
 // performQueueAction).
 
 import { SessionController } from '../src/zeron/runtime/sessionController';
+import { SessionDoc } from '../src/zeron/doc/sessionDoc';
 import {
   getSessionStore,
   resetSessionStores,
@@ -75,14 +76,14 @@ test('queueMessage parks a row on the doc queue', async () => {
   expect(queue[0].holdForTurnEnd).toBe(true);
 });
 
-test('queueMessage carries attachments refs', () => {
+test('queueMessage carries committed attachment paths, not a trailer in text', () => {
   const { c } = make();
-  c.queueMessage('look', { attachments: ['pending://u1/a.png'] });
+  c.queueMessage('look', { attachments: ['/host/uploads/a.png'] });
   const row = getSessionStore('c1').getState().queue[0];
-  expect(row.attachments).toEqual(['pending://u1/a.png']);
-  // The host composes the attachment trailer from `attachments` during
-  // queue drain (engine doc_host.rs queued_message_prompt) — the row's
-  // `text` stays the raw editable message, no client-side trailer.
+  expect(row.attachments).toEqual(['/host/uploads/a.png']);
+  // The host copies `attachments` into the prompt at drain
+  // (doc_host.rs queued_message_prompt) and does not rewrite pending://,
+  // so the row must already name a real host path. Text stays editable.
   expect(row.text).toBe('look');
 });
 
@@ -289,7 +290,26 @@ test('relay parks locally when the host is offline and flushes on reconnect', as
   c.stop();
 });
 
-// ── sendWithAttachments (pending:// queue flow) ───────────────────────────
+// ── sendWithAttachments (upload, then queue with host paths) ──────────────
+
+const uploadRelay = (): RelayLike & {
+  calls: { method: string; params: Record<string, unknown> }[];
+} => {
+  const calls: { method: string; params: Record<string, unknown> }[] = [];
+  return {
+    calls,
+    call: async <T>(
+      method: string,
+      params: Record<string, unknown>,
+    ): Promise<T> => {
+      calls.push({ method, params });
+      if (method === 'UploadChunk') return { ok: true } as T;
+      if (method === 'UploadCommit')
+        return { path: `/host/uploads/${String(params.fileName)}` } as T;
+      throw new Error(`unexpected ${method}`);
+    },
+  };
+};
 
 const QUEUE_CAPS = new Set([
   'message-queue-v1',
@@ -307,8 +327,9 @@ const stagedPng = (chatId = 'c1') =>
     },
   ]);
 
-test('sendWithAttachments on a queue-capable host → queue row with pending refs', async () => {
-  const { c, disk } = make(undefined, {
+test('sendWithAttachments on a queue-capable host uploads, then queues the host path', async () => {
+  const relay = uploadRelay();
+  const { c, disk } = make(relay, {
     hostCapabilities: () => QUEUE_CAPS,
     readFileBase64: async () => 'AAA=',
   });
@@ -319,15 +340,16 @@ test('sendWithAttachments on a queue-capable host → queue row with pending ref
   expect(plan).toBe('queue');
   const row = getSessionStore('c1').getState().queue[0];
   // The row keeps the raw text — the host expands the trailer at drain.
+  // The path is the committed host file, never pending://.
   expect(row.text).toBe('see this');
-  expect(row.attachments).toEqual([`pending://${staged[0].id}/a.png`]);
-  // The stash holds the bytes for the escort.
-  expect(await disk.loadUpload('o1', 'u1', staged[0].id)).toBeDefined();
+  expect(row.attachments).toEqual(['/host/uploads/a.png']);
+  expect(relay.calls.some(call => call.method === 'UploadCommit')).toBe(true);
+  expect(await disk.loadUpload('o1', 'u1', staged[0].id)).toBeUndefined();
   c.stop();
 });
 
 test('attachment-only queue send substitutes the fallback text', async () => {
-  const { c } = make(undefined, {
+  const { c } = make(uploadRelay(), {
     hostCapabilities: () => QUEUE_CAPS,
     readFileBase64: async () => 'AAA=',
   });
@@ -341,6 +363,7 @@ test('attachment-only queue send substitutes the fallback text', async () => {
   // message must land a body (same as withAttachments('', …)).
   expect(queue).toHaveLength(1);
   expect(queue[0].text).toBe(ATTACHMENT_ONLY_TEXT);
+  expect(queue[0].attachments).toEqual(['/host/uploads/a.png']);
   c.stop();
 });
 
@@ -374,10 +397,14 @@ test('forceQueue on a host without queue-attachments caps blocks instead of leak
   c.stop();
 });
 
-test('forceQueue on a capable offline host still takes the queue path', async () => {
-  const { c } = make(undefined, {
+test('forceQueue without a relay parks pending refs off the doc, then flush uploads them', async () => {
+  const port = new LoroCrdtAdapter();
+  let relay: RelayLike | undefined;
+  const { c, disk } = make(undefined, {
     hostCapabilities: () => QUEUE_CAPS,
     readFileBase64: async () => 'AAA=',
+    loro: () => port,
+    relayFor: () => relay,
   });
   const staged = stagedPng();
   const plan = await c.sendWithAttachments('hi', {}, staged, {
@@ -385,8 +412,21 @@ test('forceQueue on a capable offline host still takes the queue path', async ()
     forceQueue: true,
   });
   expect(plan).toBe('queue');
+  // Visible in the queue, but not written where the host would copy
+  // pending:// into the prompt.
   const row = getSessionStore('c1').getState().queue[0];
   expect(row.attachments).toEqual([`pending://${staged[0].id}/a.png`]);
+  expect(new SessionDoc(port).project()?.queue ?? []).toEqual([]);
+  expect(await disk.loadUpload('o1', 'u1', staged[0].id)).toBe('AAA=');
+
+  relay = uploadRelay();
+  await c.flushLocalQueue();
+  const queued = new SessionDoc(port).project()?.queue ?? [];
+  expect(queued).toHaveLength(1);
+  expect(queued[0].text).toBe('hi');
+  expect(queued[0].attachments).toEqual(['/host/uploads/a.png']);
+  expect(localQueuedFor('c1')).toEqual([]);
+  expect(await disk.loadUpload('o1', 'u1', staged[0].id)).toBeUndefined();
   c.stop();
 });
 

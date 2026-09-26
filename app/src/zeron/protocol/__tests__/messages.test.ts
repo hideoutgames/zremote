@@ -9,6 +9,9 @@ import {
   openInputRequest,
   parsePendingRef,
   pendingRef,
+  attachmentName,
+  parseUserMessageAttachments,
+  userMessageRailText,
   withAttachments,
 } from '../messages';
 import type { MessageEntry, MessagePart } from '../types';
@@ -166,5 +169,42 @@ describe('pendingRef', () => {
     });
     expect(parsePendingRef('file:///x')).toBeUndefined();
     expect(parsePendingRef('pending:///')).toBeUndefined();
+  });
+});
+
+describe('parseUserMessageAttachments', () => {
+  it('strips the host trailer and names the file, not the pending URL', () => {
+    const raw = [
+      'look at this',
+      '',
+      'Attached images (local files — open them to view):',
+      '- pending://up-1/photo.png',
+    ].join('\n');
+    expect(parseUserMessageAttachments(raw)).toEqual({
+      text: 'look at this',
+      attachments: [{ path: 'pending://up-1/photo.png', name: 'photo.png' }],
+    });
+    expect(attachmentName('pending://up-1/photo.png')).toBe('photo.png');
+    expect(userMessageRailText(raw)).toBe('look at this');
+  });
+
+  it('hides the attachment-only placeholder and keeps a committed path', () => {
+    const raw = `${ATTACHMENT_ONLY_TEXT}\n\nAttached files (local files — open them to view):\n- /host/uploads/notes.pdf`;
+    expect(parseUserMessageAttachments(raw)).toEqual({
+      text: '',
+      attachments: [{ path: '/host/uploads/notes.pdf', name: 'notes.pdf' }],
+    });
+    expect(
+      userMessageRailText(
+        'See the attached image(s).\n\nAttached images (local files — open them to view):\n- /host/a.png\n- /host/b.png',
+      ),
+    ).toBe('2 files');
+  });
+
+  it('leaves a prompt with no trailer unchanged', () => {
+    expect(parseUserMessageAttachments('just text')).toEqual({
+      text: 'just text',
+      attachments: [],
+    });
   });
 });

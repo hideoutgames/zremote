@@ -6,8 +6,9 @@
 import type { RunPhase } from '../state/sessionStores';
 
 export type SendPlan =
-  /** Row lands on the doc's `queue` list with `pending://` refs; an escort
-   * pushes the bytes after it. */
+  /** Row lands on the doc's `queue` list with committed host paths. The
+   * host expands the attachment trailer at drain. Offline parks locally
+   * and uploads before that write — never a `pending://` ref on the row. */
   | 'queue'
   /** Upload each file first (progress rings), then sendRun with the
    * committed host paths. */

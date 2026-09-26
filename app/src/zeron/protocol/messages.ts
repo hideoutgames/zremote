@@ -99,9 +99,18 @@ export const withAttachments = (
   return `${body}\n\n${ATTACHMENT_TRAILER_HEADER}\n${refs}`;
 };
 
+/** Host queue drain (`queued_message_prompt`) uses this body for an empty row. */
+export const HOST_ATTACHMENT_ONLY_TEXT = 'See the attached image(s).';
+
+/** Host queue drain header. The phone's own trailer says "files". */
+export const HOST_ATTACHMENT_TRAILER_HEADER =
+  'Attached images (local files — open them to view):';
+
 export const PENDING_REF_PREFIX = 'pending://';
 
-/** `pending://{uploadId}/{name}` — the queued-attachment ref (UploadStash). */
+/** `pending://{uploadId}/{name}` — bytes staged locally, not a host path.
+ * Queue rows must not carry these: the host copies `attachments` into the
+ * visible prompt verbatim and does not rewrite them. */
 export const pendingRef = (uploadId: string, name: string): string =>
   `${PENDING_REF_PREFIX}${uploadId}/${name}`;
 
@@ -114,4 +123,90 @@ export const parsePendingRef = (
   const slash = body.indexOf('/');
   if (slash <= 0 || slash === body.length - 1) return undefined;
   return { uploadId: body.slice(0, slash), name: body.slice(slash + 1) };
+};
+
+export interface UserMessageAttachment {
+  path: string;
+  name: string;
+}
+
+export interface ParsedUserMessage {
+  /** Prompt with the attachment trailer removed. Empty for file-only sends. */
+  text: string;
+  attachments: UserMessageAttachment[];
+}
+
+const ATTACHMENT_ONLY_BODIES = new Set([
+  ATTACHMENT_ONLY_TEXT,
+  HOST_ATTACHMENT_ONLY_TEXT,
+]);
+
+const isTrailerHeader = (line: string): boolean => {
+  const header = line.trim().toLowerCase();
+  return (
+    (header.startsWith('attached images (local files') ||
+      header.startsWith('attached files (local files')) &&
+    header.endsWith('):')
+  );
+};
+
+/** Last path segment, or the file name inside a `pending://` ref. */
+export const attachmentName = (path: string): string => {
+  const pending = parsePendingRef(path);
+  const raw = pending?.name ?? path;
+  const name = raw.split(/[/\\]/).pop()?.trim() ?? '';
+  return name.length > 0 ? name : 'file';
+};
+
+/** Split a user prompt into visible text and attachment refs.
+ * Mirrors `parse_user_message_images` (crates/ui/src/attachments.rs): a blank
+ * line, then `Attached images|files (local files …):`, then `- path` lines.
+ * `pending://` refs stay data — callers render the file name, never the URL. */
+export const parseUserMessageAttachments = (
+  content: string,
+): ParsedUserMessage => {
+  const lower = content.toLowerCase();
+  const needles = [
+    '\n\nattached images (local files',
+    '\n\nattached files (local files',
+  ];
+  let from = 0;
+  while (from < content.length) {
+    const hits = needles
+      .map(needle => lower.indexOf(needle, from))
+      .filter(index => index >= 0);
+    if (hits.length === 0) break;
+    const gap = Math.min(...hits);
+    const lineStart = gap + 2;
+    const nl = content.indexOf('\n', lineStart);
+    const lineEnd = nl === -1 ? content.length : nl;
+    const line = content.slice(lineStart, lineEnd).replace(/\r$/, '');
+    if (!isTrailerHeader(line)) {
+      from = lineStart;
+      continue;
+    }
+    const refsStart = Math.min(lineEnd + 1, content.length);
+    const attachments = content
+      .slice(refsStart)
+      .split('\n')
+      .map(refLine => refLine.trim().replace(/\r$/, ''))
+      .filter(refLine => refLine.startsWith('- '))
+      .map(refLine => refLine.slice(2).trim())
+      .filter(path => path.length > 0)
+      .map(path => ({ path, name: attachmentName(path) }));
+    if (attachments.length === 0) return { text: content, attachments: [] };
+    let body = content.slice(0, gap).trimEnd();
+    if (ATTACHMENT_ONLY_BODIES.has(body.trim())) body = '';
+    return { text: body, attachments };
+  }
+  return { text: content, attachments: [] };
+};
+
+/** Sidebar/rail label: the prompt, or the file name when the send was files only. */
+export const userMessageRailText = (content: string): string => {
+  const parsed = parseUserMessageAttachments(content);
+  if (parsed.text.trim() !== '') return parsed.text;
+  if (parsed.attachments.length === 0) return content;
+  if (parsed.attachments.length === 1) return parsed.attachments[0].name;
+  return `${parsed.attachments.length} files`;
 };

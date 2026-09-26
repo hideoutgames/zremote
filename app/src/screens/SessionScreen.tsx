@@ -475,6 +475,11 @@ function ActiveSessionScreen({
           chatId={chatId}
           animateEnter={enterIdsRef.current.has(item.id)}
           onEntered={onUserMessageEntered}
+          loadAttachment={
+            controller === undefined
+              ? undefined
+              : path => controller.readAttachment(path)
+          }
         />
       ) : (
         <AssistantMessage
@@ -501,6 +506,7 @@ function ActiveSessionScreen({
       openFileDiff,
       chatId,
       onUserMessageEntered,
+      controller,
       commands,
       agentWorking,
       lastEntryId,

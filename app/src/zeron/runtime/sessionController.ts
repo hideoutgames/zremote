@@ -41,9 +41,19 @@ import {
   updateAttachment,
   type StagedAttachment,
 } from '../state/draftStore';
-import { ATTACHMENT_ONLY_TEXT, withAttachments } from '../protocol/messages';
+import {
+  ATTACHMENT_ONLY_TEXT,
+  parsePendingRef,
+  pendingRef,
+  withAttachments,
+} from '../protocol/messages';
 import { uploadAttachmentChunked, type RelayLike } from '../attachments/upload';
-import { AttachmentEscort, pendingRefsFor } from '../attachments/escort';
+import { AttachmentEscort } from '../attachments/escort';
+import {
+  attachmentPreviewUri,
+  rememberAttachmentPreview,
+} from '../attachments/previewCache';
+import { readAttachmentBytes, type AttachmentBytes } from '../attachments/read';
 import {
   harnessInlinesAttachments,
   isImageMime,
@@ -60,6 +70,7 @@ import {
   isQueuedLocalBound,
   localQueuedFor,
   moveLocalQueued,
+  patchLocalQueued,
   reconcileLocalQueued,
   removeLocalQueued,
   type LocalQueuedMessage,
@@ -607,26 +618,49 @@ export class SessionController {
     return id;
   }
 
-  /** Push sidecar-only relay rows once the host is reachable. Doc-mode
-   * rows are already on the Loro queue. */
+  /** Push sidecar rows once the host is reachable. Plain doc-mode backups
+   * are already on the Loro queue. `awaitingUpload` rows are not: their
+   * bytes upload first and the queue row is written with the host path. */
   async flushLocalQueue(): Promise<void> {
     if (!this.hostOnline()) return;
-    if (this.relay === undefined) return;
     const rows = localQueuedFor(this.chatId);
     for (const row of rows) {
+      const needsUpload = row.awaitingUpload === true;
+      if (!needsUpload && this.relay === undefined) continue;
       try {
-        await this.relay.queueMessage(row.text, {
-          ...(row.attachments !== undefined
-            ? { attachments: row.attachments }
+        const attachments = needsUpload
+          ? await this.resolveQueuedAttachments(row.id, row.attachments)
+          : row.attachments;
+        const opts = {
+          ...(attachments !== undefined && attachments.length > 0
+            ? { attachments }
             : {}),
           ...(row.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
-        });
+        };
+        if (this.relay !== undefined) {
+          await this.relay.queueMessage(row.text, opts);
+        } else {
+          this.enqueueLocal(row.text, opts);
+        }
         await removeLocalQueued(this.chatId, row.id);
       } catch {
         // Keep the sidecar row; a later flush/retry will try again.
       }
     }
-    this.seedRelayLocalQueue();
+    this.publishQueue();
+  }
+
+  /** Show doc rows plus sidecar-only parks. An empty doc must not drop
+   * a row that has not been written yet. */
+  private publishQueue(): void {
+    if (this.relay !== undefined) {
+      this.seedRelayLocalQueue();
+      return;
+    }
+    const live = this.doc.project()?.queue ?? [];
+    getSessionStore(this.chatId).setState({
+      queue: displayedQueue(this.chatId, live),
+    });
   }
 
   private enqueueLocal(
@@ -692,17 +726,42 @@ export class SessionController {
   }
 
   private hostRelay(): RelayLike {
-    const host = this.deps.chatMeta().hostDeviceId;
-    if (host === undefined) throw new Error('chat has no host device');
-    const relay = this.deps.relayFor?.(host);
+    const relay = this.tryHostRelay();
     if (relay === undefined) throw new Error('host offline');
     return relay;
+  }
+
+  /** A live device relay, or undefined when the host cannot take bytes yet. */
+  private tryHostRelay(): RelayLike | undefined {
+    if (!this.hostOnline()) return undefined;
+    const host = this.deps.chatMeta().hostDeviceId;
+    if (host === undefined) return undefined;
+    return this.deps.relayFor?.(host);
+  }
+
+  /** Host file bytes for a transcript thumbnail. */
+  readAttachment(path: string): Promise<AttachmentBytes> {
+    return readAttachmentBytes(this.hostRelay(), path);
   }
 
   /** performQueueAction — sends the RPC, applies a CONFIRMED removal
    * locally, and kicks the room on an unacknowledged reply. Requires the
    * host's `message-queue-actions-v1` capability. */
   async queueAction(id: string, action: QueueActionKind): Promise<boolean> {
+    const parked = localQueuedFor(this.chatId).find(q => q.id === id);
+    if (parked?.awaitingUpload === true) {
+      if (action !== 'remove') return false;
+      await removeLocalQueued(this.chatId, id);
+      for (const ref of parked.attachments ?? []) {
+        const parsed = parsePendingRef(ref);
+        if (parsed === undefined) continue;
+        await this.deps.docDisk
+          .deleteUpload(this.deps.orgId, this.deps.userId, parsed.uploadId)
+          .catch(() => {});
+      }
+      this.publishQueue();
+      return true;
+    }
     const store = getSessionStore(this.chatId);
     const row = store.getState().queue.find(q => q.id === id);
     if (row === undefined) return false;
@@ -788,10 +847,8 @@ export class SessionController {
       this.deps.hostCapabilities?.() ?? new Set(),
       staged.length > 0,
     );
-    // Host offline: the queue is the only park that survives (legacy
-    // uploads need the host). pending:// refs still require the host's
-    // message-queue-attachments-v1 to resolve — an older host would
-    // forward them verbatim into the prompt, so block instead.
+    // Host offline: only a queue-capable host can hold the send. An older
+    // host would have to take pending:// refs in the prompt, so block.
     if (opts.forceQueue === true && staged.length > 0 && plan !== 'queue')
       plan = 'blocked';
     if (plan === 'direct') {
@@ -804,75 +861,38 @@ export class SessionController {
     if (readBase64 === undefined)
       throw new Error('readFileBase64 not wired on this platform');
 
+    const bodyText = text.trim().length === 0 ? ATTACHMENT_ONLY_TEXT : text;
     if (plan === 'queue') {
-      // Queue-first (ComposerView.swift queued flow): the row lands with
-      // pending:// refs NOW; bytes chase it via the escort from the stash.
-      const transfers = staged.map(a => ({
-        uploadId: a.id,
-        name: a.name,
-        size: a.size,
-      }));
-      for (const t of transfers) {
-        const b64 = await readBase64(
-          staged.find(a => a.id === t.uploadId)!.localUri,
-        );
-        await this.deps.docDisk.saveUpload(
-          this.deps.orgId,
-          this.deps.userId,
-          t.uploadId,
-          { name: t.name, size: t.size, chatId: this.chatId },
-          b64,
-        );
+      // The host copies queue-row `attachments` into the user prompt at
+      // drain and does not rewrite pending:// (that rewrite is only for
+      // Run commands). Upload first and store the committed host path —
+      // the same rule as the desktop composer for queue rows. Offline,
+      // park the bytes locally and flush once a relay exists.
+      const relay = this.tryHostRelay();
+      if (relay === undefined) {
+        await this.parkAttachmentQueue(bodyText, staged, readBase64);
+        return 'queue';
       }
-      // The host composes the withAttachments trailer from the row's
-      // `attachments` at dispatch (doc_host.rs queued_message_prompt —
-      // `message-queue-clean-attachment-text-v1` even strips a client-
-      // expanded trailer), so `text` stays the raw user text. An empty
-      // text is substituted like withAttachments('', …) — empty-text
-      // rows are dropped by queuedFrom on both ends.
-      await this.enqueueQueued(
-        text.trim().length === 0 ? ATTACHMENT_ONLY_TEXT : text,
-        {
-          attachments: pendingRefsFor(transfers),
-        },
-      );
+      const paths = await this.uploadStaged(draftId, staged, relay, readBase64);
+      await this.enqueueQueued(bodyText, { attachments: paths });
       noteLocalDiagnostic(
         this.chatId,
-        `upload count=${transfers.length} bytes=${transfers.reduce(
-          (n, t) => n + t.size,
+        `upload count=${paths.length} bytes=${staged.reduce(
+          (n, a) => n + a.size,
           0,
         )} result=queued`,
       );
-      this.spawnEscort(transfers);
       return 'queue';
     }
 
     // Legacy: upload first, block the send until every ref resolves to a
     // host path (progress rings on the strip).
-    const relay = this.hostRelay();
-    const paths: string[] = [];
-    for (const a of staged) {
-      updateAttachment(draftId, a.id, { uploadState: 'uploading' });
-      try {
-        const path = await uploadAttachmentChunked(relay, a.name, a.id, {
-          readBase64: () => readBase64(a.localUri),
-          clock: this.deps.clock,
-          isAborted: () => this.abortedUploads.has(a.id),
-          onProgress: p => updateAttachment(draftId, a.id, { progress: p }),
-        });
-        updateAttachment(draftId, a.id, {
-          uploadState: 'uploaded',
-          progress: 1,
-          remoteRef: path,
-        });
-        paths.push(path);
-        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=ok`);
-      } catch (e) {
-        updateAttachment(draftId, a.id, { uploadState: 'failed' });
-        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=fail`);
-        throw e;
-      }
-    }
+    const paths = await this.uploadStaged(
+      draftId,
+      staged,
+      this.hostRelay(),
+      readBase64,
+    );
     // The prompt names the paths (withAttachments transport — what persists
     // in the doc); run.attachments carries the refs only for harnesses that
     // inline image blocks.
@@ -892,6 +912,122 @@ export class SessionController {
     return 'legacy';
   }
 
+  /** Upload each staged file. Remembers the local URI under the host path
+   * so the transcript can paint the image without a round trip. */
+  private async uploadStaged(
+    draftId: string,
+    staged: readonly StagedAttachment[],
+    relay: RelayLike,
+    readBase64: (uri: string) => Promise<string>,
+  ): Promise<string[]> {
+    const paths: string[] = [];
+    for (const a of staged) {
+      updateAttachment(draftId, a.id, { uploadState: 'uploading' });
+      try {
+        const path = await uploadAttachmentChunked(relay, a.name, a.id, {
+          readBase64: () => readBase64(a.localUri),
+          clock: this.deps.clock,
+          isAborted: () => this.abortedUploads.has(a.id),
+          onProgress: p => updateAttachment(draftId, a.id, { progress: p }),
+        });
+        updateAttachment(draftId, a.id, {
+          uploadState: 'uploaded',
+          progress: 1,
+          remoteRef: path,
+        });
+        rememberAttachmentPreview(path, a.localUri);
+        rememberAttachmentPreview(pendingRef(a.id, a.name), a.localUri);
+        paths.push(path);
+        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=ok`);
+      } catch (e) {
+        updateAttachment(draftId, a.id, { uploadState: 'failed' });
+        noteLocalDiagnostic(this.chatId, `upload bytes=${a.size} result=fail`);
+        throw e;
+      }
+    }
+    return paths;
+  }
+
+  /** Host can't take bytes yet. Stash them and keep the row off the doc so
+   * a later sync cannot paste pending:// into the transcript. */
+  private async parkAttachmentQueue(
+    text: string,
+    staged: readonly StagedAttachment[],
+    readBase64: (uri: string) => Promise<string>,
+  ): Promise<void> {
+    const refs: string[] = [];
+    for (const a of staged) {
+      const b64 = await readBase64(a.localUri);
+      await this.deps.docDisk.saveUpload(
+        this.deps.orgId,
+        this.deps.userId,
+        a.id,
+        { name: a.name, size: a.size, chatId: this.chatId },
+        b64,
+      );
+      const ref = pendingRef(a.id, a.name);
+      rememberAttachmentPreview(ref, a.localUri);
+      refs.push(ref);
+    }
+    const id = newId();
+    await addLocalQueued(this.chatId, {
+      ...this.localRow(id, text, { attachments: refs }),
+      awaitingUpload: true,
+    });
+    this.publishQueue();
+    noteLocalDiagnostic(
+      this.chatId,
+      `upload count=${staged.length} bytes=${staged.reduce(
+        (n, a) => n + a.size,
+        0,
+      )} result=parked`,
+    );
+  }
+
+  /** Turn parked pending:// refs into committed host paths. Each landed
+   * file is checkpointed on the sidecar so a later retry does not need
+   * bytes that were already deleted from the stash. */
+  private async resolveQueuedAttachments(
+    rowId: string,
+    refs: string[] | undefined,
+  ): Promise<string[] | undefined> {
+    if (refs === undefined || refs.length === 0) return refs;
+    const relay = this.hostRelay();
+    const resolved = [...refs];
+    for (let i = 0; i < resolved.length; i++) {
+      const ref = resolved[i];
+      if (ref === undefined) continue;
+      const pending = parsePendingRef(ref);
+      if (pending === undefined) continue;
+      const dataB64 = await this.deps.docDisk.loadUpload(
+        this.deps.orgId,
+        this.deps.userId,
+        pending.uploadId,
+      );
+      if (dataB64 === undefined)
+        throw new Error(`stash missing for ${pending.uploadId}`);
+      const path = await uploadAttachmentChunked(
+        relay,
+        pending.name,
+        pending.uploadId,
+        {
+          readBase64: () => Promise.resolve(dataB64),
+          clock: this.deps.clock,
+        },
+      );
+      const preview = attachmentPreviewUri(ref);
+      if (preview !== undefined) rememberAttachmentPreview(path, preview);
+      await this.deps.docDisk.deleteUpload(
+        this.deps.orgId,
+        this.deps.userId,
+        pending.uploadId,
+      );
+      resolved[i] = path;
+      await patchLocalQueued(this.chatId, rowId, { attachments: resolved });
+    }
+    return resolved;
+  }
+
   /** Abort an in-flight staged upload (composer ✕) — checked between
    * chunks and before retries; deletes only the local stash. */
   cancelUpload(attachmentId: string): void {
@@ -907,8 +1043,16 @@ export class SessionController {
     this.deps.docDisk
       .listUploads(this.deps.orgId, this.deps.userId)
       .then(list => {
+        const parked = new Set<string>();
+        for (const row of localQueuedFor(this.chatId)) {
+          if (row.awaitingUpload !== true) continue;
+          for (const ref of row.attachments ?? []) {
+            const parsed = parsePendingRef(ref);
+            if (parsed !== undefined) parked.add(parsed.uploadId);
+          }
+        }
         const mine = list
-          .filter(u => u.chatId === this.chatId)
+          .filter(u => u.chatId === this.chatId && !parked.has(u.uploadId))
           .map(u => ({ uploadId: u.uploadId, name: u.name, size: u.size }));
         if (mine.length > 0) this.spawnEscort(mine);
       })

@@ -35,6 +35,23 @@ test('truncateMessageText keeps short text and ellipsizes on a word boundary', (
   expect(truncateMessageText(long, 20)).toBe('one two three four…');
 });
 
+test('entryPreviewText hides attachment trailers and pending refs', () => {
+  const raw = [
+    'look at this',
+    '',
+    'Attached images (local files — open them to view):',
+    '- pending://up-1/photo.png',
+  ].join('\n');
+  expect(entryPreviewText(entry('m1', 'user', raw))).toBe('look at this');
+  const only = [
+    'See the attached image(s).',
+    '',
+    'Attached images (local files — open them to view):',
+    '- /host/uploads/photo.png',
+  ].join('\n');
+  expect(entryPreviewText(entry('m2', 'user', only))).toBe('photo.png');
+});
+
 test('collapseMessageText and entryPreviewText flatten whitespace', () => {
   expect(collapseMessageText('  a \n\t b  ')).toBe('a b');
   expect(entryPreviewText(entry('m1', 'user', 'hello\n  there'))).toBe(

@@ -11,7 +11,11 @@ import type { QueuedMessage } from '../protocol/types';
 export type LocalQueuedMessage = Pick<
   QueuedMessage,
   'id' | 'text' | 'attachments' | 'holdForTurnEnd' | 'issuedBy' | 'issuedAt'
->;
+> & {
+  /** Bytes are still on this phone. Flush uploads them, then writes the
+   * queue row with the committed host path. Never synced as `pending://`. */
+  awaitingUpload?: boolean;
+};
 
 export interface QueuedLocalState {
   byChat: Record<string, LocalQueuedMessage[]>;
@@ -66,6 +70,7 @@ const parseSaved = (
         ? { attachments: [...row.attachments] }
         : {}),
       ...(row.holdForTurnEnd === true ? { holdForTurnEnd: true } : {}),
+      ...(row.awaitingUpload === true ? { awaitingUpload: true } : {}),
     }));
     if (next.length > 0) byChat[chatId] = next;
   }
@@ -109,6 +114,26 @@ export const addLocalQueued = (
   return persistNow();
 };
 
+/** Replace fields on a sidecar row and persist. Used to checkpoint a
+ * parked attachment once its host path is known. */
+export const patchLocalQueued = (
+  chatId: string,
+  id: string,
+  patch: Partial<Pick<LocalQueuedMessage, 'attachments'>>,
+): Promise<void> => {
+  const cur = localQueuedFor(chatId);
+  if (!cur.some(q => q.id === id)) return Promise.resolve();
+  queuedLocalStore.setState(s => ({
+    byChat: {
+      ...s.byChat,
+      [chatId]: (s.byChat[chatId] ?? []).map(row =>
+        row.id === id ? { ...row, ...patch } : row,
+      ),
+    },
+  }));
+  return persistNow();
+};
+
 export const removeLocalQueued = (
   chatId: string,
   id: string,
@@ -132,7 +157,9 @@ export const reconcileLocalQueued = (
 ): Promise<void> => {
   const cur = localQueuedFor(chatId);
   if (cur.length === 0) return Promise.resolve();
-  const next = cur.filter(q => liveIds.has(q.id));
+  // `awaitingUpload` rows are not on the doc yet — dropping them here would
+  // lose the send before flush replaces the pending ref with a host path.
+  const next = cur.filter(q => liveIds.has(q.id) || q.awaitingUpload === true);
   if (next.length === cur.length) return Promise.resolve();
   queuedLocalStore.setState(s => {
     const byChat = { ...s.byChat };
