@@ -42,7 +42,7 @@ const workedForCaption = (
     : formatWorkedDurationRange(frozen.startedAt, frozen.endedAt);
 };
 
-export const SessionTranscriptPane = React.memo(function SessionTranscriptPane({
+export const SessionTranscriptPane = React.memo(function TranscriptPane({
   chatId,
   openKey,
   transcriptRef,

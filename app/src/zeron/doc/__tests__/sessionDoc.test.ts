@@ -281,11 +281,10 @@ describe('entry identity across project()', () => {
 
   it('keeps untouched messages when only one LoroText grows', () => {
     const host = hostDoc();
-    const growing = streamingText('hello');
-    pushMessage(
+    const msg = pushMessage(
       host,
       { id: 'm1', role: 'assistant', createdAt: 1, deviceId: 'h' },
-      [{ id: 'p1', kind: 'text', text: growing }],
+      [{ id: 'p1', kind: 'text', text: streamingText('hello') }],
     );
     pushMessage(host, { id: 'm2', role: 'user', createdAt: 2, deviceId: 'h' }, [
       { id: 'p2', kind: 'text', text: streamingText('stable') },
@@ -294,7 +293,10 @@ describe('entry identity across project()', () => {
     const from = host.oplogVersion();
     const { adapter, doc } = mirror(host);
     const first = doc.project()!;
-    growing.insert(5, '!');
+    // setContainer returns the attached text; the pre-attach LoroText is detached.
+    const parts = msg.get('parts') as LoroList;
+    const part = parts.get(0) as LoroMap;
+    (part.get('text') as LoroText).insert(5, '!');
     host.commit();
     adapter.import(host.export({ mode: 'update', from }));
     const second = doc.project()!;

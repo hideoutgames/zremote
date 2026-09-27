@@ -640,7 +640,7 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   );
 }
 
-const TermRow = React.memo(function TermRow({
+const TermRow = React.memo(function TerminalRow({
   row,
   cursor,
 }: {

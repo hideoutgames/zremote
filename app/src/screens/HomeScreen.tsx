@@ -510,6 +510,8 @@ export function HomeScreen({
               .includes(q),
           );
     return sortOverviewThreads(filtered, sessions, Date.now());
+    // runningKey flips when a working row crosses the stale boundary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overview, spaceFilter, query, sessions, runningKey]);
   const { pinned, rest } = useMemo(
     () => partitionPinnedChats(chats, pinnedIds),
