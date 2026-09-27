@@ -5,8 +5,11 @@
 # cloud-signs with the team's one Apple Distribution certificate.
 # Requires repo secrets ASC_KEY_ID / ASC_ISSUER_ID /
 # ASC_PRIVATE_KEY (the .p8 file contents, pasted as-is; base64 also
-# accepted) / APPLE_TEAM_ID. Optional variables IOS_BUNDLE_ID (default
-# no.hideout.zremote) / ZERON_EDGE_URL (see docs/TESTFLIGHT.md).
+# accepted) / APPLE_TEAM_ID. Optional variable IOS_BUNDLE_ID (default
+# no.hideout.zremote). See docs/TESTFLIGHT.md.
+#
+# The Xcode "Rust core" phase builds crates/mobile during the archive
+# (scripts/ios/build-core.sh). Rust must be on PATH before xcodebuild.
 
 name: iOS TestFlight
 
@@ -29,14 +32,11 @@ jobs:
   testflight:
     runs-on: macos-26
     environment: testflight
-    defaults:
-      run:
-        working-directory: app
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
       - name: Record revision
-        working-directory: .
         run: |
           sha=$(git rev-parse HEAD)
           short=$(git rev-parse --short HEAD)
@@ -47,6 +47,7 @@ jobs:
             echo "- Subject: $subject"
             echo "- Build number: \`${{ github.run_number }}\`"
             echo "- Ref: \`${{ github.ref }}\`"
+            echo "- Bundle id: \`${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Archiving $short — $subject (build ${{ github.run_number }})"
 
@@ -76,37 +77,15 @@ jobs:
           fi
           xcodebuild -version
 
-      - uses: actions/setup-node@v4
+      - name: Rust toolchain + iOS targets
+        uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
+          targets: aarch64-apple-ios
 
-      - name: Install JS dependencies
-        run: npm ci
-
-      - uses: ruby/setup-ruby@v1
+      - uses: Swatinem/rust-cache@v2
         with:
-          ruby-version: "3.3"
-          working-directory: app
-
-      - name: Install CocoaPods + xcpretty
-        run: bundle install
-
-      - name: Expo prebuild
-        env:
-          ZERON_IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          IOS_BUILD_NUMBER: ${{ github.run_number }}
-          ZERON_EDGE_URL: ${{ vars.ZERON_EDGE_URL || 'https://edge.zeron.sh' }}
-          GITHUB_SHA: ${{ github.sha }}
-        run: npx expo prebuild --platform ios --clean --no-install
-
-      - name: CocoaPods install
-        working-directory: app/ios
-        env:
-          COCOAPODS_DISABLE_STATS: "1"
-        run: bundle exec pod install
+          key: ios-core
+          cache-on-failure: true
 
       - name: Write App Store Connect API key
         env:
@@ -123,6 +102,10 @@ jobs:
           grep -q "BEGIN PRIVATE KEY" "$key" || { echo "ASC_PRIVATE_KEY is not a valid .p8"; exit 1; }
 
       - name: Archive (unsigned)
+        working-directory: apps/ios
+        env:
+          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -o pipefail
           # Unsigned on purpose: Automatic archive on Xcode 26 still asks
@@ -130,16 +113,18 @@ jobs:
           # then mints a new development cert on each runner until the
           # team's 3-certificate cap. Export (below) is the only step that
           # talks to Apple for signing — it reuses the one cloud-managed
-          # Distribution cert. Workspace-wide CODE_SIGNING_ALLOWED=NO is
-          # safe (unlike a Distribution identity xcarg) and matches
-          # ios-compile.yml, including ExpoWidgetsTarget and Pods.
-          xcodebuild -workspace ios/ZRemote.xcworkspace \
-            -scheme ZRemote -configuration Release \
+          # Distribution cert.
+          # The Zeron target's "Rust core" phase builds libzeron_mobile.a.
+          xcodebuild -project Zeron.xcodeproj -scheme Zeron \
+            -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            archive -quiet 2>&1 | tee build.log || {
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive 2>&1 | tee build.log || {
               grep -E "error:" build.log || true
               exit 1
             }
@@ -185,8 +170,8 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            -quiet 2>&1 | tee export.log || {
-              grep -E "error:" export.log || true
+            2>&1 | tee apps/ios/export.log || {
+              grep -E "error:" apps/ios/export.log || true
               exit 1
             }
 
@@ -196,9 +181,9 @@ jobs:
           # Belt and braces: the logs must never contain key material. If
           # they do, delete them so the artifact upload below has nothing
           # to leak, then fail the job loudly.
-          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" build.log export.log 2>/dev/null; then
+          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" apps/ios/build.log apps/ios/export.log 2>/dev/null; then
             echo "Log file contains key material — deleting logs and failing."
-            rm -f build.log export.log
+            rm -f apps/ios/build.log apps/ios/export.log
             exit 1
           fi
           rm -rf "$RUNNER_TEMP/asc"
@@ -209,6 +194,6 @@ jobs:
         with:
           name: testflight-logs
           path: |
-            app/build.log
-            app/export.log
+            apps/ios/build.log
+            apps/ios/export.log
           if-no-files-found: ignore

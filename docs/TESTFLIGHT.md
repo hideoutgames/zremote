@@ -1,167 +1,66 @@
 # TestFlight pipeline
 
-Two workflows under `.github/workflows/`:
+`.github/workflows/ios-testflight.yml` — **iOS TestFlight**. Manual
+`workflow_dispatch` only (optional `notes`). Merges to `main` do not start
+it.
 
-- **`ios-compile.yml` — iOS Compile Check.** Manual `workflow_dispatch`
-  only. Merges to `main` and pull requests do **not** start it. Unsigned
-  Release build (`CODE_SIGNING_ALLOWED=NO`, placeholder bundle id
-  `dev.zremote.compilecheck`). Needs **no secrets**.
-- **`ios-testflight.yml` — iOS TestFlight.** Manual `workflow_dispatch`
-  only (optional `notes`). Merges to `main` do **not** start it. The
-  archive is **unsigned** (`CODE_SIGNING_ALLOWED=NO`, same flags as the
-  compile-check job) so ephemeral runners never mint Apple Development
-  certificates. `xcodebuild -exportArchive` then cloud-signs with the
-  App Store Connect API key and the team's **one cloud-managed Apple
-  Distribution certificate**. No certificates, profiles, or key material
-  are committed. The generated `project.pbxproj` is left as Expo prebuild
-  wrote it — rewriting identities cannot stop Xcode 26 from treating
-  Automatic archive as development signing.
+The job checks out this repo, installs Rust (`rust-toolchain.toml`, iOS
+device target) and Xcode 26, then archives `apps/ios/Zeron.xcodeproj`
+scheme **Zeron** for a generic iOS device. The target's **Rust core**
+build phase runs `scripts/ios/build-core.sh`, which compiles `crates/mobile`
+(`libzeron_mobile.a`) and refreshes the UniFFI bindings.
 
-  The archive is always the **checked-out git SHA** of the branch
-  selected in the Actions UI (`github.sha`). `CFBundleVersion` is
-  `github.run_number` (counts every run of this workflow, including
-  failures). `extra.gitSha` is baked in at prebuild as
-  `0.1.0 (N) · abc1234`. Dispatch `main` after the work has merged
-  (AGENTS.md) — stacked PRs that land on another feature branch never
-  ship.
+The archive is **unsigned** (`CODE_SIGNING_ALLOWED=NO`) so ephemeral
+runners never mint Apple Development certificates.
+`xcodebuild -exportArchive` then cloud-signs with the App Store Connect
+API key and the team's **one cloud-managed Apple Distribution
+certificate**, and uploads to App Store Connect. No certificates,
+profiles, or key material are committed.
 
-Both run on `macos-26` and select `/Applications/Xcode_26.app` when
-present (the step prints `ls /Applications | grep -i xcode` and
-`xcodebuild -version` so the exact image contents land in the log).
+`CFBundleVersion` is `github.run_number` (this workflow's run count,
+including failures). `CFBundleShortVersionString` is the project's
+`MARKETING_VERSION` (`1.0`). The bundle id defaults to
+**`no.hideout.zremote`** — the existing ZRemote App ID — so the upload
+lands on the existing TestFlight app. Override with the `IOS_BUNDLE_ID`
+Actions variable. `DEVELOPMENT_TEAM` on the archive and `teamID` in
+`ExportOptions.plist` both come from the `APPLE_TEAM_ID` secret.
 
-## 1. One-time Apple setup
+The native app has **no entitlements file** (no push, associated domains,
+app groups, or widget extension). Extra capabilities already enabled on
+the `no.hideout.zremote` App ID do not have to be removed.
 
-Apple Developer Program membership is required (paid).
-
-**Certificates, Identifiers & Profiles → Identifiers:**
-
-- New **App ID** for the app's bundle id — `no.hideout.zremote` (the
-  default in `app.config.ts`; override with the `IOS_BUNDLE_ID` GitHub
-  variable). Capabilities to enable:
-  - **Push Notifications** (`expo-widgets` with
-    `enablePushNotifications: true` — Live Activity push-to-start — and
-    `expo-notifications` for finish-banner alerts).
-  - **Associated Domains** (universal-link auth return:
-    `applinks:<edge host>`).
-  - **App Groups** — the `expo-widgets` config plugin defaults the shared
-    app group to `group.<bundleId>` and writes it into
-    `com.apple.security.application-groups` (verified via
-    `expo config --type introspect`).
-- The `expo-widgets` plugin also generates a widget-extension target
-  named **`ExpoWidgetsTarget`** with bundle id
-  **`<bundleId>.ExpoWidgetsTarget`** — register that App ID too
-  (with the same App Groups capability so it can join
-  `group.<bundleId>`). The target exists even though `widgets[]` is
-  empty; Live Activities are registered at runtime.
-
-**App Store Connect → Apps → New App:** platform iOS, name `ZRemote`,
-pick the bundle id, choose an SKU (e.g. `zremote`).
-
-## 2. App Store Connect API key
-
-Users and Access → **Integrations → App Store Connect API → Team Keys →
-Generate**. Role **Admin** (required for Xcode cloud-managed
-distribution certificates; App Manager + "Access to Cloud Managed
-Distribution Certificate" also works). Download the `.p8` **once** —
-Apple does not offer it again. Note the **Key ID** and **Issuer ID**.
-
-That API key is how CI uses the **single** Apple Distribution
-certificate Apple already manages for the team. The archive step does
-not sign and does not pass `-allowProvisioningUpdates` or the ASC
-authentication flags, so it cannot create Apple Development
-certificates or register the GitHub runner as a device. Automatic
-development signing on an ephemeral runner mints a new development cert
-each job until the account hits Apple's 3-certificate cap ("Choose a
-certificate to revoke"), which is what broke later TestFlight archives.
-
-If Certificates, Identifiers & Profiles already lists several **Apple
-Development** entries named "Created via API" / "Created by Xcode" from
-those earlier runs, revoke the unused development ones so a Mac can
-still issue a local development cert. Those leftover certs are
-unusable (the private keys died with the runners) and will keep
-blocking **local** Xcode development until revoked. Leave the Apple
-Distribution / cloud-managed distribution certificate alone. Revoking
-the orphaned development certs is optional for the unsigned-archive
-job.
-
-**Team ID**: developer.apple.com → Membership details → Team ID
-(10 chars, e.g. `ABCDE12345`).
-
-## 3. GitHub configuration
+## GitHub configuration
 
 Repo → Settings → **Secrets and variables → Actions**:
 
 | Kind     | Name              | Value                                              |
 | -------- | ----------------- | -------------------------------------------------- |
-| Secret   | `ASC_KEY_ID`      | Key ID from step 2                                 |
-| Secret   | `ASC_ISSUER_ID`   | Issuer ID from step 2                              |
+| Secret   | `ASC_KEY_ID`      | App Store Connect API Key ID                       |
+| Secret   | `ASC_ISSUER_ID`   | App Store Connect API Issuer ID                    |
 | Secret   | `ASC_PRIVATE_KEY` | the `.p8` file's text, pasted as-is (see below)    |
-| Secret   | `APPLE_TEAM_ID`   | Team ID                                            |
+| Secret   | `APPLE_TEAM_ID`   | Team ID (10 characters)                            |
 | Variable | `IOS_BUNDLE_ID`   | optional — defaults to `no.hideout.zremote`        |
-| Variable | `ZERON_EDGE_URL`  | optional — edge base URL (default `edge.zeron.sh`) |
 
-The `.p8` is a plain-text PEM file, so no conversion tool is needed. Open
-it in any text viewer (on iPad: Files → tap the file → Quick Look, or
-share it into Notes), select all, copy, and paste the whole thing —
-including the `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----`
-lines — into the secret's value box. GitHub secrets keep newlines. The
-workflow also accepts a base64-encoded value if you prefer.
+The `.p8` is a plain-text PEM file. Paste the whole thing — including the
+`-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` lines — into
+the secret. The workflow also accepts a base64-encoded value.
 
-Create the **`testflight`** environment (Settings → Environments → New
-environment) and optionally add required reviewers so every upload is
-gated. The job's first step fails with a clear list of missing secret
-**names** (values are never printed).
+Create the **`testflight`** environment (Settings → Environments) and
+optionally add required reviewers so every upload is gated. The job's
+secret check fails with a list of missing secret **names** (values are
+never printed).
 
-## 4. Run
+The API key needs a role that can use cloud-managed distribution
+certificates (**Admin**, or App Manager with access to the cloud-managed
+distribution certificate).
 
-- Actions → **iOS TestFlight** → Run workflow (picks a branch; default
-  `main`). Merges to `main` do not start an archive.
+## Run
 
-`IOS_BUILD_NUMBER` is the workflow run number; `GITHUB_SHA` is written
-into `expo.extra.gitSha` at prebuild. `aps-environment` stays
-`development` in the entitlements file — Xcode swaps it to `production`
-on App Store export via the distribution profile.
+Actions → **iOS TestFlight** → Run workflow. The archive is the
+checked-out SHA. The job summary lists the SHA, commit subject, build
+number, and bundle id.
 
-The job summary lists the SHA, commit subject, and build number. Settings
-→ Account shows the same `version (build) · sha` label so a TestFlight
-install can be matched to git.
-
-The archive step passes `CODE_SIGNING_ALLOWED=NO`,
-`CODE_SIGNING_REQUIRED=NO`, and an empty `CODE_SIGN_IDENTITY` — the
-same unsigned flags as **iOS Compile Check**. It does **not** pass
-`-allowProvisioningUpdates` or the ASC authentication flags. Those
-apply only at export, where `ExportOptions.plist` sets
-`signingStyle=automatic` and `signingCertificate=Apple Distribution` so
-cloud signing can pick the team's one Distribution cert.
-
-Do not pass `CODE_SIGN_IDENTITY=Apple Distribution` or
-`CODE_SIGN_STYLE` as workspace-wide xcargs: they leak onto CocoaPods and
-on Xcode 26 produce "automatically signed for development, but a
-conflicting code signing identity Apple Distribution has been manually
-specified." Writing Apple Distribution into the generated
-`project.pbxproj` while `CODE_SIGN_STYLE` stays Automatic is the same
-conflict. Manual style without a local Distribution cert fails with
-"requires a provisioning profile". Stripping `CODE_SIGN_IDENTITY` and
-keeping Automatic still asks for iOS App Development profiles at
-archive time.
-
-## 5. First-run expectations
-
-The in-repo native modules (`react-native-loro`, `zeron-dictation`,
-`expo-widgets` extension) have **never been compiled** — Windows cannot
-build them. Run **iOS Compile Check** first and fix any Swift errors from
-its `build.log` artifact before expecting TestFlight to pass. Export
-compliance is pre-answered by `ITSAppUsesNonExemptEncryption=false` in
-`infoPlist`. TestFlight processing takes ~10 minutes after upload; add
-testers under TestFlight → Internal Testing.
-
-## 6. Security notes
-
-- The repo is **public**: bundle ids, team id, and key material come from
-  GitHub variables/secrets at run time — nothing sensitive is hardcoded.
-- The `.p8` exists only as `$RUNNER_TEMP/asc/AuthKey.p8` (mode 600) for
-  the job's lifetime and is deleted in an `always()` step. Before the log
-  artifacts upload, the logs are grepped for `AuthKey`/`-----BEGIN`; a
-  hit deletes the logs and fails the job.
-- Forks cannot read secrets; the compile-check workflow needs none.
-- Never `echo` the key or enable `set -x` in a step that touches it.
+The archive step does **not** pass `-allowProvisioningUpdates` or the ASC
+authentication flags. Those apply only at export, where
+`ExportOptions.plist` sets `signingStyle=automatic` and
+`signingCertificate=Apple Distribution`.
