@@ -1,6 +1,6 @@
 # ZRemote
 
-ZRemote is the iPhone and iPad build of [Zeron](https://github.com/zeronsh/zeron), shipped under the existing ZRemote App Store identity.
+ZRemote is a clone of of [Zeron](https://github.com/zeronsh/zeron), purely for testing.
 
 ## Attribution
 
