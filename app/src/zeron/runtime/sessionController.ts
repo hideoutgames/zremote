@@ -367,23 +367,37 @@ export class SessionController {
     const knownFailed = new Set(s.failedSends.map(f => f.messageId));
     const liveIds = new Set(proj.queue.map(q => q.id));
     reconcileLocalQueued(this.chatId, liveIds).catch(() => {});
-    store.setState({
-      entries: proj.entries,
-      commands: proj.commands,
-      queue: displayedQueue(this.chatId, proj.queue),
-      meta: proj.meta,
-      pendingSends:
-        stillPending.length === s.pendingSends.length &&
-        stillPending.every((p, i) => p === s.pendingSends[i])
-          ? s.pendingSends
-          : stillPending,
-      failedSends:
-        failedSends.length === s.failedSends.length &&
-        failedSends.every((f, i) => f === s.failedSends[i])
-          ? s.failedSends
-          : failedSends,
-      hostDeviceId: this.deps.chatMeta().hostDeviceId,
-    });
+    const nextPending =
+      stillPending.length === s.pendingSends.length &&
+      stillPending.every((p, i) => p === s.pendingSends[i])
+        ? s.pendingSends
+        : stillPending;
+    const nextFailed =
+      failedSends.length === s.failedSends.length &&
+      failedSends.every((f, i) => f === s.failedSends[i])
+        ? s.failedSends
+        : failedSends;
+    const queue = displayedQueue(this.chatId, proj.queue);
+    const hostDeviceId = this.deps.chatMeta().hostDeviceId;
+    if (
+      proj.entries !== s.entries ||
+      proj.commands !== s.commands ||
+      queue !== s.queue ||
+      proj.meta !== s.meta ||
+      nextPending !== s.pendingSends ||
+      nextFailed !== s.failedSends ||
+      hostDeviceId !== s.hostDeviceId
+    ) {
+      store.setState({
+        entries: proj.entries,
+        commands: proj.commands,
+        queue,
+        meta: proj.meta,
+        pendingSends: nextPending,
+        failedSends: nextFailed,
+        hostDeviceId,
+      });
+    }
     for (const f of failedSends) {
       if (knownFailed.has(f.messageId)) continue;
       if ((draftFor(this.chatId)?.text ?? '').trim() === '')

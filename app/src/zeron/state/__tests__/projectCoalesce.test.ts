@@ -45,4 +45,24 @@ describe('ProjectCoalesce', () => {
     expect(n).toBe(2);
     c.dispose();
   });
+
+  it('a follow-up after a timed flush waits for the next window', async () => {
+    const clock = new FakeClock(1_000);
+    let n = 0;
+    const c = new ProjectCoalesce(clock, () => {
+      n += 1;
+    });
+    c.schedule();
+    await flush();
+    expect(n).toBe(1);
+    c.schedule();
+    clock.advance(PROJECT_COALESCE_MS);
+    expect(n).toBe(2);
+    c.schedule();
+    await flush();
+    expect(n).toBe(2);
+    clock.advance(PROJECT_COALESCE_MS);
+    expect(n).toBe(3);
+    c.dispose();
+  });
 });

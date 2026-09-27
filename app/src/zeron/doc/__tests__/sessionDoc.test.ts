@@ -9,6 +9,8 @@ import {
   buildRespondInput,
   buildRunCommand,
   buildSteer,
+  entryFrom,
+  entryMatchesRaw,
   SessionDoc,
 } from '../sessionDoc';
 import { COMMAND_DEFAULT_TTL_MS } from '../../protocol/types';
@@ -249,6 +251,142 @@ describe('SessionDoc.project', () => {
       { id: 'q1', text: 'queued hello', issuedBy: 'phone-1', issuedAt: 42 },
     ]);
     expect(p.meta.contextUsage).toEqual({ tokens: 100, window: 200 });
+  });
+});
+
+describe('entry identity across project()', () => {
+  it('reuses entry objects when the doc has not changed', () => {
+    const host = hostDoc();
+    pushMessage(host, { id: 'm1', role: 'user', createdAt: 1, deviceId: 'h' }, [
+      { id: 'p1', kind: 'text', text: streamingText('hello') },
+    ]);
+    pushMessage(
+      host,
+      {
+        id: 'm2',
+        role: 'assistant',
+        createdAt: 2,
+        deviceId: 'h',
+        status: 'streaming',
+      },
+      [{ id: 'p2', kind: 'text', text: streamingText('stable') }],
+    );
+    host.commit();
+    const { doc } = mirror(host);
+    const first = doc.project()!;
+    const second = doc.project()!;
+    expect(second.entries[0]).toBe(first.entries[0]);
+    expect(second.entries[1]).toBe(first.entries[1]);
+  });
+
+  it('keeps untouched messages when only one LoroText grows', () => {
+    const host = hostDoc();
+    const growing = streamingText('hello');
+    pushMessage(
+      host,
+      { id: 'm1', role: 'assistant', createdAt: 1, deviceId: 'h' },
+      [{ id: 'p1', kind: 'text', text: growing }],
+    );
+    pushMessage(host, { id: 'm2', role: 'user', createdAt: 2, deviceId: 'h' }, [
+      { id: 'p2', kind: 'text', text: streamingText('stable') },
+    ]);
+    host.commit();
+    const from = host.oplogVersion();
+    const { adapter, doc } = mirror(host);
+    const first = doc.project()!;
+    growing.insert(5, '!');
+    host.commit();
+    adapter.import(host.export({ mode: 'update', from }));
+    const second = doc.project()!;
+    expect(second.entries[0]).not.toBe(first.entries[0]);
+    expect(second.entries[0].parts[0]).toMatchObject({ text: 'hello!' });
+    expect(second.entries[1]).toBe(first.entries[1]);
+  });
+});
+
+describe('entryMatchesRaw', () => {
+  const raw = {
+    id: 'm1',
+    role: 'assistant',
+    createdAt: 1,
+    deviceId: 'h',
+    status: 'streaming',
+    parts: [
+      { id: 'p1', kind: 'text', text: 'hi' },
+      { id: 'r1', kind: 'reasoning', reasoning: 'because' },
+      {
+        id: 't1',
+        kind: 'tool',
+        call: { name: 'bash', command: 'ls' },
+        output: 'ok',
+        isError: false,
+      },
+      {
+        id: 'i1',
+        kind: 'image',
+        path: '/tmp/a.png',
+        name: 'a.png',
+        mimeType: 'image/png',
+      },
+    ],
+  };
+
+  it('matches a freshly decoded entry', () => {
+    const entry = entryFrom(raw);
+    expect(entry).toBeDefined();
+    expect(entryMatchesRaw(entry!, raw)).toBe(true);
+  });
+
+  it('rejects text, status, tool output, isError, image, reasoning, and order changes', () => {
+    const entry = entryFrom(raw)!;
+    const parts = raw.parts;
+    expect(
+      entryMatchesRaw(entry, {
+        ...raw,
+        parts: [{ ...parts[0], text: 'hi!' }, ...parts.slice(1)],
+      }),
+    ).toBe(false);
+    expect(entryMatchesRaw(entry, { ...raw, status: 'complete' })).toBe(false);
+    expect(
+      entryMatchesRaw(entry, {
+        ...raw,
+        parts: [parts[0], parts[1], { ...parts[2], output: 'nope' }, parts[3]],
+      }),
+    ).toBe(false);
+    expect(
+      entryMatchesRaw(entry, {
+        ...raw,
+        parts: [parts[0], parts[1], { ...parts[2], isError: true }, parts[3]],
+      }),
+    ).toBe(false);
+    expect(
+      entryMatchesRaw(entry, {
+        ...raw,
+        parts: [
+          parts[0],
+          parts[1],
+          parts[2],
+          { ...parts[3], path: '/tmp/b.png' },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      entryMatchesRaw(entry, {
+        ...raw,
+        parts: [
+          parts[0],
+          { ...parts[1], reasoning: 'else' },
+          parts[2],
+          parts[3],
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      entryMatchesRaw(entry, {
+        ...raw,
+        parts: [parts[1], parts[0], parts[2], parts[3]],
+      }),
+    ).toBe(false);
   });
 });
 

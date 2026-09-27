@@ -37,6 +37,9 @@ import {
 } from '../zeron/state/workspaceStore';
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
 import {
+  chatIndicator,
+  effectiveStatus,
+  isAgentRunning,
   isPresenceFresh,
   sortOverviewThreads,
 } from '../zeron/protocol/entities';
@@ -459,16 +462,10 @@ export function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const [bottomH, setBottomH] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
   const searching = searchFocused || query.trim() !== '';
   const wallpaper = useNewThreadComposerBackground() !== undefined;
   const theme = chromeThemeFor(wallpaper, contentTheme);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -483,6 +480,20 @@ export function HomeScreen({
   const connection = useStore(workspaceStore, s => s.connection);
   const sessions = useStore(workspaceStore, s => s.sessions);
   const pinnedIds = usePinnedChatIds();
+  // Running-vs-stale is the only sort input that moves with the clock.
+  // A bit string stays Object.is-stable, so the 1s clock does not rebuild
+  // the list until a row actually crosses the stale boundary.
+  const runningKey = useDerivedNow(now => {
+    let bits = '';
+    for (const c of overview) {
+      bits += isAgentRunning(
+        chatIndicator(c, effectiveStatus(sessions[c.id], now)),
+      )
+        ? '1'
+        : '0';
+    }
+    return bits;
+  });
 
   const chats = useMemo(() => {
     const scoped =
@@ -498,8 +509,8 @@ export function HomeScreen({
               .toLowerCase()
               .includes(q),
           );
-    return sortOverviewThreads(filtered, sessions, now);
-  }, [overview, spaceFilter, query, sessions, now]);
+    return sortOverviewThreads(filtered, sessions, Date.now());
+  }, [overview, spaceFilter, query, sessions, runningKey]);
   const { pinned, rest } = useMemo(
     () => partitionPinnedChats(chats, pinnedIds),
     [chats, pinnedIds],

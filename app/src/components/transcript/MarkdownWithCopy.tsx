@@ -1,7 +1,11 @@
 import React from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
-import { markdownMd4cFlags, markdownStyleFor } from '../../markdownStyle';
+import {
+  darkMarkdownStyle,
+  lightMarkdownStyle,
+  markdownMd4cFlags,
+} from '../../markdownStyle';
 import { useTheme } from '../../theme';
 import { CodeFenceBlock } from './CodeFenceBlock';
 import { splitMarkdownFences } from './splitMarkdownFences';
@@ -16,7 +20,8 @@ export function MarkdownWithCopy({
   streaming?: boolean;
 }) {
   const theme = useTheme();
-  const mdStyle = markdownStyleFor(theme);
+  const mdStyle =
+    theme.scheme === 'light' ? lightMarkdownStyle : darkMarkdownStyle;
   const segments = splitMarkdownFences(markdown);
   if (segments.length === 0) return null;
   const onlyProse =

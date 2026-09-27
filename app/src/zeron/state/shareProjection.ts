@@ -20,7 +20,11 @@ export const reuseMeta = (
   next: SessionDocMeta,
 ): SessionDocMeta => (sameMeta(prev, next) ? prev : next);
 
+const sameJson = (a: unknown, b: unknown): boolean =>
+  JSON.stringify(a) === JSON.stringify(b);
+
 const samePart = (a: MessagePart, b: MessagePart): boolean => {
+  if (a === b) return true;
   if (a.kind !== b.kind || a.id !== b.id) return false;
   switch (a.kind) {
     case 'text':
@@ -43,39 +47,57 @@ const samePart = (a: MessagePart, b: MessagePart): boolean => {
         a.questions === b.questions
       );
     case 'tool':
-      return b.kind === 'tool' && JSON.stringify(a) === JSON.stringify(b);
+      // Compare the large output string by value. Stringifying the whole
+      // part copied every tool body on each streaming projection.
+      return (
+        b.kind === 'tool' &&
+        a.resolved === b.resolved &&
+        a.isError === b.isError &&
+        a.output === b.output &&
+        a.outputRef === b.outputRef &&
+        a.outputBytes === b.outputBytes &&
+        a.diffRef === b.diffRef &&
+        a.subagentRef === b.subagentRef &&
+        a.subagentStatus === b.subagentStatus &&
+        a.subagentTail === b.subagentTail &&
+        sameJson(a.call, b.call) &&
+        sameJson(a.diff, b.diff) &&
+        sameJson(a.diffStats, b.diffStats)
+      );
     default:
       return false;
   }
 };
 
 export const sameEntry = (a: MessageEntry, b: MessageEntry): boolean =>
-  a.id === b.id &&
-  a.role === b.role &&
-  a.createdAt === b.createdAt &&
-  a.deviceId === b.deviceId &&
-  a.status === b.status &&
-  a.continuationOf === b.continuationOf &&
-  a.parts.length === b.parts.length &&
-  a.parts.every((p, i) => samePart(p, b.parts[i]));
+  a === b ||
+  (a.id === b.id &&
+    a.role === b.role &&
+    a.createdAt === b.createdAt &&
+    a.deviceId === b.deviceId &&
+    a.status === b.status &&
+    a.continuationOf === b.continuationOf &&
+    a.parts.length === b.parts.length &&
+    a.parts.every((p, i) => samePart(p, b.parts[i])));
 
 export const sameCommand = (
   a: SessionCommandEntry,
   b: SessionCommandEntry,
 ): boolean =>
-  a.id === b.id &&
-  a.status === b.status &&
-  a.kind === b.kind &&
-  a.issuedAt === b.issuedAt &&
-  a.issuedBy === b.issuedBy &&
-  a.expiresAt === b.expiresAt &&
-  a.resolution === b.resolution &&
-  a.basedOn?.turnId === b.basedOn?.turnId &&
-  a.basedOn?.frontier === b.basedOn?.frontier &&
-  JSON.stringify(a.payload) === JSON.stringify(b.payload);
+  a === b ||
+  (a.id === b.id &&
+    a.status === b.status &&
+    a.kind === b.kind &&
+    a.issuedAt === b.issuedAt &&
+    a.issuedBy === b.issuedBy &&
+    a.expiresAt === b.expiresAt &&
+    a.resolution === b.resolution &&
+    a.basedOn?.turnId === b.basedOn?.turnId &&
+    a.basedOn?.frontier === b.basedOn?.frontier &&
+    JSON.stringify(a.payload) === JSON.stringify(b.payload));
 
 export const sameQueued = (a: QueuedMessage, b: QueuedMessage): boolean =>
-  JSON.stringify(a) === JSON.stringify(b);
+  a === b || JSON.stringify(a) === JSON.stringify(b);
 
 export const reuseById = <T extends { id: string }>(
   prev: readonly T[],
