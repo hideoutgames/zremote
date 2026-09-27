@@ -1,4 +1,7 @@
-import { shouldLocalQuestionBanner } from '../src/notifications/questionAlert';
+import {
+  shouldLocalQuestionBanner,
+  shouldNotifyOpenQuestion,
+} from '../src/notifications/questionAlert';
 
 test('local question banner: active + other thread + working→awaitingInput', () => {
   expect(
@@ -32,6 +35,80 @@ test('local question banner skips background (edge APNs covers lock screen)', ()
       appState: 'background',
       selectedChatId: 'c2',
       chatId: 'c1',
+    }),
+  ).toBe(false);
+});
+
+test('open-question notify fires for a new tool question on another thread', () => {
+  expect(
+    shouldNotifyOpenQuestion({
+      baseline: false,
+      alreadyNotified: false,
+      questionId: 'tc1',
+      prevQuestionId: undefined,
+      kind: 'tool',
+      appState: 'active',
+      selectedChatId: 'c2',
+      chatId: 'c1',
+      leavingForeground: false,
+    }),
+  ).toBe(true);
+});
+
+test('open-question notify stays quiet on the baseline and on the open thread', () => {
+  expect(
+    shouldNotifyOpenQuestion({
+      baseline: true,
+      alreadyNotified: false,
+      questionId: 'tc1',
+      prevQuestionId: undefined,
+      kind: 'tool',
+      appState: 'active',
+      selectedChatId: 'c2',
+      chatId: 'c1',
+      leavingForeground: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldNotifyOpenQuestion({
+      baseline: false,
+      alreadyNotified: false,
+      questionId: 'tc1',
+      prevQuestionId: undefined,
+      kind: 'tool',
+      appState: 'active',
+      selectedChatId: 'c1',
+      chatId: 'c1',
+      leavingForeground: false,
+    }),
+  ).toBe(false);
+});
+
+test('locking the phone delivers a question that was on screen', () => {
+  expect(
+    shouldNotifyOpenQuestion({
+      baseline: false,
+      alreadyNotified: false,
+      questionId: 'tc1',
+      prevQuestionId: 'tc1',
+      kind: 'tool',
+      appState: 'background',
+      selectedChatId: 'c1',
+      chatId: 'c1',
+      leavingForeground: true,
+    }),
+  ).toBe(true);
+  expect(
+    shouldNotifyOpenQuestion({
+      baseline: false,
+      alreadyNotified: true,
+      questionId: 'tc1',
+      prevQuestionId: 'tc1',
+      kind: 'tool',
+      appState: 'background',
+      selectedChatId: 'c1',
+      chatId: 'c1',
+      leavingForeground: true,
     }),
   ).toBe(false);
 });

@@ -2,7 +2,7 @@
 // holds awaitingInput on idle runs (input-part parity) so unbrokered ask
 // tools keep the Live Activity on "needs input" instead of completing.
 
-import { activityPhase } from '../activityPhase';
+import { activityPhase, activityPhaseLabel } from '../activityPhase';
 
 describe('activityPhase', () => {
   it('maps run phases one-to-one without a question', () => {
@@ -24,6 +24,14 @@ describe('activityPhase', () => {
     expect(activityPhase('stopping', false, true)).toBe('stopping');
     expect(activityPhase('stale', false, true)).toBe('stale');
     expect(activityPhase('errored', false, true)).toBe('errored');
+  });
+
+  it('labels phases without prompt text', () => {
+    expect(activityPhaseLabel('awaitingInput')).toBe('Needs you');
+    expect(activityPhaseLabel('working')).toBe('Working');
+    expect(activityPhaseLabel('planReady')).toBe('Plan ready');
+    expect(activityPhaseLabel('errored')).toBe('Failed');
+    expect(activityPhaseLabel('completed')).toBe('Done');
   });
 
   it('planReady still wins over an open question', () => {

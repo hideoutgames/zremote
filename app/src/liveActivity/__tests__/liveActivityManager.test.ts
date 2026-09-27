@@ -71,10 +71,12 @@ class FakeHandle implements LiveActivityHandle {
 
 class FakeDriver implements LiveActivityDriver {
   failIndividuals = false;
+  failAll = false;
   started: FakeHandle[] = [];
   startedProps: SessionActivityProps[] = [];
   instances: FakeHandle[] = [];
   start(p: SessionActivityProps): LiveActivityHandle {
+    if (this.failAll) throw new Error('unavailable');
     if (this.failIndividuals && p.overflowTitles === undefined)
       throw new Error('activity limit');
     this.startedProps.push(p);
@@ -117,6 +119,22 @@ test('start dedupes, token listener registers, end unregisters', () => {
   mgr.apply('c1', props('completed'));
   expect(driver.started[0].ended).toEqual(['after']);
   expect(unreg).toEqual(['c1']);
+});
+
+test('a refused start is retried, and existing activities stay until one starts', () => {
+  const driver = new FakeDriver();
+  driver.failAll = true;
+  const { mgr } = make(driver);
+  const orphan = new FakeHandle();
+  mgr.apply('c1', props('working'));
+  mgr.endUnowned([orphan]);
+  expect(orphan.ended).toEqual([]);
+  driver.failAll = false;
+  mgr.apply('c1', props('working'));
+  expect(driver.started).toHaveLength(1);
+  mgr.endUnowned([orphan, driver.started[0]]);
+  expect(orphan.ended).toEqual(['immediate']);
+  expect(driver.started[0].ended).toEqual([]);
 });
 
 test('OS refusal packs leftovers into one overflow list', () => {
