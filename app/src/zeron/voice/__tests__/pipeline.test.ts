@@ -109,6 +109,16 @@ test('cleanup success replaces only the voice span', async () => {
   expect(cln.clean).toHaveBeenCalledTimes(1);
 });
 
+test('cleanup wrappers are stripped and the edit is applied', async () => {
+  const { session, getDraft, notices } = setup({
+    cleaned: '<think>drop the filler</think>\nOutput: open the settings',
+  });
+  await session.start();
+  await session.stop();
+  expect(getDraft()).toBe('prefix open the settings');
+  expect(notices.some(n => n?.kind === 'restore')).toBe(true);
+});
+
 test('invalid cleanup output keeps the raw transcript', async () => {
   const { session, getDraft, notices } = setup({
     cleaned: 'please open preferences instead',

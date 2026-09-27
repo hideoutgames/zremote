@@ -1,4 +1,5 @@
 import {
+  adoptCustomBackground,
   bindBackgroundFs,
   copyBackgroundFile,
   parseNewThreadComposerBackground,
@@ -113,6 +114,17 @@ test('parseNewThreadComposerBackground accepts legacy custom and presets', () =>
     }),
   ).toEqual({ kind: 'custom', uri: 'file:///docs/x.png', name: 'x.png' });
   expect(
+    parseNewThreadComposerBackground({
+      uri: 'file:///var/mobile/Containers/Data/Application/OLD/Documents/new-thread-backgrounds/new-thread-background-abc.png',
+      name: 'sunset.png',
+    }),
+  ).toEqual({
+    kind: 'custom',
+    uri: 'file:///var/mobile/Containers/Data/Application/OLD/Documents/new-thread-backgrounds/new-thread-background-abc.png',
+    name: 'sunset.png',
+    fileName: 'new-thread-background-abc.png',
+  });
+  expect(
     parseNewThreadComposerBackground({ kind: 'preset', id: 'emma' }),
   ).toEqual({ kind: 'preset', id: 'emma' });
   expect(
@@ -130,6 +142,34 @@ test('retireManagedBackground ignores presets and only deletes managed files', a
     '/docs/new-thread-backgrounds/next.png',
   );
   expect(fs.files.size).toBe(1);
+});
+
+test('adoptCustomBackground keeps a custom image when the container path changes', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const fileName = 'new-thread-background-abc.png';
+  const current = fs.joinManaged(fileName);
+  fs.files.set(current, 'bytes');
+  const adopted = await adoptCustomBackground({
+    uri: `file:///var/mobile/Containers/Data/Application/OLD-UUID/Documents/new-thread-backgrounds/${fileName}`,
+    name: 'sunset.png',
+  });
+  expect(adopted).toEqual({
+    kind: 'custom',
+    uri: current,
+    name: 'sunset.png',
+    fileName,
+  });
+});
+
+test('adoptCustomBackground drops a managed pointer whose file is gone', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const adopted = await adoptCustomBackground({
+    uri: 'file:///var/mobile/Containers/Data/Application/OLD/Documents/new-thread-backgrounds/new-thread-background-gone.png',
+    name: 'gone.png',
+  });
+  expect(adopted).toBeUndefined();
 });
 
 test('bundled default backgrounds have unique ids', () => {

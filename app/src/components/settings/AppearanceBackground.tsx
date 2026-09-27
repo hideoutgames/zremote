@@ -40,6 +40,7 @@ import {
   NEW_THREAD_BACKGROUND_EFFECTS,
   isPresetBackground,
   isWallpaperAvailable,
+  resolveBackgroundUri,
   type NewThreadBackgroundEffect,
   type NewThreadComposerBackground,
 } from '../../zeron/state/newThreadBackground';
@@ -234,6 +235,10 @@ export function AppearanceBackground({
     wallpaperOn && isPresetBackground(background) ? background.id : undefined;
   const customSelected =
     wallpaperOn && !isPresetBackground(background) ? background : undefined;
+  const customUri =
+    customSelected !== undefined
+      ? resolveBackgroundUri(customSelected)
+      : undefined;
 
   return (
     <>
@@ -317,9 +322,9 @@ export function AppearanceBackground({
                 tileRing(theme, customSelected !== undefined),
               ]}
             >
-              {customSelected !== undefined ? (
+              {customUri !== undefined ? (
                 <Image
-                  source={{ uri: customSelected.uri }}
+                  source={{ uri: customUri }}
                   style={styles.tile}
                   contentFit="cover"
                   testID="settings-background-thumb"

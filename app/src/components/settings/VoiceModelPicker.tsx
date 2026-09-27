@@ -220,6 +220,9 @@ export function VoiceModelPicker({
             ? t('settings.voiceModel')
             : t('settings.cleanupModel')
         }
+        footer={
+          kind === 'cleanup' ? t('settings.cleanupOptionalHint') : undefined
+        }
       >
         {models.map(model => {
           const row = byId[model.id] ?? {
@@ -234,10 +237,10 @@ export function VoiceModelPicker({
               selected={selected}
               onDelete={confirmDelete}
               onInstalled={m => {
-                // First install of a kind selects it automatically.
-                if (selected === null) {
-                  if (m.kind === 'transcription') setVoiceModelId(m.id);
-                  else setCleanupModelId(m.id);
+                // A transcription model has to be selected to record.
+                // Cleanup stays off until the user picks one.
+                if (selected === null && m.kind === 'transcription') {
+                  setVoiceModelId(m.id);
                 }
               }}
             />

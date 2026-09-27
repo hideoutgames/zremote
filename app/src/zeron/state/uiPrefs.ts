@@ -9,9 +9,11 @@ import { togglePinnedModelList } from './pinnedModels';
 import { modelRowKey, type ModelSettings } from '../../components/modelPicker';
 import { defaultBackgroundById } from './defaultBackgrounds';
 import {
+  adoptCustomBackground,
   copyBackgroundFile,
   DEFAULT_BACKGROUND_EFFECT,
   getBackgroundFs,
+  isPresetBackground,
   isWallpaperAvailable,
   parseNewThreadComposerBackground,
   retireManagedBackground,
@@ -181,11 +183,20 @@ export const bindUiPrefs = async (
     if (uiPrefsStore.getState().newThreadComposerBackground !== undefined) {
       uiPrefsStore.setState(WALLPAPER_UNSET);
     }
-  } else {
+  } else if (isPresetBackground(background)) {
     uiPrefsStore.setState({ newThreadComposerBackground: background });
     const ok = await isWallpaperAvailable(background);
     if (!ok) {
       uiPrefsStore.setState(WALLPAPER_UNSET);
+    }
+  } else {
+    // Custom artwork is stored by file name. Re-resolve it against the
+    // current container so an app update does not drop the pointer.
+    const adopted = await adoptCustomBackground(background);
+    if (adopted === undefined) {
+      uiPrefsStore.setState(WALLPAPER_UNSET);
+    } else {
+      uiPrefsStore.setState({ newThreadComposerBackground: adopted });
     }
   }
   syncComposerExtraHeightSV(uiPrefsStore.getState().composerExtraHeight);

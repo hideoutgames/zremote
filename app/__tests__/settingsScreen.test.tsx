@@ -351,6 +351,36 @@ test('fresh prefs keep Dictation and hide Voice Model rows', async () => {
   ).toBe(0);
 });
 
+test('cleanup model page is optional and stays off until chosen', async () => {
+  setVoiceInputMode('voiceModel');
+  const mounted = await render(<SettingsScreen onClose={() => {}} />);
+  const row = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-cleanup-model' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    row.props.onPress();
+  });
+  const text = allText(mounted.root);
+  expect(text).toContain('Disabled');
+  expect(text).toContain('Optional. Transcription works');
+  expect(uiPrefsStore.getState().cleanupModelId).toBeNull();
+  const disabled = mounted.root.findAll(
+    n =>
+      n.props.testID === 'settings-cleanup-disabled' &&
+      typeof n.props.onPress === 'function',
+  )[0];
+  await act(async () => {
+    setCleanupModelId('qwen25-0.5b-instruct');
+  });
+  expect(uiPrefsStore.getState().cleanupModelId).toBe('qwen25-0.5b-instruct');
+  await act(async () => {
+    disabled.props.onPress();
+  });
+  expect(uiPrefsStore.getState().cleanupModelId).toBeNull();
+});
+
 test('Voice Model mode shows model pickers and hides Language', async () => {
   setVoiceInputMode('voiceModel');
   const mounted = await render(<SettingsScreen onClose={() => {}} />);
