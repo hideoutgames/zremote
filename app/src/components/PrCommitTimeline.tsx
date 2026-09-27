@@ -30,10 +30,14 @@ export function PrCommitTimeline({
   commits,
   loading,
   error,
+  caption,
+  onLoadMore,
 }: {
   commits: readonly GitHistoryCommit[];
   loading: boolean;
   error?: string;
+  caption?: string;
+  onLoadMore?: () => void;
 }) {
   const theme = useTheme();
   const now = Date.now();
@@ -59,6 +63,11 @@ export function PrCommitTimeline({
 
   return (
     <ScrollView contentContainerStyle={styles.list}>
+      {caption !== undefined && caption !== '' ? (
+        <Text style={[styles.caption, { color: theme.textSecondary }]}>
+          {caption}
+        </Text>
+      ) : null}
       {groups.map(group => (
         <View key={group.key}>
           <View style={styles.dayRow}>
@@ -77,6 +86,19 @@ export function PrCommitTimeline({
           ))}
         </View>
       ))}
+      {onLoadMore !== undefined ? (
+        <Pressable
+          onPress={onLoadMore}
+          accessibilityRole="button"
+          accessibilityLabel={t('pr.loadMore')}
+          testID="pr-load-more"
+          style={styles.more}
+        >
+          <Text style={[styles.moreLabel, { color: theme.text }]}>
+            {loading ? t('pr.loadingCommits') : t('pr.loadMore')}
+          </Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -105,6 +127,9 @@ function CommitRow({
         )}
       </View>
       <Pressable
+        onPress={() => {
+          Clipboard.setStringAsync(commit.sha).catch(() => {});
+        }}
         onLongPress={() => {
           Clipboard.setStringAsync(commit.sha).catch(() => {});
         }}
@@ -119,6 +144,9 @@ function CommitRow({
             numberOfLines={1}
           >
             {label}
+          </Text>
+          <Text style={[styles.sha, { color: theme.textSecondary }]}>
+            {commit.sha.slice(0, 7)}
           </Text>
           <Text style={[styles.when, { color: theme.textSecondary }]}>
             {when}
@@ -143,6 +171,9 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
+  caption: { fontSize: 13, paddingTop: 8, paddingBottom: 4 },
+  more: { minHeight: 44, justifyContent: 'center', paddingVertical: 12 },
+  moreLabel: { fontSize: 15, fontWeight: '600' },
   day: { fontSize: 13 },
   dayLine: { flex: 1, height: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', minHeight: 64 },
@@ -167,6 +198,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   author: { flex: 1, fontSize: 15, fontWeight: '600' },
+  sha: { fontSize: 13, fontVariant: ['tabular-nums'] },
   when: { fontSize: 13 },
   subject: { fontSize: 15, lineHeight: 20 },
 });
