@@ -6,12 +6,17 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { FlatList, Text, View, type LayoutChangeEvent } from 'react-native';
 import {
   SessionTranscriptList,
+  AUTOSCROLL_VIEWPORT_FRACTION,
   LIST_RESIZE_REMOUNT_DELTA,
   RAIL_RIGHT,
   isTranscriptAtEnd,
   listEndDistance,
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
+import {
+  TRANSCRIPT_PAGE,
+  TRANSCRIPT_WINDOW,
+} from '../src/components/transcriptWindow';
 import type { MessageEntry } from '../src/zeron/protocol/types';
 import { setComposerExtraHeightLive } from '../src/zeron/state/uiPrefs';
 import {
@@ -206,6 +211,30 @@ test('scrolls to the bottom once when entries are present on mount', async () =>
   expect(scrollToEnd).toHaveBeenCalledTimes(1);
   expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
   expect(followingOn(tree!)).toBe(true);
+  expect(listProps(tree!).maintainVisibleContentPosition).toEqual(
+    expect.objectContaining({
+      autoscrollToBottomThreshold: AUTOSCROLL_VIEWPORT_FRACTION,
+      animateAutoScrollToBottom: false,
+    }),
+  );
+  expect(AUTOSCROLL_VIEWPORT_FRACTION).toBeLessThan(0.25);
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('content growth while following does not force another jump to the end', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), entry('m2')]} openKey="c1:1" />,
+    );
+  });
+  scrollToEnd.mockClear();
+  await act(async () => {
+    listProps(tree!).onContentSizeChange(390, 8000);
+  });
+  expect(scrollToEnd).not.toHaveBeenCalled();
   await act(async () => {
     tree!.unmount();
   });
@@ -1207,6 +1236,154 @@ test('sub-delta width ticks do not remount or restore scroll', async () => {
   });
   expect(listProps(tree!).testID).toBe('session-transcript-list');
   expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+const many = (count: number): MessageEntry[] =>
+  Array.from({ length: count }, (_, i) => entry(`m${i}`));
+
+function rowIds(tree: TestRenderer.ReactTestRenderer): string[] {
+  return listProps(tree).data.map(
+    (row: { kind: string; entry?: MessageEntry }) =>
+      row.kind === 'working' ? 'working' : row.entry?.id,
+  );
+}
+
+test('a long thread mounts a tail window, not every message', async () => {
+  const count = TRANSCRIPT_WINDOW + 60;
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={many(count)} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+  });
+  const ids = rowIds(tree!);
+  expect(ids).toHaveLength(TRANSCRIPT_WINDOW);
+  expect(ids[0]).toBe(`m${count - TRANSCRIPT_WINDOW}`);
+  expect(ids[ids.length - 1]).toBe(`m${count - 1}`);
+  expect(
+    tree!.root.findAll(
+      n =>
+        String(n.props.testID ?? '').startsWith('preview-rail-item-') &&
+        typeof n.props.onPress === 'function',
+    ).length,
+  ).toBeLessThan(count);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'preview-rail-item-m0').length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree!.root.findAll(
+      n => n.props.testID === `preview-rail-item-m${count - 1}`,
+    ).length,
+  ).toBeGreaterThan(0);
+  expect(
+    tree!.root.findAll(n => n.props.testID === 'transcript-earlier').length,
+  ).toBeGreaterThan(0);
+
+  const before = ids[0];
+  await act(async () => {
+    listProps(tree!).onScrollBeginDrag();
+    listProps(tree!).onStartReached();
+  });
+  const shifted = rowIds(tree!);
+  expect(shifted[0]).toBe(`m${count - TRANSCRIPT_WINDOW - TRANSCRIPT_PAGE}`);
+  expect(shifted[0]).not.toBe(before);
+  expect(shifted).toHaveLength(TRANSCRIPT_WINDOW);
+
+  scrollToIndex.mockClear();
+  scrollToOffset.mockClear();
+  await act(async () => {
+    tree!.root
+      .findAll(
+        n =>
+          n.props.testID === 'preview-rail-item-m0' &&
+          typeof n.props.onPress === 'function',
+      )[0]
+      .props.onPress();
+  });
+  expect(rowIds(tree!)[0]).toBe('m0');
+  expect(scrollToOffset).not.toHaveBeenCalled();
+  expect(scrollToIndex).toHaveBeenCalledWith(
+    expect.objectContaining({ index: 0, viewPosition: 0.15 }),
+  );
+
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('onEndReached pages forward once until the reader leaves the end', async () => {
+  const count = TRANSCRIPT_WINDOW + 60;
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={many(count)} openKey="c1:1" />,
+    );
+  });
+  await act(async () => {
+    overflowList(tree!);
+    listProps(tree!).onScrollBeginDrag();
+    listProps(tree!).onStartReached();
+  });
+  await act(async () => {
+    listProps(tree!).onScroll({
+      nativeEvent: {
+        contentOffset: { x: 0, y: 200 },
+        contentSize: { width: 390, height: 2000 },
+        layoutMeasurement: { width: 390, height: 844 },
+      },
+    });
+    listProps(tree!).onStartReached();
+  });
+  const parked = `m${count - TRANSCRIPT_WINDOW - TRANSCRIPT_PAGE * 2}`;
+  expect(rowIds(tree!)[0]).toBe(parked);
+  await act(async () => {
+    listProps(tree!).onEndReached();
+    listProps(tree!).onEndReached();
+  });
+  expect(rowIds(tree!)[0]).toBe(
+    `m${count - TRANSCRIPT_WINDOW - TRANSCRIPT_PAGE}`,
+  );
+  await act(async () => {
+    leaveEnd(tree!);
+    listProps(tree!).onEndReached();
+  });
+  expect(rowIds(tree!)[0]).toBe(`m${count - TRANSCRIPT_WINDOW}`);
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('a huge assistant turn is more than one list row', async () => {
+  const huge: MessageEntry = {
+    ...entry('a1'),
+    role: 'assistant',
+    parts: [{ kind: 'text', id: 't', text: 'x'.repeat(1600 * 3) }],
+  };
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1'), huge]} openKey="c1:1" />,
+    );
+  });
+  const rows = listProps(tree!).data as {
+    kind: string;
+    key: string;
+    showTail?: boolean;
+    continued?: boolean;
+  }[];
+  const slices = rows.filter(
+    row => row.kind === 'entry' && row.key.startsWith('a1'),
+  );
+  expect(slices.length).toBeGreaterThan(1);
+  expect(slices[0]?.showTail).toBe(false);
+  expect(slices[slices.length - 1]?.showTail).toBe(true);
+  expect(new Set(rows.map(row => row.key)).size).toBe(rows.length);
   await act(async () => {
     tree!.unmount();
   });

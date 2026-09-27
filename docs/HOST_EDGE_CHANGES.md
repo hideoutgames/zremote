@@ -42,11 +42,18 @@ The per-user RegistryRoom DO gains:
   throttle to 1/5s per chat; awaitingInput/errored push immediately at
   priority 10 (working is 5). Returning to `idle` after
   working/awaitingInput sends `event:"end"` (dismissal 30min); updates
-  carry `stale-date` now+120s. `BadDeviceToken`/410 prune the token.
-- Push-to-start: a `sessions` flip to `working` with no activity token but
-  a registered `push_to_start` token sends `event:"start"` with
-  `attributes-type:"LiveActivityAttributes"` +
-  `attributes:{url:"zeron://session/{chatId}"}`.
+  carry `stale-date` now+120s. `BadDeviceToken` retries the other APNs
+  host once (sandbox tokens and production tokens share this registry)
+  and prunes only if that fails too; 410 prunes immediately.
+- Push-to-start: the first `sessions` flip to `working` or `awaitingInput`
+  with no activity token but a registered `push_to_start` token sends
+  `event:"start"`. The start payload includes `aps.alert` (Apple drops a
+  start that has none), `attributes-type:"LiveActivityAttributes"`,
+  `attributes:{url:"zeron://session/{chatId}"}`, and `input-push-token: 1`
+  so iOS 18+ returns a per-activity token for later updates. One start per
+  chat until the run ends (`idle`/`errored`); that marker is stored in
+  `meta` so a hibernated DO does not stack a second activity. The alert
+  banner still sends on the same flip (a start does not skip it).
 - ES256 APNs JWT from `APNS_TEAM_ID`/`APNS_KEY_ID`/`APNS_P8` (WebCrypto),
   cached ≤50min. Endpoint `api.push.apple.com`, or sandbox with
   `APNS_ENV=sandbox`. Topic `${APNS_BUNDLE_ID}.push-type.liveactivity`.
@@ -99,11 +106,14 @@ APNs to the same token table as finish banners:
 }
 ```
 
-No prompt or question text. The phone has no background socket, so
-lock-screen question alerts cannot be local. While the app is active the
-client still presents the flip via `shouldPresentBanner` (hides only when
-that thread is selected). One Settings toggle covers finish **and**
-questions. Helper: `isQuestionAlert` in `live-activity.ts`.
+No prompt or question text. The edge only sees registry row flips, so an
+AskQuestion the host never turns into `awaitingInput` does not get this
+push. While the app process can see the transcript it schedules the same
+banner locally (`shouldNotifyOpenQuestion`), including when the phone
+locks with that thread on screen. `shouldPresentBanner` still hides a
+foreground banner only when that thread is selected. One Settings toggle
+covers finish **and** questions. Helper: `isQuestionAlert` in
+`live-activity.ts`.
 
 Env/secrets: `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`,
 `APNS_P8` (PKCS8 PEM), `APNS_ENV` (`sandbox` optional). Everything is gated
@@ -141,6 +151,7 @@ git am <zremote>/patches/zeron-edge/0003-*.patch
 git am <zremote>/patches/zeron-edge/0004-*.patch
 git am <zremote>/patches/zeron-edge/0005-*.patch
 git am <zremote>/patches/zeron-edge/0006-*.patch
+git am <zremote>/patches/zeron-edge/0007-*.patch
 wrangler secret put APNS_P8        # PKCS8 PEM
 wrangler secret put APNS_KEY_ID
 wrangler secret put APNS_TEAM_ID
@@ -158,6 +169,8 @@ npm run test:unit && wrangler deploy
   intercepts the HTTPS WorkOS callback in-session without the hop.
 - All sync: registry, chat2 rooms, device relay, attachments, queue.
 - Live Activities still render locally while the app is foregrounded; only
-  APNs-driven updates/start are missing.
+  APNs-driven updates/start are missing. Without `0007`, a start push has
+  no alert (Apple drops it) and a `BadDeviceToken` from the wrong APNs
+  host prunes a token that is live on the other host.
 - Finish-banner and question-alert pushes are missing (no `kind: "alert"`
   producer).

@@ -127,6 +127,61 @@ export function railItemSize(
   return railHeight / count;
 }
 
+/** Below this, a tick is no longer a target — a finger crosses dozens of
+ *  messages per point and the rail mounts one view per message. */
+export const MIN_RAIL_TICK = 12;
+
+export function maxRailTicks(railHeight: number, min = MIN_RAIL_TICK): number {
+  if (!(railHeight > 0) || !(min > 0)) return 1;
+  return Math.max(2, Math.floor(railHeight / min));
+}
+
+/** Keep the first and last message and spread the rest evenly. */
+export function sampleEvenly<T>(items: readonly T[], max: number): T[] {
+  if (max <= 0) return [];
+  if (items.length <= max) return [...items];
+  if (max === 1) return [items[items.length - 1]];
+  const last = items.length - 1;
+  const used = new Set<number>();
+  const out: T[] = [];
+  for (let i = 0; i < max; i++) {
+    const index = Math.round((i / (max - 1)) * last);
+    if (used.has(index)) continue;
+    used.add(index);
+    out.push(items[index]);
+  }
+  return out;
+}
+
+/** One tick per message until they would shrink below a finger target. */
+export function railTicksFor<T>(items: readonly T[], railHeight: number): T[] {
+  if (railHeight <= 0) return [...items];
+  return sampleEvenly(items, maxRailTicks(railHeight));
+}
+
+export function entryIndexForProgress(count: number, progress: number): number {
+  if (count <= 1) return 0;
+  const clamped = progress <= 0 ? 0 : progress >= 1 ? 1 : progress;
+  return Math.round(clamped * (count - 1));
+}
+
+export function nearestIndex(
+  indexes: readonly number[],
+  target: number,
+): number {
+  if (indexes.length === 0) return 0;
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < indexes.length; i++) {
+    const dist = Math.abs(indexes[i] - target);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return best;
+}
+
 /** Map a Y offset on the rail column to a tick index. `stackTop` is the
  *  empty padding above a short (uncompressed) stack. */
 export function railIndexAtY(

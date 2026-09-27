@@ -149,7 +149,7 @@ describe('detectThreadPrs — thread semantics', () => {
     ]);
   });
 
-  it('ignores user and system entries', () => {
+  it('keeps a pull request the user linked and ignores system text', () => {
     const prs = detectThreadPrs([
       entry('u1', [text('t1', 'please review https://github.com/a/b/pull/1')], {
         role: 'user',
@@ -158,7 +158,74 @@ describe('detectThreadPrs — thread semantics', () => {
         role: 'system',
       }),
     ]);
+    expect(prs.map(p => p.number)).toEqual([1]);
+  });
+
+  it('ignores pull request urls that only appear in reasoning', () => {
+    const prs = detectThreadPrs([
+      entry('e1', [
+        {
+          kind: 'reasoning',
+          id: 'r',
+          text: 'https://github.com/a/b/pull/3',
+        },
+      ]),
+    ]);
     expect(prs).toEqual([]);
+  });
+
+  it('uses a markdown link label instead of the repo slug', () => {
+    const prs = detectThreadPrs([
+      entry('e1', [
+        text(
+          't1',
+          'Shipped [Fix login flake](https://github.com/acme/app/pull/47).',
+        ),
+      ]),
+    ]);
+    expect(prs[0]?.title).toBe('Fix login flake');
+    expect(prs[0]?.url).toBe('https://github.com/acme/app/pull/47');
+  });
+
+  it('collapses files, patch, and API urls onto one pull request', () => {
+    const prs = detectThreadPrs([
+      entry('e1', [text('t1', 'https://github.com/acme/app/pull/47.diff')]),
+      entry('e2', [
+        text(
+          't2',
+          '[Fix login flake](https://github.com/acme/app/pull/47/files)',
+        ),
+      ]),
+      entry('e3', [
+        text(
+          't3',
+          'https://api.github.com/repos/acme/app/pulls/47 and https://www.github.com/acme/app/pull/47',
+        ),
+      ]),
+    ]);
+    expect(prs).toHaveLength(1);
+    expect(prs[0].number).toBe(47);
+    expect(prs[0].url).toBe('https://www.github.com/acme/app/pull/47');
+    expect(prs[0].title).toBe('Fix login flake');
+    expect(prs[0].provider).toBe('github');
+  });
+
+  it('finds a pull request url in tool-call fields other than command', () => {
+    const prs = detectThreadPrs([
+      entry('e1', [
+        {
+          kind: 'tool',
+          id: 'c',
+          call: {
+            kind: 'unknown',
+            name: 'Shell',
+            note: 'https://github.com/acme/app/pull/8',
+          } as RenderToolCall,
+          resolved: true,
+        },
+      ]),
+    ]);
+    expect(prs[0]?.number).toBe(8);
   });
 
   it('ignores non-PR urls', () => {
@@ -186,6 +253,15 @@ describe('scanThreadPrs — incremental cache', () => {
     ];
     expect(scanThreadPrs('chat', grown)).toEqual(detectThreadPrs(grown));
     expect(scanThreadPrs('chat', grown).map(p => p.number)).toEqual([4, 1]);
+  });
+
+  it('re-scans when the text changes but the length stays the same', () => {
+    const first = [entry('e1', [text('t1', 'https://github.com/a/b/pull/1')])];
+    expect(scanThreadPrs('chat', first).map(p => p.number)).toEqual([1]);
+    const swapped = [
+      entry('e1', [text('t1', 'https://github.com/a/b/pull/2')]),
+    ];
+    expect(scanThreadPrs('chat', swapped).map(p => p.number)).toEqual([2]);
   });
 
   it('re-scans a streaming entry as its text grows', () => {

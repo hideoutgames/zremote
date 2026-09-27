@@ -12,6 +12,8 @@ import {
   CHAT_BACKGROUND_BLUR_TINT,
   COMPACT_THREADS_INTENSITY,
   REGULAR_THREADS_INTENSITY,
+  THREADS_BACKGROUND_BLUR_TINT,
+  WALLPAPER_BLUR_PASSES,
   wallpaperBlurFor,
 } from '../src/components/SessionBackgroundBlur';
 import {
@@ -344,8 +346,9 @@ test('compact wallpaper blur is full-bleed; iPad sidebar is unmasked', () => {
     intensity: COMPACT_THREADS_INTENSITY,
     fade: 'none',
   });
-  expect(COMPACT_THREADS_INTENSITY).toBe(120);
-  expect(REGULAR_THREADS_INTENSITY).toBe(90);
+  expect(COMPACT_THREADS_INTENSITY).toBe(100);
+  expect(REGULAR_THREADS_INTENSITY).toBe(100);
+  expect(WALLPAPER_BLUR_PASSES).toBe(2);
   expect(wallpaperBlurFor(1024)).toEqual({
     intensity: REGULAR_THREADS_INTENSITY,
     fade: 'none',
@@ -356,10 +359,16 @@ test('home list uses full-bleed regular blur at the 750pt test window', async ()
   const mounted = await render(
     <HomeScreen onOpenSession={() => {}} onOpenSettings={() => {}} />,
   );
-  const blur = mounted.root.findAllByType(FadeBlur)[0];
-  expect(blur.props.fade).toBe('none');
-  expect(blur.props.tint).toBe('systemThinMaterialDark');
-  expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
+  const layer = mounted.root.findByProps({
+    testID: 'session-background-blur',
+  });
+  const blurs = layer.findAllByType(FadeBlur);
+  expect(blurs).toHaveLength(WALLPAPER_BLUR_PASSES);
+  for (const blur of blurs) {
+    expect(blur.props.fade).toBe('none');
+    expect(blur.props.tint).toBe(THREADS_BACKGROUND_BLUR_TINT);
+    expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
+  }
   expect(count(mounted.root, 'session-background-dim')).toBeGreaterThan(0);
   expect(count(mounted.root, 'bottom-chrome-fade')).toBe(0);
   expect(count(mounted.root, 'content-edge-mask')).toBeGreaterThan(0);
@@ -428,11 +437,15 @@ test('session background blur frosts the chat without a dark tint', async () => 
   expect(count(mounted.root, 'chat-background-blur')).toBeGreaterThan(0);
   expect(count(mounted.root, 'session-background-dim')).toBe(0);
   const layer = mounted.root.findByProps({ testID: 'chat-background-blur' });
-  const blur = layer.findByType(FadeBlur);
-  expect(blur.props.tint).toBe(CHAT_BACKGROUND_BLUR_TINT);
-  expect(blur.props.tint).not.toBe('systemThinMaterialDark');
-  expect(blur.props.fade).toBe('none');
-  expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
+  const blurs = layer.findAllByType(FadeBlur);
+  expect(blurs).toHaveLength(WALLPAPER_BLUR_PASSES);
+  for (const blur of blurs) {
+    expect(blur.props.tint).toBe(CHAT_BACKGROUND_BLUR_TINT);
+    expect(blur.props.tint).not.toBe('systemThinMaterialDark');
+    expect(blur.props.tint).not.toBe('systemChromeMaterialDark');
+    expect(blur.props.fade).toBe('none');
+    expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
+  }
 });
 
 test('compose stays sharp when session background blur is on', async () => {

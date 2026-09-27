@@ -1,7 +1,10 @@
 // Device-local new-thread composer background: validate a picker asset,
 // copy it into a managed folder, retire the previous managed file after
-// the prefs pointer is committed. Pure + injectable fs so Jest does not
-// load expo-file-system.
+// the prefs pointer is committed. The pointer stores the file name inside
+// that folder — iOS changes the app container path on update, so an
+// absolute URI saved from the previous install would 404 and the artwork
+// would be cleared. Pure + injectable fs so Jest does not load
+// expo-file-system.
 
 import { Image } from 'react-native';
 import { MAX_ATTACHMENT_BYTES } from '../attachments/validate';
@@ -23,6 +26,11 @@ export type CustomNewThreadBackground = {
   kind?: 'custom';
   uri: string;
   name: string;
+  /**
+   * Basename inside `new-thread-backgrounds/`. Stable across app updates;
+   * `uri` is resolved from it against the current container.
+   */
+  fileName?: string;
 };
 
 export type PresetNewThreadBackground = {
@@ -48,7 +56,7 @@ export const customBackgroundUri = (
   bg: NewThreadComposerBackground | undefined,
 ): string | undefined => {
   if (bg === undefined || isPresetBackground(bg)) return undefined;
-  return bg.uri;
+  return resolveBackgroundUri(bg);
 };
 
 export const parseNewThreadComposerBackground = (
@@ -62,13 +70,29 @@ export const parseNewThreadComposerBackground = (
     id?: unknown;
     uri?: unknown;
     name?: unknown;
+    fileName?: unknown;
   };
   if (v.kind === 'preset') {
     if (typeof v.id !== 'string' || v.id === '') return undefined;
     return { kind: 'preset', id: v.id };
   }
   if (typeof v.uri === 'string' && v.uri !== '' && typeof v.name === 'string') {
-    return { kind: 'custom', uri: v.uri, name: v.name };
+    const named =
+      typeof v.fileName === 'string'
+        ? managedBackgroundFileName(v.fileName)
+        : undefined;
+    const fileName = named ?? fileNameFromBackgroundUri(v.uri);
+    return {
+      kind: 'custom',
+      uri: v.uri,
+      name: v.name,
+      ...(fileName !== undefined ? { fileName } : {}),
+    };
+  }
+  if (typeof v.fileName === 'string' && typeof v.name === 'string') {
+    const fileName = managedBackgroundFileName(v.fileName);
+    if (fileName === undefined) return undefined;
+    return { kind: 'custom', fileName, name: v.name, uri: '' };
   }
   return undefined;
 };
@@ -81,7 +105,15 @@ export const resolveBackgroundUri = (
     if (preset === undefined) return undefined;
     return Image.resolveAssetSource(preset.source)?.uri;
   }
-  return bg.uri;
+  // `uri` is the path adoptCustomBackground already checked. Prefer it so a
+  // still-valid legacy path is shown; an empty uri means "resolve the
+  // stable file name against the current container".
+  if (bg.uri !== '') return bg.uri;
+  const fs = getBackgroundFs();
+  if (bg.fileName !== undefined && fs !== undefined) {
+    return fs.joinManaged(bg.fileName);
+  }
+  return undefined;
 };
 
 export const isWallpaperAvailable = async (
@@ -90,7 +122,7 @@ export const isWallpaperAvailable = async (
   if (isPresetBackground(bg)) {
     return defaultBackgroundById(bg.id) !== undefined;
   }
-  return backgroundFileExists(bg.uri);
+  return (await adoptCustomBackground(bg)) !== undefined;
 };
 
 export interface BackgroundSource {
@@ -197,7 +229,8 @@ export const copyBackgroundFile = async (
 ): Promise<BackgroundInstallResult> => {
   const checked = validateBackgroundSource(input);
   if (checked.ok === false) return checked;
-  const destUri = fs.joinManaged(`new-thread-background-${id}.${checked.ext}`);
+  const fileName = `new-thread-background-${id}.${checked.ext}`;
+  const destUri = fs.joinManaged(fileName);
   try {
     await fs.copyFile(input.uri, destUri);
   } catch {
@@ -205,7 +238,7 @@ export const copyBackgroundFile = async (
   }
   return {
     ok: true,
-    background: { kind: 'custom', uri: destUri, name: input.name },
+    background: { kind: 'custom', uri: destUri, name: input.name, fileName },
   };
 };
 
@@ -222,10 +255,69 @@ export const retireManagedBackground = async (
 };
 
 export const backgroundFileExists = async (uri: string): Promise<boolean> => {
+  if (uri === '') return false;
   if (boundFs === undefined) return true;
   try {
     return await boundFs.fileExists(uri);
   } catch {
     return false;
   }
+};
+
+/** Basename only — rejects path separators so a prefs value cannot escape the folder. */
+export const managedBackgroundFileName = (
+  value: string,
+): string | undefined => {
+  if (value === '' || value.includes('/') || value.includes('\\')) {
+    return undefined;
+  }
+  if (value.includes('..')) return undefined;
+  const ext = extFromName(value);
+  if (ext === undefined || !RASTER_EXT.has(ext)) return undefined;
+  return value;
+};
+
+export const fileNameFromBackgroundUri = (uri: string): string | undefined => {
+  const marker = `/${NEW_THREAD_BACKGROUND_DIR}/`;
+  const at = uri.lastIndexOf(marker);
+  if (at < 0) return undefined;
+  const rest = uri.slice(at + marker.length).split(/[?#]/)[0];
+  if (rest === '' || rest.includes('/')) return undefined;
+  let base = rest;
+  try {
+    base = decodeURIComponent(rest);
+  } catch {
+    base = rest;
+  }
+  return managedBackgroundFileName(base);
+};
+
+/**
+ * Rebind a custom wallpaper onto the current container. A stored absolute
+ * URI from before an app update no longer exists; the bytes are still in
+ * the managed folder under the same file name.
+ */
+export const adoptCustomBackground = async (
+  bg: CustomNewThreadBackground,
+): Promise<CustomNewThreadBackground | undefined> => {
+  const fileName =
+    bg.fileName ??
+    (bg.uri !== '' ? fileNameFromBackgroundUri(bg.uri) : undefined);
+  const candidate: CustomNewThreadBackground = {
+    kind: 'custom',
+    name: bg.name,
+    uri: bg.uri,
+    ...(fileName !== undefined ? { fileName } : {}),
+  };
+  const fs = getBackgroundFs();
+  if (fileName !== undefined && fs !== undefined) {
+    const current = fs.joinManaged(fileName);
+    if (await backgroundFileExists(current)) {
+      return { ...candidate, uri: current };
+    }
+  }
+  if (bg.uri !== '' && (await backgroundFileExists(bg.uri))) {
+    return candidate;
+  }
+  return undefined;
 };

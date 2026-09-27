@@ -14,9 +14,12 @@ import type { TokenSource } from '../zeron/transport/tokenSource';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { createLog } from '../zeron/log';
 import { chatIdFromData, shouldPresentBanner } from './presentation';
-import { shouldLocalQuestionBanner } from './questionAlert';
+import {
+  shouldLocalQuestionBanner,
+  shouldNotifyOpenQuestion,
+} from './questionAlert';
 import { openQuestion } from '../zeron/protocol/detectQuestion';
-import { getSessionStore, runPhase } from '../zeron/state/sessionStores';
+import { getSessionStore } from '../zeron/state/sessionStores';
 import { t } from '../i18n/strings';
 import { workspaceStore } from '../zeron/state/workspaceStore';
 
@@ -141,13 +144,27 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
     lastEnabled = s.notificationsEnabled;
     tick();
   });
+  // The first token fetch often fails while the app is still starting.
+  // Retry when we come back to the foreground if we never registered.
+  const appSub = AppState.addEventListener('change', next => {
+    if (next === 'active' && lastToken === undefined) tick();
+  });
   tick();
 
   const lastStatus = new Map<string, string | undefined>();
-  /** chatId → last-seen open-question id; the app-detected counterpart of
-   * lastStatus (host flips). Absence of a key marks the first observation. */
+  /** chatId → last-seen open-question id. Absence of a key is the baseline
+   * observation (a transcript that already ended on a question is not a
+   * fresh alert). */
   const lastQuestion = new Map<string, string | undefined>();
-  const presentQuestion = (chatId: string, title: string): void => {
+  const notified = new Set<string>();
+  const presentQuestion = (
+    chatId: string,
+    questionId: string,
+    title: string,
+  ): void => {
+    const key = `${chatId}/${questionId}`;
+    if (notified.has(key)) return;
+    notified.add(key);
     Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -157,20 +174,25 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
       trigger: null,
     }).catch(e => log.warn(`question banner: ${e}`));
   };
-  const scanQuestions = (): void => {
+  const scanQuestions = (leavingForeground = false): void => {
     if (cancelled || !uiPrefsStore.getState().notificationsEnabled) return;
     const { sessions, chats } = workspaceStore.getState();
-    const now = Date.now();
     for (const row of Object.values(sessions)) {
       const prev = lastStatus.get(row.chatId);
       lastStatus.set(row.chatId, row.status);
       const chat = chats.find(c => c.id === row.chatId);
+      const title = chat?.title ?? 'Session';
       const s = getSessionStore(row.chatId).getState();
       const open = openQuestion(s.entries, s.answeredQuestionIds);
       const observed = lastQuestion.has(row.chatId);
       const prevQuestion = lastQuestion.get(row.chatId);
       lastQuestion.set(row.chatId, open?.id);
+      if (open === undefined) {
+        notified.delete(`${row.chatId}/${prevQuestion ?? ''}`);
+      }
+      const noteKey = `${row.chatId}/${open?.id ?? ''}`;
       if (
+        !leavingForeground &&
         shouldLocalQuestionBanner({
           prevStatus: prev,
           status: row.status,
@@ -179,29 +201,29 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
           chatId: row.chatId,
         })
       ) {
-        presentQuestion(row.chatId, chat?.title ?? 'Session');
+        if (open !== undefined) presentQuestion(row.chatId, open.id, title);
+        else presentQuestion(row.chatId, 'status', title);
         continue;
       }
-      // App-detected questions never flip the row — the host mints no
-      // `input` part for unbrokered ask tools (opencode `question`, hermes
-      // `clarify`, grok's ACP method, …). Mirror the Live Activity parity:
-      // a new open-question id fires the same "needs input" banner when the
-      // phase machine flags the run (awaitingInput), or when an already
-      // observed idle thread surfaces one — first-seen idle questions seed
-      // silently (a stale transcript tail is not fresh input need).
-      const phase = runPhase(s, row, chat, deps.phoneDeviceId, now);
-      const fresh = phase === 'awaitingInput' || (phase === 'idle' && observed);
+      // AskQuestion and the other unbrokered ask tools never flip the row
+      // to awaitingInput, so the edge alert does not fire. A new question
+      // id after the baseline does, including when the user locks the phone
+      // while that thread is on screen (the panel is no longer visible).
       if (
-        open !== undefined &&
-        open.id !== prevQuestion &&
-        fresh &&
-        shouldPresentBanner({
+        shouldNotifyOpenQuestion({
+          baseline: !observed,
+          alreadyNotified: notified.has(noteKey),
+          questionId: open?.id,
+          prevQuestionId: prevQuestion,
+          kind: open?.kind,
           appState: AppState.currentState,
           selectedChatId: deps.selectedChatId(),
-          notificationChatId: row.chatId,
-        })
+          chatId: row.chatId,
+          leavingForeground,
+        }) &&
+        open !== undefined
       ) {
-        presentQuestion(row.chatId, chat?.title ?? 'Session');
+        presentQuestion(row.chatId, open.id, title);
       }
     }
   };
@@ -210,13 +232,18 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
     for (const u of sessionUnsubs) u();
     // openQuestion reads per-chat entries — workspace ticks alone never
     // re-scan when a room's doc updates.
+    // The listener receives the store state. scanQuestions's argument is
+    // "the app is leaving the foreground", so it must not be the listener.
     sessionUnsubs = Object.keys(workspaceStore.getState().sessions).map(id =>
-      getSessionStore(id).subscribe(scanQuestions),
+      getSessionStore(id).subscribe(() => scanQuestions()),
     );
   };
   const unsubWorkspace = workspaceStore.subscribe(() => {
     resubSessions();
     scanQuestions();
+  });
+  const leaveSub = AppState.addEventListener('change', next => {
+    if (next === 'background' || next === 'inactive') scanQuestions(true);
   });
   resubSessions();
   scanQuestions();
@@ -225,6 +252,8 @@ const bindPushNotificationsUnsafe = (deps: BindPushDeps): (() => void) => {
     cancelled = true;
     unsubPrefs();
     unsubWorkspace();
+    appSub.remove();
+    leaveSub.remove();
     for (const u of sessionUnsubs) u();
     responseSub.remove();
     tokenSub.remove();

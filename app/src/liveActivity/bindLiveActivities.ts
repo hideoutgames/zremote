@@ -5,6 +5,7 @@
 // IMPLEMENTED-BUT-UNVERIFIED on device: ActivityKit behavior needs a Mac
 // build (docs/NATIVE_MODULES.md).
 
+import { AppState } from 'react-native';
 import { addPushToStartTokenListener, after } from 'expo-widgets';
 import { SessionActivity } from './SessionActivity';
 import {
@@ -13,7 +14,7 @@ import {
   type LiveActivityHandle,
 } from './liveActivityManager';
 import { activityAccent } from './activityAccent';
-import { activityPhase } from './activityPhase';
+import { activityPhase, activityPhaseLabel } from './activityPhase';
 import { planAwaitingReview } from './planAwaitingReview';
 import { openQuestion } from '../zeron/protocol/detectQuestion';
 import {
@@ -99,17 +100,6 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
     selectedChatId: deps.selectedChatId,
   });
 
-  // Relaunch cleanup: handles are per-process, so any activity still alive
-  // from a previous launch is an orphan — ending it keeps one activity per
-  // chat instead of stacking a duplicate every time the app reopens.
-  try {
-    for (const inst of driver.getInstances()) {
-      inst.end('immediate').catch(() => {});
-    }
-  } catch (e) {
-    log.warn(`live activity instance sweep: ${e}`);
-  }
-
   let pushToStart: { remove(): void } = { remove() {} };
   try {
     pushToStart = addPushToStartTokenListener(e => {
@@ -177,12 +167,17 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
             ? `${host.name}${space !== undefined ? ` · ${space.name}` : ''}`
             : undefined,
         phase,
-        phaseLabel: phase,
+        phaseLabel: activityPhaseLabel(phase),
         startedAt: (session.startedAt ?? now) / 1000,
         showContext,
         accentColor: accent.color,
         glyph: accent.glyph,
       });
+    }
+    try {
+      mgr.endUnowned(driver.getInstances());
+    } catch (e) {
+      log.warn(`live activity orphan sweep: ${e}`);
     }
   };
 
@@ -199,12 +194,20 @@ const bindLiveActivitiesUnsafe = (deps: BindDeps): (() => void) => {
   });
   const unsubPrefs = uiPrefsStore.subscribe(tick);
   const unsubCr = changeRequestStore.subscribe(tick);
+  // Start is refused while the app is inactive. Retry once we are active,
+  // and only then drop activities this process does not own — ending a
+  // push-started activity before the replacement exists is how the Lock
+  // Screen stayed empty.
+  const appSub = AppState.addEventListener('change', next => {
+    if (next === 'active') tick();
+  });
   resubSessions();
   tick();
   return () => {
     unsub();
     unsubPrefs();
     unsubCr();
+    appSub.remove();
     for (const u of sessionUnsubs) u();
     pushToStart.remove();
     mgr.endAll();

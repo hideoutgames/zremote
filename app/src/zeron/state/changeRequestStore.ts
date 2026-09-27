@@ -8,7 +8,10 @@ import type {
   CheckoutChangeRequestStatus,
   CheckoutDiff,
 } from '../protocol/types';
-import { sameDetectedPrs } from '../protocol/detectChangeRequest';
+import {
+  isListableChangeRequest,
+  sameDetectedPrs,
+} from '../protocol/detectChangeRequest';
 import {
   prBadgeModel,
   threadPrDot,
@@ -71,13 +74,25 @@ export const clearChangeRequestForChat = (chatId: string): void => {
   });
 };
 
-/** The thread's effective change request: the host-resolved checkout PR, or
- * the newest transcript-detected link when the host can't resolve one. */
+/** The thread's effective change request. A real open/draft/merged checkout
+ * PR wins. A placeholder or closed checkout does not hide a pull request the
+ * thread actually linked. */
 export const effectiveChangeRequest = (
   s: ChangeRequestState,
   chatId: string,
-): ChangeRequestSummary | undefined =>
-  s.byChat[chatId]?.changeRequest ?? s.detectedByChat[chatId]?.[0];
+): ChangeRequestSummary | undefined => {
+  const checkout = s.byChat[chatId]?.changeRequest ?? undefined;
+  const detected = s.detectedByChat[chatId] ?? [];
+  const visible = (
+    summary: ChangeRequestSummary | null | undefined,
+  ): summary is ChangeRequestSummary =>
+    isListableChangeRequest(summary) && summary.state !== 'closed';
+  if (visible(checkout)) return checkout;
+  const linked = detected.find(visible);
+  if (linked !== undefined) return linked;
+  if (isListableChangeRequest(checkout)) return checkout;
+  return detected.find(isListableChangeRequest);
+};
 
 export const badgeForChat = (
   chatId: string,

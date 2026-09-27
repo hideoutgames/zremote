@@ -23,6 +23,7 @@ import { AssistantMessage } from './transcript/AssistantMessage';
 import {
   SessionTranscriptList,
   type SessionTranscriptListHandle,
+  type TranscriptRenderInfo,
 } from './SessionTranscriptList';
 import type { FetchToolBlob } from './agentsKit/ToolActivity';
 import type { FileDiffRequest } from './FileDiffSheet';
@@ -93,7 +94,7 @@ export const SessionTranscriptPane = React.memo(function TranscriptPane({
   }, [chatId, entries]);
 
   const renderEntry = useCallback(
-    ({ item }: { item: MessageEntry }) =>
+    ({ item, parts, showTail, continued }: TranscriptRenderInfo) =>
       item.role === 'user' ? (
         <UserMessage
           entry={item}
@@ -109,19 +110,28 @@ export const SessionTranscriptPane = React.memo(function TranscriptPane({
       ) : (
         <AssistantMessage
           entry={item}
+          parts={parts}
+          showTail={showTail}
+          continued={continued}
           onOpenReasoning={onOpenReasoning}
           onFetchBlob={onFetchBlob}
           onOpenPlan={onOpenPlan}
           onOpenFileDiff={onOpenFileDiff}
           commands={commands}
-          showWorking={agentWorking && item.id === lastEntryId}
+          showWorking={
+            agentWorking && item.id === lastEntryId && showTail !== false
+          }
           workingChatId={chatId}
           workingStartedAt={workingStartedAt}
-          workedFor={workedForCaption(
-            item,
-            agentWorking && item.id === lastEntryId,
-            workedByMessage,
-          )}
+          workedFor={
+            showTail === false
+              ? undefined
+              : workedForCaption(
+                  item,
+                  agentWorking && item.id === lastEntryId,
+                  workedByMessage,
+                )
+          }
         />
       ),
     [
