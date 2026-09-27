@@ -1,16 +1,17 @@
 # ZRemote
 
-The ZRemote iPhone and iPad app: the [Zeron](https://github.com/hideoutgames/zeron)
-iOS client (`apps/ios`), linked to the Rust mobile core it needs to build,
-shipped under the existing ZRemote App Store identity.
+ZRemote is the iPhone and iPad build of [Zeron](https://github.com/zeronsh/zeron), shipped under the existing ZRemote App Store identity.
+
+## Attribution
+
+The iOS app (`apps/ios`) and the Rust mobile core it links are from the [Zeron](https://zeron.sh) project by Wing — [zeronsh/zeron](https://github.com/zeronsh/zeron). This repository vendors that code at [`433aa148`](https://github.com/zeronsh/zeron/commit/433aa148d55e3316dab9d69afc402e0bb8f55583). Zeron is [MIT licensed](LICENSE); copyright (c) 2026 Wing. Other bundled components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+ZRemote changes the App Store identity only: bundle id `no.hideout.zremote`, the ZRemote display name, and the logos in [`logos/`](logos/).
 
 - **Bundle id:** `no.hideout.zremote` (override in CI with the `IOS_BUNDLE_ID` variable)
 - **Display name:** ZRemote
 - **Icon and sign-in mark:** [`logos/`](logos/) (`AppIcon.png`, black/white `ZRemoteLogo`)
 - **TestFlight:** [iOS TestFlight](.github/workflows/ios-testflight.yml) — see [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)
-
-Upstream revision imported here: `433aa148d55e3316dab9d69afc402e0bb8f55583`
-(`hideoutgames/zeron` `main`).
 
 No agent runs on the phone. Rust decides what to paint; Swift paints, scrolls,
 and handles gestures. The crates in this repo are only the ones `zeron-mobile`
