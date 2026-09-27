@@ -89,25 +89,88 @@ const cellStyle = (cell: Cell, defaultFg: string) => {
   };
 };
 
+const samePaint = (
+  a: number | [number, number, number] | undefined,
+  b: number | [number, number, number] | undefined,
+): boolean => {
+  if (a === b) return true;
+  return (
+    Array.isArray(a) &&
+    Array.isArray(b) &&
+    a[0] === b[0] &&
+    a[1] === b[1] &&
+    a[2] === b[2]
+  );
+};
+
+const sameCellStyle = (a: Cell['style'], b: Cell['style']): boolean =>
+  a.bold === b.bold &&
+  a.dim === b.dim &&
+  a.italic === b.italic &&
+  a.underline === b.underline &&
+  a.inverse === b.inverse &&
+  samePaint(a.fg, b.fg) &&
+  samePaint(a.bg, b.bg);
+
 /** Collapse a row into same-style runs for fewer Text nodes. */
 const rowRuns = (row: Cell[], defaultFg: string) => {
   const runs: { text: string; style: ReturnType<typeof cellStyle> }[] = [];
   let cur: Cell | undefined;
   for (const cell of row) {
-    const st = cellStyle(cell, defaultFg);
     const prev = runs[runs.length - 1];
     if (
       prev !== undefined &&
       cur !== undefined &&
-      JSON.stringify(prev.style) === JSON.stringify(st)
+      sameCellStyle(cur.style, cell.style)
     ) {
       prev.text += cell.ch;
     } else {
-      runs.push({ text: cell.ch, style: st });
+      runs.push({ text: cell.ch, style: cellStyle(cell, defaultFg) });
       cur = cell;
     }
   }
   return runs;
+};
+
+type LineCache = {
+  gridEpoch: number;
+  sbLen: number;
+  rows: number;
+  rowEpoch: number[];
+  lines: Cell[][];
+};
+
+/** Copy only the grid rows whose epoch changed. Scrollback rows are
+ * append-only and keep their identities. */
+const linesFor = (screen: AnsiScreen, cache: LineCache): Cell[][] => {
+  const sbLen = screen.scrollback.length;
+  const full =
+    cache.gridEpoch !== screen.gridEpoch ||
+    cache.sbLen !== sbLen ||
+    cache.rows !== screen.rows ||
+    cache.lines.length !== sbLen + screen.rows;
+  if (full) {
+    const lines = screen.scrollback.concat(screen.grid.map(row => row.slice()));
+    cache.gridEpoch = screen.gridEpoch;
+    cache.sbLen = sbLen;
+    cache.rows = screen.rows;
+    cache.rowEpoch = screen.rowEpoch.slice();
+    cache.lines = lines;
+    return lines;
+  }
+  let lines = cache.lines;
+  let changed = false;
+  for (let y = 0; y < screen.rows; y++) {
+    if (cache.rowEpoch[y] === screen.rowEpoch[y]) continue;
+    if (!changed) {
+      lines = cache.lines.slice();
+      changed = true;
+    }
+    lines[sbLen + y] = screen.grid[y].slice();
+    cache.rowEpoch[y] = screen.rowEpoch[y];
+  }
+  if (changed) cache.lines = lines;
+  return lines;
 };
 
 const CHAR_W = 7.8; // Menlo 13pt advance
@@ -183,9 +246,27 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const [error, setError] = useState<string | undefined>(undefined);
   const [layoutReady, setLayoutReady] = useState(false);
   const tabsRef = useRef<TerminalTab[]>([]);
-  // Bumping forces a re-render after PTY data mutates the screen model.
-  const [, setFrame] = useState(0);
-  const bump = useCallback(() => setFrame(f => f + 1), []);
+  // One paint per frame. PTY chunks mutate the screen model immediately;
+  // React commits the dirty rows on the next animation frame.
+  const [frame, setFrame] = useState(0);
+  const paintRaf = useRef<number | null>(null);
+  const bump = useCallback(() => {
+    if (process.env.JEST_WORKER_ID !== undefined) {
+      setFrame(f => f + 1);
+      return;
+    }
+    if (paintRaf.current != null) return;
+    paintRaf.current = requestAnimationFrame(() => {
+      paintRaf.current = null;
+      setFrame(f => f + 1);
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (paintRaf.current != null) cancelAnimationFrame(paintRaf.current);
+    },
+    [],
+  );
   const restoredRef = useRef(false);
 
   // Tabs outlive a sheet mount (module-level store): every mount hands each
@@ -335,19 +416,30 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
   const screen = tab?.screen;
   // Scrollback + visible grid as one virtualized list; follow-tail unless the
   // user scrolls up more than the re-engage band (~2 rows). LegendList only
-  // repaints items whose reference changed, and AnsiScreen mutates cells in
-  // place — so grid rows go in as fresh copies each frame. Scrollback rows
-  // are append-only and keep their identities.
-  const lineData =
-    screen === undefined
-      ? []
-      : [...screen.scrollback, ...screen.grid.map(r => r.slice())];
+  // repaints items whose reference changed. Unchanged grid rows keep the
+  // copy from the last epoch; scrollback rows are append-only.
+  const lineCaches = useRef(new WeakMap<AnsiScreen, LineCache>());
+  const lineData = (() => {
+    if (screen === undefined) return [];
+    let cache = lineCaches.current.get(screen);
+    if (cache === undefined) {
+      cache = {
+        gridEpoch: -1,
+        sbLen: -1,
+        rows: -1,
+        rowEpoch: [],
+        lines: [],
+      };
+      lineCaches.current.set(screen, cache);
+    }
+    return linesFor(screen, cache);
+  })();
   const cursorRow = (screen?.scrollback.length ?? 0) + (screen?.y ?? 0);
   const listRef = useRef<LegendListRef>(null);
   const follow = useRef(true);
   useEffect(() => {
     if (follow.current) listRef.current?.scrollToEnd({ animated: false });
-  });
+  }, [frame]);
   const onScroll = useCallback(
     (e: {
       nativeEvent: {
@@ -457,16 +549,10 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
           keyboardDismissMode="none"
           onTouchEnd={focus.focusInput}
           renderItem={({ item: row, index: y }) => (
-            <Text style={styles.termRow} selectable={false}>
-              {rowRuns(row, FG).map((r, i) => (
-                <Text key={i} style={[styles.termRun, r.style]}>
-                  {r.text}
-                </Text>
-              ))}
-              {screen?.cursorVisible && y === cursorRow ? (
-                <Text style={[styles.termRun, styles.cursor]}> </Text>
-              ) : null}
-            </Text>
+            <TermRow
+              row={row}
+              cursor={screen?.cursorVisible === true && y === cursorRow}
+            />
           )}
           ListFooterComponent={
             tab?.exited ? (
@@ -553,6 +639,25 @@ export function TerminalScreen({ chatId }: { chatId: string }) {
     </View>
   );
 }
+
+const TermRow = React.memo(function TerminalRow({
+  row,
+  cursor,
+}: {
+  row: Cell[];
+  cursor: boolean;
+}) {
+  return (
+    <Text style={styles.termRow} selectable={false}>
+      {rowRuns(row, FG).map((r, i) => (
+        <Text key={i} style={[styles.termRun, r.style]}>
+          {r.text}
+        </Text>
+      ))}
+      {cursor ? <Text style={[styles.termRun, styles.cursor]}> </Text> : null}
+    </Text>
+  );
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

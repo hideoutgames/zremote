@@ -6,6 +6,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing as RnEasing,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -31,6 +33,106 @@ import {
   VOICE_PILL_SEND_HIT,
   VOICE_PILL_SIZE,
 } from './voicePillMath';
+
+const IN_TEST = process.env.JEST_WORKER_ID !== undefined;
+const BAR_MAX = 18;
+
+function StaticVoiceBars({
+  accent,
+  levelTick,
+}: {
+  accent: string;
+  levelTick: number;
+}) {
+  const levels = simulatedVoiceLevels(0, VOICE_PILL_BAR_COUNT, levelTick);
+  return (
+    <View style={styles.bars}>
+      {levels.map((level, i) => (
+        <View
+          key={i}
+          style={[
+            styles.bar,
+            {
+              height: 4 + level * 14,
+              backgroundColor: accent,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function AnimatedVoiceBar({
+  index,
+  accent,
+  boost,
+}: {
+  index: number;
+  accent: string;
+  boost: number;
+}) {
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const duration = 360 + (index % 5) * 80;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(progress, {
+          toValue: 1,
+          duration,
+          easing: RnEasing.inOut(RnEasing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(progress, {
+          toValue: 0,
+          duration,
+          easing: RnEasing.inOut(RnEasing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [boost, index, progress]);
+  const scaleY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.28 + boost * 0.2, Math.min(1, 0.72 + boost)],
+  });
+  return (
+    <Animated.View
+      style={[
+        styles.bar,
+        {
+          height: BAR_MAX,
+          backgroundColor: accent,
+          transform: [{ scaleY }],
+        },
+      ]}
+    />
+  );
+}
+
+function VoiceBars({
+  accent,
+  levelTick,
+  reduceMotion,
+}: {
+  accent: string;
+  levelTick: number;
+  reduceMotion: boolean;
+}) {
+  if (IN_TEST || reduceMotion) {
+    return <StaticVoiceBars accent={accent} levelTick={levelTick} />;
+  }
+  const boost = 0.12 * Math.min(1, levelTick % 7);
+  return (
+    <View style={styles.bars}>
+      {Array.from({ length: VOICE_PILL_BAR_COUNT }, (_, i) => (
+        <AnimatedVoiceBar key={i} index={i} accent={accent} boost={boost} />
+      ))}
+    </View>
+  );
+}
 
 export function VoicePill({
   active,
@@ -58,9 +160,6 @@ export function VoicePill({
   const cover = useSharedValue(covering ? 1 : 0);
   const slide = useSharedValue(0);
   const [elapsed, setElapsed] = useState('0:00');
-  const [levels, setLevels] = useState(() =>
-    simulatedVoiceLevels(0, VOICE_PILL_BAR_COUNT),
-  );
   const [sliding, setSliding] = useState(false);
   const startedAt = useRef<number | null>(null);
   const cancelledRef = useRef(false);
@@ -91,16 +190,11 @@ export function VoicePill({
     const tick = () => {
       const start = startedAt.current ?? Date.now();
       setElapsed(formatVoiceElapsed(Date.now() - start));
-      if (!reduceMotion) {
-        setLevels(
-          simulatedVoiceLevels(Date.now(), VOICE_PILL_BAR_COUNT, levelTick),
-        );
-      }
     };
     tick();
-    const id = setInterval(tick, reduceMotion ? 250 : 50);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [active, levelTick, reduceMotion]);
+  }, [active]);
 
   const setSlidingRef = useRef(setSliding);
   setSlidingRef.current = setSliding;
@@ -208,20 +302,11 @@ export function VoicePill({
                 </Text>
               ) : null}
               <Text style={[styles.clock, { color: accent }]}>{elapsed}</Text>
-              <View style={styles.bars}>
-                {levels.map((level, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.bar,
-                      {
-                        height: 4 + level * 14,
-                        backgroundColor: accent,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
+              <VoiceBars
+                accent={accent}
+                levelTick={levelTick}
+                reduceMotion={reduceMotion === true}
+              />
             </View>
           ) : null}
           <View style={styles.iconSlot}>

@@ -11,6 +11,21 @@ const rowText = (s: AnsiScreen, y: number) =>
     .join('')
     .replace(/\s+$/, '');
 
+test('a character bumps only the row it lands on', () => {
+  const s = new AnsiScreen(10, 3);
+  s.write(enc('a'));
+  expect(s.rowEpoch[0]).toBe(1);
+  expect(s.rowEpoch[1]).toBe(0);
+  expect(s.rowEpoch[2]).toBe(0);
+  expect(s.gridEpoch).toBe(0);
+});
+
+test('scrolling a full screen bumps the grid epoch', () => {
+  const s = new AnsiScreen(10, 1);
+  s.write(enc('\n'));
+  expect(s.gridEpoch).toBe(1);
+});
+
 test('plain text + CR/LF advance', () => {
   const s = new AnsiScreen(10, 4);
   s.write(enc('hello\r\nworld'));

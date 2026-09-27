@@ -315,6 +315,27 @@ describe('RelaySessionSource', () => {
     src.stop();
   });
 
+  it('keeps an untouched entry reference when a later row appends', async () => {
+    const { src, relay, clock } = makeSource();
+    src.start();
+    await flush();
+    const ts = relay.transcriptStreams[0];
+    ts.push({ reset: [entry('a', 'hello'), entry('b', 'wor')] });
+    await drain(clock);
+    const first = store().entries[0];
+    expect(texts(store().entries)).toEqual(['hello', 'wor']);
+    ts.push({
+      upsert: [],
+      append: [{ entry: 'b', part: 't0', text: 'ld', len: utf8('world') }],
+      remove: [],
+      count: 2,
+    });
+    await drain(clock);
+    expect(store().entries[0]).toBe(first);
+    expect(texts(store().entries)).toEqual(['hello', 'world']);
+    src.stop();
+  });
+
   it('burst transcript frames share store writes via the quiet window', async () => {
     const { src, relay, clock } = makeSource();
     src.start();

@@ -16,7 +16,11 @@ import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import * as Clipboard from 'expo-clipboard';
 import * as DropdownMenu from './menus/dropdown-menu';
 import { useStore } from 'zustand';
-import { markdownMd4cFlags, markdownStyleFor } from '../markdownStyle';
+import {
+  darkMarkdownStyle,
+  lightMarkdownStyle,
+  markdownMd4cFlags,
+} from '../markdownStyle';
 import { ChangesScreen } from '../screens/ChangesScreen';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { getSessionStore } from '../zeron/state/sessionStores';
@@ -375,7 +379,9 @@ function OverviewTab({
         {body !== '' ? (
           <EnrichedMarkdownText
             markdown={body}
-            markdownStyle={markdownStyleFor(theme)}
+            markdownStyle={
+              theme.scheme === 'light' ? lightMarkdownStyle : darkMarkdownStyle
+            }
             md4cFlags={markdownMd4cFlags}
             flavor="github"
           />
