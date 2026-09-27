@@ -4,11 +4,18 @@
 `workflow_dispatch` only (optional `notes`). Merges to `main` do not start
 it.
 
-The job checks out this repo, installs Rust (`rust-toolchain.toml`, iOS
-device target) and Xcode 26, then archives `apps/ios/Zeron.xcodeproj`
-scheme **Zeron** for a generic iOS device. The target's **Rust core**
-build phase runs `scripts/ios/build-core.sh`, which compiles `crates/mobile`
-(`libzeron_mobile.a`) and refreshes the UniFFI bindings.
+The job checks out this repo, selects Xcode 26 (downloading the iOS
+platform if that SDK is missing), and installs Rust into `~/.cargo/bin`.
+`scripts/ios/build-core.sh` runs `cargo` with a scrubbed environment that
+only looks there. `rust-toolchain.toml` lists both `aarch64-apple-ios` and
+`aarch64-apple-ios-sim`; rustup will not run until both are installed, so
+the job adds them even though the device archive only links the device
+target.
+
+It then archives `apps/ios/Zeron.xcodeproj` scheme **Zeron**, Release, for
+a generic iOS device. The target's **Rust core** build phase runs
+`build-core.sh`, which compiles `crates/mobile` with the `mobile-dist`
+profile (`libzeron_mobile.a`) and refreshes the UniFFI bindings.
 
 The archive is **unsigned** (`CODE_SIGNING_ALLOWED=NO`) so ephemeral
 runners never mint Apple Development certificates.
@@ -17,13 +24,19 @@ API key and the team's **one cloud-managed Apple Distribution
 certificate**, and uploads to App Store Connect. No certificates,
 profiles, or key material are committed.
 
-`CFBundleVersion` is `github.run_number` (this workflow's run count,
-including failures). `CFBundleShortVersionString` is the project's
-`MARKETING_VERSION` (`1.0`). The bundle id defaults to
-**`no.hideout.zremote`** — the existing ZRemote App ID — so the upload
-lands on the existing TestFlight app. Override with the `IOS_BUNDLE_ID`
-Actions variable. `DEVELOPMENT_TEAM` on the archive and `teamID` in
-`ExportOptions.plist` both come from the `APPLE_TEAM_ID` secret.
+`CFBundleShortVersionString` is the project's `MARKETING_VERSION`
+(`1.0`). `CFBundleVersion` is the greater of `github.run_number` and one
+more than the highest numeric build App Store Connect already has for
+this app, so a re-run cannot reuse or go backwards from an uploaded
+build. The bundle id defaults to **`no.hideout.zremote`** — the existing
+ZRemote App ID — so the upload lands on the existing TestFlight app.
+Override with the `IOS_BUNDLE_ID` variable. `DEVELOPMENT_TEAM` on the
+archive and `teamID` in `ExportOptions.plist` both come from the
+`APPLE_TEAM_ID` secret.
+
+After the upload, the job polls App Store Connect until that build's
+processing state is `VALID` (or fails the job on `FAILED` / `INVALID`).
+Processing is given 30 minutes.
 
 The native app has **no entitlements file** (no push, associated domains,
 app groups, or widget extension). Extra capabilities already enabled on
@@ -57,8 +70,8 @@ distribution certificate).
 ## Run
 
 Actions → **iOS TestFlight** → Run workflow. The archive is the
-checked-out SHA. The job summary lists the SHA, commit subject, build
-number, and bundle id.
+checked-out SHA. The job summary lists the SHA, commit subject, App
+Store Connect app, build number, bundle id, and processing state.
 
 The archive step does **not** pass `-allowProvisioningUpdates` or the ASC
 authentication flags. Those apply only at export, where

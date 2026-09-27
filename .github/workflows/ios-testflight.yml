@@ -8,8 +8,10 @@
 # accepted) / APPLE_TEAM_ID. Optional variable IOS_BUNDLE_ID (default
 # no.hideout.zremote). See docs/TESTFLIGHT.md.
 #
-# The Xcode "Rust core" phase builds crates/mobile during the archive
-# (scripts/ios/build-core.sh). Rust must be on PATH before xcodebuild.
+# The Xcode "Rust core" phase runs scripts/ios/build-core.sh, which
+# calls cargo with a scrubbed environment whose PATH includes
+# ~/.cargo/bin. Rustup must live there, and every target named in
+# rust-toolchain.toml must already be installed.
 
 name: iOS TestFlight
 
@@ -32,7 +34,9 @@ jobs:
   testflight:
     runs-on: macos-26
     environment: testflight
-    timeout-minutes: 90
+    timeout-minutes: 120
+    env:
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,11 +49,10 @@ jobs:
             echo "## TestFlight revision"
             echo "- SHA: \`$sha\`"
             echo "- Subject: $subject"
-            echo "- Build number: \`${{ github.run_number }}\`"
             echo "- Ref: \`${{ github.ref }}\`"
-            echo "- Bundle id: \`${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}\`"
+            echo "- Bundle id: \`$BUNDLE_ID\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "Archiving $short — $subject (build ${{ github.run_number }})"
+          echo "Archiving $short — $subject"
 
       - name: Check required secrets are present
         env:
@@ -71,40 +74,141 @@ jobs:
 
       - name: Select Xcode 26
         run: |
+          set -euo pipefail
           ls /Applications | grep -i xcode || true
           if [ -d /Applications/Xcode_26.app ]; then
             sudo xcode-select -s /Applications/Xcode_26.app
           fi
           xcodebuild -version
+          ver=$(xcodebuild -version | awk 'NR==1 { print $2 }')
+          case "$ver" in
+            26*) ;;
+            *)
+              echo "Xcode 26 is required. The app's deployment target is iOS 26.0 (found Xcode $ver)."
+              exit 1
+              ;;
+          esac
+          if ! xcodebuild -showsdks | grep -q iphoneos; then
+            echo "iOS SDK is not installed; downloading the iOS platform."
+            xcodebuild -downloadPlatform iOS
+          fi
+          xcodebuild -showsdks | grep -E "iphoneos|iOS" || true
 
       - name: Rust toolchain + iOS targets
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios
+        run: |
+          set -euo pipefail
+          # build-core.sh scrubs the environment and only looks for cargo in
+          # ~/.cargo/bin. Install rustup there when the image doesn't have it.
+          if [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+            curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cargo/bin:$PATH"
+          # rust-toolchain.toml selects stable and lists both iOS targets.
+          # rustup errors on any cargo invocation if a listed target is missing,
+          # including the simulator target the device archive does not link.
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          rustc --version
+          rustup target list --installed
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ios-core
+          key: ios-core-mobile-dist
           cache-on-failure: true
 
-      - name: Write App Store Connect API key
+      - name: App Store Connect key and build number
         env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
-          # Accept the .p8 pasted as-is (PEM text) or base64-encoded.
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/asc"
           key="$RUNNER_TEMP/asc/AuthKey.p8"
           case "$ASC_PRIVATE_KEY" in
             *"-----BEGIN "*) printf '%s\n' "$ASC_PRIVATE_KEY" > "$key" ;;
-            *) echo "$ASC_PRIVATE_KEY" | base64 --decode > "$key" ;;
+            *)
+              if ! printf '%s' "$ASC_PRIVATE_KEY" | base64 --decode > "$key" 2>/dev/null; then
+                printf '%s' "$ASC_PRIVATE_KEY" | base64 -D > "$key"
+              fi
+              ;;
           esac
           chmod 600 "$key"
           grep -q "BEGIN PRIVATE KEY" "$key" || { echo "ASC_PRIVATE_KEY is not a valid .p8"; exit 1; }
 
+          python3 -m pip install --quiet 'PyJWT[crypto]' \
+            || python3 -m pip install --quiet --user --break-system-packages 'PyJWT[crypto]'
+
+          token_path="$RUNNER_TEMP/asc/token"
+          mint_token() {
+            python3 - "$key" "$ASC_KEY_ID" "$ASC_ISSUER_ID" > "$token_path" <<'PY'
+          import sys
+          import time
+          import jwt
+
+          key_path, key_id, issuer_id = sys.argv[1:]
+          with open(key_path, "rb") as key_file:
+              private_key = key_file.read()
+          now = int(time.time())
+          print(jwt.encode(
+              {"iss": issuer_id, "iat": now, "exp": now + 1199, "aud": "appstoreconnect-v1"},
+              private_key,
+              algorithm="ES256",
+              headers={"kid": key_id, "typ": "JWT"},
+          ))
+          PY
+            chmod 600 "$token_path"
+          }
+          mint_token
+
+          api() {
+            curl --globoff --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $(cat "$token_path")" \
+              -H "Content-Type: application/json" "$1"
+          }
+
+          apps="$RUNNER_TEMP/asc/apps.json"
+          api "https://api.appstoreconnect.apple.com/v1/apps?filter[bundleId]=${BUNDLE_ID}&fields[apps]=name,bundleId&limit=10" > "$apps"
+          app_count="$(jq '.data | length' "$apps")"
+          if [ "$app_count" -ne 1 ]; then
+            echo "Expected exactly one App Store Connect app for ${BUNDLE_ID}; found ${app_count}." >&2
+            jq -r '.errors[]? | "\(.status) \(.code): \(.title) — \(.detail)"' "$apps" >&2 || true
+            exit 3
+          fi
+          app_id="$(jq -r '.data[0].id' "$apps")"
+          app_name="$(jq -r '.data[0].attributes.name' "$apps")"
+
+          url="https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${app_id}&fields[builds]=version&limit=200"
+          latest=0
+          pages=0
+          while [ -n "$url" ] && [ "$pages" -lt 10 ]; do
+            builds="$RUNNER_TEMP/asc/builds-${pages}.json"
+            api "$url" > "$builds"
+            page_max="$(jq -r '[.data[].attributes.version | select(test("^[0-9]+$")) | tonumber] | max // 0' "$builds")"
+            if [ "$page_max" -gt "$latest" ]; then latest="$page_max"; fi
+            url="$(jq -r '.links.next // empty' "$builds")"
+            pages=$((pages + 1))
+          done
+
+          build_number=$((latest + 1))
+          if [ "$build_number" -lt "${{ github.run_number }}" ]; then
+            build_number="${{ github.run_number }}"
+          fi
+
+          echo "AC_KEY_PATH=$key" >> "$GITHUB_ENV"
+          echo "AC_TOKEN_PATH=$token_path" >> "$GITHUB_ENV"
+          echo "ASC_APP_ID=$app_id" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+          {
+            echo "- App: $app_name (\`$app_id\`)"
+            echo "- Build number: \`$build_number\` (highest existing build: $latest)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Preparing TestFlight build $build_number of $BUNDLE_ID ($app_name) from $GITHUB_SHA."
+
       - name: Archive (unsigned)
         working-directory: apps/ios
         env:
-          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -o pipefail
@@ -114,18 +218,18 @@ jobs:
           # team's 3-certificate cap. Export (below) is the only step that
           # talks to Apple for signing — it reuses the one cloud-managed
           # Distribution cert.
-          # The Zeron target's "Rust core" phase builds libzeron_mobile.a.
+          # Release selects the mobile-dist cargo profile inside build-core.sh.
           xcodebuild -project Zeron.xcodeproj -scheme Zeron \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             archive 2>&1 | tee build.log || {
-              grep -E "error:" build.log || true
+              grep -E "error:|error\[|fatal error|ld: " build.log | tail -80 || true
               exit 1
             }
 
@@ -167,13 +271,71 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyPath "$AC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee apps/ios/export.log || {
-              grep -E "error:" apps/ios/export.log || true
+              grep -E "error:|error\[|fatal error|ld: " apps/ios/export.log | tail -80 || true
               exit 1
             }
+
+      - name: Verify App Store Connect processing
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          mint_token() {
+            python3 - "$AC_KEY_PATH" "$ASC_KEY_ID" "$ASC_ISSUER_ID" > "$AC_TOKEN_PATH" <<'PY'
+          import sys
+          import time
+          import jwt
+
+          key_path, key_id, issuer_id = sys.argv[1:]
+          with open(key_path, "rb") as key_file:
+              private_key = key_file.read()
+          now = int(time.time())
+          print(jwt.encode(
+              {"iss": issuer_id, "iat": now, "exp": now + 1199, "aud": "appstoreconnect-v1"},
+              private_key,
+              algorithm="ES256",
+              headers={"kid": key_id, "typ": "JWT"},
+          ))
+          PY
+            chmod 600 "$AC_TOKEN_PATH"
+          }
+
+          builds="$RUNNER_TEMP/asc/processing-builds.json"
+          # 60 * 30s = 30 minutes. Refresh the 20-minute API token along the way.
+          for attempt in $(seq 1 60); do
+            if [ $((attempt % 20)) -eq 1 ]; then
+              mint_token
+            fi
+            curl --globoff --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $(cat "$AC_TOKEN_PATH")" \
+              -H "Content-Type: application/json" \
+              "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=$ASC_APP_ID&fields[builds]=version,uploadedDate,processingState,expired,minOsVersion&sort=-uploadedDate&limit=20" \
+              > "$builds"
+            state="$(jq -r --arg version "$BUILD_NUMBER" '[.data[] | select(.attributes.version == $version)][0].attributes.processingState // "NOT_FOUND"' "$builds")"
+            echo "Build $BUILD_NUMBER processing state: $state"
+            case "$state" in
+              VALID)
+                jq -c --arg version "$BUILD_NUMBER" '.data[] | select(.attributes.version == $version) | {id, version: .attributes.version, uploadedDate: .attributes.uploadedDate, processingState: .attributes.processingState, expired: .attributes.expired, minOsVersion: .attributes.minOsVersion}' "$builds"
+                {
+                  echo "- Processing: VALID"
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+                ;;
+              FAILED|INVALID)
+                echo "App Store Connect rejected build $BUILD_NUMBER with state $state." >&2
+                jq -c --arg version "$BUILD_NUMBER" '.data[] | select(.attributes.version == $version)' "$builds" >&2 || true
+                exit 4
+                ;;
+            esac
+            sleep 30
+          done
+          echo "Build $BUILD_NUMBER did not finish processing within 30 minutes." >&2
+          exit 5
 
       - name: Cleanup key material + guard logs
         if: always()
