@@ -468,7 +468,17 @@ function ActiveSessionScreen({
   );
 
   const renderEntry = useCallback(
-    ({ item }: { item: MessageEntry }) =>
+    ({
+      item,
+      parts,
+      showTail,
+      continued,
+    }: {
+      item: MessageEntry;
+      parts?: MessageEntry['parts'];
+      showTail?: boolean;
+      continued?: boolean;
+    }) =>
       item.role === 'user' ? (
         <UserMessage
           entry={item}
@@ -484,19 +494,28 @@ function ActiveSessionScreen({
       ) : (
         <AssistantMessage
           entry={item}
+          parts={parts}
+          showTail={showTail}
+          continued={continued}
           onOpenReasoning={openReasoning}
           onFetchBlob={onFetchBlob}
           onOpenPlan={openPlan}
           onOpenFileDiff={openFileDiff}
           commands={commands}
-          showWorking={agentWorking && item.id === lastEntryId}
+          showWorking={
+            agentWorking && item.id === lastEntryId && showTail !== false
+          }
           workingChatId={chatId}
           workingStartedAt={workingStartedAt}
-          workedFor={workedForCaption(
-            item,
-            agentWorking && item.id === lastEntryId,
-            workedByMessage,
-          )}
+          workedFor={
+            showTail === false
+              ? undefined
+              : workedForCaption(
+                  item,
+                  agentWorking && item.id === lastEntryId,
+                  workedByMessage,
+                )
+          }
         />
       ),
     [

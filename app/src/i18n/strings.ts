@@ -114,6 +114,8 @@ const en = {
   'session.message': 'Message',
   'session.messageNavigation': 'Message navigation',
   'session.goToMessage': 'Go to {role} message {n} of {total}',
+  'session.earlierMessages': 'Earlier messages',
+  'session.laterMessages': 'Later messages',
 
   // Inspector (iPad)
   'inspector.changes': 'Changes',
