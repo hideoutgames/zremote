@@ -27,6 +27,8 @@ export type ThreadPrStatus = {
   tone: 'open' | 'merged' | 'draft';
   additions: number;
   deletions: number;
+  /** Transcript link only — the host has not confirmed lifecycle. */
+  linked?: boolean;
 };
 
 export type ThreadStatusLine =
@@ -38,6 +40,7 @@ export type ThreadStatusLine =
       tone: ThreadPrStatus['tone'];
       additions: number;
       deletions: number;
+      linked?: boolean;
     }
   | { kind: 'time'; label: string };
 
@@ -56,6 +59,7 @@ export const threadStatusLine = (
       tone: pr.tone,
       additions: pr.additions,
       deletions: pr.deletions,
+      ...(pr.linked === true ? { linked: true } : {}),
     };
   return { kind: 'time', label: timeLabel };
 };

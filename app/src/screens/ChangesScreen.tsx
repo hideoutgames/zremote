@@ -56,12 +56,15 @@ export function ChangesScreen({
   chatId,
   embedded,
   onOpenHistory,
+  initialDiff,
 }: {
   chatId: string;
   /** Inside the iPad inspector — skip the standalone-screen chrome. */
   embedded?: boolean;
   /** Header "History" button → git history for this checkout. */
   onOpenHistory?: () => void;
+  /** Diff the session already watched, so the sheet is not stuck preparing. */
+  initialDiff?: CheckoutDiff;
 }) {
   const theme = useTheme();
   const runtime = useRuntime();
@@ -78,6 +81,11 @@ export function ChangesScreen({
   // checkoutId yet we match the stream by cwd instead.
   const checkoutId = chat?.checkoutId;
   const cwd = chat?.cwd;
+
+  useEffect(() => {
+    if (initialDiff !== undefined)
+      dispatch({ type: 'diff', diff: initialDiff });
+  }, [initialDiff]);
 
   useEffect(() => {
     if (runtime === null || hostDeviceId === undefined) return;

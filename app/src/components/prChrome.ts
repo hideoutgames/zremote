@@ -3,8 +3,9 @@ import type { PrBadgeModel } from './prBadge';
 
 export const prToneColor = (
   theme: Theme,
-  badge: Pick<PrBadgeModel, 'tone' | 'state'>,
+  badge: Pick<PrBadgeModel, 'tone' | 'state' | 'resolved'>,
 ): string => {
+  if (badge.resolved === false) return theme.textSecondary;
   if (badge.state === 'closed') return theme.textSecondary;
   if (badge.tone === 'merged') return theme.prMerged;
   if (badge.tone === 'draft') return theme.prDraft;

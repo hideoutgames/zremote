@@ -1,6 +1,11 @@
 // PR pill presentation — maps a change-request snapshot (+ optional working
 // tree diff totals) to the composer chrome. Closed PRs are hidden.
 
+import {
+  isWeakPrTitle,
+  prIdentityFromUrl,
+  prIdentityKey,
+} from '../zeron/protocol/detectChangeRequest';
 import type {
   ChangeRequestState,
   ChangeRequestSummary,
@@ -34,6 +39,13 @@ export interface PrBadgeModel {
   body?: string;
   baseRef: string;
   headRef: string;
+  /** Host supplied refs (and therefore title/state). Omitted on older
+   * fixtures, which are treated as resolved. */
+  resolved?: boolean;
+  /** Title is only the repo slug or another stand-in. */
+  weakTitle?: boolean;
+  /** `owner/repo` parsed from the URL, when we recognized the provider. */
+  repoLabel?: string;
 }
 
 /** Checkout working-tree totals used on the PR header (not GitHub PR stats). */
@@ -52,8 +64,9 @@ export const hasPrStats = (
 ): boolean => badge.additions > 0 || badge.deletions > 0 || badge.fileCount > 0;
 
 export const prStateLabelKey = (
-  badge: Pick<PrBadgeModel, 'state' | 'tone'>,
-): 'pr.open' | 'pr.merged' | 'pr.draft' | 'pr.closed' => {
+  badge: Pick<PrBadgeModel, 'state' | 'tone' | 'resolved'>,
+): 'pr.open' | 'pr.merged' | 'pr.draft' | 'pr.closed' | 'pr.linked' => {
+  if (badge.resolved === false) return 'pr.linked';
   if (badge.state === 'closed') return 'pr.closed';
   if (badge.tone === 'merged') return 'pr.merged';
   if (badge.tone === 'draft') return 'pr.draft';
@@ -65,8 +78,29 @@ export const isCheckoutPr = (
   summary?: ChangeRequestSummary | null,
 ): boolean => {
   if (summary == null) return false;
+  if (prIdentityFromUrl(badge.url) && prIdentityFromUrl(summary.url))
+    return prIdentityKey(badge) === prIdentityKey(summary);
   if (badge.url !== '' && summary.url !== '') return badge.url === summary.url;
-  return badge.number === summary.number;
+  return badge.number > 0 && badge.number === summary.number;
+};
+
+/** Attach resolved/weak-title flags from the summary the badge was built from. */
+export const presentPrBadge = (
+  summary: ChangeRequestSummary,
+  badge: PrBadgeModel,
+): PrBadgeModel => {
+  const id = prIdentityFromUrl(summary.url);
+  const repoLabel = id?.repo ?? '';
+  const number = badge.number > 0 ? badge.number : id?.number ?? badge.number;
+  const resolved =
+    summary.baseRef.trim() !== '' && summary.headRef.trim() !== '';
+  return {
+    ...badge,
+    number,
+    resolved,
+    repoLabel,
+    weakTitle: !resolved && isWeakPrTitle(badge.title, repoLabel, number),
+  };
 };
 
 export const prBadgeModel = (
@@ -79,7 +113,7 @@ export const prBadgeModel = (
     summary.state === 'merged' ? 'merged' : draft ? 'draft' : 'open';
   const additions = diff?.additions ?? 0;
   const deletions = diff?.deletions ?? 0;
-  return {
+  return presentPrBadge(summary, {
     tone,
     label: draft ? 'viewPrDraft' : 'viewPr',
     showCounts: draft,
@@ -93,5 +127,5 @@ export const prBadgeModel = (
     body: summary.body ?? summary.description,
     baseRef: summary.baseRef,
     headRef: summary.headRef,
-  };
+  });
 };

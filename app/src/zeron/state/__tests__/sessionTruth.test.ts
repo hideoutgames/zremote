@@ -31,6 +31,18 @@ describe('threadStatusLine', () => {
     });
   });
 
+  it('keeps a transcript-only link flagged', () => {
+    expect(
+      threadStatusLine('idle', { ...pr, tone: 'open', linked: true }, '1h'),
+    ).toEqual({
+      kind: 'pr',
+      tone: 'open',
+      additions: 12,
+      deletions: 3,
+      linked: true,
+    });
+  });
+
   it('uses relative time when idle with no PR', () => {
     expect(threadStatusLine('completed', undefined, '3m')).toEqual({
       kind: 'time',

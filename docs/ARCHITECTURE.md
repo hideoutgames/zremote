@@ -241,13 +241,15 @@ These are thin screens over host-relayed RPCs — nothing runs on the phone.
   transcript-scanned PR/MR URLs (`zeron/protocol/detectChangeRequest.ts`) for
   providers the host lookup can't reach — the engine resolves only through
   `gh`, so GitLab/Bitbucket/Azure DevOps/Gitea threads would otherwise show
-  nothing. Host results always win; detected rows render `state: 'open'`.
-  Tapping a row opens `PrSheet` filled from
-  Zeron data (Open/Draft/Merged badge, checkout `+/-` and file count,
-  Overview / Discussion / Commits). Overview is the change-request body
-  plus checkout diffs (`ChangesScreen`); Discussion and Commits show
-  `ListGitHistory` for the session cwd. Share and “Open in browser” use
-  the host-provided URL (no in-app merge or CI — the host has no
+  nothing. The same request is one row (host + repo + number), so
+  `/pull/19` and `/pull/19/files` do not duplicate. Placeholder checkout
+  summaries are dropped. Host fields win on that row; a link the thread
+  only mentioned is labeled Linked, not Open. Tapping a row opens
+  `PrSheet`. Overview is the body plus checkout diffs when this is the
+  checkout’s current request. Discussion lists thread messages that
+  mention it. Commits are `ListGitHistory` for the session cwd (the ones
+  that name the pull request, when several do). Share and “Open in
+  browser” use the URL (no in-app merge or CI — the host has no
   checks/merge RPCs).
 - **Previews** (`screens/PreviewsScreen.tsx`): still implemented
   (`WatchPreviews {chatId}`) but unwired from the session overflow.

@@ -72,6 +72,22 @@ test('hasPrStats is true when any checkout total is non-zero', () => {
   expect(hasPrStats({ ...base, fileCount: 2 })).toBe(true);
 });
 
+test('prStateLabelKey calls an unresolved link Linked', () => {
+  const linked = {
+    ...prBadgeModel(
+      summary({
+        baseRef: '',
+        headRef: '',
+        title: 'app',
+        url: 'https://github.com/acme/app/pull/12',
+      }),
+    )!,
+  };
+  expect(linked.resolved).toBe(false);
+  expect(linked.weakTitle).toBe(true);
+  expect(prStateLabelKey(linked)).toBe('pr.linked');
+});
+
 test('isCheckoutPr matches URL when both sides have one', () => {
   const badge = prBadgeModel(summary())!;
   expect(isCheckoutPr(badge, summary())).toBe(true);
@@ -79,6 +95,15 @@ test('isCheckoutPr matches URL when both sides have one', () => {
     isCheckoutPr(badge, summary({ url: 'https://example.com/99', number: 12 })),
   ).toBe(false);
   expect(isCheckoutPr(badge, undefined)).toBe(false);
+  const gh = prBadgeModel(
+    summary({ url: 'https://github.com/acme/app/pull/12' }),
+  )!;
+  expect(
+    isCheckoutPr(
+      gh,
+      summary({ url: 'https://github.com/acme/app/pull/12/files' }),
+    ),
+  ).toBe(true);
 });
 
 test('prStateLabelKey prefers closed over draft/open tone', () => {

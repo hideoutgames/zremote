@@ -66,6 +66,7 @@ import { formatWorkingElapsed } from '../zeron/state/workingElapsed';
 import { useOverviewChangeRequestWatches } from '../hooks/useCheckoutWatches';
 import {
   changeRequestStore,
+  effectiveChangeRequest,
   useThreadPrDot,
 } from '../zeron/state/changeRequestStore';
 import {
@@ -116,6 +117,7 @@ const statusCopy = (line: ThreadStatusLine): string => {
     case 'time':
       return line.label;
     case 'pr':
+      if (line.linked === true) return t('pr.linked');
       return line.tone === 'merged'
         ? t('pr.merged')
         : line.tone === 'draft'
@@ -177,8 +179,10 @@ const ThreadStatus = ({
     const prColor = prToneColor(theme, {
       tone: line.tone,
       state: line.tone === 'merged' ? 'merged' : 'open',
+      resolved: line.linked === true ? false : undefined,
     });
-    const showCounts = line.additions > 0 || line.deletions > 0;
+    const showCounts =
+      line.linked !== true && (line.additions > 0 || line.deletions > 0);
     return (
       <View style={styles.prStatus} testID={`thread-status-${chatId}`}>
         <BrandMark svg={svgForPullRequest(prColor)} size={14} />
@@ -238,6 +242,14 @@ const ChatRow = React.memo(function ({
   const hostOnline = useDerivedNow(n => isPresenceFresh(presenceAt, n));
   const unseen = chatUnseen(chat);
   const prTone = useThreadPrDot(chat.id);
+  const prLinked = useStore(changeRequestStore, s => {
+    const summary = effectiveChangeRequest(s, chat.id);
+    return (
+      summary !== undefined &&
+      summary.baseRef.trim() === '' &&
+      summary.headRef.trim() === ''
+    );
+  });
   const prAdds = useStore(
     changeRequestStore,
     s => s.diffByChat[chat.id]?.additions ?? 0,
@@ -265,7 +277,12 @@ const ChatRow = React.memo(function ({
     indicator,
     prTone === null
       ? undefined
-      : { tone: prTone, additions: prAdds, deletions: prDels },
+      : {
+          tone: prTone,
+          additions: prAdds,
+          deletions: prDels,
+          linked: prLinked,
+        },
     atLabel,
   );
   const workingElapsed = line.kind === 'working' ? elapsedLabel : undefined;

@@ -8,11 +8,16 @@ import {
 } from '../src/app/runtimeContext';
 import { workspaceStore } from '../src/zeron/state/workspaceStore';
 import {
+  getSessionStore,
+  resetSessionStores,
+} from '../src/zeron/state/sessionStores';
+import {
   changeRequestStore,
   setChangeRequestForChat,
   setCheckoutDiffForChat,
 } from '../src/zeron/state/changeRequestStore';
 import type { PrBadgeModel } from '../src/components/prBadge';
+import { t } from '../src/i18n/strings';
 import type { GitHistoryPage } from '../src/zeron/protocol/types';
 
 const services = (runtime: AppServices['runtime'] = null): AppServices => ({
@@ -64,6 +69,7 @@ const render = async (
 };
 
 beforeEach(() => {
+  resetSessionStores();
   act(() => {
     workspaceStore.setState({
       devices: [
@@ -201,7 +207,7 @@ test('share uses the change-request URL', async () => {
   });
 });
 
-test('discussion tab lists checkout git history', async () => {
+test('commits tab lists checkout git history', async () => {
   const page: GitHistoryPage = {
     commits: [
       {
@@ -229,9 +235,10 @@ test('discussion tab lists checkout git history', async () => {
     await Promise.resolve();
   });
   await act(async () => {
-    tree.root.findByProps({ testID: 'pr-tab-discussion' }).props.onPress();
+    tree.root.findByProps({ testID: 'pr-tab-commits' }).props.onPress();
   });
   const labels = texts(tree.root);
+  expect(labels).toContain('Recent commits on feat/composer');
   expect(labels).toContain('Cursor Agent committed');
   expect(labels).toContain('Make queued pill Liquid Glass');
   expect(labels).toContain('Today');
@@ -287,4 +294,94 @@ test('live checkout diff updates header stats', async () => {
   });
   expect(texts(tree.root)).toContain('+4');
   expect(texts(tree.root)).toContain('-1');
+  expect(texts(tree.root)).toContain('a.ts');
+});
+
+test('a linked pull request does not claim it is open or show another checkout diff', async () => {
+  act(() => {
+    setChangeRequestForChat('c1', {
+      checkoutId: 'ck',
+      deviceId: 'h1',
+      cwd: '/repo',
+      branch: 'feat',
+      changeRequest: {
+        provider: 'github',
+        number: 4,
+        title: 'Checkout request',
+        url: 'https://github.com/acme/app/pull/4',
+        state: 'open',
+        baseRef: 'main',
+        headRef: 'feat',
+      },
+      updatedAt: '2026-09-19T00:00:00Z',
+    });
+    setCheckoutDiffForChat('c1', {
+      checkoutId: 'ck',
+      deviceId: 'h1',
+      cwd: '/repo',
+      patch: '',
+      files: [
+        {
+          path: 'secret.ts',
+          status: 'modified',
+          additions: 1,
+          deletions: 0,
+          binary: false,
+        },
+      ],
+      additions: 1,
+      deletions: 0,
+      truncated: false,
+      checksum: 'x',
+      updatedAt: '2026-09-19T00:00:00Z',
+    });
+    getSessionStore('c1').setState({
+      entries: [
+        {
+          id: 'e1',
+          role: 'assistant',
+          createdAt: Date.now(),
+          deviceId: 'h1',
+          parts: [
+            {
+              kind: 'text',
+              id: 't1',
+              text: 'Opened [Composer queue glass](https://github.com/hideoutgames/zremote/pull/19).',
+            },
+          ],
+        },
+      ],
+    });
+  });
+  const tree = await render(
+    <PrSheet
+      chatId="c1"
+      badge={badge({
+        resolved: false,
+        weakTitle: true,
+        title: 'zremote',
+        repoLabel: 'hideoutgames/zremote',
+        additions: 0,
+        deletions: 0,
+        fileCount: 0,
+        body: undefined,
+        baseRef: '',
+        headRef: '',
+      })}
+      onDismiss={() => {}}
+    />,
+  );
+  const labels = texts(tree.root);
+  expect(labels.filter(label => label === 'Open')).toEqual([]);
+  expect(labels).toContain('Linked');
+  expect(labels).toContain('Pull request');
+  expect(labels).toContain('hideoutgames/zremote');
+  expect(labels).not.toContain('What changed');
+  expect(labels).not.toContain('secret.ts');
+  expect(labels).toContain(t('pr.diffElsewhere'));
+  await act(async () => {
+    tree.root.findByProps({ testID: 'pr-tab-discussion' }).props.onPress();
+  });
+  expect(texts(tree.root)).toContain('Composer queue glass');
+  expect(texts(tree.root).some(label => label.startsWith('Agent'))).toBe(true);
 });
