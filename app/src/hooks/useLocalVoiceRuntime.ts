@@ -51,28 +51,40 @@ export const useLocalVoiceRuntime = (
       if (!mounted) return;
       const transcriptionPath =
         voiceModelId != null ? manager?.installedPath(voiceModelId) ?? '' : '';
+      // Cleanup is optional. No selection, a non-cleanup id, or a model
+      // that is not installed yet leaves the raw transcript in place —
+      // and does not load llama.rn.
+      const cleanupEntry = catalogEntry(cleanupModelId);
+      const cleanupId =
+        cleanupEntry?.kind === 'cleanup' ? cleanupEntry.id : undefined;
       const cleanupPath =
-        cleanupModelId != null
-          ? manager?.installedPath(cleanupModelId)
-          : undefined;
+        cleanupId !== undefined ? manager?.installedPath(cleanupId) : undefined;
       if (voiceModelId != null && transcriptionPath !== '') {
         manager?.markInUse(voiceModelId);
       }
-      if (cleanupModelId != null && cleanupPath !== undefined) {
-        manager?.markInUse(cleanupModelId);
+      if (
+        cleanupId !== undefined &&
+        cleanupPath !== undefined &&
+        cleanupPath !== ''
+      ) {
+        manager?.markInUse(cleanupId);
       }
       const [capture, transcription, cleanup] = await Promise.all([
         resolveVoiceCapture(),
         resolveTranscriptionEngine(
           catalogEntry(voiceModelId)?.runtime ?? 'whisper',
         ),
-        resolveCleanupEngine(),
+        cleanupPath !== undefined && cleanupPath !== ''
+          ? resolveCleanupEngine()
+          : Promise.resolve(undefined),
       ]);
       if (!mounted) return;
       // A cleanup engine that reports unavailable (native module not
       // linked) fails every cleanup — keep the raw transcript instead.
       const cleanupUsable =
+        cleanup !== undefined &&
         cleanupPath !== undefined &&
+        cleanupPath !== '' &&
         (await cleanup.isAvailable().catch(() => false));
       setRuntime({
         capture,
@@ -89,7 +101,8 @@ export const useLocalVoiceRuntime = (
     return () => {
       mounted = false;
       if (voiceModelId != null) manager?.release(voiceModelId);
-      if (cleanupModelId != null) manager?.release(cleanupModelId);
+      const cleanupEntry = catalogEntry(cleanupModelId);
+      if (cleanupEntry?.kind === 'cleanup') manager?.release(cleanupEntry.id);
     };
   }, [enabled, voiceModelId, cleanupModelId, installedTick]);
 

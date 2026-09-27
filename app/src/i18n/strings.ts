@@ -257,6 +257,8 @@ const en = {
   'settings.voiceModel': 'Voice Model',
   'settings.cleanupModel': 'Cleanup Model',
   'settings.cleanupDisabled': 'Disabled',
+  'settings.cleanupOptionalHint':
+    'Optional. Transcription works with no cleanup model. A selected model removes filler and self-corrections on device.',
   'settings.cleanupInstructions': 'Cleanup Instructions',
   'settings.cleanupInstructionsHint':
     'Remove filler words, repeated starts, and spoken corrections without rewriting what you said.',
