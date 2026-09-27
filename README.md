@@ -4,7 +4,7 @@ ZRemote is a clone of of [Zeron](https://github.com/zeronsh/zeron), purely for t
 
 ## Attribution
 
-The iOS app (`apps/ios`) and the Rust mobile core it links are from the [Zeron](https://zeron.sh) project by Wing — [zeronsh/zeron](https://github.com/zeronsh/zeron). This repository vendors that code at [`433aa148`](https://github.com/zeronsh/zeron/commit/433aa148d55e3316dab9d69afc402e0bb8f55583). Zeron is [MIT licensed](LICENSE); copyright (c) 2026 Wing. Other bundled components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The iOS app (`apps/ios`) and the Rust mobile core it links are from the [Zeron](https://zeron.sh) project by Wing — [zeronsh/zeron](https://github.com/zeronsh/zeron). This repository vendors that code at [`433aa148`](https://github.com/zeronsh/zeron/commit/433aa148d55e3316dab9d69afc402e0bb8f55583), plus the iOS model picker from [zeronsh/zeron#583](https://github.com/zeronsh/zeron/pull/583) ([`a63c25b`](https://github.com/zeronsh/zeron/commit/a63c25b44c4c5ca6e544457c45351e89b6a1d5f1)). Zeron is [MIT licensed](LICENSE); copyright (c) 2026 Wing. Other bundled components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ZRemote changes the App Store identity only: bundle id `no.hideout.zremote`, the ZRemote display name, and the logos in [`logos/`](logos/).
 
