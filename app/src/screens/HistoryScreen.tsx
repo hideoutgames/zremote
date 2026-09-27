@@ -6,7 +6,12 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useStore } from 'zustand';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
-import { collectThreadPrs } from '../components/threadPrs';
+import {
+  collectThreadPrs,
+  prHeadlineIsFallback,
+  threadPrMeta,
+} from '../components/threadPrs';
+import { prIdentityKey } from '../zeron/protocol/detectChangeRequest';
 import { prStateLabelKey, type PrBadgeModel } from '../components/prBadge';
 import { prToneColor } from '../components/prChrome';
 import { BrandMark } from '../components/BrandMark';
@@ -46,34 +51,51 @@ export function HistoryScreen({
           contentContainerStyle={styles.listContent}
         >
           {prs.map(badge => {
+            const title = prHeadlineIsFallback(badge)
+              ? t('pr.fallbackTitle')
+              : badge.title;
+            const state = t(prStateLabelKey(badge));
+            const metaLine = threadPrMeta(badge);
+            const meta = metaLine !== '' ? `${state} · ${metaLine}` : state;
             const label = t('history.prRow')
               .replace('{number}', String(badge.number))
-              .replace('{title}', badge.title);
+              .replace('{title}', title);
             return (
               <Pressable
-                key={badge.url !== '' ? badge.url : String(badge.number)}
+                key={prIdentityKey(badge)}
                 onPress={() => onOpenPr?.(badge)}
                 accessibilityRole="button"
-                accessibilityLabel={`${label}, ${t(prStateLabelKey(badge))}`}
+                accessibilityLabel={`${label}, ${state}`}
                 style={[styles.row, { borderBottomColor: theme.border }]}
               >
                 <BrandMark
                   svg={svgForPullRequest(prToneColor(theme, badge))}
                   size={16}
                 />
-                <Text
-                  style={[styles.title, { color: theme.text }]}
-                  numberOfLines={2}
-                  maxFontSizeMultiplier={1.6}
-                >
-                  {badge.title}
-                </Text>
-                <Text
-                  style={[styles.number, { color: theme.textSecondary }]}
-                  numberOfLines={1}
-                >
-                  {`#${badge.number}`}
-                </Text>
+                <View style={styles.copy}>
+                  <Text
+                    style={[styles.title, { color: theme.text }]}
+                    numberOfLines={2}
+                    maxFontSizeMultiplier={1.6}
+                  >
+                    {title}
+                  </Text>
+                  <Text
+                    style={[styles.meta, { color: theme.textSecondary }]}
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.6}
+                  >
+                    {meta}
+                  </Text>
+                </View>
+                {badge.number > 0 ? (
+                  <Text
+                    style={[styles.number, { color: theme.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {`#${badge.number}`}
+                  </Text>
+                ) : null}
                 <Icon
                   name="chevron.right"
                   size={14}
@@ -102,6 +124,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  title: { flex: 1, fontSize: 16, fontWeight: '600' },
+  copy: { flex: 1, gap: 2 },
+  title: { fontSize: 16, fontWeight: '600' },
+  meta: { fontSize: 13 },
   number: { fontSize: 13, fontVariant: ['tabular-nums'] },
 });

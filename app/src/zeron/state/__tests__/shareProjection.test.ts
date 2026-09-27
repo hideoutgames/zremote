@@ -82,6 +82,27 @@ describe('shareSessionProjection', () => {
     );
   });
 
+  it('compares large tool outputs without treating equal bodies as changed', () => {
+    const body = 'x'.repeat(80_000);
+    const tool = (output: string): MessageEntry => ({
+      id: 'a',
+      role: 'assistant',
+      parts: [
+        {
+          kind: 'tool',
+          id: 't',
+          call: { name: 'bash' } as never,
+          output,
+          resolved: true,
+        },
+      ],
+      createdAt: 1,
+      deviceId: 'host',
+    });
+    expect(sameEntry(tool(body), tool(body))).toBe(true);
+    expect(sameEntry(tool(body), tool(`${body}!`))).toBe(false);
+  });
+
   it('sameCommand treats a status change as distinct', () => {
     expect(sameCommand(cmd('c1'), cmd('c1', { status: 'applied' }))).toBe(
       false,

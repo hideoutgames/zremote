@@ -20,7 +20,11 @@ import { Icon } from './Icon';
 import { Glass } from './Glass';
 import { SESSION_SHEET_GRABBER_INSET } from './SessionSheet';
 import { useTheme } from '../theme';
-import { markdownMd4cFlags, markdownStyleFor } from '../markdownStyle';
+import {
+  darkMarkdownStyle,
+  lightMarkdownStyle,
+  markdownMd4cFlags,
+} from '../markdownStyle';
 import { t } from '../i18n/strings';
 
 export function PlanSheet({
@@ -39,7 +43,8 @@ export function PlanSheet({
   const { height: windowHeight } = useWindowDimensions();
   const sheet = useRef<TrueSheet>(null);
   const implementing = useRef(false);
-  const mdStyle = markdownStyleFor(theme);
+  const mdStyle =
+    theme.scheme === 'light' ? lightMarkdownStyle : darkMarkdownStyle;
   const cap = Math.max(240, Math.round(windowHeight - insets.top));
 
   const implement = () => {

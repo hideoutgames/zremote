@@ -1,0 +1,301 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hideoutgames <154709155+hideoutgames@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 01:40:00 +0000
+Subject: [PATCH] edge: Live Activity start payload and APNs host fallback
+
+Start pushes include aps.alert (Apple drops a start without one),
+input-push-token, and a phase label. Push-to-start also runs on
+awaitingInput, once per chat until the run ends, and that marker
+survives DO hibernation. BadDeviceToken retries the other APNs host
+before the token is pruned.
+---
+diff --git a/edge/src/live-activity.test.ts b/edge/src/live-activity.test.ts
+index c73770c..131cec8 100644
+--- a/edge/src/live-activity.test.ts
++++ b/edge/src/live-activity.test.ts
+@@ -1,5 +1,6 @@
+ import { describe, expect, it, vi, beforeEach } from "vitest";
+ import {
++  activityPhaseForStatus,
+   apnsConfigured,
+   buildAlertPayload,
+   buildLiveActivityPayload,
+@@ -59,7 +60,7 @@ describe("buildLiveActivityPayload", () => {
+     expect(p.aps["stale-date"]).toBeUndefined();
+   });
+ 
+-  it("start carries attributes-type + attributes.url deep link", () => {
++  it("start carries attributes, a required alert, and input-push-token", () => {
+     const p = buildLiveActivityPayload("start", props, 1_000) as {
+       aps: Record<string, unknown>;
+     };
+@@ -68,6 +69,8 @@ describe("buildLiveActivityPayload", () => {
+     expect(
+       (p.aps.attributes as { url: string }).url
+     ).toBe("zeron://session/c1");
++    expect(p.aps.alert).toEqual({ title: "Fix bug", body: "Working" });
++    expect(p.aps["input-push-token"]).toBe(1);
+   });
+ });
+ 
+@@ -126,6 +129,20 @@ describe("sendLiveActivityPush", () => {
+     );
+     const r = await sendLiveActivityPush(env(), "t", "update", props, 0, fetchImpl as typeof fetch);
+     expect(r).toEqual({ ok: false, status: 400, reason: "BadDeviceToken" });
++    expect(fetchImpl).toHaveBeenCalledTimes(2);
++  });
++
++  it("retries the other APNs host when the configured one rejects the token", async () => {
++    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
++      const host = String(url);
++      if (host.includes("api.push.apple.com")) {
++        return new Response(JSON.stringify({ reason: "BadDeviceToken" }), { status: 400 });
++      }
++      return new Response("{}", { status: 200 });
++    });
++    const r = await sendLiveActivityPush(env(), "t", "update", props, 0, fetchImpl as typeof fetch);
++    expect(r.ok).toBe(true);
++    expect(String(fetchImpl.mock.calls[1][0])).toContain("api.sandbox.push.apple.com");
+   });
+ 
+   it("caches the JWT (one key import/sign per 50min)", async () => {
+@@ -155,6 +172,24 @@ describe("isRunFinished", () => {
+   });
+ });
+ 
++describe("activityPhaseForStatus", () => {
++  it("maps session status onto the widget phase and a short label", () => {
++    expect(activityPhaseForStatus("working")).toEqual({
++      phase: "working",
++      phaseLabel: "Working"
++    });
++    expect(activityPhaseForStatus("awaitingInput")).toEqual({
++      phase: "awaitingInput",
++      phaseLabel: "Needs you"
++    });
++    expect(activityPhaseForStatus("idle")).toEqual({
++      phase: "completed",
++      phaseLabel: "Done"
++    });
++    expect(activityPhaseForStatus("errored").phaseLabel).toBe("Failed");
++  });
++});
++
+ describe("isQuestionAlert", () => {
+   it("is true only for working → awaitingInput", () => {
+     expect(isQuestionAlert("working", "awaitingInput")).toBe(true);
+diff --git a/edge/src/live-activity.ts b/edge/src/live-activity.ts
+index df516e2..8e193fb 100644
+--- a/edge/src/live-activity.ts
++++ b/edge/src/live-activity.ts
+@@ -118,13 +118,39 @@ export const buildLiveActivityPayload = (
+     aps["dismissal-date"] = Math.floor((now + 1_800_000) / 1000);
+   }
+   if (event === "start") {
+-    // LiveActivityAttributes { url } — expo-widgets' attributes type name.
++    // Apple rejects a start push that has no alert. attributes.url is
++    // expo-widgets' LiveActivityAttributes deep link (unknown keys are
++    // ignored on older widgets that only decode ContentState).
++    // input-push-token asks iOS 18+ for a per-activity token so later
++    // updates have somewhere to go.
+     aps["attributes-type"] = "LiveActivityAttributes";
+     aps["attributes"] = { url: `zeron://session/${props.chatId}` };
++    aps.alert = {
++      title: props.title,
++      body: props.phaseLabel
++    };
++    aps["input-push-token"] = 1;
+   }
+   return { aps };
+ };
+ 
++/** Session-row status → the widget's phase + Lock Screen label.
++ * No prompt or message text. `idle` is the completed end state. */
++export const activityPhaseForStatus = (
++  status: string
++): { phase: string; phaseLabel: string } => {
++  switch (status) {
++    case "awaitingInput":
++      return { phase: "awaitingInput", phaseLabel: "Needs you" };
++    case "errored":
++      return { phase: "errored", phaseLabel: "Failed" };
++    case "idle":
++      return { phase: "completed", phaseLabel: "Done" };
++    default:
++      return { phase: "working", phaseLabel: "Working" };
++  }
++};
++
+ export type ApnsResult =
+   | { ok: true }
+   | { ok: false; status: number; reason: string };
+@@ -187,6 +213,27 @@ const postApns = async (
+   return { ok: false, status: res.status, reason };
+ };
+ 
++/** Development builds mint sandbox tokens; TestFlight mints production
++ * tokens. Both register on the same edge. A BadDeviceToken from the
++ * configured host is the other environment — try it before the caller
++ * prunes a token that is live. */
++const postApnsEitherHost = async (
++  env: Env,
++  deviceToken: string,
++  headers: Record<string, string>,
++  body: Record<string, unknown>,
++  now: number,
++  fetchImpl: typeof fetch
++): Promise<ApnsResult> => {
++  const first = await postApns(env, deviceToken, headers, body, now, fetchImpl);
++  if (first.ok || first.reason !== "BadDeviceToken") return first;
++  const other: Env = {
++    ...env,
++    APNS_ENV: env.APNS_ENV === "sandbox" ? "production" : "sandbox"
++  };
++  return postApns(other, deviceToken, headers, body, now, fetchImpl);
++};
++
+ /** POST one Live Activity push to APNs for a device token. */
+ export const sendLiveActivityPush = async (
+   env: Env,
+@@ -196,7 +243,7 @@ export const sendLiveActivityPush = async (
+   now = Date.now(),
+   fetchImpl: typeof fetch = fetch
+ ): Promise<ApnsResult> =>
+-  postApns(
++  postApnsEitherHost(
+     env,
+     deviceToken,
+     {
+@@ -219,7 +266,7 @@ export const sendAlertPush = async (
+   now = Date.now(),
+   fetchImpl: typeof fetch = fetch
+ ): Promise<ApnsResult> =>
+-  postApns(
++  postApnsEitherHost(
+     env,
+     deviceToken,
+     {
+diff --git a/edge/src/registry-room.ts b/edge/src/registry-room.ts
+index f8e2b04..4fdfaf9 100644
+--- a/edge/src/registry-room.ts
++++ b/edge/src/registry-room.ts
+@@ -22,6 +22,7 @@
+ import { applyOp, validateOp, type Op, type Row } from "./registry-core";
+ import { AUTH_USER_HEADER, type Env } from "./env";
+ import {
++  activityPhaseForStatus,
+   apnsConfigured,
+   isQuestionAlert,
+   isRunFinished,
+@@ -63,6 +64,10 @@ export class RegistryRoom implements DurableObject {
+   /** chatId → last APNs 'working' push (epoch ms). Memory-only throttle —
+    * a DO hibernate simply resets the window. */
+   private readonly lastWorkingPush = new Map<string, number>();
++  /** Chats we already push-to-started and have not ended. Another start
++   * every throttled working tick stacks a second Live Activity. Persisted:
++   * a hibernated DO would otherwise forget and start a second activity. */
++  private readonly pushStarted = new Set<string>();
+ 
+   constructor(ctx: DurableObjectState, env: Env) {
+     this.ctx = ctx;
+@@ -83,6 +88,28 @@ export class RegistryRoom implements DurableObject {
+     // pong is runtime-answered and proves nothing about this DO's health.
+     // Clients judge liveness by probe frames (crates/sync/src/registry.rs).
+     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
++    this.restorePushStarted();
++  }
++
++  private restorePushStarted(): void {
++    const raw = this.getMeta("liveActivityPushStarted");
++    if (raw === undefined) return;
++    try {
++      const parsed = JSON.parse(raw) as unknown;
++      if (!Array.isArray(parsed)) return;
++      for (const id of parsed) {
++        if (typeof id === "string" && id !== "") this.pushStarted.add(id);
++      }
++    } catch {
++      // A corrupt marker must not block later pushes.
++    }
++  }
++
++  private persistPushStarted(): void {
++    this.setMeta(
++      "liveActivityPushStarted",
++      JSON.stringify([...this.pushStarted])
++    );
+   }
+ 
+   // ── meta helpers ──────────────────────────────────────────────────────────
+@@ -516,6 +543,7 @@ export class RegistryRoom implements DurableObject {
+         typeof row.fields.deviceId === "string"
+           ? this.deviceRow(row.fields.deviceId)
+           : undefined;
++      const shown = activityPhaseForStatus(status);
+       const props: SessionPushProps = {
+         chatId,
+         title: (chat?.fields.title as string | undefined) ?? "Session",
+@@ -523,8 +551,8 @@ export class RegistryRoom implements DurableObject {
+           device !== undefined
+             ? (device.fields.name as string | undefined)
+             : undefined,
+-        phase: status,
+-        phaseLabel: status,
++        phase: shown.phase,
++        phaseLabel: shown.phaseLabel,
+         startedAt:
+           typeof row.fields.startedAt === "number"
+             ? row.fields.startedAt / 1000
+@@ -539,6 +567,7 @@ export class RegistryRoom implements DurableObject {
+       // awaitingInput; errored maps to 'end' too (final state, dismiss 30min).
+       const finished = isRunFinished(prevStatus, status);
+       const event = finished ? "end" : "update";
++      if (finished && this.pushStarted.delete(chatId)) this.persistPushStarted();
+ 
+       // working → update throttled to 1/5s per chat.
+       if (
+@@ -557,24 +586,36 @@ export class RegistryRoom implements DurableObject {
+         )
+       ].map(r => r.token as string);
+ 
+-      if (activityTokens.length === 0 && status === "working") {
++      const canPushStart =
++        !finished &&
++        activityTokens.length === 0 &&
++        (status === "working" || status === "awaitingInput") &&
++        !this.pushStarted.has(chatId);
++
++      if (canPushStart) {
+         // Push-to-start: no per-activity token — the phone may still be
+-        // reachable via its user-scoped push_to_start token.
++        // reachable via its user-scoped push_to_start token. awaitingInput
++        // counts too: a question can be the first status we observe.
+         const startTokens = [
+           ...this.ctx.storage.sql.exec(
+             "SELECT token FROM live_activity_tokens WHERE kind = 'push_to_start'"
+           )
+         ].map(r => r.token as string);
++        let started = false;
+         for (const token of startTokens) {
+           const res = await sendLiveActivityPush(this.env, token, "start", props, now);
++          if (res.ok) started = true;
++          else await this.pruneBadToken(token, res);
++        }
++        if (started) {
++          this.pushStarted.add(chatId);
++          this.persistPushStarted();
++        }
++      } else if (activityTokens.length > 0) {
++        for (const token of activityTokens) {
++          const res = await sendLiveActivityPush(this.env, token, event, props, now);
+           if (!res.ok) await this.pruneBadToken(token, res);
+         }
+-        continue;
+-      }
+-
+-      for (const token of activityTokens) {
+-        const res = await sendLiveActivityPush(this.env, token, event, props, now);
+-        if (!res.ok) await this.pruneBadToken(token, res);
+       }
+ 
+       // Alert banners (native device tokens). Independent of Live Activities

@@ -214,6 +214,37 @@ test('bindUiPrefs drops an unknown preset id', async () => {
   expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('dither');
 });
 
+test('bindUiPrefs keeps a custom wallpaper after the container path changes', async () => {
+  const fs = new MemoryBackgroundFs();
+  bindBackgroundFs(fs);
+  const disk = memDocDisk();
+  const fileName = 'new-thread-background-abc.png';
+  const current = fs.joinManaged(fileName);
+  fs.files.set(current, 'bytes');
+  await disk.saveUiPrefs('org', 'user', {
+    newThreadComposerBackground: {
+      uri: `file:///var/mobile/Containers/Data/Application/OLD-UUID/Documents/new-thread-backgrounds/${fileName}`,
+      name: 'sunset.png',
+    },
+    newThreadBackgroundEffect: 'ascii',
+  });
+  await bindUiPrefs(disk, 'org', 'user');
+  expect(uiPrefsStore.getState().newThreadComposerBackground).toEqual({
+    kind: 'custom',
+    uri: current,
+    name: 'sunset.png',
+    fileName,
+  });
+  expect(uiPrefsStore.getState().newThreadBackgroundEffect).toBe('ascii');
+  const saved = await disk.loadUiPrefs('org', 'user');
+  expect(saved?.newThreadComposerBackground).toEqual({
+    kind: 'custom',
+    uri: current,
+    name: 'sunset.png',
+    fileName,
+  });
+});
+
 test('bindUiPrefs drops a wallpaper pointer whose file is gone', async () => {
   const fs = new MemoryBackgroundFs();
   bindBackgroundFs(fs);

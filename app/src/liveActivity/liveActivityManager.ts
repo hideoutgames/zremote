@@ -121,11 +121,30 @@ export class LiveActivityManager {
     return [...this.overflowItems.keys()];
   }
 
+  /** True when this chat has a live ActivityKit handle we can update. */
+  private hasHandle(chatId: string): boolean {
+    return (
+      this.handles.has(chatId) ||
+      (this.overflowItems.has(chatId) && this.overflowHandle !== undefined)
+    );
+  }
+
   /** Feed the latest props for a session; call with `null` on archive. */
   apply(chatId: string, next: SessionActivityProps | null): void {
     const prev = this.states.get(chatId);
     if (next === null) {
       this.end(chatId, 'immediate');
+      return;
+    }
+    // A start that threw (app not active yet, activity limit while a
+    // previous activity was still ending) must be retried. Recording the
+    // phase without a handle would skip `start` forever.
+    if (
+      prev !== undefined &&
+      !this.hasHandle(chatId) &&
+      START_PHASES.has(next.phase)
+    ) {
+      this.start(chatId, next);
       return;
     }
     const action = planActivity(prev, next, this.now());
@@ -186,10 +205,6 @@ export class LiveActivityManager {
 
   private packOverflow(chatId: string, props: SessionActivityProps): void {
     this.overflowItems.set(chatId, props);
-    this.states.set(chatId, {
-      phase: props.phase,
-      lastUpdateAt: this.now(),
-    });
     if (this.overflowHandle === undefined) {
       try {
         this.overflowHandle = this.driver.start(
@@ -198,11 +213,16 @@ export class LiveActivityManager {
           new Date(this.now() + STALE_AFTER_MS),
         );
       } catch {
-        /* Live Activities unavailable entirely */
+        // No handle and no phase recorded — the next apply retries start.
+        return;
       }
-      return;
+    } else {
+      this.syncOverflow();
     }
-    this.syncOverflow();
+    this.states.set(chatId, {
+      phase: props.phase,
+      lastUpdateAt: this.now(),
+    });
   }
 
   private buildOverflowProps(): SessionActivityProps {
@@ -265,6 +285,22 @@ export class LiveActivityManager {
     this.handles.delete(chatId);
     this.states.delete(chatId);
     this.cb.onUnregister(chatId);
+  }
+
+  /**
+   * End activities this process does not own, once we have started our own.
+   * If every start failed, leave whatever is already on the Lock Screen —
+   * ending it first is how a push-started activity disappeared for good.
+   */
+  endUnowned(instances: readonly LiveActivityHandle[]): void {
+    if (this.handles.size === 0 && this.overflowHandle === undefined) return;
+    const known = new Set<string>();
+    for (const handle of this.handles.values()) known.add(handle.getId());
+    if (this.overflowHandle !== undefined)
+      known.add(this.overflowHandle.getId());
+    for (const inst of instances) {
+      if (!known.has(inst.getId())) inst.end('immediate').catch(() => {});
+    }
   }
 
   endAll(): void {

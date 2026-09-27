@@ -138,12 +138,14 @@ describe('runPhase with app-detected questions', () => {
     );
   });
 
-  it('dead run leaves the tool panel up but phase stays idle', () => {
+  it('an unanswered question on an idle run is awaitingInput', () => {
     const s = state([questionToolEntry('e1')]);
-    expect(runPhase(s, row('idle'), undefined, 'phone', NOW)).toBe('idle');
+    expect(runPhase(s, row('idle'), undefined, 'phone', NOW)).toBe(
+      'awaitingInput',
+    );
   });
 
-  it('trailing prose question does not flip an idle session', () => {
+  it('a turn that ends by asking flips an idle session', () => {
     const s = state([
       {
         id: 'e1',
@@ -154,11 +156,26 @@ describe('runPhase with app-detected questions', () => {
         status: 'complete',
       },
     ]);
-    expect(runPhase(s, row('idle'), undefined, 'phone', NOW)).toBe('idle');
-    // …but it marks the tail of a still-working run as awaiting input.
+    expect(runPhase(s, row('idle'), undefined, 'phone', NOW)).toBe(
+      'awaitingInput',
+    );
     expect(runPhase(s, row('working'), undefined, 'phone', NOW)).toBe(
       'awaitingInput',
     );
+  });
+
+  it('a finished statement leaves an idle session idle', () => {
+    const s = state([
+      {
+        id: 'e1',
+        role: 'assistant',
+        parts: [{ kind: 'text', id: 't1', text: 'Done. The build passed.' }],
+        createdAt: 1,
+        deviceId: 'host',
+        status: 'complete',
+      },
+    ]);
+    expect(runPhase(s, row('idle'), undefined, 'phone', NOW)).toBe('idle');
   });
 
   it('answered question ids stop blocking the phase', () => {

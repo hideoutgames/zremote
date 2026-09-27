@@ -184,6 +184,171 @@ export const entryFrom = (value: unknown): MessageEntry | undefined => {
   };
 };
 
+const jsonEqual = (a: unknown, b: unknown): boolean => {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
+      return false;
+    for (let i = 0; i < a.length; i++) if (!jsonEqual(a[i], b[i])) return false;
+    return true;
+  }
+  const ak = Object.keys(a as Json);
+  const bk = Object.keys(b as Json);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!jsonEqual((a as Json)[k], (b as Json)[k])) return false;
+  }
+  return true;
+};
+
+const PART_KINDS = new Set([
+  'text',
+  'reasoning',
+  'image',
+  'tool',
+  'input',
+  'error',
+]);
+
+/** True when `partFrom(raw)` would equal `prev`. `'drop'` when partFrom
+ * would omit the value (unknown kind / missing id). */
+const partMatchesRaw = (
+  prev: MessagePart | undefined,
+  raw: unknown,
+): boolean | 'drop' => {
+  if (!isObj(raw)) return 'drop';
+  const id = str(raw.id);
+  const kind = str(raw.kind);
+  if (id === undefined || kind === undefined) return 'drop';
+  if (kind === 'tool' && !isObj(raw.call)) {
+    return (
+      prev !== undefined &&
+      prev.kind === 'text' &&
+      prev.id === id &&
+      prev.text === ''
+    );
+  }
+  if (!PART_KINDS.has(kind)) return 'drop';
+  if (prev === undefined || prev.id !== id) return false;
+  switch (kind) {
+    case 'text':
+      return prev.kind === 'text' && prev.text === (str(raw.text) ?? '');
+    case 'reasoning':
+      return (
+        prev.kind === 'reasoning' && prev.text === (str(raw.reasoning) ?? '')
+      );
+    case 'error':
+      return prev.kind === 'error' && prev.message === (str(raw.message) ?? '');
+    case 'image': {
+      const path = str(raw.path) ?? '';
+      const name = str(raw.name) ?? '';
+      const mimeType = str(raw.mimeType) ?? '';
+      if (!imageValid(path, name, mimeType)) {
+        return (
+          prev.kind === 'error' &&
+          prev.message === 'Generated image unavailable'
+        );
+      }
+      return (
+        prev.kind === 'image' &&
+        prev.path === path &&
+        prev.name === name &&
+        prev.mimeType === mimeType
+      );
+    }
+    case 'tool': {
+      if (prev.kind !== 'tool') return false;
+      const isError = bool(raw.isError);
+      if (isError === undefined) {
+        if (prev.isError !== undefined || prev.resolved !== false) return false;
+      } else if (prev.isError !== isError || prev.resolved !== true) {
+        return false;
+      }
+      if (prev.output !== str(raw.output)) return false;
+      if (prev.outputRef !== str(raw.outputRef)) return false;
+      if (prev.outputBytes !== num(raw.outputBytes)) return false;
+      if (prev.diffRef !== str(raw.diffRef)) return false;
+      if (prev.subagentRef !== str(raw.subagentRef)) return false;
+      if (prev.subagentTail !== str(raw.subagentTail)) return false;
+      const sub = str(raw.subagentStatus);
+      const subDecoded =
+        sub === 'running' || sub === 'done' || sub === 'failed'
+          ? sub
+          : undefined;
+      if (prev.subagentStatus !== subDecoded) return false;
+      const diff = isObj(raw.diff) ? raw.diff : undefined;
+      if (!jsonEqual(prev.diff, diff)) return false;
+      const stats = arr(raw.diffStats);
+      if (!jsonEqual(prev.diffStats, stats)) return false;
+      return jsonEqual(prev.call, raw.call);
+    }
+    case 'input': {
+      if (prev.kind !== 'input' || prev.requestId !== id) return false;
+      if (prev.resolved !== (bool(raw.resolved) ?? false)) return false;
+      const rawQs = (arr(raw.questions) ?? []).filter(isObj);
+      if (prev.questions.length !== rawQs.length) return false;
+      for (let i = 0; i < rawQs.length; i++) {
+        const q = rawQs[i];
+        const p = prev.questions[i];
+        if (
+          p.id !== (str(q.id) ?? '') ||
+          p.header !== (str(q.header) ?? '') ||
+          p.question !== (str(q.question) ?? '')
+        )
+          return false;
+        const multi = bool(q.multiSelect);
+        if (multi === undefined) {
+          if (p.multiSelect !== undefined) return false;
+        } else if (p.multiSelect !== multi) return false;
+        const opts = arr(q.options) ?? [];
+        if (p.options.length !== opts.length) return false;
+        for (let j = 0; j < opts.length; j++) {
+          if (p.options[j] !== String(opts[j])) return false;
+        }
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+};
+
+/** True when `entryFrom(raw)` would return the same entry as `prev`. Used to
+ * keep row identity across full-doc decodes when only the tail changed. */
+export const entryMatchesRaw = (prev: MessageEntry, raw: unknown): boolean => {
+  if (!isObj(raw)) return false;
+  const id = str(raw.id);
+  const role = str(raw.role);
+  if (
+    id !== prev.id ||
+    role !== prev.role ||
+    role === undefined ||
+    !ROLES.has(role as MessageRole)
+  )
+    return false;
+  if ((num(raw.createdAt) ?? 0) !== prev.createdAt) return false;
+  if ((str(raw.deviceId) ?? '') !== prev.deviceId) return false;
+  const status = str(raw.status);
+  const decodedStatus =
+    status !== undefined && STATUSES.has(status as MessageStatus)
+      ? (status as MessageStatus)
+      : undefined;
+  if (decodedStatus !== prev.status) return false;
+  if (str(raw.continuationOf) !== prev.continuationOf) return false;
+  const rawParts = arr(raw.parts) ?? [];
+  let i = 0;
+  for (const rp of rawParts) {
+    const matched = partMatchesRaw(prev.parts[i], rp);
+    if (matched === 'drop') continue;
+    if (!matched) return false;
+    i += 1;
+  }
+  return i === prev.parts.length;
+};
+
 // ── queue decode (queue.rs queued_from_json) ────────────────────────────────
 
 const gateFrom = (v: unknown): QueueDeliveryGate | undefined => {
@@ -311,6 +476,10 @@ export interface SessionDocProjection {
 }
 
 export class SessionDoc {
+  /** Last decode of each message id. A full-doc toJSON still runs on import,
+   * but unchanged messages keep their object identity so React rows skip. */
+  private entryCache = new Map<string, MessageEntry>();
+
   constructor(readonly port: LoroDocPort) {}
 
   /** Whole-doc decode. `undefined` when the doc has no map root yet — callers
@@ -319,11 +488,21 @@ export class SessionDoc {
   project(): SessionDocProjection | undefined {
     const root = this.port.toJSON();
     if (!isObj(root)) return undefined;
-    const entries = joinContinuations(
-      (arr(root.messages) ?? [])
-        .map(entryFrom)
-        .filter((e): e is MessageEntry => e !== undefined),
-    );
+    const decoded: MessageEntry[] = [];
+    const nextCache = new Map<string, MessageEntry>();
+    for (const raw of arr(root.messages) ?? []) {
+      const id = isObj(raw) ? str(raw.id) : undefined;
+      const cached = id !== undefined ? this.entryCache.get(id) : undefined;
+      const entry =
+        cached !== undefined && entryMatchesRaw(cached, raw)
+          ? cached
+          : entryFrom(raw);
+      if (entry === undefined) continue;
+      decoded.push(entry);
+      nextCache.set(entry.id, entry);
+    }
+    this.entryCache = nextCache;
+    const entries = joinContinuations(decoded);
     const commands = (arr(root.commands) ?? [])
       .map(commandFrom)
       .filter((c): c is SessionCommandEntry => c !== undefined);

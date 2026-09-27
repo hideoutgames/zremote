@@ -31,7 +31,7 @@ import * as DropdownMenu from '../components/menus/dropdown-menu';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from 'zustand';
 import {
-  useSessionState,
+  getSessionStore,
   useSessionCommands,
   useSessionQueueLength,
   useRunPhase,
@@ -70,12 +70,6 @@ import {
 } from '../zeron/protocol/detectQuestion';
 import { useLocalQueuedIds } from '../zeron/state/queuedLocalStore';
 import {
-  bindPendingWorkedDuration,
-  workedDurationStore,
-  type FrozenWorkedDuration,
-} from '../zeron/state/workedDuration';
-import { formatWorkedDurationRange } from '../zeron/state/workingElapsed';
-import {
   setChatArchived,
   setChatConfig,
   renameChat,
@@ -105,7 +99,7 @@ import {
 } from '../hooks/useCheckoutWatches';
 import { changeRequestStore } from '../zeron/state/changeRequestStore';
 import { useRuntime, useAuthSession } from '../app/runtimeContext';
-import { DESKTOP_SANDBOX, type MessageEntry } from '../zeron/protocol/types';
+import { DESKTOP_SANDBOX } from '../zeron/protocol/types';
 import { Icon } from '../components/Icon';
 import { Glass, GlassControl } from '../components/Glass';
 import { Composer } from '../components/Composer';
@@ -115,10 +109,8 @@ import { ChangesScreen } from './ChangesScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { ComposerChromeRow } from '../components/ComposerChromeRow';
 import { composerPrBadge } from '../components/threadPrs';
-import {
-  SessionTranscriptList,
-  type SessionTranscriptListHandle,
-} from '../components/SessionTranscriptList';
+import type { SessionTranscriptListHandle } from '../components/SessionTranscriptList';
+import { SessionTranscriptPane } from '../components/SessionTranscriptPane';
 import {
   EffortOverlay,
   measureWindowRect,
@@ -140,8 +132,6 @@ import {
 import type { DictationPort } from '../zeron/native/dictation';
 import { CAP_QUEUE_ACTIONS } from '../zeron/attachments/sendPlan';
 import type { SendPlan } from '../zeron/attachments/sendPlan';
-import { UserMessage } from '../components/transcript/UserMessage';
-import { AssistantMessage } from '../components/transcript/AssistantMessage';
 import { PlanSheet } from '../components/PlanSheet';
 import { applyBuildPrefix } from '../components/planMode';
 import { ThreadDetailsSheet } from '../components/ThreadDetailsSheet';
@@ -169,20 +159,6 @@ import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 
 const log = createLog();
 const EMPTY_ATTACHMENTS: StagedAttachment[] = [];
-const noopComposerHeight = () => {};
-
-const workedForCaption = (
-  item: MessageEntry,
-  hide: boolean,
-  byId: Record<string, FrozenWorkedDuration>,
-): string | undefined => {
-  if (hide) return undefined;
-  if (item.status !== 'complete' && item.status !== 'aborted') return undefined;
-  const frozen = byId[item.id];
-  return frozen === undefined
-    ? undefined
-    : formatWorkedDurationRange(frozen.startedAt, frozen.endedAt);
-};
 
 const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({
@@ -381,7 +357,16 @@ function ActiveSessionScreen({
     }
   }, [runtime, chatId]);
 
-  const session = useSessionState(chatId);
+  const sessionStore = getSessionStore(chatId);
+  const pendingSends = useStore(sessionStore, s => s.pendingSends);
+  const failedSends = useStore(sessionStore, s => s.failedSends);
+  const room = useStore(sessionStore, s => s.room);
+  const queue = useStore(sessionStore, s => s.queue);
+  const queueActionsPending = useStore(
+    sessionStore,
+    s => s.queueActionsPending,
+  );
+  const queueActionError = useStore(sessionStore, s => s.queueActionError);
   const commands = useSessionCommands(chatId);
   const queueCount = useSessionQueueLength(chatId);
   const chat = useChat(chatId);
@@ -437,23 +422,17 @@ function ActiveSessionScreen({
   // defeat memoization on every transcript row.
   const mountTimeRef = useRef(Date.now());
 
-  const entries = session.entries;
   const openKey = `${chatId}:${openGeneration}`;
   const agentWorking =
     phase === 'working' ||
     phase === 'queuedLocally' ||
     phase === 'synchronized';
-  const lastEntryId = entries[entries.length - 1]?.id;
-  const workedByMessage = useStore(workedDurationStore, s => s.byMessageId);
-
-  useEffect(() => {
-    bindPendingWorkedDuration(chatId);
-  }, [chatId, entries]);
 
   // Local send/steer ids play SlideInDown once. Historical rows (thread
   // open, list recycle) must not — UserMessage entering is mount-time.
+  // Recorded here, before the transcript pane paints the new row.
   const enterIdsRef = useRef(new Set<string>());
-  for (const p of session.pendingSends) {
+  for (const p of pendingSends) {
     enterIdsRef.current.add(p.messageId);
   }
   const onUserMessageEntered = useCallback((id: string) => {
@@ -492,54 +471,6 @@ function ActiveSessionScreen({
     [runtime, auth, chatId],
   );
 
-  const renderEntry = useCallback(
-    ({ item }: { item: MessageEntry }) =>
-      item.role === 'user' ? (
-        <UserMessage
-          entry={item}
-          chatId={chatId}
-          animateEnter={enterIdsRef.current.has(item.id)}
-          onEntered={onUserMessageEntered}
-          loadAttachment={
-            controller === undefined
-              ? undefined
-              : path => controller.readAttachment(path)
-          }
-        />
-      ) : (
-        <AssistantMessage
-          entry={item}
-          onOpenReasoning={openReasoning}
-          onFetchBlob={onFetchBlob}
-          onOpenPlan={openPlan}
-          onOpenFileDiff={openFileDiff}
-          commands={commands}
-          showWorking={agentWorking && item.id === lastEntryId}
-          workingChatId={chatId}
-          workingStartedAt={workingStartedAt}
-          workedFor={workedForCaption(
-            item,
-            agentWorking && item.id === lastEntryId,
-            workedByMessage,
-          )}
-        />
-      ),
-    [
-      openReasoning,
-      onFetchBlob,
-      openPlan,
-      openFileDiff,
-      chatId,
-      onUserMessageEntered,
-      controller,
-      commands,
-      agentWorking,
-      lastEntryId,
-      workingStartedAt,
-      workedByMessage,
-    ],
-  );
-
   const doSend = useCallback(
     (text: string): boolean => {
       if (controller === undefined) return false;
@@ -565,9 +496,9 @@ function ActiveSessionScreen({
         return false;
       }
       if (wt !== undefined) setDraftPendingWorktree(chatId, undefined);
-      transcriptRef.current?.noteSent(entries.length);
+      const count = getSessionStore(chatId).getState().entries.length;
+      transcriptRef.current?.noteSent(count);
       const list = transcriptRef.current;
-      const count = entries.length;
       requestAnimationFrame(() => {
         list?.scrollMessageToEnd({
           animated: count > 0,
@@ -576,7 +507,7 @@ function ActiveSessionScreen({
       });
       return true;
     },
-    [controller, hostOnline, pendingWorktree, chat, chatId, entries.length],
+    [controller, hostOnline, pendingWorktree, chat, chatId],
   );
 
   const doSteer = useCallback(
@@ -957,23 +888,26 @@ function ActiveSessionScreen({
       ]}
     >
       <ChatBackgroundBlur />
-      <SessionTranscriptList
-        key={openKey}
-        ref={transcriptRef}
+      <SessionTranscriptPane
+        chatId={chatId}
         openKey={openKey}
-        entries={entries}
-        renderEntry={renderEntry}
+        transcriptRef={transcriptRef}
         composerRef={composerRef}
         contentMaxWidth={contentMaxWidth}
         windowWidth={windowWidth}
         windowHeight={windowHeight}
         insetsTop={insets.top}
         insetsBottom={insets.bottom}
-        onComposerHeight={noopComposerHeight}
         onShowScrollDown={setShowScrollDown}
-        working={agentWorking}
-        chatId={chatId}
-        startedAt={workingStartedAt}
+        agentWorking={agentWorking}
+        workingStartedAt={workingStartedAt}
+        enterIdsRef={enterIdsRef}
+        onUserMessageEntered={onUserMessageEntered}
+        controller={controller}
+        onOpenReasoning={openReasoning}
+        onFetchBlob={onFetchBlob}
+        onOpenPlan={openPlan}
+        onOpenFileDiff={openFileDiff}
       />
 
       {/* Header: back, title (tap → session menu), overflow.
@@ -1155,14 +1089,14 @@ function ActiveSessionScreen({
         />
       ) : null}
 
-      {session.failedSends.length > 0 ? (
+      {failedSends.length > 0 ? (
         <ComposerStickyBottom
           extra={10}
           style={styles.failedWrap}
           pointerEvents="box-none"
         >
           <KeyboardStickyView offset={keyboardOffset} pointerEvents="box-none">
-            {session.failedSends.map(f => (
+            {failedSends.map(f => (
               <Glass
                 key={f.messageId}
                 style={[
@@ -1243,7 +1177,7 @@ function ActiveSessionScreen({
           <Composer
             chatId={chatId}
             phase={phase}
-            roomState={session.room}
+            roomState={room}
             harness={harness}
             capabilities={capabilities}
             modelLabel={modelLabel}
@@ -1433,11 +1367,11 @@ function ActiveSessionScreen({
           draggable={false}
         >
           <QueuePanel
-            queue={session.queue}
+            queue={queue}
             actionsSupported={capabilities.has(CAP_QUEUE_ACTIONS)}
-            pending={session.queueActionsPending}
+            pending={queueActionsPending}
             localIds={localQueuedIds}
-            error={session.queueActionError}
+            error={queueActionError}
             canSteer={
               harness?.supportsSteering === true &&
               harness.steeringMode === 'step-boundary'
@@ -1496,8 +1430,8 @@ function ActiveSessionScreen({
       ) : null}
 
       {subagentsOpen ? (
-        <SubagentsSheet
-          entries={entries}
+        <SubagentsSheetGate
+          chatId={chatId}
           onDismiss={() => setSubagentsOpen(false)}
         />
       ) : null}
@@ -1583,6 +1517,19 @@ function ActiveSessionScreen({
       ) : null}
     </View>
   );
+}
+
+/** Entries subscription lives here so opening the sheet is the only time
+ * the session chrome observes the transcript. */
+function SubagentsSheetGate({
+  chatId,
+  onDismiss,
+}: {
+  chatId: string;
+  onDismiss: () => void;
+}) {
+  const entries = useStore(getSessionStore(chatId), s => s.entries);
+  return <SubagentsSheet entries={entries} onDismiss={onDismiss} />;
 }
 
 const styles = StyleSheet.create({

@@ -2,8 +2,8 @@
 // RN Animated / interval only — no Reanimated worklets (SessionScreen forbids them).
 /* eslint-disable react-native/no-inline-styles -- cell size/opacity are per-frame */
 
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { flavourSeed, flavourWord } from './workingMotion';
@@ -15,27 +15,69 @@ const DIM = 0.1;
 const PERIOD_MS = 750;
 const IN_TEST = process.env.JEST_WORKER_ID !== undefined;
 
-const gspinOpacity = (phase: number): number => {
-  const p = phase - Math.floor(phase);
-  if (p < 0.45) {
-    const t = p / 0.45;
-    const smooth = t * t * (3 - 2 * t);
-    return 1 - (1 - DIM) * smooth;
-  }
-  if (p < 0.92) return DIM;
-  const t = (p - 0.92) / 0.08;
-  return DIM + (1 - DIM) * t;
-};
+/** Samples of gspinOpacity: smoothstep 1→DIM over the first 45%, hold,
+ * then rise back to 1. Native-driver interpolation, so the grid does not
+ * commit React state 12 times a second. */
+const SPIN_INPUT = [0, 0.15, 0.3, 0.45, 0.92, 1];
+const SPIN_OUTPUT = [1, 0.767, 0.333, DIM, DIM, 1];
+
+function SpinCell({
+  row,
+  col,
+  cellSize,
+  reduceMotion,
+}: {
+  row: number;
+  col: number;
+  cellSize: number;
+  reduceMotion: boolean;
+}) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const dx = col - 1;
+  const dy = 2 - row;
+  const dist = Math.sqrt(dx * dx + dy * dy) / 2.5;
+  const frozen = reduceMotion || IN_TEST;
+  useEffect(() => {
+    if (frozen) return;
+    let loop: Animated.CompositeAnimation | undefined;
+    const timer = setTimeout(() => {
+      progress.setValue(0);
+      loop = Animated.loop(
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: PERIOD_MS,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      );
+      loop.start();
+    }, dist * PERIOD_MS);
+    return () => {
+      clearTimeout(timer);
+      loop?.stop();
+    };
+  }, [frozen, dist, progress]);
+  const opacity = progress.interpolate({
+    inputRange: SPIN_INPUT,
+    outputRange: SPIN_OUTPUT,
+  });
+  return (
+    <Animated.View
+      style={[
+        styles.cell,
+        {
+          width: cellSize,
+          height: cellSize,
+          backgroundColor: ROW_TINTS[row],
+          opacity: frozen ? 1 : opacity,
+        },
+      ]}
+    />
+  );
+}
 
 export function WorkingSpinner({ cellSize = 2.5 }: { cellSize?: number }) {
-  const reduceMotion = useReducedMotion();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (reduceMotion || IN_TEST) return;
-    const id = setInterval(() => setNow(Date.now()), 80);
-    return () => clearInterval(id);
-  }, [reduceMotion]);
-  const t = now / PERIOD_MS;
+  const reduceMotion = useReducedMotion() === true;
   const gap = cellSize * 0.8;
   return (
     <View
@@ -46,25 +88,15 @@ export function WorkingSpinner({ cellSize = 2.5 }: { cellSize?: number }) {
     >
       {[0, 1, 2].map(row => (
         <View key={row} style={[styles.row, { gap }]}>
-          {[0, 1, 2].map(col => {
-            const dx = col - 1;
-            const dy = 2 - row;
-            const dist = Math.sqrt(dx * dx + dy * dy) / 2.5;
-            return (
-              <View
-                key={col}
-                style={[
-                  styles.cell,
-                  {
-                    width: cellSize,
-                    height: cellSize,
-                    backgroundColor: ROW_TINTS[row],
-                    opacity: reduceMotion ? 1 : gspinOpacity(t - dist),
-                  },
-                ]}
-              />
-            );
-          })}
+          {[0, 1, 2].map(col => (
+            <SpinCell
+              key={col}
+              row={row}
+              col={col}
+              cellSize={cellSize}
+              reduceMotion={reduceMotion}
+            />
+          ))}
         </View>
       ))}
     </View>

@@ -54,6 +54,12 @@ export class AnsiScreen {
   y = 0;
   cursorVisible = true;
   title?: string;
+  /** Bumped when scroll, resize, or a full erase replaces the grid. */
+  gridEpoch = 0;
+  /** Per visible row. The renderer copies a row only when this changes. */
+  rowEpoch: number[];
+  private cursorYMarked = 0;
+  private cursorVisMarked = true;
   private style: CellStyle = {};
   private saved = { x: 0, y: 0 };
   /** Bytes of a UTF-8 char split across write() calls. */
@@ -63,6 +69,27 @@ export class AnsiScreen {
     this.cols = cols;
     this.rows = rows;
     this.grid = Array.from({ length: rows }, () => emptyRow(cols));
+    this.rowEpoch = Array.from({ length: rows }, () => 0);
+  }
+
+  private bumpRow(y: number): void {
+    if (y >= 0 && y < this.rows) this.rowEpoch[y] += 1;
+  }
+
+  private bumpGrid(): void {
+    this.gridEpoch += 1;
+  }
+
+  private noteCursor(): void {
+    if (this.cursorYMarked !== this.y) {
+      this.bumpRow(this.cursorYMarked);
+      this.bumpRow(this.y);
+      this.cursorYMarked = this.y;
+    }
+    if (this.cursorVisMarked !== this.cursorVisible) {
+      this.bumpRow(this.y);
+      this.cursorVisMarked = this.cursorVisible;
+    }
   }
 
   /** Grow or shrink the visible grid to match a PTY resize. Extra rows
@@ -89,8 +116,11 @@ export class AnsiScreen {
     }
     this.cols = nextCols;
     this.rows = nextRows;
+    this.rowEpoch = Array.from({ length: nextRows }, () => 0);
+    this.bumpGrid();
     this.x = clamp(this.x, 0, nextCols - 1);
     this.y = clamp(this.y, 0, nextRows - 1);
+    this.cursorYMarked = this.y;
   }
 
   snapshot(): ScreenState {
@@ -123,6 +153,7 @@ export class AnsiScreen {
       }
       i = next;
     }
+    this.noteCursor();
   }
 
   private consume(b: Uint8Array, i: number): number {
@@ -194,6 +225,7 @@ export class AnsiScreen {
       this.linefeed();
     }
     this.grid[this.y][this.x] = { ch, style: { ...this.style } };
+    this.bumpRow(this.y);
     this.x += 1;
   }
 
@@ -203,6 +235,7 @@ export class AnsiScreen {
       this.scrollback.push(top);
       if (this.scrollback.length > SCROLLBACK_MAX) this.scrollback.shift();
       this.grid.push(emptyRow(this.cols));
+      this.bumpGrid();
     } else {
       this.y += 1;
     }
@@ -328,6 +361,7 @@ export class AnsiScreen {
     if (mode === 2 || mode === 3) {
       this.grid = Array.from({ length: this.rows }, () => emptyRow(this.cols));
       if (mode === 3) this.scrollback = [];
+      this.bumpGrid();
       return;
     }
     if (mode === 0) {
@@ -344,9 +378,11 @@ export class AnsiScreen {
   }
 
   private eraseRange(y0: number, x0: number, y1: number, x1: number): void {
-    for (let y = y0; y <= y1; y++)
+    for (let y = y0; y <= y1; y++) {
+      this.bumpRow(y);
       for (let x = y === y0 ? x0 : 0; x <= (y === y1 ? x1 : this.cols - 1); x++)
         this.grid[y][x] = emptyCell();
+    }
   }
 
   private sgr(params: number[]): void {

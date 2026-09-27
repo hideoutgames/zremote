@@ -289,6 +289,9 @@ export const AssistantMessage = React.memo(function ({
   workingChatId = '',
   workingStartedAt = 0,
   workedFor,
+  parts,
+  showTail = true,
+  continued = false,
 }: {
   entry: MessageEntry;
   onOpenReasoning: (text: string) => void;
@@ -300,10 +303,17 @@ export const AssistantMessage = React.memo(function ({
   workingChatId?: string;
   workingStartedAt?: number;
   workedFor?: string;
+  /** Subset of `entry.parts` when a long turn is split across list rows. */
+  parts?: MessagePart[];
+  /** Plan card, files, and worked-for stay on the last slice of a turn. */
+  showTail?: boolean;
+  /** Continuation slice — drop the top gap so the turn still reads as one. */
+  continued?: boolean;
 }) {
   const theme = useTheme();
   const streaming = entry.status === 'streaming';
-  const items = useMemo(() => groupParts(entry.parts), [entry.parts]);
+  const renderedParts = parts ?? entry.parts;
+  const items = useMemo(() => groupParts(renderedParts), [renderedParts]);
   const plan = useMemo(() => detectPlanArtifact(entry), [entry]);
   const consumedIds = useMemo(() => consumedPlanTextIds(entry), [entry]);
   const files = useMemo(
@@ -470,9 +480,10 @@ export const AssistantMessage = React.memo(function ({
   );
 
   const planNode =
-    plan !== undefined ? (
+    showTail && plan !== undefined ? (
       <PlanCardOpen plan={plan} onOpenPlan={onOpenPlan} />
     ) : null;
+  const tailNode = showTail ? tail : null;
 
   let body: React.ReactNode;
   if (streaming) {
@@ -506,7 +517,7 @@ export const AssistantMessage = React.memo(function ({
     const trailing = (
       <>
         {planNode}
-        {tail}
+        {tailNode}
       </>
     );
     body =
@@ -535,7 +546,10 @@ export const AssistantMessage = React.memo(function ({
   }
 
   return (
-    <View testID="assistant-message" style={styles.row}>
+    <View
+      testID="assistant-message"
+      style={[styles.row, continued ? styles.rowContinued : null]}
+    >
       <View style={styles.stack}>{body}</View>
     </View>
   );
@@ -553,6 +567,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
+  rowContinued: { paddingTop: 0 },
   // The trigger view shrink-wraps its child unless told to fill the row —
   // without this the native markdown view measures at a narrow intrinsic
   // width and the whole bubble collapses to ~100pt columns.

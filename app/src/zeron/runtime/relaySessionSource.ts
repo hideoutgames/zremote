@@ -86,16 +86,20 @@ const normalizeEntry = (value: unknown): MessageEntry => {
 };
 
 /** Port of `apply_transcript_frame`: mutates `current`. On any error the
- * state is unreliable — the caller must resubscribe for a reset. */
+ * state is unreliable — the caller must resubscribe for a reset.
+ * Returns the ids inserted, replaced, or text-appended so the projection
+ * can clone only those rows. */
 export const applyTranscriptFrame = (
   current: MessageEntry[],
   frame: TranscriptFrame,
-): void => {
+): Set<string> => {
+  const dirty = new Set<string>();
   if ('reset' in frame) {
     const next = frame.reset.map(normalizeEntry);
     current.length = 0;
     current.push(...next);
-    return;
+    for (const entry of next) dirty.add(entry.id);
+    return dirty;
   }
   const { upsert, append, remove, count } = frame;
   if (remove.length > 0) {
@@ -116,6 +120,7 @@ export const applyTranscriptFrame = (
       at = ix + 1;
     }
     current.splice(at, 0, entry);
+    dirty.add(entry.id);
   }
   for (const a of append) {
     const target = current.find(e => e.id === a.entry);
@@ -134,11 +139,13 @@ export const applyTranscriptFrame = (
           tail.text,
         )}, expected ${a.len}`,
       );
+    dirty.add(a.entry);
   }
   if (current.length !== count)
     throw new TranscriptDesync(
       `count mismatch: have ${current.length}, expected ${count}`,
     );
+  return dirty;
 };
 
 export const parseTranscriptUpdate = (value: unknown): TranscriptUpdate => {
@@ -199,6 +206,10 @@ export class RelaySessionSource {
   private readonly coalesce: ProjectCoalesce;
   /** Last transcript update's contextUsage — applied on the coalesced write. */
   private pendingUsage: ContextUsage | undefined;
+  /** Immutable snapshots already handed to the store, keyed by entry id.
+   * Appends mutate `entries` in place; only dirty ids are cloned. */
+  private published = new Map<string, MessageEntry>();
+  private dirtyIds = new Set<string>();
 
   constructor(
     private readonly chatId: string,
@@ -324,7 +335,8 @@ export class RelaySessionSource {
   private onTranscript(value: unknown): void {
     try {
       const update = parseTranscriptUpdate(value);
-      applyTranscriptFrame(this.entries, frameOf(update));
+      const dirty = applyTranscriptFrame(this.entries, frameOf(update));
+      for (const id of dirty) this.dirtyIds.add(id);
       this.desynced = false;
       // A clean frame proves the stream is healthy — reset the backoff.
       this.reopenDelay = REOPEN_MS;
@@ -337,6 +349,8 @@ export class RelaySessionSource {
         // Diverged copy is unsafe: drop it and resubscribe for a reset.
         this.desynced = true;
         this.entries.length = 0;
+        this.published.clear();
+        this.dirtyIds.clear();
         const delay = this.nextReopenDelay();
         this.deps.log?.(
           `relay-session: desync (${e.message}) — resubscribing in ${delay}ms`,
@@ -366,13 +380,32 @@ export class RelaySessionSource {
     }
   }
 
+  /** Clone only rows the latest frames touched. Untouched snapshots stay
+   * the same objects the store already published. */
+  private snapshotEntries(): MessageEntry[] {
+    const next = new Map<string, MessageEntry>();
+    const raw: MessageEntry[] = [];
+    for (const live of this.entries) {
+      const prev = this.published.get(live.id);
+      const snap =
+        prev !== undefined && !this.dirtyIds.has(live.id)
+          ? prev
+          : cloneEntry(live);
+      raw.push(snap);
+      next.set(snap.id, snap);
+    }
+    this.published = next;
+    this.dirtyIds.clear();
+    return joinContinuations(raw);
+  }
+
   private applyProjection(): void {
     const store = getSessionStore(this.chatId);
     const s = store.getState();
     const entryIds = new Set(this.entries.map(e => e.id));
     const pendingSends = s.pendingSends.filter(p => !entryIds.has(p.messageId));
     const shared = shareSessionProjection(s, {
-      entries: joinContinuations(this.entries.map(cloneEntry)),
+      entries: this.snapshotEntries(),
       commands: [...this.ownCommands.values()],
       queue: s.queue,
       meta: {
@@ -384,16 +417,26 @@ export class RelaySessionSource {
           : {}),
       },
     });
+    const nextPending =
+      pendingSends.length === s.pendingSends.length &&
+      pendingSends.every((p, i) => p === s.pendingSends[i])
+        ? s.pendingSends
+        : pendingSends;
+    const hostDeviceId = this.deps.chatMeta().hostDeviceId;
+    if (
+      shared.entries === s.entries &&
+      shared.commands === s.commands &&
+      shared.meta === s.meta &&
+      nextPending === s.pendingSends &&
+      hostDeviceId === s.hostDeviceId
+    )
+      return;
     store.setState({
       entries: shared.entries,
       commands: shared.commands,
       meta: shared.meta,
-      pendingSends:
-        pendingSends.length === s.pendingSends.length &&
-        pendingSends.every((p, i) => p === s.pendingSends[i])
-          ? s.pendingSends
-          : pendingSends,
-      hostDeviceId: this.deps.chatMeta().hostDeviceId,
+      pendingSends: nextPending,
+      hostDeviceId,
     });
   }
 

@@ -22,6 +22,7 @@
 import { applyOp, validateOp, type Op, type Row } from "./registry-core";
 import { AUTH_USER_HEADER, type Env } from "./env";
 import {
+  activityPhaseForStatus,
   apnsConfigured,
   isQuestionAlert,
   isRunFinished,
@@ -63,6 +64,10 @@ export class RegistryRoom implements DurableObject {
   /** chatId → last APNs 'working' push (epoch ms). Memory-only throttle —
    * a DO hibernate simply resets the window. */
   private readonly lastWorkingPush = new Map<string, number>();
+  /** Chats we already push-to-started and have not ended. Another start
+   * every throttled working tick stacks a second Live Activity. Persisted:
+   * a hibernated DO would otherwise forget and start a second activity. */
+  private readonly pushStarted = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
@@ -83,6 +88,28 @@ export class RegistryRoom implements DurableObject {
     // pong is runtime-answered and proves nothing about this DO's health.
     // Clients judge liveness by probe frames (crates/sync/src/registry.rs).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.restorePushStarted();
+  }
+
+  private restorePushStarted(): void {
+    const raw = this.getMeta("liveActivityPushStarted");
+    if (raw === undefined) return;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      for (const id of parsed) {
+        if (typeof id === "string" && id !== "") this.pushStarted.add(id);
+      }
+    } catch {
+      // A corrupt marker must not block later pushes.
+    }
+  }
+
+  private persistPushStarted(): void {
+    this.setMeta(
+      "liveActivityPushStarted",
+      JSON.stringify([...this.pushStarted])
+    );
   }
 
   // ── meta helpers ──────────────────────────────────────────────────────────
@@ -516,6 +543,7 @@ export class RegistryRoom implements DurableObject {
         typeof row.fields.deviceId === "string"
           ? this.deviceRow(row.fields.deviceId)
           : undefined;
+      const shown = activityPhaseForStatus(status);
       const props: SessionPushProps = {
         chatId,
         title: (chat?.fields.title as string | undefined) ?? "Session",
@@ -523,8 +551,8 @@ export class RegistryRoom implements DurableObject {
           device !== undefined
             ? (device.fields.name as string | undefined)
             : undefined,
-        phase: status,
-        phaseLabel: status,
+        phase: shown.phase,
+        phaseLabel: shown.phaseLabel,
         startedAt:
           typeof row.fields.startedAt === "number"
             ? row.fields.startedAt / 1000
@@ -539,6 +567,7 @@ export class RegistryRoom implements DurableObject {
       // awaitingInput; errored maps to 'end' too (final state, dismiss 30min).
       const finished = isRunFinished(prevStatus, status);
       const event = finished ? "end" : "update";
+      if (finished && this.pushStarted.delete(chatId)) this.persistPushStarted();
 
       // working → update throttled to 1/5s per chat.
       if (
@@ -557,24 +586,36 @@ export class RegistryRoom implements DurableObject {
         )
       ].map(r => r.token as string);
 
-      if (activityTokens.length === 0 && status === "working") {
+      const canPushStart =
+        !finished &&
+        activityTokens.length === 0 &&
+        (status === "working" || status === "awaitingInput") &&
+        !this.pushStarted.has(chatId);
+
+      if (canPushStart) {
         // Push-to-start: no per-activity token — the phone may still be
-        // reachable via its user-scoped push_to_start token.
+        // reachable via its user-scoped push_to_start token. awaitingInput
+        // counts too: a question can be the first status we observe.
         const startTokens = [
           ...this.ctx.storage.sql.exec(
             "SELECT token FROM live_activity_tokens WHERE kind = 'push_to_start'"
           )
         ].map(r => r.token as string);
+        let started = false;
         for (const token of startTokens) {
           const res = await sendLiveActivityPush(this.env, token, "start", props, now);
+          if (res.ok) started = true;
+          else await this.pruneBadToken(token, res);
+        }
+        if (started) {
+          this.pushStarted.add(chatId);
+          this.persistPushStarted();
+        }
+      } else if (activityTokens.length > 0) {
+        for (const token of activityTokens) {
+          const res = await sendLiveActivityPush(this.env, token, event, props, now);
           if (!res.ok) await this.pruneBadToken(token, res);
         }
-        continue;
-      }
-
-      for (const token of activityTokens) {
-        const res = await sendLiveActivityPush(this.env, token, event, props, now);
-        if (!res.ok) await this.pruneBadToken(token, res);
       }
 
       // Alert banners (native device tokens). Independent of Live Activities

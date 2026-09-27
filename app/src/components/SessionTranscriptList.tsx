@@ -12,7 +12,9 @@ import React, {
   useState,
 } from 'react';
 import {
+  Pressable,
   StyleSheet,
+  Text,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -26,9 +28,10 @@ import {
 } from 'react-native-keyboard-controller';
 import { useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { createStore, useStore, type StoreApi } from 'zustand';
-import type { MessageEntry } from '../zeron/protocol/types';
+import type { MessageEntry, MessagePart } from '../zeron/protocol/types';
 import { uiPrefsStore } from '../zeron/state/uiPrefs';
 import { t } from '../i18n/strings';
+import { useTheme } from '../theme';
 import { transcriptHorizontalPadding } from '../navigation/layout';
 import {
   ContentEdgeMask,
@@ -52,11 +55,22 @@ import {
 } from './agentsKit/PreviewRail';
 import {
   buildRailItems,
+  entryIndexForProgress,
   entryPreviewText,
+  nearestIndex,
   pickActiveRailId,
+  railTicksFor,
   type RailItem,
 } from './agentsKit/messagePreview';
 import { TranscriptChatScrollView } from './TranscriptChatScrollView';
+import {
+  rangeAround,
+  sameRange,
+  shiftRange,
+  slicesForEntry,
+  tailRange,
+  type EntryRange,
+} from './transcriptWindow';
 
 const ANCHOR_MAX_SIZE = 2 * 21 + 32;
 export const RAIL_RIGHT = 4;
@@ -65,6 +79,13 @@ export const RAIL_RIGHT = 4;
  *  stays mounted so collapse does not rebuild rows mid-slide. */
 export const LIST_RESIZE_REMOUNT_DELTA = 40;
 export const END_THRESHOLD = 1;
+/**
+ * FlashList multiplies this by the viewport. `1` means "within one full
+ * screen of the bottom", so measuring the next row yanks the reader back
+ * and a long thread never leaves the tail. A small fraction sticks only
+ * when the tail is actually on screen.
+ */
+export const AUTOSCROLL_VIEWPORT_FRACTION = 0.12;
 
 export const listEndDistance = (
   contentHeight: number,
@@ -90,8 +111,22 @@ export const transcriptEndOffset = (
 export const WORKING_STATUS_ID = '__working-status__';
 
 type TranscriptRow =
-  | { kind: 'entry'; entry: MessageEntry }
-  | { kind: 'working' };
+  | {
+      kind: 'entry';
+      key: string;
+      entry: MessageEntry;
+      parts: MessagePart[];
+      showTail: boolean;
+      continued: boolean;
+    }
+  | { kind: 'working'; key: string };
+
+export type TranscriptRenderInfo = {
+  item: MessageEntry;
+  parts?: MessagePart[];
+  showTail?: boolean;
+  continued?: boolean;
+};
 
 export type SessionTranscriptListHandle = {
   scrollMessageToEnd: (opts: {
@@ -110,7 +145,7 @@ const SessionTranscriptListInner = forwardRef<
   SessionTranscriptListHandle,
   {
     entries: MessageEntry[];
-    renderEntry: ({ item }: { item: MessageEntry }) => React.ReactElement;
+    renderEntry: (info: TranscriptRenderInfo) => React.ReactElement;
     composerRef: React.RefObject<View | null>;
     contentMaxWidth?: number;
     windowWidth: number;
@@ -173,14 +208,34 @@ const SessionTranscriptListInner = forwardRef<
   followingRef.current = following;
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
+  // Pinned windows slide with new messages. A drag or a jump into history
+  // unpins so measurement and streaming cannot drag the reader along.
+  const pinnedToTailRef = useRef(true);
+  const [range, setRange] = useState<EntryRange>(() =>
+    tailRange(entries.length),
+  );
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
+  const pendingRevealRef = useRef<{
+    id: string;
+    animated: boolean;
+    viewPosition: number;
+  } | null>(null);
+  const pendingFollowRef = useRef<{
+    animated: boolean;
+    closeKeyboard: boolean;
+  } | null>(null);
+  const startGateRef = useRef(true);
+  // onEndReached's "already fired" flag resets whenever `data` changes, so a
+  // window shift that leaves the reader near the new tail would page the
+  // rest of the thread in one cascade. Re-arm only after they leave the end.
+  const endGateRef = useRef(true);
   const pendingRailJumpRef = useRef<{
     index: number;
     animated: boolean;
     progress?: number;
   } | null>(null);
   const railJumpRafRef = useRef<number | null>(null);
-  const followRafRef = useRef<number | null>(null);
-  const followAnimRef = useRef(false);
   const flashScrollRef = useRef<
     React.Ref<React.ComponentRef<typeof TranscriptChatScrollView>> | undefined
   >(undefined);
@@ -213,15 +268,32 @@ const SessionTranscriptListInner = forwardRef<
   onShowScrollDownRef.current = onShowScrollDown;
 
   const data = useMemo((): TranscriptRow[] => {
-    const rows: TranscriptRow[] = entries.map(entry => ({
-      kind: 'entry',
-      entry,
-    }));
+    const rows: TranscriptRow[] = [];
+    const end = Math.min(range.end, entries.length);
+    for (let i = range.start; i < end; i++) {
+      const entry = entries[i];
+      if (!entry) continue;
+      for (const slice of slicesForEntry(entry)) {
+        rows.push({
+          kind: 'entry',
+          key: slice.key,
+          entry,
+          parts: slice.parts,
+          showTail: slice.showTail,
+          continued: slice.continued,
+        });
+      }
+    }
     const last = entries[entries.length - 1];
+    const tailVisible = range.end >= entries.length && entries.length > 0;
     const workingInLastAssistant = working && last?.role === 'assistant';
-    if (working && !workingInLastAssistant) rows.push({ kind: 'working' });
+    if (working && tailVisible && !workingInLastAssistant) {
+      rows.push({ kind: 'working', key: WORKING_STATUS_ID });
+    }
     return rows;
-  }, [entries, working]);
+  }, [entries, range.start, range.end, working]);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   // Preview text is keyed by entry identity (stable across projections via
   // reuseById): streaming updates only re-collapse the rows that changed
@@ -247,34 +319,74 @@ const SessionTranscriptListInner = forwardRef<
       }),
     [entries, previewText],
   );
-  const itemIds = useMemo(() => railItems.map(item => item.id), [railItems]);
-  const itemIdsRef = useRef(itemIds);
-  itemIdsRef.current = itemIds;
-
-  // The rail highlight is the only render consumer of per-frame scroll data;
-  // keep metrics in refs and re-render only when the picked id changes.
-  const recomputeRailId = useCallback(() => {
-    const m = scrollMetricsRef.current;
-    const ids = itemIdsRef.current;
-    const next = followingRef.current
-      ? ids[ids.length - 1] ?? ''
-      : pickActiveRailId({
-          itemIds: ids,
-          offset: m.offset,
-          viewportHeight: m.viewportHeight || listHeightRef.current,
-          contentHeight: m.contentHeight || contentHeightRef.current,
-        });
-    railIdStore.current.setState({ id: next });
-  }, []);
-
-  useEffect(() => {
-    recomputeRailId();
-  }, [itemIds, following, recomputeRailId]);
+  const entryIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    entries.forEach((entry, index) => map.set(entry.id, index));
+    return map;
+  }, [entries]);
 
   const overflowing = contentHeight > listHeight + 1 && entries.length > 1;
   const railTop = insetsTop + 96;
   const railHeight = Math.max(0, listHeight - railTop - composerInset);
   const railRight = RAIL_RIGHT;
+  const railTicks = useMemo(
+    () => railTicksFor(railItems, railHeight),
+    [railItems, railHeight],
+  );
+  const railTickIndexes = useMemo(
+    () => railTicks.map(item => entryIndexById.get(item.id) ?? 0),
+    [railTicks, entryIndexById],
+  );
+  const railTicksRef = useRef(railTicks);
+  railTicksRef.current = railTicks;
+  const railTickIndexesRef = useRef(railTickIndexes);
+  railTickIndexesRef.current = railTickIndexes;
+
+  // The rail highlight is the only render consumer of per-frame scroll data;
+  // keep metrics in refs and re-render only when the picked id changes.
+  // Scroll position is within the mounted window, then mapped onto the
+  // (possibly sampled) ticks that represent the whole thread.
+  const recomputeRailId = useCallback(() => {
+    const ticks = railTicksRef.current;
+    if (ticks.length === 0) {
+      railIdStore.current.setState({ id: '' });
+      return;
+    }
+    if (followingRef.current) {
+      railIdStore.current.setState({ id: ticks[ticks.length - 1]?.id ?? '' });
+      return;
+    }
+    const entriesNow = entriesRef.current;
+    const rangeNow = rangeRef.current;
+    const spanIds: string[] = [];
+    const end = Math.min(rangeNow.end, entriesNow.length);
+    for (let i = rangeNow.start; i < end; i++) {
+      const id = entriesNow[i]?.id;
+      if (id) spanIds.push(id);
+    }
+    const m = scrollMetricsRef.current;
+    const localId = pickActiveRailId({
+      itemIds: spanIds,
+      offset: m.offset,
+      viewportHeight: m.viewportHeight || listHeightRef.current,
+      contentHeight: m.contentHeight || contentHeightRef.current,
+    });
+    const local = Math.max(0, spanIds.indexOf(localId));
+    const absolute = rangeNow.start + (spanIds.length > 0 ? local : 0);
+    const tickAt = nearestIndex(railTickIndexesRef.current, absolute);
+    railIdStore.current.setState({ id: ticks[tickAt]?.id ?? '' });
+  }, []);
+
+  useEffect(() => {
+    recomputeRailId();
+  }, [
+    railTicks,
+    railTickIndexes,
+    range.start,
+    range.end,
+    following,
+    recomputeRailId,
+  ]);
 
   const publishMeasuredInset = useCallback(
     (height: number) => {
@@ -306,10 +418,6 @@ const SessionTranscriptListInner = forwardRef<
 
   const scrollMessageToEnd = useCallback(
     async (opts: { animated: boolean; closeKeyboard: boolean }) => {
-      if (followRafRef.current != null) {
-        cancelAnimationFrame(followRafRef.current);
-        followRafRef.current = null;
-      }
       freeze.set(true);
       const dismissPromise = opts.closeKeyboard
         ? KeyboardController.dismiss()
@@ -339,18 +447,6 @@ const SessionTranscriptListInner = forwardRef<
   );
   scrollToEndRef.current = scrollMessageToEnd;
 
-  const scheduleFollowEnd = useCallback((animated: boolean) => {
-    followAnimRef.current = animated;
-    if (followRafRef.current != null) return;
-    followRafRef.current = requestAnimationFrame(() => {
-      followRafRef.current = null;
-      if (!followingRef.current) return;
-      scrollToEndRef
-        .current({ animated: followAnimRef.current, closeKeyboard: false })
-        .catch(() => {});
-    });
-  }, []);
-
   useEffect(() => {
     const seed = seedComposerInset();
     extraContentPadding.value = seed;
@@ -358,6 +454,36 @@ const SessionTranscriptListInner = forwardRef<
     composerInsetRef.current = seed;
     onComposerHeightRef.current(seed);
   }, [extraContentPadding, openKey]);
+
+  useEffect(() => {
+    pinnedToTailRef.current = true;
+    startGateRef.current = true;
+    endGateRef.current = true;
+    pendingRevealRef.current = null;
+    pendingFollowRef.current = null;
+    setRange(prev => {
+      const next = tailRange(entriesRef.current.length);
+      return sameRange(prev, next) ? prev : next;
+    });
+  }, [openKey]);
+
+  useEffect(() => {
+    setRange(prev => {
+      const count = entries.length;
+      if (pinnedToTailRef.current) {
+        const next = tailRange(count);
+        return sameRange(prev, next) ? prev : next;
+      }
+      const start = Math.min(prev.start, count);
+      const end = Math.min(count, Math.max(start, prev.end));
+      const next = { start, end };
+      return sameRange(prev, next) ? prev : next;
+    });
+  }, [entries.length]);
+
+  useEffect(() => {
+    if (range.end < entries.length) onShowScrollDownRef.current(true);
+  }, [range.end, entries.length]);
 
   useEffect(() => {
     if (entries.length === 0 && !working) return;
@@ -405,11 +531,26 @@ const SessionTranscriptListInner = forwardRef<
     (opts: { animated: boolean; closeKeyboard: boolean }) => {
       hasOverflowedRef.current = true;
       followingRef.current = true;
+      pinnedToTailRef.current = true;
+      pendingRevealRef.current = null;
       setFollowing(true);
+      const next = tailRange(entriesRef.current.length);
+      if (!sameRange(rangeRef.current, next)) {
+        pendingFollowRef.current = opts;
+        setRange(next);
+        return Promise.resolve();
+      }
       return scrollMessageToEnd(opts);
     },
     [scrollMessageToEnd],
   );
+
+  useEffect(() => {
+    const opts = pendingFollowRef.current;
+    if (!opts) return;
+    pendingFollowRef.current = null;
+    scrollMessageToEnd(opts).catch(() => {});
+  }, [data, scrollMessageToEnd]);
 
   useImperativeHandle(
     ref,
@@ -417,10 +558,15 @@ const SessionTranscriptListInner = forwardRef<
       scrollMessageToEnd,
       followEnd,
       noteSent: (entryCount: number) => {
+        pinnedToTailRef.current = true;
         setAnchorIndex(entryCount);
         anchorContentHeightRef.current = contentHeightRef.current;
         const listH = listHeightRef.current || windowHeightRef.current;
         blankSpace.value = Math.max(0, listH - ANCHOR_MAX_SIZE);
+        setRange(prev => {
+          const next = tailRange(entriesRef.current.length);
+          return sameRange(prev, next) ? prev : next;
+        });
         if (hasOverflowedRef.current) {
           followingRef.current = true;
           setFollowing(true);
@@ -439,7 +585,12 @@ const SessionTranscriptListInner = forwardRef<
       item.kind === 'working' ? (
         <WorkingStatusBubble chatId={chatId} startedAt={startedAt} />
       ) : (
-        renderEntry({ item: item.entry })
+        renderEntry({
+          item: item.entry,
+          parts: item.parts,
+          showTail: item.showTail,
+          continued: item.continued,
+        })
       ),
     [chatId, startedAt, renderEntry],
   );
@@ -447,8 +598,10 @@ const SessionTranscriptListInner = forwardRef<
   const applyEndVisible = useCallback((atEnd: boolean) => {
     if (atEnd === atEndRef.current) return;
     atEndRef.current = atEnd;
-    onShowScrollDownRef.current(!atEnd);
-    if (atEnd && hasOverflowedRef.current) {
+    const atThreadTail = rangeRef.current.end >= entriesRef.current.length;
+    onShowScrollDownRef.current(!(atEnd && atThreadTail));
+    if (atEnd && atThreadTail && hasOverflowedRef.current) {
+      pinnedToTailRef.current = true;
       followingRef.current = true;
       setFollowing(true);
     }
@@ -463,12 +616,18 @@ const SessionTranscriptListInner = forwardRef<
         viewportHeight: layoutMeasurement.height,
         contentHeight: contentSize.height,
       };
+      if (contentOffset.y > 48) startGateRef.current = true;
       recomputeRailId();
       const distance = listEndDistance(
         contentSize.height,
         contentOffset.y,
         layoutMeasurement.height,
       );
+      // Half a viewport is past FlashList's 0.35 end threshold, so re-arming
+      // here cannot chain another page in the same commit.
+      if (distance > layoutMeasurement.height * 0.5) {
+        endGateRef.current = true;
+      }
       lastDistanceRef.current = distance;
       applyEndVisible(isTranscriptAtEnd(distance, composerInsetRef.current));
     },
@@ -523,22 +682,105 @@ const SessionTranscriptListInner = forwardRef<
     [],
   );
 
+  const coversFullThread = useCallback((): boolean => {
+    const count = entriesRef.current.length;
+    const current = rangeRef.current;
+    return current.start <= 0 && current.end >= count;
+  }, []);
+
+  const proportionalNav = useCallback(
+    (): boolean =>
+      coversFullThread() &&
+      railTicksRef.current.length >= entriesRef.current.length,
+    [coversFullThread],
+  );
+
+  const rowIndexForEntry = useCallback((entryId: string): number => {
+    return dataRef.current.findIndex(
+      row => row.kind === 'entry' && row.entry.id === entryId,
+    );
+  }, []);
+
+  const scrollRowTo = useCallback(
+    (row: number, animated: boolean, viewPosition = 0.15) => {
+      const jump = listRef.current?.scrollToIndex({
+        index: row,
+        animated,
+        viewPosition,
+      });
+      jump?.catch(() => {
+        requestAnimationFrame(() => {
+          listRef.current
+            ?.scrollToIndex({ index: row, animated: false, viewPosition })
+            ?.catch(() => {});
+        });
+      });
+    },
+    [],
+  );
+
+  const revealEntry = useCallback(
+    (entryIndex: number, animated: boolean) => {
+      const entriesNow = entriesRef.current;
+      const count = entriesNow.length;
+      if (count === 0) return;
+      const index = Math.max(0, Math.min(count - 1, entryIndex));
+      if (index >= count - 1) {
+        followEnd({ animated, closeKeyboard: false }).catch(() => {});
+        return;
+      }
+      hasOverflowedRef.current = true;
+      pinnedToTailRef.current = false;
+      followingRef.current = false;
+      setFollowing(false);
+      const id = entriesNow[index]?.id;
+      if (!id) return;
+      const current = rangeRef.current;
+      if (index >= current.start && index < current.end) {
+        const row = rowIndexForEntry(id);
+        if (row >= 0) scrollRowTo(row, animated);
+        return;
+      }
+      pendingRevealRef.current = { id, animated, viewPosition: 0.15 };
+      const next = rangeAround(index, count);
+      setRange(prev => (sameRange(prev, next) ? prev : next));
+    },
+    [followEnd, rowIndexForEntry, scrollRowTo],
+  );
+
+  useEffect(() => {
+    const pending = pendingRevealRef.current;
+    if (!pending) return;
+    const row = data.findIndex(
+      item => item.kind === 'entry' && item.entry.id === pending.id,
+    );
+    if (row < 0) return;
+    pendingRevealRef.current = null;
+    scrollRowTo(row, pending.animated, pending.viewPosition);
+  }, [data, scrollRowTo]);
+
   const performRailJump = useCallback(
     (index: number, animated: boolean) => {
       const offset = offsetForRailIndex(index);
       // Proportional offset first so KeyboardChatScrollView moves even when
       // FlashList scrollToIndex no-ops on an unmeasured row. scrollToIndex
-      // then refines to a centered item when layout exists.
+      // then refines to a centered item when layout exists. This path is
+      // only for threads that fit in one window — a long thread jumps by
+      // message index instead, because a proportional pixel offset lands
+      // in the wrong place and fights scrollToIndex.
       scrollChatToOffset(offset, animated);
+      const id = entriesRef.current[index]?.id;
+      const row = id != null ? rowIndexForEntry(id) : -1;
+      const target = row >= 0 ? row : index;
       const jump = listRef.current?.scrollToIndex({
-        index,
+        index: target,
         animated,
         viewPosition: 0.5,
       });
       jump?.catch(() => {
         requestAnimationFrame(() => {
           const retry = listRef.current?.scrollToIndex({
-            index,
+            index: target,
             animated: false,
             viewPosition: 0.5,
           });
@@ -548,14 +790,46 @@ const SessionTranscriptListInner = forwardRef<
         });
       });
     },
-    [offsetForRailIndex, scrollChatToOffset],
+    [offsetForRailIndex, rowIndexForEntry, scrollChatToOffset],
   );
 
   const performRailScrub = useCallback(
     (progress: number) => {
+      if (!proportionalNav()) {
+        const count = entriesRef.current.length;
+        const entryIndex = entryIndexForProgress(count, progress);
+        const current = rangeRef.current;
+        // Pixel offset inside the mounted window. scrollToIndex restarts its
+        // measurement pass whenever the target moves, which makes a drag
+        // scrub fight the list.
+        if (
+          entryIndex >= current.start &&
+          entryIndex < current.end &&
+          entryIndex < count - 1
+        ) {
+          const span = Math.max(1, current.end - current.start - 1);
+          const local = (entryIndex - current.start) / span;
+          hasOverflowedRef.current = true;
+          pinnedToTailRef.current = false;
+          if (followingRef.current) {
+            followingRef.current = false;
+            setFollowing(false);
+          }
+          scrollChatToOffset(local * maxRailOffset(), false);
+          return;
+        }
+        revealEntry(entryIndex, false);
+        return;
+      }
       scrollChatToOffset(offsetForRailProgress(progress), false);
     },
-    [offsetForRailProgress, scrollChatToOffset],
+    [
+      maxRailOffset,
+      offsetForRailProgress,
+      revealEntry,
+      scrollChatToOffset,
+      proportionalNav,
+    ],
   );
 
   const flushPendingRailJump = useCallback(() => {
@@ -600,10 +874,6 @@ const SessionTranscriptListInner = forwardRef<
         cancelAnimationFrame(railJumpRafRef.current);
         railJumpRafRef.current = null;
       }
-      if (followRafRef.current != null) {
-        cancelAnimationFrame(followRafRef.current);
-        followRafRef.current = null;
-      }
     },
     [],
   );
@@ -624,7 +894,32 @@ const SessionTranscriptListInner = forwardRef<
         }).catch(() => {});
         return;
       }
-      const index = entries.findIndex(entry => entry.id === item.id);
+      if (!proportionalNav()) {
+        const count = entriesRef.current.length;
+        const entryIndex =
+          opts?.progress != null
+            ? entryIndexForProgress(count, opts.progress)
+            : entriesRef.current.findIndex(entry => entry.id === item.id);
+        if (entryIndex < 0) return;
+        if (!animated && opts?.progress != null) {
+          hasOverflowedRef.current = true;
+          const wasFollowing = followingRef.current;
+          if (wasFollowing) {
+            followingRef.current = false;
+            setFollowing(false);
+          }
+          pendingRailJumpRef.current = {
+            index: entryIndex,
+            animated: false,
+            progress: opts.progress,
+          };
+          if (!wasFollowing) flushPendingRailJump();
+          return;
+        }
+        revealEntry(entryIndex, animated);
+        return;
+      }
+      const index = entriesRef.current.findIndex(entry => entry.id === item.id);
       if (index < 0) return;
       hasOverflowedRef.current = true;
       const wasFollowing = followingRef.current;
@@ -639,7 +934,14 @@ const SessionTranscriptListInner = forwardRef<
       };
       if (!wasFollowing) flushPendingRailJump();
     },
-    [entries, flushPendingRailJump, followEnd, railItems, reduceMotion],
+    [
+      flushPendingRailJump,
+      followEnd,
+      railItems,
+      reduceMotion,
+      revealEntry,
+      proportionalNav,
+    ],
   );
 
   const setScrollRef = useCallback(
@@ -651,6 +953,53 @@ const SessionTranscriptListInner = forwardRef<
     },
     [],
   );
+
+  const loadEarlier = useCallback(() => {
+    const count = entriesRef.current.length;
+    pinnedToTailRef.current = false;
+    followingRef.current = false;
+    setFollowing(false);
+    hasOverflowedRef.current = true;
+    startGateRef.current = false;
+    const next = shiftRange(rangeRef.current, count, -1);
+    if (sameRange(rangeRef.current, next)) return;
+    const id = entriesRef.current[next.start]?.id;
+    if (id) {
+      pendingRevealRef.current = { id, animated: false, viewPosition: 0 };
+    }
+    setRange(next);
+  }, []);
+
+  const loadLater = useCallback(() => {
+    const count = entriesRef.current.length;
+    endGateRef.current = false;
+    pinnedToTailRef.current = false;
+    followingRef.current = false;
+    setFollowing(false);
+    const current = rangeRef.current;
+    const next = shiftRange(current, count, 1);
+    if (sameRange(current, next)) return;
+    const anchor = Math.min(current.end, next.end - 1);
+    const id = entriesRef.current[anchor]?.id;
+    if (id) {
+      pendingRevealRef.current = { id, animated: false, viewPosition: 0 };
+    }
+    setRange(next);
+  }, []);
+
+  const onStartReached = useCallback(() => {
+    if (pinnedToTailRef.current || followingRef.current) return;
+    if (!startGateRef.current) return;
+    if (rangeRef.current.start <= 0) return;
+    startGateRef.current = false;
+    loadEarlier();
+  }, [loadEarlier]);
+
+  const onEndReached = useCallback(() => {
+    if (!endGateRef.current) return;
+    if (rangeRef.current.end >= entriesRef.current.length) return;
+    loadLater();
+  }, [loadLater]);
 
   const renderScrollComponent = useCallback(
     (props: ScrollViewProps) => {
@@ -688,26 +1037,23 @@ const SessionTranscriptListInner = forwardRef<
   );
 
   const onScrollBeginDrag = useCallback(() => {
+    pinnedToTailRef.current = false;
+    // Same turn as onStartReached — the ref must drop before the render
+    // that commits `following`, or the first drag never pages.
     if (hasOverflowedRef.current) {
       followingRef.current = false;
       setFollowing(false);
-    }
-    if (followRafRef.current != null) {
-      cancelAnimationFrame(followRafRef.current);
-      followRafRef.current = null;
     }
     setDismissKey(key => key + 1);
   }, []);
 
   const onContentSizeChange = useCallback(
     (_w: number, height: number) => {
-      const grew = height > contentHeightRef.current;
       contentHeightRef.current = height;
       setContentHeight(prev => (prev === height ? prev : height));
       updateBlankSpace(height);
-      if (grew && followingRef.current) scheduleFollowEnd(false);
     },
-    [scheduleFollowEnd, updateBlankSpace],
+    [updateBlankSpace],
   );
 
   const contentContainerStyle = useMemo(
@@ -729,11 +1075,18 @@ const SessionTranscriptListInner = forwardRef<
   const maintainVisibleContentPosition = useMemo(
     () => ({
       startRenderingFromBottom: true,
-      autoscrollToBottomThreshold: following ? END_THRESHOLD : undefined,
-      animateAutoScrollToBottom: reduceMotion !== true,
+      autoscrollToBottomThreshold: following
+        ? AUTOSCROLL_VIEWPORT_FRACTION
+        : undefined,
+      // Instant. An animated stick replays on every measured row and fights
+      // the finger the moment a long thread starts to scroll.
+      animateAutoScrollToBottom: false,
     }),
-    [following, reduceMotion],
+    [following],
   );
+
+  const earlierLabel = t('session.earlierMessages');
+  const laterLabel = t('session.laterMessages');
 
   return (
     <View
@@ -760,9 +1113,7 @@ const SessionTranscriptListInner = forwardRef<
           ref={listRef}
           style={styles.fill}
           data={data}
-          keyExtractor={(item: TranscriptRow) =>
-            item.kind === 'working' ? WORKING_STATUS_ID : item.entry.id
-          }
+          keyExtractor={(item: TranscriptRow) => item.key}
           getItemType={(item: TranscriptRow) =>
             item.kind === 'working' ? 'working' : item.entry.role
           }
@@ -770,6 +1121,28 @@ const SessionTranscriptListInner = forwardRef<
           renderScrollComponent={renderScrollComponent}
           maintainVisibleContentPosition={maintainVisibleContentPosition}
           drawDistance={windowHeight}
+          ListHeaderComponent={
+            range.start > 0 ? (
+              <WindowEdge
+                label={earlierLabel}
+                testID="transcript-earlier"
+                onPress={loadEarlier}
+              />
+            ) : null
+          }
+          ListFooterComponent={
+            range.end < entries.length ? (
+              <WindowEdge
+                label={laterLabel}
+                testID="transcript-later"
+                onPress={loadLater}
+              />
+            ) : null
+          }
+          onStartReached={onStartReached}
+          onStartReachedThreshold={0.35}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.35}
           onScrollBeginDrag={onScrollBeginDrag}
           onScroll={onScroll}
           onContentSizeChange={onContentSizeChange}
@@ -779,10 +1152,10 @@ const SessionTranscriptListInner = forwardRef<
           keyboardDismissMode="interactive"
         />
       </ContentEdgeMask>
-      {overflowing && railItems.length > 1 && railHeight > 0 ? (
+      {overflowing && railTicks.length > 1 && railHeight > 0 ? (
         <RailHighlight
           store={railIdStore.current}
-          items={railItems}
+          items={railTicks}
           label={t('session.messageNavigation')}
           onItemSelect={scrollToRailItem}
           top={railTop}
@@ -810,7 +1183,37 @@ const RailHighlight = React.memo(function RailHighlightInner({
   return <PreviewRail {...props} activeId={activeId} />;
 });
 
+function WindowEdge({
+  label,
+  testID,
+  onPress,
+}: {
+  label: string;
+  testID: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="button"
+      style={styles.edge}
+    >
+      <Text style={[styles.edgeText, { color: theme.textSecondary }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   listContent: { paddingBottom: 4 },
+  edge: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  edgeText: { fontSize: 13, fontWeight: '500' },
 });

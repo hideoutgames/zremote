@@ -114,6 +114,8 @@ const en = {
   'session.message': 'Message',
   'session.messageNavigation': 'Message navigation',
   'session.goToMessage': 'Go to {role} message {n} of {total}',
+  'session.earlierMessages': 'Earlier messages',
+  'session.laterMessages': 'Later messages',
 
   // Inspector (iPad)
   'inspector.changes': 'Changes',
@@ -257,6 +259,8 @@ const en = {
   'settings.voiceModel': 'Voice Model',
   'settings.cleanupModel': 'Cleanup Model',
   'settings.cleanupDisabled': 'Disabled',
+  'settings.cleanupOptionalHint':
+    'Optional. Transcription works with no cleanup model. A selected model removes filler and self-corrections on device.',
   'settings.cleanupInstructions': 'Cleanup Instructions',
   'settings.cleanupInstructionsHint':
     'Remove filler words, repeated starts, and spoken corrections without rewriting what you said.',
@@ -508,6 +512,8 @@ const en = {
   'pr.merged': 'Merged',
   'pr.draft': 'Draft',
   'pr.closed': 'Closed',
+  'pr.linked': 'Linked',
+  'pr.fallbackTitle': 'Pull request',
   'pr.overview': 'Overview',
   'pr.discussion': 'Discussion',
   'pr.commits': 'Commits',
@@ -518,6 +524,19 @@ const en = {
   'pr.shareA11y': 'Share pull request',
   'pr.moreA11y': 'More pull request actions',
   'pr.whatChanged': 'What changed',
+  'pr.noDescription':
+    'No description is available on this device. Open the pull request to read it.',
+  'pr.diffElsewhere':
+    'File changes follow the checkout’s current pull request, not this one.',
+  'pr.mentionsEmpty': 'No messages in this thread mention this pull request.',
+  'pr.mentionFallback': 'Mentioned this pull request.',
+  'pr.you': 'You',
+  'pr.agent': 'Agent',
+  'pr.checkoutCommits': 'Recent commits on this checkout',
+  'pr.branchCommits': 'Recent commits on {branch}',
+  'pr.mentionedCommits': 'Commits that mention this pull request',
+  'pr.loadMore': 'Load more commits',
+  'pr.loadingCommits': 'Loading commits…',
   'pr.committed': '{author} committed',
   'pr.today': 'Today',
   'pr.yesterday': 'Yesterday',

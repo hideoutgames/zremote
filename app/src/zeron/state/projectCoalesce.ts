@@ -7,7 +7,8 @@
 
 import type { Clock } from '../transport/clock';
 
-/** Trailing quiet window so streaming WS turns share one projection. */
+/** Trailing quiet window so streaming WS turns share one projection.
+ * Steady traffic projects once per window (~30Hz), not once per frame. */
 export const PROJECT_COALESCE_MS = 32;
 
 export class ProjectCoalesce {
@@ -20,21 +21,19 @@ export class ProjectCoalesce {
     private readonly run: () => void,
   ) {}
 
-  /** Incoming row/frame: batch same-tick via microtask; later turns in the
-   * quiet window wait for the Clock timer. */
+  /** Incoming row/frame: the first turn in a burst projects on a microtask;
+   * later turns in the quiet window wait for the Clock timer. After each
+   * timed flush a new window is armed so a steady stream does not project
+   * again on the very next microtask. */
   schedule(): void {
     this.dirty = true;
-    if (this.trail !== undefined) return;
-    if (this.microQueued) return;
+    if (this.trail !== undefined || this.microQueued) return;
     this.microQueued = true;
     queueMicrotask(() => {
       this.microQueued = false;
-      this.flushIfDue();
       if (this.trail !== undefined) return;
-      this.trail = this.clock.setTimeout(() => {
-        this.trail = undefined;
-        this.flushIfDue();
-      }, PROJECT_COALESCE_MS);
+      this.flushIfDue();
+      this.arm();
     });
   }
 
@@ -50,6 +49,16 @@ export class ProjectCoalesce {
     this.dirty = false;
     this.microQueued = false;
     this.clearTrail();
+  }
+
+  private arm(): void {
+    if (this.trail !== undefined) return;
+    this.trail = this.clock.setTimeout(() => {
+      this.trail = undefined;
+      if (!this.dirty) return;
+      this.flushIfDue();
+      this.arm();
+    }, PROJECT_COALESCE_MS);
   }
 
   private flushIfDue(): void {

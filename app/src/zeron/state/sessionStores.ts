@@ -229,7 +229,8 @@ const TERMINAL_COMMAND_STATUSES = new Set([
 /**
  * runPhase precedence (first match wins):
  *  1. `stopping`      — an own `interrupt` command is still pending.
- *  2. `awaitingInput` — an unresolved, non-empty input part exists.
+ *  2. `awaitingInput` — an unanswered question is open (host input part,
+ *                       question tool call, or a turn that ends by asking).
  *  3. `working`       — the session row's effective status is `working`
  *                       (fresh; stale working rows fall through to `stale`)
  *                       OR an entry is streaming.
@@ -260,11 +261,11 @@ export const runPhase = (
   const streaming = s.entries.some(e => e.status === 'streaming');
   const runLive = live === 'working' || live === 'awaitingInput' || streaming;
   const open = openQuestion(s.entries, s.answeredQuestionIds);
-  // Host input parts stay open until answered regardless of run state;
-  // app-detected tool/text questions only mark a live run awaiting input —
-  // an idle thread keeps its phase even while the panel stays up.
-  if (open !== undefined && (open.kind === 'input' || runLive))
-    return 'awaitingInput';
+  // A real unanswered question blocks the run whether or not the host
+  // flipped the row to awaitingInput. Detection only returns a question
+  // the current turn actually ends on, so an idle thread that finished
+  // with a statement stays idle.
+  if (open !== undefined) return 'awaitingInput';
 
   if (runLive) return 'working';
 

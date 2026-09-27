@@ -1,6 +1,7 @@
 // Local Voice Model session: capture → transcribe → optional cleanup.
 // Dictation stays on its own 2s cooldown path in Composer.
 
+import { normalizeCleanupText } from './cleanupOutput';
 import { DEFAULT_CLEANUP_PROMPT } from './prompt';
 import {
   replaceVoiceRange,
@@ -215,7 +216,7 @@ export class LocalVoiceSession {
     if (!this.alive(mine)) return;
     this.clearWatchdog();
     await this.host.cleanup?.unload().catch(() => {});
-    const checked = validateCleanupOutput(raw, out.text, {
+    const checked = validateCleanupOutput(raw, normalizeCleanupText(out.text), {
       truncated: out.truncated,
     });
     if (!checked.ok) {

@@ -8,10 +8,14 @@ import {
   entryPreviewText,
   getMessagePreview,
   pickActiveRailId,
+  entryIndexForProgress,
+  nearestIndex,
   railIndexAtY,
   railItemSize,
   railProgressAtY,
+  railTicksFor,
   railYFromPage,
+  sampleEvenly,
   tickScale,
   truncateMessageText,
 } from '../src/components/agentsKit/messagePreview';
@@ -207,4 +211,31 @@ test('tickScale is a four-step pyramid', () => {
   expect(tickScale(1)).toBe(0.68);
   expect(tickScale(2)).toBe(0.44);
   expect(tickScale(3)).toBe(0.25);
+});
+
+test('railTicksFor keeps every message until ticks would be untappable', () => {
+  const items = Array.from({ length: 20 }, (_, i) => i);
+  expect(railTicksFor(items, 400)).toEqual(items);
+  const sampled = railTicksFor(items, 80);
+  expect(sampled.length).toBeLessThan(items.length);
+  expect(sampled[0]).toBe(0);
+  expect(sampled[sampled.length - 1]).toBe(19);
+});
+
+test('sampleEvenly always includes the ends', () => {
+  const items = Array.from({ length: 100 }, (_, i) => `m${i}`);
+  const sampled = sampleEvenly(items, 5);
+  // round(i / 4 * 99) for i in 0..4 — 74.25 rounds to 74, not 75.
+  expect(sampled).toEqual(['m0', 'm25', 'm50', 'm74', 'm99']);
+});
+
+test('entryIndexForProgress and nearestIndex map a scrub onto a tick', () => {
+  expect(entryIndexForProgress(1, 0.4)).toBe(0);
+  expect(entryIndexForProgress(101, 0)).toBe(0);
+  expect(entryIndexForProgress(101, 1)).toBe(100);
+  // Indices 0..100; the midpoint is 50.
+  expect(entryIndexForProgress(101, 0.5)).toBe(50);
+  // 40 is closer to 50 than to 25.
+  expect(nearestIndex([0, 25, 50, 75, 99], 40)).toBe(2);
+  expect(nearestIndex([0, 25, 50, 75, 99], 90)).toBe(4);
 });
