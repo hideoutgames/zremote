@@ -4,13 +4,16 @@
 `workflow_dispatch` only (optional `notes`). Merges to `main` do not start
 it.
 
-The job checks out this repo, selects Xcode 26 (downloading the iOS
-platform if that SDK is missing), and installs Rust into `~/.cargo/bin`.
+The workflow is a single macOS job, started only with **Run workflow**.
+Pull requests do not start it, and this repo has no other macOS workflow.
+It does not build or test the iOS Simulator app — Zeron pull-request CI
+already does that. This job only archives the device build and uploads it.
+
+The job selects Xcode 26 (downloading the iOS platform if that SDK is
+missing) and installs Rust into `~/.cargo/bin`.
 `scripts/ios/build-core.sh` runs `cargo` with a scrubbed environment that
-only looks there. `rust-toolchain.toml` lists both `aarch64-apple-ios` and
-`aarch64-apple-ios-sim`; rustup will not run until both are installed, so
-the job adds them even though the device archive only links the device
-target.
+only looks there. `rust-toolchain.toml` lists `aarch64-apple-ios`; the job
+installs that device target and does not install `aarch64-apple-ios-sim`.
 
 It then archives `apps/ios/Zeron.xcodeproj` scheme **Zeron**, Release, for
 a generic iOS device. The target's **Rust core** build phase runs

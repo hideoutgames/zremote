@@ -8,10 +8,15 @@
 # accepted) / APPLE_TEAM_ID. Optional variable IOS_BUNDLE_ID (default
 # no.hideout.zremote). See docs/TESTFLIGHT.md.
 #
+# One macOS runner, and only when someone starts this workflow.
+# Pull requests do not start it, and it does not build the iOS Simulator
+# slice — that build already runs in Zeron PR CI. This job archives the
+# device app and uploads it.
+#
 # The Xcode "Rust core" phase runs scripts/ios/build-core.sh, which
 # calls cargo with a scrubbed environment whose PATH includes
-# ~/.cargo/bin. Rustup must live there, and every target named in
-# rust-toolchain.toml must already be installed.
+# ~/.cargo/bin. Rustup must live there, with the device target from
+# rust-toolchain.toml installed.
 
 name: iOS TestFlight
 
@@ -104,11 +109,11 @@ jobs:
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.cargo/bin:$PATH"
-          # rust-toolchain.toml selects stable and lists both iOS targets.
-          # rustup errors on any cargo invocation if a listed target is missing,
-          # including the simulator target the device archive does not link.
+          # rust-toolchain.toml selects stable and the device target. rustup
+          # errors on cargo if that target is missing. Do not add the
+          # simulator target here; simulator builds are not this job.
           rustup show active-toolchain || rustup toolchain install
-          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          rustup target add aarch64-apple-ios
           rustc --version
           rustup target list --installed
 

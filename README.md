@@ -21,8 +21,9 @@ embeds at compile time.
 
 ## Build
 
-Xcode 26 or newer, and a Rust toolchain with the iOS targets (`rust-toolchain.toml`
-lists them):
+Xcode 26 or newer, and a Rust toolchain. `rust-toolchain.toml` installs the
+device target (`aarch64-apple-ios`). Simulator builds also need
+`rustup target add aarch64-apple-ios-sim` (TestFlight does not install that):
 
 ```sh
 cd apps/ios

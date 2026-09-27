@@ -1,4 +1,6 @@
 [toolchain]
 channel = "stable"
 components = ["rustfmt", "clippy"]
-targets = ["aarch64-apple-ios", "aarch64-apple-ios-sim"]
+# Device target only. The simulator target is for local runs
+# (`rustup target add aarch64-apple-ios-sim`); TestFlight does not install it.
+targets = ["aarch64-apple-ios"]
