@@ -1,11 +1,14 @@
-// Soft wallpaper blur behind the threads list and, optionally, open
-// sessions. Compact (iPhone) is full-bleed so the image is frosted on
-// the list. Regular iPad sidebar is fully frosted (no edge fade) with a
-// darken overlay. Session blur (pref) uses the same intensity without
-// that overlay. Compose does not mount either layer.
+// Heavy frosted-glass wallpaper behind the threads list and, optionally,
+// open sessions. UIBlurEffect intensity caps at 100, and a single pass
+// cannot exceed that style's radius, so each surface stacks two chrome
+// materials. Compact (iPhone) is full-bleed. Regular iPad sidebar is
+// fully frosted (no edge fade) with a darken overlay. Session blur
+// (pref) uses the same intensity with a light chrome material and no
+// overlay. Compose does not mount either layer.
 
 import React from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import type { BlurTint } from 'expo-blur';
 import { FadeBlur } from './FadeBlur';
 import {
   useNewThreadComposerBackground,
@@ -13,10 +16,13 @@ import {
 } from '../zeron/state/uiPrefs';
 import { REGULAR_MIN_WIDTH } from '../navigation/layout';
 
-export const COMPACT_THREADS_INTENSITY = 120;
-export const REGULAR_THREADS_INTENSITY = 90;
+export const COMPACT_THREADS_INTENSITY = 100;
+export const REGULAR_THREADS_INTENSITY = 100;
+/** Second pass re-blurs the first; one UIBlurEffect cannot go further. */
+export const WALLPAPER_BLUR_PASSES = 2;
 export const SIDEBAR_DARKEN = 'rgba(0,0,0,0.35)';
-export const CHAT_BACKGROUND_BLUR_TINT = 'default' as const;
+export const THREADS_BACKGROUND_BLUR_TINT = 'systemChromeMaterialDark' as const;
+export const CHAT_BACKGROUND_BLUR_TINT = 'systemChromeMaterialLight' as const;
 
 export type WallpaperBlurSpec = {
   intensity: number;
@@ -37,6 +43,29 @@ export const wallpaperBlurFor = (width: number): WallpaperBlurSpec => {
   };
 };
 
+function WallpaperBlurStack({
+  spec,
+  tint,
+}: {
+  spec: WallpaperBlurSpec;
+  tint: BlurTint;
+}) {
+  return (
+    <>
+      {Array.from({ length: WALLPAPER_BLUR_PASSES }, (_, index) => (
+        <FadeBlur
+          key={index}
+          fade={spec.fade}
+          fadeHold={spec.fadeHold}
+          intensity={spec.intensity}
+          tint={tint}
+          style={StyleSheet.absoluteFill}
+        />
+      ))}
+    </>
+  );
+}
+
 export function ThreadsBackgroundBlur() {
   const background = useNewThreadComposerBackground();
   const { width } = useWindowDimensions();
@@ -49,13 +78,7 @@ export function ThreadsBackgroundBlur() {
       testID="session-background-blur"
       style={styles.layer}
     >
-      <FadeBlur
-        fade={spec.fade}
-        fadeHold={spec.fadeHold}
-        intensity={spec.intensity}
-        tint="systemThinMaterialDark"
-        style={StyleSheet.absoluteFill}
-      />
+      <WallpaperBlurStack spec={spec} tint={THREADS_BACKGROUND_BLUR_TINT} />
       {dim ? (
         <View
           testID="session-background-dim"
@@ -78,13 +101,7 @@ export function ChatBackgroundBlur() {
       testID="chat-background-blur"
       style={styles.layer}
     >
-      <FadeBlur
-        fade={spec.fade}
-        fadeHold={spec.fadeHold}
-        intensity={spec.intensity}
-        tint={CHAT_BACKGROUND_BLUR_TINT}
-        style={StyleSheet.absoluteFill}
-      />
+      <WallpaperBlurStack spec={spec} tint={CHAT_BACKGROUND_BLUR_TINT} />
     </View>
   );
 }
