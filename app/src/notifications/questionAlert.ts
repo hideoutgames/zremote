@@ -26,3 +26,36 @@ export const shouldLocalQuestionBanner = (a: {
     notificationChatId: a.chatId,
   });
 };
+
+/**
+ * App-detected questions (AskQuestion and the other unbrokered ask tools)
+ * never flip the session row, so the edge cannot push for them. Notify when
+ * a new question id appears after the first observation of that chat.
+ * Host `input` questions already get an APNs alert once the app is not
+ * active — don't schedule a second local one. Leaving the foreground
+ * delivers a question that was suppressed because that thread was on screen.
+ */
+export const shouldNotifyOpenQuestion = (a: {
+  baseline: boolean;
+  alreadyNotified: boolean;
+  questionId: string | undefined;
+  prevQuestionId: string | undefined;
+  kind: 'input' | 'tool' | 'text' | undefined;
+  appState: string;
+  selectedChatId: string | undefined;
+  chatId: string;
+  leavingForeground: boolean;
+}): boolean => {
+  if (a.baseline || a.alreadyNotified || a.questionId === undefined)
+    return false;
+  // The panel is gone. A foreground APNs alert for an `input` question was
+  // already swallowed by the presentation handler while this thread was open.
+  if (a.leavingForeground) return true;
+  if (a.questionId === a.prevQuestionId) return false;
+  if (a.kind === 'input' && a.appState !== 'active') return false;
+  return shouldPresentBanner({
+    appState: a.appState,
+    selectedChatId: a.selectedChatId,
+    notificationChatId: a.chatId,
+  });
+};

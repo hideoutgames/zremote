@@ -118,11 +118,37 @@ export const buildLiveActivityPayload = (
     aps["dismissal-date"] = Math.floor((now + 1_800_000) / 1000);
   }
   if (event === "start") {
-    // LiveActivityAttributes { url } — expo-widgets' attributes type name.
+    // Apple rejects a start push that has no alert. attributes.url is
+    // expo-widgets' LiveActivityAttributes deep link (unknown keys are
+    // ignored on older widgets that only decode ContentState).
+    // input-push-token asks iOS 18+ for a per-activity token so later
+    // updates have somewhere to go.
     aps["attributes-type"] = "LiveActivityAttributes";
     aps["attributes"] = { url: `zeron://session/${props.chatId}` };
+    aps.alert = {
+      title: props.title,
+      body: props.phaseLabel
+    };
+    aps["input-push-token"] = 1;
   }
   return { aps };
+};
+
+/** Session-row status → the widget's phase + Lock Screen label.
+ * No prompt or message text. `idle` is the completed end state. */
+export const activityPhaseForStatus = (
+  status: string
+): { phase: string; phaseLabel: string } => {
+  switch (status) {
+    case "awaitingInput":
+      return { phase: "awaitingInput", phaseLabel: "Needs you" };
+    case "errored":
+      return { phase: "errored", phaseLabel: "Failed" };
+    case "idle":
+      return { phase: "completed", phaseLabel: "Done" };
+    default:
+      return { phase: "working", phaseLabel: "Working" };
+  }
 };
 
 export type ApnsResult =
@@ -187,6 +213,27 @@ const postApns = async (
   return { ok: false, status: res.status, reason };
 };
 
+/** Development builds mint sandbox tokens; TestFlight mints production
+ * tokens. Both register on the same edge. A BadDeviceToken from the
+ * configured host is the other environment — try it before the caller
+ * prunes a token that is live. */
+const postApnsEitherHost = async (
+  env: Env,
+  deviceToken: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  now: number,
+  fetchImpl: typeof fetch
+): Promise<ApnsResult> => {
+  const first = await postApns(env, deviceToken, headers, body, now, fetchImpl);
+  if (first.ok || first.reason !== "BadDeviceToken") return first;
+  const other: Env = {
+    ...env,
+    APNS_ENV: env.APNS_ENV === "sandbox" ? "production" : "sandbox"
+  };
+  return postApns(other, deviceToken, headers, body, now, fetchImpl);
+};
+
 /** POST one Live Activity push to APNs for a device token. */
 export const sendLiveActivityPush = async (
   env: Env,
@@ -196,7 +243,7 @@ export const sendLiveActivityPush = async (
   now = Date.now(),
   fetchImpl: typeof fetch = fetch
 ): Promise<ApnsResult> =>
-  postApns(
+  postApnsEitherHost(
     env,
     deviceToken,
     {
@@ -219,7 +266,7 @@ export const sendAlertPush = async (
   now = Date.now(),
   fetchImpl: typeof fetch = fetch
 ): Promise<ApnsResult> =>
-  postApns(
+  postApnsEitherHost(
     env,
     deviceToken,
     {

@@ -35,12 +35,13 @@ const tool = (
   id: string,
   call: Record<string, unknown>,
   resolved = false,
+  isError = false,
 ): MessagePart => ({
   kind: 'tool',
   id,
   call: call as RenderToolCall,
   resolved,
-  ...(resolved ? { isError: false } : {}),
+  ...(resolved ? { isError } : {}),
 });
 
 const inputPart = (id: string, resolved: boolean): MessagePart => ({
@@ -85,7 +86,12 @@ describe('openQuestion — question tool calls', () => {
     ]);
     expect(q).toMatchObject({ kind: 'tool', id: 'tc1', entryId: 'e1' });
     expect(q?.questions).toEqual([
-      { id: 'q0', header: 'Agent question', question: '', options: [] },
+      {
+        id: 'q0',
+        header: 'Agent question',
+        question: 'The agent needs your input',
+        options: [],
+      },
     ]);
   });
 
@@ -239,6 +245,202 @@ describe('openQuestion — question tool calls', () => {
     ).toBeUndefined();
   });
 
+  it('parses the Cursor AskQuestion shape, including JSON-string args', () => {
+    const args = {
+      title: 'Need input',
+      questions: [
+        {
+          id: 'mode',
+          prompt: 'Which mode should I use?',
+          options: [
+            { id: 'agent', label: 'Agent' },
+            { id: 'plan', label: 'Plan' },
+          ],
+          allow_multiple: false,
+        },
+        {
+          id: 'aspects',
+          prompt: 'Which aspects should vary?',
+          options: [
+            { id: 'a', label: 'Color' },
+            { id: 'b', label: 'Type' },
+          ],
+          allow_multiple: true,
+        },
+      ],
+    };
+    const q = openQuestion([
+      entry('e1', [
+        tool('tc1', {
+          kind: 'unknown',
+          name: 'AskQuestion',
+          arguments: JSON.stringify(args),
+        }),
+      ]),
+    ]);
+    expect(q?.questions).toEqual([
+      {
+        id: 'mode',
+        header: 'Need input',
+        question: 'Which mode should I use?',
+        options: ['Agent', 'Plan'],
+      },
+      {
+        id: 'aspects',
+        header: 'Need input',
+        question: 'Which aspects should vary?',
+        options: ['Color', 'Type'],
+        multiSelect: true,
+      },
+    ]);
+  });
+
+  it('matches SDK discriminants like askQuestionToolCall', () => {
+    const q = openQuestion([
+      entry('e1', [
+        tool('tc', { kind: 'unknown', name: 'askQuestionToolCall' }),
+      ]),
+    ]);
+    expect(q?.kind).toBe('tool');
+  });
+
+  it('reads a bare string prompt and a JSON question list', () => {
+    const bare = openQuestion([
+      entry('e1', [
+        tool('tc1', {
+          kind: 'unknown',
+          name: 'AskQuestion',
+          input: 'Which environment?',
+        }),
+      ]),
+    ]);
+    expect(bare?.questions[0].question).toBe('Which environment?');
+
+    const list = openQuestion([
+      entry('e1', [
+        tool('tc1', {
+          kind: 'unknown',
+          name: 'AskQuestion',
+          arguments: JSON.stringify([
+            { prompt: 'Which environment?' },
+            { prompt: 'Roll back on failure?' },
+          ]),
+        }),
+      ]),
+    ]);
+    expect(list?.questions.map(item => item.question)).toEqual([
+      'Which environment?',
+      'Roll back on failure?',
+    ]);
+  });
+
+  it('uses a sibling question when the host stripped the tool args', () => {
+    const q = openQuestion([
+      entry('e1', [
+        text('t1', 'I can do this two ways.\n\nWhich environment?'),
+        tool('tc1', { kind: 'unknown', name: 'askQuestion' }),
+      ]),
+    ]);
+    expect(q?.kind).toBe('tool');
+    expect(q?.questions[0].question).toBe('Which environment?');
+  });
+
+  it('keeps a failed or skipped AskQuestion that ended the turn', () => {
+    const failed = openQuestion([
+      entry('e1', [
+        tool('tc1', { kind: 'unknown', name: 'AskQuestion' }, true, true),
+      ]),
+    ]);
+    expect(failed?.kind).toBe('tool');
+
+    const skipped = openQuestion([
+      entry('e1', [
+        {
+          kind: 'tool',
+          id: 'tc2',
+          call: { kind: 'unknown', name: 'askQuestion' },
+          resolved: true,
+          isError: false,
+          output:
+            'Questions skipped by the user, continue with the information you already have',
+        },
+      ]),
+    ]);
+    expect(skipped?.kind).toBe('tool');
+  });
+
+  it('does not reopen a skipped question once a later entry continues', () => {
+    expect(
+      openQuestion([
+        entry('e1', [
+          {
+            kind: 'tool',
+            id: 'tc1',
+            call: { kind: 'unknown', name: 'askQuestion' },
+            resolved: true,
+            isError: false,
+            output: 'Questions skipped by the user',
+          },
+        ]),
+        entry('e2', [text('t1', 'Using the default and continuing.')], {
+          status: 'complete',
+        }),
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('keeps a skipped question whose prompt survived in a later message', () => {
+    const q = openQuestion([
+      entry('e1', [
+        {
+          kind: 'tool',
+          id: 'tc1',
+          call: { kind: 'unknown', name: 'askQuestion' },
+          resolved: true,
+          isError: false,
+          output: 'Questions skipped by the user',
+        },
+      ]),
+      entry('e2', [text('t1', 'Which environment?')], { status: 'complete' }),
+    ]);
+    expect(q?.kind).toBe('tool');
+    expect(q?.questions[0].question).toBe('Which environment?');
+  });
+
+  it('does not reopen a question the agent already continued past', () => {
+    expect(
+      openQuestion([
+        entry('e1', [
+          tool('tc1', { kind: 'unknown', name: 'AskQuestion' }, true, true),
+          text('t1', 'I will use the default and keep going.'),
+        ]),
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('ignores a question tool once the user has replied', () => {
+    expect(
+      openQuestion([
+        entry('e1', [tool('tc1', { kind: 'unknown', name: 'askQuestion' })]),
+        { ...entry('u1', [text('t2', 'staging')], { role: 'user' }) },
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('does not treat another tool that merely shares a name as a question', () => {
+    expect(
+      openQuestion([
+        entry('e1', [
+          tool('tc1', {
+            kind: 'unknown',
+            name: 'question',
+            args: { command: 'ls' },
+          }),
+        ]),
+      ]),
+    ).toBeUndefined();
+  });
+
   it('generic names (ask, elicit) need parseable questions', () => {
     expect(
       openQuestion([
@@ -297,14 +499,118 @@ describe('openQuestion — prose fallback', () => {
     ).toBeUndefined();
   });
 
-  it('yields to an open tool call in the same entry', () => {
+  it('still asks when a settled entry ends on a question beside an open tool', () => {
     const q = openQuestion([
-      entry('e1', [
-        tool('tc1', { kind: 'unknown', name: 'shell' }),
-        text('t1', 'Continue?'),
-      ]),
+      entry(
+        'e1',
+        [
+          tool('tc1', { kind: 'unknown', name: 'shell' }),
+          text('t1', 'Continue?'),
+        ],
+        { status: 'complete' },
+      ),
     ]);
-    expect(q).toBeUndefined();
+    expect(q?.kind).toBe('text');
+    expect(q?.questions[0].question).toBe('Continue?');
+  });
+
+  it('ignores a question the agent already answered later in the message', () => {
+    expect(
+      openQuestion([
+        entry(
+          'e1',
+          [
+            text(
+              't1',
+              'Should I refactor?\n\nI went ahead and renamed the module.',
+            ),
+          ],
+          { status: 'complete' },
+        ),
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('ignores question marks inside code, links, and earlier paragraphs', () => {
+    expect(
+      openQuestion([
+        entry(
+          'e1',
+          [
+            text(
+              't1',
+              'Use `user?.name`.\n\n```\nconst x = a?.b ?? c;\n```\n\nSee https://example.com/a?q=1\n\nShipped.',
+            ),
+          ],
+          { status: 'complete' },
+        ),
+      ]),
+    ).toBeUndefined();
+    expect(
+      openQuestion([
+        entry(
+          'e1',
+          [
+            text(
+              't1',
+              'What changed?\n\n- src/app.ts\n- src/index.ts\n\nDone.',
+            ),
+          ],
+          { status: 'complete' },
+        ),
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('reads lettered choices and a list glued to its question', () => {
+    const lettered = openQuestion([
+      entry(
+        'e1',
+        [text('t1', 'Which environment?\n\nA) staging\nB) production')],
+        { status: 'complete' },
+      ),
+    ]);
+    expect(lettered?.questions[0].options).toEqual(['staging', 'production']);
+
+    const glued = openQuestion([
+      entry('e1', [text('t1', 'Which environment?\n- staging\n- production')], {
+        status: 'complete',
+      }),
+    ]);
+    expect(glued?.questions[0].question).toBe('Which environment?');
+    expect(glued?.questions[0].options).toEqual(['staging', 'production']);
+  });
+
+  it('reads a trailing choice list as options', () => {
+    const q = openQuestion([
+      entry(
+        'e1',
+        [text('t1', 'Which environment?\n\n- staging\n- production')],
+        { status: 'complete' },
+      ),
+    ]);
+    expect(q?.questions).toEqual([
+      {
+        id: 'q0',
+        header: 'Agent question',
+        question: 'Which environment?',
+        options: ['staging', 'production'],
+      },
+    ]);
+  });
+
+  it('splits a trailing list of questions', () => {
+    const q = openQuestion([
+      entry(
+        'e1',
+        [text('t1', '1. Which environment?\n2. Roll back on failure?')],
+        { status: 'complete' },
+      ),
+    ]);
+    expect(q?.questions.map(item => item.question)).toEqual([
+      'Which environment?',
+      'Roll back on failure?',
+    ]);
   });
 });
 

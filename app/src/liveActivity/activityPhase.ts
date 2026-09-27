@@ -8,6 +8,26 @@
 import type { SessionActivityPhase } from './SessionActivity';
 import type { RunPhase } from '../zeron/state/sessionStores';
 
+/** Lock Screen copy. No prompt or message text. */
+export const activityPhaseLabel = (phase: SessionActivityPhase): string => {
+  switch (phase) {
+    case 'awaitingInput':
+      return 'Needs you';
+    case 'planReady':
+      return 'Plan ready';
+    case 'stopping':
+      return 'Stopping';
+    case 'errored':
+      return 'Failed';
+    case 'completed':
+      return 'Done';
+    case 'stale':
+      return 'Reconnecting';
+    default:
+      return 'Working';
+  }
+};
+
 export const activityPhase = (
   phase: RunPhase,
   planReady: boolean,

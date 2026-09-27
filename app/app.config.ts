@@ -30,9 +30,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     requireFullScreen: false,
     associatedDomains: [`applinks:${edgeHost}`],
-    entitlements: {
-      'aps-environment': 'development',
-    },
+    // Do not set aps-environment here. expo-widgets writes `development`
+    // during prebuild, and App Store export swaps it to `production`
+    // (docs/TESTFLIGHT.md). Setting it in this file does not stick.
     infoPlist: {
       NSMicrophoneUsageDescription:
         'ZRemote uses the microphone to dictate prompts and commands to remote coding engines.',

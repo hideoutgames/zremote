@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
+  activityPhaseForStatus,
   apnsConfigured,
   buildAlertPayload,
   buildLiveActivityPayload,
@@ -59,7 +60,7 @@ describe("buildLiveActivityPayload", () => {
     expect(p.aps["stale-date"]).toBeUndefined();
   });
 
-  it("start carries attributes-type + attributes.url deep link", () => {
+  it("start carries attributes, a required alert, and input-push-token", () => {
     const p = buildLiveActivityPayload("start", props, 1_000) as {
       aps: Record<string, unknown>;
     };
@@ -68,6 +69,8 @@ describe("buildLiveActivityPayload", () => {
     expect(
       (p.aps.attributes as { url: string }).url
     ).toBe("zeron://session/c1");
+    expect(p.aps.alert).toEqual({ title: "Fix bug", body: "Working" });
+    expect(p.aps["input-push-token"]).toBe(1);
   });
 });
 
@@ -126,6 +129,20 @@ describe("sendLiveActivityPush", () => {
     );
     const r = await sendLiveActivityPush(env(), "t", "update", props, 0, fetchImpl as typeof fetch);
     expect(r).toEqual({ ok: false, status: 400, reason: "BadDeviceToken" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries the other APNs host when the configured one rejects the token", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const host = String(url);
+      if (host.includes("api.push.apple.com")) {
+        return new Response(JSON.stringify({ reason: "BadDeviceToken" }), { status: 400 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+    const r = await sendLiveActivityPush(env(), "t", "update", props, 0, fetchImpl as typeof fetch);
+    expect(r.ok).toBe(true);
+    expect(String(fetchImpl.mock.calls[1][0])).toContain("api.sandbox.push.apple.com");
   });
 
   it("caches the JWT (one key import/sign per 50min)", async () => {
@@ -152,6 +169,24 @@ describe("isRunFinished", () => {
     expect(isRunFinished("awaitingInput", "working")).toBe(false);
     expect(isRunFinished(undefined, "idle")).toBe(false);
     expect(isRunFinished("idle", "idle")).toBe(false);
+  });
+});
+
+describe("activityPhaseForStatus", () => {
+  it("maps session status onto the widget phase and a short label", () => {
+    expect(activityPhaseForStatus("working")).toEqual({
+      phase: "working",
+      phaseLabel: "Working"
+    });
+    expect(activityPhaseForStatus("awaitingInput")).toEqual({
+      phase: "awaitingInput",
+      phaseLabel: "Needs you"
+    });
+    expect(activityPhaseForStatus("idle")).toEqual({
+      phase: "completed",
+      phaseLabel: "Done"
+    });
+    expect(activityPhaseForStatus("errored").phaseLabel).toBe("Failed");
   });
 });
 
