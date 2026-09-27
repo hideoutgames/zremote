@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
-  AccessibilityInfo,
   Pressable,
   StyleSheet,
   View,
@@ -8,6 +7,7 @@ import {
   type PressableProps,
   type ViewProps,
 } from 'react-native';
+import { useReduceTransparency } from '../hooks/useReduceTransparency';
 import { BlurView } from 'expo-blur';
 import {
   isLiquidGlassSupported,
@@ -37,17 +37,7 @@ export function Glass({
 }: GlassProps) {
   const theme = useChromeTheme();
   // Reduce Transparency → always the opaque fallback surface.
-  const [reduceTransparency, setReduceTransparency] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceTransparencyEnabled()
-      .then(setReduceTransparency)
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      setReduceTransparency,
-    );
-    return () => sub.remove();
-  }, []);
+  const reduceTransparency = useReduceTransparency();
   if (isLiquidGlassSupported && !reduceTransparency) {
     return (
       <LiquidGlassView

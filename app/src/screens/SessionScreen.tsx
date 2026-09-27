@@ -46,9 +46,10 @@ import {
   useDeviceOnline,
 } from '../zeron/state/workspaceStore';
 import {
-  useDraft,
+  draftStore,
   setDraftPendingWorktree,
   restoreFailedSend,
+  type StagedAttachment,
 } from '../zeron/state/draftStore';
 import {
   modelSettingsFor,
@@ -157,6 +158,7 @@ import { wallpaperScreenFill } from '../zeron/state/newThreadBackground';
 import { ChatBackgroundBlur } from '../components/SessionBackgroundBlur';
 
 const log = createLog();
+const EMPTY_ATTACHMENTS: StagedAttachment[] = [];
 
 const ReasoningSheet = React.lazy(() =>
   import('../components/ReasoningSheet').then(m => ({
@@ -368,10 +370,32 @@ function ActiveSessionScreen({
   const commands = useSessionCommands(chatId);
   const queueCount = useSessionQueueLength(chatId);
   const chat = useChat(chatId);
-  const row = useStore(workspaceStore, s => s.sessions[chatId]);
+  const sessionStatus = useStore(
+    workspaceStore,
+    s => s.sessions[chatId]?.status,
+  );
+  const sessionStartedAt = useStore(
+    workspaceStore,
+    s => s.sessions[chatId]?.startedAt,
+  );
+  const updatedAtWithoutStart = useStore(workspaceStore, s => {
+    const live = s.sessions[chatId];
+    return live?.startedAt !== undefined ? undefined : live?.updatedAt;
+  });
   const deviceId = runtime?.deviceId ?? '';
+  const row =
+    sessionStatus === undefined
+      ? undefined
+      : workspaceStore.getState().sessions[chatId];
   const phase = useRunPhase(chatId, row, chat, deviceId);
-  const draft = useDraft(chatId);
+  const pendingWorktree = useStore(
+    draftStore,
+    s => s.byChat[chatId]?.pendingWorktree,
+  );
+  const draftAttachments = useStore(
+    draftStore,
+    s => s.byChat[chatId]?.attachments ?? EMPTY_ATTACHMENTS,
+  );
 
   const hostDeviceId = chat?.deviceId;
   const hostOnline = useDeviceOnline(hostDeviceId ?? '');
@@ -425,7 +449,7 @@ function ActiveSessionScreen({
     [],
   );
   const workingStartedAt =
-    row?.startedAt ?? row?.updatedAt ?? mountTimeRef.current;
+    sessionStartedAt ?? updatedAtWithoutStart ?? mountTimeRef.current;
 
   const onFetchBlob = useCallback(
     async (partId: string): Promise<string> => {
@@ -459,7 +483,7 @@ function ActiveSessionScreen({
         alertHostNotConnectedQueue();
         return true;
       }
-      const wt = draft.pendingWorktree;
+      const wt = pendingWorktree;
       try {
         controller.sendRun(
           text,
@@ -483,7 +507,7 @@ function ActiveSessionScreen({
       });
       return true;
     },
-    [controller, hostOnline, draft.pendingWorktree, chat, chatId],
+    [controller, hostOnline, pendingWorktree, chat, chatId],
   );
 
   const doSteer = useCallback(
@@ -553,9 +577,9 @@ function ActiveSessionScreen({
         .sendWithAttachments(
           text,
           { config: chat?.config, cwd: chat?.cwd },
-          draft.attachments,
+          draftAttachments,
           {
-            worktree: draft.pendingWorktree,
+            worktree: pendingWorktree,
             phase,
             forceQueue: !hostOnline,
           },
@@ -569,8 +593,8 @@ function ActiveSessionScreen({
       controller,
       chat?.config,
       chat?.cwd,
-      draft.attachments,
-      draft.pendingWorktree,
+      draftAttachments,
+      pendingWorktree,
       phase,
       hostOnline,
     ],
@@ -638,7 +662,7 @@ function ActiveSessionScreen({
   const [prSheet, setPrSheet] = useState<PrBadgeModel | null>(null);
   const pendingPrRef = useRef<PrBadgeModel | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
-  const keyboardHeight = useKeyboardState(s => s.height);
+  const keyboardVisible = useKeyboardState(s => s.height > 0);
   const keyboardWasVisible = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -705,14 +729,14 @@ function ActiveSessionScreen({
   }, [phase]);
 
   useEffect(() => {
-    if (keyboardHeight > 0) {
+    if (keyboardVisible) {
       keyboardWasVisible.current = true;
       return;
     }
     if (!keyboardWasVisible.current) return;
     keyboardWasVisible.current = false;
     setComposerFocused(false);
-  }, [keyboardHeight]);
+  }, [keyboardVisible]);
 
   useEffect(() => {
     if (toolSheet !== null) return;
@@ -1046,7 +1070,7 @@ function ActiveSessionScreen({
         </View>
       </View>
 
-      {composerFocused && keyboardHeight > 0 ? (
+      {composerFocused && keyboardVisible ? (
         <Pressable
           testID="composer-focus-dim"
           style={[

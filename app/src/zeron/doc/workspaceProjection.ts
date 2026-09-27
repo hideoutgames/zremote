@@ -300,6 +300,145 @@ export const indicatorFor = (
 ): ChatIndicator =>
   chatIndicator(chat, effectiveStatus(w.sessions[chat.id], nowMs));
 
+const sameStrings = (a: readonly string[], b: readonly string[]): boolean => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+const sameRecord = (
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean => {
+  if (a === b) return true;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const key of keys) if (a[key] !== b[key]) return false;
+  return true;
+};
+
+const sameSourceContext = (
+  a: ConversationSourceContext | undefined,
+  b: ConversationSourceContext | undefined,
+): boolean =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.checkoutId === b.checkoutId &&
+    a.repoRoot === b.repoRoot &&
+    a.cwd === b.cwd &&
+    a.branch === b.branch &&
+    a.headSha === b.headSha &&
+    a.observedAt === b.observedAt);
+
+const sameConfig = (
+  a: ChatConfig | undefined,
+  b: ChatConfig | undefined,
+): boolean =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.harness === b.harness &&
+    a.model === b.model &&
+    a.reasoning === b.reasoning &&
+    a.sandbox === b.sandbox &&
+    sameRecord(a.modelOptions, b.modelOptions));
+
+export const sameDevice = (a: DeviceRow, b: DeviceRow): boolean =>
+  a.id === b.id &&
+  a.name === b.name &&
+  a.platform === b.platform &&
+  a.lastSeenAt === b.lastSeenAt &&
+  a.createdAt === b.createdAt &&
+  a.version === b.version &&
+  sameStrings(a.capabilities, b.capabilities);
+
+export const sameSpace = (a: Space, b: Space): boolean =>
+  a.id === b.id &&
+  a.deviceId === b.deviceId &&
+  a.path === b.path &&
+  a.name === b.name &&
+  a.gitDetected === b.gitDetected &&
+  a.gitCheckedAt === b.gitCheckedAt &&
+  a.checkoutId === b.checkoutId &&
+  a.createdAt === b.createdAt;
+
+export const sameChat = (a: Chat, b: Chat): boolean =>
+  a.id === b.id &&
+  a.deviceId === b.deviceId &&
+  a.title === b.title &&
+  a.archived === b.archived &&
+  a.cwd === b.cwd &&
+  a.branch === b.branch &&
+  a.checkoutId === b.checkoutId &&
+  a.lastMessagePreview === b.lastMessagePreview &&
+  a.lastMessageAt === b.lastMessageAt &&
+  a.createdAt === b.createdAt &&
+  a.spaceId === b.spaceId &&
+  a.lastSeenAt === b.lastSeenAt &&
+  a.roomGen === b.roomGen &&
+  sameSourceContext(a.sourceContext, b.sourceContext) &&
+  sameConfig(a.config, b.config);
+
+export const sameSessionRow = (a: SessionRow, b: SessionRow): boolean =>
+  a.chatId === b.chatId &&
+  a.deviceId === b.deviceId &&
+  a.status === b.status &&
+  a.startedAt === b.startedAt &&
+  a.updatedAt === b.updatedAt;
+
+const reuseById = <T extends { id: string }>(
+  prev: readonly T[],
+  next: readonly T[],
+  eq: (a: T, b: T) => boolean,
+): T[] => {
+  if (prev.length === next.length && prev.every((item, i) => eq(item, next[i])))
+    return prev as T[];
+  const prevById = new Map(prev.map(item => [item.id, item]));
+  return next.map(item => {
+    const prior = prevById.get(item.id);
+    return prior !== undefined && eq(prior, item) ? prior : item;
+  });
+};
+
+export const reuseSessions = (
+  prev: Readonly<Record<string, SessionRow>>,
+  next: Readonly<Record<string, SessionRow>>,
+): Record<string, SessionRow> => {
+  const nextKeys = Object.keys(next);
+  let unchanged = Object.keys(prev).length === nextKeys.length;
+  const out: Record<string, SessionRow> = {};
+  for (const key of nextKeys) {
+    const prior = prev[key];
+    const item = next[key];
+    const row =
+      prior !== undefined && sameSessionRow(prior, item) ? prior : item;
+    if (row !== prior) unchanged = false;
+    out[key] = row;
+  }
+  return unchanged ? (prev as Record<string, SessionRow>) : out;
+};
+
+/** Keep prior object identity when a re-projection did not change values. */
+export const reuseWorkspaceProjection = (
+  prev: WorkspaceProjection,
+  next: WorkspaceProjection,
+): WorkspaceProjection => {
+  const devices = reuseById(prev.devices, next.devices, sameDevice);
+  const spaces = reuseById(prev.spaces, next.spaces, sameSpace);
+  const chats = reuseById(prev.chats, next.chats, sameChat);
+  const sessions = reuseSessions(prev.sessions, next.sessions);
+  if (
+    devices === prev.devices &&
+    spaces === prev.spaces &&
+    chats === prev.chats &&
+    sessions === prev.sessions
+  )
+    return prev;
+  return { devices, spaces, chats, sessions };
+};
+
 // ── Write set-shapes (callers pass them to doc.write/deleteRows) ───────────
 
 /** workspace_host.rs create_chat shape: a full-row upsert. Born on chat2 ⇒

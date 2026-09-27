@@ -11,11 +11,12 @@ import { createStore, useStore } from 'zustand';
 import {
   archivedChats,
   chatsInSpace,
-  indicatorFor,
   overviewChats,
+  reuseWorkspaceProjection,
   type WorkspaceProjection,
 } from '../doc/workspaceProjection';
 import {
+  chatIndicator,
   effectiveStatus,
   isPresenceFresh,
   type ChatIndicator,
@@ -50,6 +51,19 @@ export const createWorkspaceStore = () =>
 /** The account-scoped singleton the runtime drives. */
 export const workspaceStore = createWorkspaceStore();
 
+/** Values from the last bind. Presence beats mutate the runtime's object
+ *  in place, so reference equality cannot tell a beat from a no-op. */
+let presenceValues: Record<string, number> = {};
+
+const presenceChanged = (next: Record<string, number>): boolean => {
+  const prevKeys = Object.keys(presenceValues);
+  const nextKeys = Object.keys(next);
+  if (prevKeys.length !== nextKeys.length) return true;
+  for (const key of nextKeys)
+    if (presenceValues[key] !== next[key]) return true;
+  return false;
+};
+
 /** Runtime entry point: replace the projected workspace. */
 export const bindWorkspace = (
   projection: WorkspaceProjection,
@@ -57,46 +71,70 @@ export const bindWorkspace = (
   connection: ConnectionState,
   at = Date.now(),
 ): void => {
+  const prev = workspaceStore.getState();
+  const reused = reuseWorkspaceProjection(prev, projection);
+  const presenceDirty = presenceChanged(presence);
+  if (
+    reused.devices === prev.devices &&
+    reused.spaces === prev.spaces &&
+    reused.chats === prev.chats &&
+    reused.sessions === prev.sessions &&
+    !presenceDirty &&
+    connection === prev.connection
+  ) {
+    return;
+  }
+  const nextPresence = presenceDirty ? { ...presence } : prev.presence;
+  if (presenceDirty) presenceValues = nextPresence;
   workspaceStore.setState({
-    devices: projection.devices,
-    spaces: projection.spaces,
-    chats: projection.chats,
-    sessions: projection.sessions,
-    presence,
+    devices: reused.devices,
+    spaces: reused.spaces,
+    chats: reused.chats,
+    sessions: reused.sessions,
+    presence: nextPresence,
     connection,
     lastSyncAt: at,
   });
 };
 
 export const resetWorkspace = (): void => {
+  presenceValues = {};
   workspaceStore.setState(EMPTY);
 };
 
 // ── Hooks ──────────────────────────────────────────────────────────────
 
-const useProjection = (): WorkspaceProjection => {
-  const devices = useStore(workspaceStore, s => s.devices);
+const EMPTY_DEVICES: DeviceRow[] = [];
+const EMPTY_SESSIONS: Record<string, SessionRow> = {};
+
+/** List helpers only read spaces and chats. Subscribing to sessions would
+ *  re-render every thread row on a presence heartbeat. */
+const useSpaceChatProjection = (): WorkspaceProjection => {
   const spaces = useStore(workspaceStore, s => s.spaces);
   const chats = useStore(workspaceStore, s => s.chats);
-  const sessions = useStore(workspaceStore, s => s.sessions);
   return useMemo(
-    () => ({ devices, spaces, chats, sessions }),
-    [devices, spaces, chats, sessions],
+    () => ({
+      devices: EMPTY_DEVICES,
+      spaces,
+      chats,
+      sessions: EMPTY_SESSIONS,
+    }),
+    [spaces, chats],
   );
 };
 
 export const useOverviewChats = (): Chat[] => {
-  const w = useProjection();
+  const w = useSpaceChatProjection();
   return useMemo(() => overviewChats(w), [w]);
 };
 
 export const useChatsInSpace = (spaceId: string): Chat[] => {
-  const w = useProjection();
+  const w = useSpaceChatProjection();
   return useMemo(() => chatsInSpace(w, spaceId), [w, spaceId]);
 };
 
 export const useArchivedChats = (spaceId?: string): Chat[] => {
-  const w = useProjection();
+  const w = useSpaceChatProjection();
   return useMemo(() => archivedChats(w, spaceId), [w, spaceId]);
 };
 
@@ -126,12 +164,22 @@ export const useDerivedNow = <T>(derive: (now: number) => T): T => {
   return useStore(nowStore, s => derive(s.now));
 };
 
-/** Indicator with a 1s-ticking `now` so staleness updates live. */
+/** Indicator with a 1s-ticking `now` so staleness updates live.
+ *  Subscribes to the chat object and the status string — an `updatedAt`
+ *  heartbeat keeps the same status and must not re-render the row. */
 export const useIndicator = (chatId: string): ChatIndicator => {
-  const w = useProjection();
+  const chat = useStore(workspaceStore, s =>
+    s.chats.find(c => c.id === chatId),
+  );
+  const status = useStore(workspaceStore, s => s.sessions[chatId]?.status);
   return useDerivedNow(now => {
-    const chat = w.chats.find(c => c.id === chatId);
-    return chat === undefined ? 'idle' : indicatorFor(w, chat, now);
+    if (chat === undefined) return 'idle';
+    const row = workspaceStore.getState().sessions[chatId];
+    const stamped =
+      row !== undefined && status !== undefined && row.status !== status
+        ? { ...row, status }
+        : row;
+    return chatIndicator(chat, effectiveStatus(stamped, now));
   });
 };
 

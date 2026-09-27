@@ -4,9 +4,8 @@
 // clustering). Shadow lives on the outer wrapper so overflow clipping does
 // not eat it.
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
-  AccessibilityInfo,
   StyleSheet,
   View,
   type ColorValue,
@@ -15,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { BlurView, type BlurTint } from 'expo-blur';
+import { useReduceTransparency } from '../../hooks/useReduceTransparency';
 import { useTheme } from '../../theme';
 
 export const BUBBLE_BLUR_INTENSITY = 100;
@@ -45,17 +45,7 @@ export function FrostedBubble({
   ...rest
 }: FrostedBubbleProps) {
   const theme = useTheme();
-  const [reduceTransparency, setReduceTransparency] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceTransparencyEnabled()
-      .then(setReduceTransparency)
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      setReduceTransparency,
-    );
-    return () => sub.remove();
-  }, []);
+  const reduceTransparency = useReduceTransparency();
 
   const pad = (
     <View

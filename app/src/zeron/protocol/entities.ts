@@ -108,6 +108,40 @@ export const sortActive = (chats: readonly Chat[]): Chat[] =>
 export const isAgentRunning = (indicator: ChatIndicator): boolean =>
   indicator === 'working' || indicator === 'awaitingInput';
 
+/** Stable id list of threads whose effective status is still running.
+ *  Sorted so chat-array order does not change the string. */
+export const overviewRunningSignature = (
+  chats: readonly Chat[],
+  sessions: Readonly<Record<string, SessionRow | undefined>>,
+  nowMs: number,
+): string => {
+  const ids: string[] = [];
+  for (const chat of chats) {
+    if (
+      isAgentRunning(
+        chatIndicator(chat, effectiveStatus(sessions[chat.id], nowMs)),
+      )
+    )
+      ids.push(chat.id);
+  }
+  ids.sort();
+  return ids.join('\n');
+};
+
+/** Status and start time only — `updatedAt` heartbeats must not change it. */
+export const sessionActivitySignature = (
+  sessions: Readonly<Record<string, SessionRow | undefined>>,
+): string => {
+  const ids = Object.keys(sessions).sort();
+  let out = '';
+  for (const id of ids) {
+    const row = sessions[id];
+    if (row === undefined) continue;
+    out += `${id}:${row.status}:${row.startedAt ?? ''};`;
+  }
+  return out;
+};
+
 /** Overview list: agent-running threads first, then recency within each group. */
 export const sortOverviewThreads = (
   chats: readonly Chat[],

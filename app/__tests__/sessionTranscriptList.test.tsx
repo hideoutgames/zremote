@@ -1,5 +1,6 @@
-// Open-scroll: the transcript jumps to the tail once per openKey, then
-// stays put while later messages append (follow is the list's job).
+// Open-scroll: the transcript jumps to the tail once per openKey. Later
+// content growth does not jump again. An explicit follow uses a measured
+// vertical offset that includes the composer inset.
 
 import React, { useRef } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
@@ -11,6 +12,7 @@ import {
   RAIL_RIGHT,
   isTranscriptAtEnd,
   listEndDistance,
+  transcriptEndOffset,
   type SessionTranscriptListHandle,
 } from '../src/components/SessionTranscriptList';
 import {
@@ -793,7 +795,11 @@ test('last rail tick follows the live edge', async () => {
       )[0]
       .props.onPress();
   });
-  expect(scrollToEnd).toHaveBeenCalledWith({ animated: true });
+  expect(scrollToOffset).toHaveBeenCalledWith({
+    offset: transcriptEndOffset(2000, 844, COMPOSER_INSET_FALLBACK),
+    animated: true,
+  });
+  expect(scrollToEnd).not.toHaveBeenCalled();
   expect(followingOn(tree!)).toBe(true);
   expect(scrollToIndex).not.toHaveBeenCalled();
 
@@ -990,7 +996,11 @@ test('dragging onto the last tick follows the live edge', async () => {
     track.props.onResponderMove(touch(3));
   });
   expect(followingOn(tree!)).toBe(true);
-  expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
+  expect(scrollToOffset).toHaveBeenCalledWith({
+    offset: transcriptEndOffset(2000, 844, COMPOSER_INSET_FALLBACK),
+    animated: false,
+  });
+  expect(scrollToEnd).not.toHaveBeenCalled();
   expect(scrollToIndex).not.toHaveBeenCalled();
 
   await act(async () => {
@@ -1111,6 +1121,28 @@ test('wide overflowing iPad transcript does not add extra rail padding', async (
     paddingLeft: 140,
     paddingRight: 140,
   });
+  await act(async () => {
+    tree!.unmount();
+  });
+});
+
+test('renderScrollComponent keeps the FlashList scroll ref', async () => {
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <Harness entries={[entry('m1')]} openKey="c1:1" />,
+    );
+  });
+  const flashRef: { current: { id: string } | null } = { current: null };
+  const element = listProps(tree!).renderScrollComponent({
+    testID: 'merged-scroll',
+    ref: flashRef,
+  });
+  const ref = element.props.ref ?? element.ref;
+  const node = { id: 'scroll-node' };
+  ref(node);
+  expect(flashRef.current).toBe(node);
+
   await act(async () => {
     tree!.unmount();
   });

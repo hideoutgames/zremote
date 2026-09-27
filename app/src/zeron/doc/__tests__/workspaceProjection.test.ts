@@ -5,6 +5,8 @@ import { RegistryDoc } from '../registryDoc';
 import {
   archivedChats,
   buildArchivedSet,
+  reuseSessions,
+  reuseWorkspaceProjection,
   buildChatCheckoutSet,
   buildChatConfigSet,
   buildChatSpaceSet,
@@ -227,6 +229,37 @@ describe('write set-shapes', () => {
       { kind: 'sessions', id: 'c-space' },
       { kind: 'spaces', id: 'sp-1' },
     ]);
+  });
+
+  it('reuses projection identity when values are unchanged', () => {
+    const prev = projectWorkspace(fixture());
+    const next = projectWorkspace(fixture());
+    expect(next.chats).not.toBe(prev.chats);
+    const reused = reuseWorkspaceProjection(prev, next);
+    expect(reused).toBe(prev);
+    expect(reused.chats).toBe(prev.chats);
+    expect(reused.sessions).toBe(prev.sessions);
+  });
+
+  it('reuses untouched rows when one session heartbeat changes', () => {
+    const prev = projectWorkspace(fixture());
+    const next = projectWorkspace(fixture());
+    const priorRow = prev.sessions['c-space'];
+    next.sessions = {
+      ...next.sessions,
+      'c-space': { ...next.sessions['c-space'], updatedAt: 9 },
+    };
+    const reused = reuseWorkspaceProjection(prev, next);
+    expect(reused.chats).toBe(prev.chats);
+    expect(reused.sessions).not.toBe(prev.sessions);
+    expect(reused.sessions['c-space']).not.toBe(priorRow);
+    expect(reused.sessions['c-space'].updatedAt).toBe(9);
+  });
+
+  it('drops a removed session without keeping the previous record', () => {
+    const prev = { 'c-space': projectWorkspace(fixture()).sessions['c-space'] };
+    expect(reuseSessions(prev, {})).toEqual({});
+    expect(reuseSessions(prev, {})).not.toBe(prev);
   });
 
   it('an update op via the doc flows into the overlay', () => {

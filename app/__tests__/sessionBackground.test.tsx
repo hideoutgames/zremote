@@ -420,7 +420,7 @@ test('session chrome follows the content theme when wallpaper is set', async () 
   }
 });
 
-test('session background blur frosts the chat without a dark tint', async () => {
+test('session background blur frosts the chat with the thread-list material', async () => {
   uiPrefsStore.setState({ sessionBackgroundBlur: true });
   workspaceStore.setState({
     chats: [
@@ -441,8 +441,8 @@ test('session background blur frosts the chat without a dark tint', async () => 
   expect(blurs).toHaveLength(WALLPAPER_BLUR_PASSES);
   for (const blur of blurs) {
     expect(blur.props.tint).toBe(CHAT_BACKGROUND_BLUR_TINT);
-    expect(blur.props.tint).not.toBe('systemThinMaterialDark');
-    expect(blur.props.tint).not.toBe('systemChromeMaterialDark');
+    expect(blur.props.tint).toBe(THREADS_BACKGROUND_BLUR_TINT);
+    expect(blur.props.tint).not.toBe('systemChromeMaterialLight');
     expect(blur.props.fade).toBe('none');
     expect(blur.props.intensity).toBe(REGULAR_THREADS_INTENSITY);
   }

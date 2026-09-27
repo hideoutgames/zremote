@@ -99,6 +99,15 @@ export const isTranscriptAtEnd = (
   threshold = END_THRESHOLD,
 ): boolean => distance + composerInset <= threshold;
 
+/** Visual tail. Composer padding is an iOS content inset, so the offset
+ *  has to include it. Native scrollToEnd can also treat a still-zero frame
+ *  as a horizontal list and leave Y at 0. */
+export const transcriptEndOffset = (
+  contentHeight: number,
+  viewportHeight: number,
+  composerInset: number,
+): number => Math.max(0, contentHeight - viewportHeight + composerInset);
+
 export const WORKING_STATUS_ID = '__working-status__';
 
 type TranscriptRow =
@@ -132,7 +141,7 @@ export type SessionTranscriptListHandle = {
   onComposerLayout: (event: LayoutChangeEvent) => void;
 };
 
-export const SessionTranscriptList = forwardRef<
+const SessionTranscriptListInner = forwardRef<
   SessionTranscriptListHandle,
   {
     entries: MessageEntry[];
@@ -151,7 +160,7 @@ export const SessionTranscriptList = forwardRef<
     chatId?: string;
     startedAt?: number;
   }
->(function SessionTranscriptListInner(
+>(function SessionTranscriptListBody(
   {
     entries,
     renderEntry,
@@ -227,6 +236,9 @@ export const SessionTranscriptList = forwardRef<
     progress?: number;
   } | null>(null);
   const railJumpRafRef = useRef<number | null>(null);
+  const flashScrollRef = useRef<
+    React.Ref<React.ComponentRef<typeof TranscriptChatScrollView>> | undefined
+  >(undefined);
   const atEndRef = useRef(false);
   const [initialInset] = useState(seedComposerInset);
   const extraContentPadding = useSharedValue(initialInset);
@@ -410,9 +422,24 @@ export const SessionTranscriptList = forwardRef<
       const dismissPromise = opts.closeKeyboard
         ? KeyboardController.dismiss()
         : Promise.resolve();
-      const scrollOpts = { animated: opts.animated };
-      listRef.current?.scrollToEnd(scrollOpts);
-      chatScrollRef.current?.scrollToEnd?.(scrollOpts);
+      const contentH = contentHeightRef.current;
+      const listH = listHeightRef.current;
+      if (contentH > 0 && listH > 0) {
+        const offset = transcriptEndOffset(
+          contentH,
+          listH,
+          composerInsetRef.current,
+        );
+        listRef.current?.scrollToOffset({ offset, animated: opts.animated });
+        chatScrollRef.current?.scrollTo?.({
+          y: offset,
+          animated: opts.animated,
+        });
+      } else {
+        const scrollOpts = { animated: opts.animated };
+        listRef.current?.scrollToEnd(scrollOpts);
+        chatScrollRef.current?.scrollToEnd?.(scrollOpts);
+      }
       await dismissPromise;
       freeze.set(false);
     },
@@ -464,6 +491,7 @@ export const SessionTranscriptList = forwardRef<
     if (composerInsetRef.current <= 0) return;
     scrolledForKeyRef.current = openKey;
     hasOverflowedRef.current = true;
+    followingRef.current = true;
     setFollowing(true);
     scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(
       () => {},
@@ -502,6 +530,7 @@ export const SessionTranscriptList = forwardRef<
   const followEnd = useCallback(
     (opts: { animated: boolean; closeKeyboard: boolean }) => {
       hasOverflowedRef.current = true;
+      followingRef.current = true;
       pinnedToTailRef.current = true;
       pendingRevealRef.current = null;
       setFollowing(true);
@@ -539,8 +568,10 @@ export const SessionTranscriptList = forwardRef<
           return sameRange(prev, next) ? prev : next;
         });
         if (hasOverflowedRef.current) {
+          followingRef.current = true;
           setFollowing(true);
         } else {
+          followingRef.current = false;
           setFollowing(false);
         }
       },
@@ -571,6 +602,7 @@ export const SessionTranscriptList = forwardRef<
     onShowScrollDownRef.current(!(atEnd && atThreadTail));
     if (atEnd && atThreadTail && hasOverflowedRef.current) {
       pinnedToTailRef.current = true;
+      followingRef.current = true;
       setFollowing(true);
     }
   }, []);
@@ -614,6 +646,7 @@ export const SessionTranscriptList = forwardRef<
       blankSpace.value = next;
       if (next <= 0 && !hasOverflowedRef.current) {
         hasOverflowedRef.current = true;
+        followingRef.current = true;
         setFollowing(true);
       }
     },
@@ -911,6 +944,16 @@ export const SessionTranscriptList = forwardRef<
     ],
   );
 
+  const setScrollRef = useCallback(
+    (node: React.ComponentRef<typeof TranscriptChatScrollView> | null) => {
+      chatScrollRef.current = node;
+      const outer = flashScrollRef.current;
+      if (typeof outer === 'function') outer(node);
+      else if (outer) outer.current = node;
+    },
+    [],
+  );
+
   const loadEarlier = useCallback(() => {
     const count = entriesRef.current.length;
     pinnedToTailRef.current = false;
@@ -959,25 +1002,74 @@ export const SessionTranscriptList = forwardRef<
   }, [loadLater]);
 
   const renderScrollComponent = useCallback(
-    (props: ScrollViewProps) => (
-      <TranscriptChatScrollView
-        {...props}
-        ref={chatScrollRef}
-        extraContentPadding={extraContentPadding}
-        blankSpace={blankSpace}
-        freeze={freeze}
-        offset={insetsBottom}
-        onEndVisible={() =>
-          applyEndVisible(
-            isTranscriptAtEnd(
-              lastDistanceRef.current,
-              composerInsetRef.current,
-            ),
-          )
-        }
-      />
-    ),
-    [applyEndVisible, blankSpace, extraContentPadding, freeze, insetsBottom],
+    (props: ScrollViewProps) => {
+      const { ref: listRefOuter, ...rest } = props as ScrollViewProps & {
+        ref?: React.Ref<React.ComponentRef<typeof TranscriptChatScrollView>>;
+      };
+      flashScrollRef.current = listRefOuter;
+      return (
+        <TranscriptChatScrollView
+          {...rest}
+          ref={setScrollRef}
+          extraContentPadding={extraContentPadding}
+          blankSpace={blankSpace}
+          freeze={freeze}
+          offset={insetsBottom}
+          onEndVisible={() =>
+            applyEndVisible(
+              isTranscriptAtEnd(
+                lastDistanceRef.current,
+                composerInsetRef.current,
+              ),
+            )
+          }
+        />
+      );
+    },
+    [
+      applyEndVisible,
+      blankSpace,
+      extraContentPadding,
+      freeze,
+      insetsBottom,
+      setScrollRef,
+    ],
+  );
+
+  const onScrollBeginDrag = useCallback(() => {
+    pinnedToTailRef.current = false;
+    // Same turn as onStartReached — the ref must drop before the render
+    // that commits `following`, or the first drag never pages.
+    if (hasOverflowedRef.current) {
+      followingRef.current = false;
+      setFollowing(false);
+    }
+    setDismissKey(key => key + 1);
+  }, []);
+
+  const onContentSizeChange = useCallback(
+    (_w: number, height: number) => {
+      contentHeightRef.current = height;
+      setContentHeight(prev => (prev === height ? prev : height));
+      updateBlankSpace(height);
+    },
+    [updateBlankSpace],
+  );
+
+  const contentContainerStyle = useMemo(
+    () => [
+      styles.listContent,
+      {
+        paddingTop: insetsTop + 96,
+        ...transcriptHorizontalPadding(listWidth, contentMaxWidth, 0),
+      },
+    ],
+    [contentMaxWidth, insetsTop, listWidth],
+  );
+
+  const scrollIndicatorInsets = useMemo(
+    () => ({ top: insetsTop + 96 }),
+    [insetsTop],
   );
 
   const maintainVisibleContentPosition = useMemo(
@@ -1051,30 +1143,11 @@ export const SessionTranscriptList = forwardRef<
           onStartReachedThreshold={0.35}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.35}
-          onScrollBeginDrag={() => {
-            pinnedToTailRef.current = false;
-            // Same turn as onStartReached — the ref must drop before the
-            // render that commits `following`, or the first drag never pages.
-            if (hasOverflowedRef.current) {
-              followingRef.current = false;
-              setFollowing(false);
-            }
-            setDismissKey(key => key + 1);
-          }}
+          onScrollBeginDrag={onScrollBeginDrag}
           onScroll={onScroll}
-          onContentSizeChange={(_w: number, height: number) => {
-            contentHeightRef.current = height;
-            setContentHeight(prev => (prev === height ? prev : height));
-            updateBlankSpace(height);
-          }}
-          contentContainerStyle={[
-            styles.listContent,
-            {
-              paddingTop: insetsTop + 96,
-              ...transcriptHorizontalPadding(listWidth, contentMaxWidth, 0),
-            },
-          ]}
-          scrollIndicatorInsets={{ top: insetsTop + 96 }}
+          onContentSizeChange={onContentSizeChange}
+          contentContainerStyle={contentContainerStyle}
+          scrollIndicatorInsets={scrollIndicatorInsets}
           showsVerticalScrollIndicator={!overflowing}
           keyboardDismissMode="interactive"
         />
@@ -1095,6 +1168,8 @@ export const SessionTranscriptList = forwardRef<
     </View>
   );
 });
+
+export const SessionTranscriptList = React.memo(SessionTranscriptListInner);
 
 /** Subscribes to the rail's active id so scroll updates re-render only the
  *  rail, never the transcript list. */

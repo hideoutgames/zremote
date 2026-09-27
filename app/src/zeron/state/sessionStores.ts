@@ -7,6 +7,7 @@ import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { effectiveStatus } from '../protocol/entities';
+import { useDerivedNow, workspaceStore } from './workspaceStore';
 import {
   openQuestion,
   sameOpenQuestion,
@@ -335,7 +336,21 @@ export const useRunPhase = (
   row: SessionRow | undefined,
   chat: Chat | undefined,
   deviceId: string,
-): RunPhase =>
-  useStore(getSessionStore(chatId), s =>
+): RunPhase => {
+  // Session-doc updates (commands, streaming, questions) re-render
+  // immediately. The clock rereads the workspace row so a heartbeat can
+  // flip `working` to `stale` without subscribing to `updatedAt`.
+  const docPhase = useStore(getSessionStore(chatId), s =>
     runPhase(s, row, chat, deviceId, Date.now()),
   );
+  const clockPhase = useDerivedNow(now =>
+    runPhase(
+      getSessionStore(chatId).getState(),
+      workspaceStore.getState().sessions[chatId] ?? row,
+      chat,
+      deviceId,
+      now,
+    ),
+  );
+  return clockPhase !== docPhase ? clockPhase : docPhase;
+};
