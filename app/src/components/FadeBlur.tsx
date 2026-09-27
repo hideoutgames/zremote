@@ -5,14 +5,9 @@
 // chrome dissolve. Skia is intentionally avoided here (Release worklet
 // crashes).
 
-import React, { useEffect, useState } from 'react';
-import {
-  AccessibilityInfo,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import React from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useReduceTransparency } from '../hooks/useReduceTransparency';
 import { BlurView, type BlurTint } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -81,17 +76,7 @@ export function FadeBlur({
   tint?: BlurTint;
 }) {
   const theme = useTheme();
-  const [reduceTransparency, setReduceTransparency] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceTransparencyEnabled()
-      .then(setReduceTransparency)
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      setReduceTransparency,
-    );
-    return () => sub.remove();
-  }, []);
+  const reduceTransparency = useReduceTransparency();
   if (reduceTransparency) return null;
   const tint: BlurTint =
     tintOverride ??

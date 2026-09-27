@@ -38,6 +38,8 @@ import {
 import { chatUnseen } from '../zeron/doc/workspaceProjection';
 import {
   isPresenceFresh,
+  overviewRunningSignature,
+  sessionActivitySignature,
   sortOverviewThreads,
 } from '../zeron/protocol/entities';
 import {
@@ -232,7 +234,14 @@ const ChatRow = React.memo(function ({
   const theme = useChromeTheme();
   const runtime = useRuntime();
   const indicator = useIndicator(chat.id);
-  const session = useStore(workspaceStore, s => s.sessions[chat.id]);
+  const startedAt = useStore(
+    workspaceStore,
+    s => s.sessions[chat.id]?.startedAt,
+  );
+  const updatedAtFallback = useStore(workspaceStore, s => {
+    const row = s.sessions[chat.id];
+    return row?.startedAt !== undefined ? undefined : row?.updatedAt;
+  });
   const host = useHostForChat(chat.id);
   const presenceAt = useStore(workspaceStore, s => s.presence[chat.deviceId]);
   const hostOnline = useDerivedNow(n => isPresenceFresh(presenceAt, n));
@@ -255,7 +264,7 @@ const ChatRow = React.memo(function ({
   );
   const at = chat.lastMessageAt ?? chat.createdAt;
   const atLabel = useDerivedNow(n => relativeTime(at, n));
-  const workingStarted = session?.startedAt ?? session?.updatedAt;
+  const workingStarted = startedAt ?? updatedAtFallback;
   const elapsedLabel = useDerivedNow(n =>
     workingStarted === undefined
       ? undefined
@@ -459,16 +468,10 @@ export function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const [bottomH, setBottomH] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
   const runtime = useRuntime();
   const searching = searchFocused || query.trim() !== '';
   const wallpaper = useNewThreadComposerBackground() !== undefined;
   const theme = chromeThemeFor(wallpaper, contentTheme);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -481,7 +484,16 @@ export function HomeScreen({
   const spaces = useStore(workspaceStore, s => s.spaces);
   const devices = useStore(workspaceStore, s => s.devices);
   const connection = useStore(workspaceStore, s => s.connection);
-  const sessions = useStore(workspaceStore, s => s.sessions);
+  const activitySignature = useStore(workspaceStore, s =>
+    sessionActivitySignature(s.sessions),
+  );
+  const runningSignature = useDerivedNow(now =>
+    overviewRunningSignature(
+      workspaceStore.getState().chats,
+      workspaceStore.getState().sessions,
+      now,
+    ),
+  );
   const pinnedIds = usePinnedChatIds();
 
   const chats = useMemo(() => {
@@ -498,8 +510,15 @@ export function HomeScreen({
               .toLowerCase()
               .includes(q),
           );
-    return sortOverviewThreads(filtered, sessions, now);
-  }, [overview, spaceFilter, query, sessions, now]);
+    return sortOverviewThreads(
+      filtered,
+      workspaceStore.getState().sessions,
+      Date.now(),
+    );
+    // activitySignature / runningSignature rerun this when status, start
+    // time, or the stale window changes. The sort reads the store then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overview, spaceFilter, query, activitySignature, runningSignature]);
   const { pinned, rest } = useMemo(
     () => partitionPinnedChats(chats, pinnedIds),
     [chats, pinnedIds],

@@ -4,14 +4,9 @@
 // blur and the wash. ContentEdgeMask is a viewport alpha mask on the
 // scrolling content itself.
 
-import React, { useEffect, useState } from 'react';
-import {
-  AccessibilityInfo,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useReduceTransparency } from '../hooks/useReduceTransparency';
 import Animated, { type AnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -49,17 +44,7 @@ function ChromeFadeWash({
   fadeHold: number;
   wash: string;
 }) {
-  const [reduceTransparency, setReduceTransparency] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceTransparencyEnabled()
-      .then(setReduceTransparency)
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      setReduceTransparency,
-    );
-    return () => sub.remove();
-  }, []);
+  const reduceTransparency = useReduceTransparency();
   if (reduceTransparency) return null;
   const hold = Math.min(0.85, Math.max(0, fadeHold));
   const colors =

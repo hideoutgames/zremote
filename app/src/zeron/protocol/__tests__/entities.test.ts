@@ -11,7 +11,9 @@ import {
   displayTitle,
   effectiveStatus,
   isAgentRunning,
+  overviewRunningSignature,
   SESSION_STALE_MS,
+  sessionActivitySignature,
   sortActive,
   sortOverviewThreads,
   spaceDisplayName,
@@ -121,6 +123,51 @@ describe('sortOverviewThreads', () => {
         SESSION_STALE_MS + 10,
       ).map(x => x.id),
     ).toEqual(['stale', 'idle']);
+  });
+});
+
+describe('overviewRunningSignature', () => {
+  it('lists fresh running threads in sorted id order and drops stale ones', () => {
+    const chats = [
+      chat({ id: 'b', lastMessageAt: 1 }),
+      chat({ id: 'a', lastMessageAt: 2 }),
+      chat({ id: 'stale', lastMessageAt: 3 }),
+      chat({ id: 'idle', lastMessageAt: 4 }),
+    ];
+    const now = SESSION_STALE_MS + 10;
+    const sessions = {
+      b: session('working', now),
+      a: session('awaitingInput', now),
+      stale: session('working', 0),
+      idle: session('idle', now),
+    };
+    expect(overviewRunningSignature(chats, sessions, now)).toBe('a\nb');
+    expect(overviewRunningSignature([...chats].reverse(), sessions, now)).toBe(
+      'a\nb',
+    );
+  });
+});
+
+describe('sessionActivitySignature', () => {
+  it('ignores updatedAt and follows status plus startedAt', () => {
+    const base = {
+      b: { ...session('working', 50), chatId: 'b', startedAt: 10 },
+      a: { ...session('idle', 90), chatId: 'a' },
+    };
+    const heartbeat = {
+      b: { ...base.b, updatedAt: 51 },
+      a: base.a,
+    };
+    expect(sessionActivitySignature(base)).toBe(
+      sessionActivitySignature(heartbeat),
+    );
+    expect(sessionActivitySignature(base)).toBe('a:idle:;b:working:10;');
+    expect(
+      sessionActivitySignature({
+        ...base,
+        b: { ...base.b, status: 'idle' },
+      }),
+    ).toBe('a:idle:;b:idle:10;');
   });
 });
 

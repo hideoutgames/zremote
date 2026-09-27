@@ -3,8 +3,8 @@
 // cannot exceed that style's radius, so each surface stacks two chrome
 // materials. Compact (iPhone) is full-bleed. Regular iPad sidebar is
 // fully frosted (no edge fade) with a darken overlay. Session blur
-// (pref) uses the same intensity with a light chrome material and no
-// overlay. Compose does not mount either layer.
+// (pref) uses that same dark chrome material with no overlay, so the
+// wallpaper stays visible. Compose does not mount either layer.
 
 import React from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -22,7 +22,9 @@ export const REGULAR_THREADS_INTENSITY = 100;
 export const WALLPAPER_BLUR_PASSES = 2;
 export const SIDEBAR_DARKEN = 'rgba(0,0,0,0.35)';
 export const THREADS_BACKGROUND_BLUR_TINT = 'systemChromeMaterialDark' as const;
-export const CHAT_BACKGROUND_BLUR_TINT = 'systemChromeMaterialLight' as const;
+/** Same material as the threads list. A light chrome stacked twice
+ *  covers the artwork with solid white. */
+export const CHAT_BACKGROUND_BLUR_TINT = THREADS_BACKGROUND_BLUR_TINT;
 
 export type WallpaperBlurSpec = {
   intensity: number;
