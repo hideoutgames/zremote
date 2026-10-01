@@ -45,7 +45,8 @@ The gesture reveals a recessed strip with the agent's working throbber and
 inset edge shadows. A selected Composer image keeps its filter, full-window
 scale and position, with a darker overlay; otherwise the strip uses a slightly
 darker page background. Refresh asks the existing peer to resync, and further
-remote updates can arrive after the gesture finishes.
+remote updates can arrive after the gesture finishes. The indicator stays visible
+for at least half a second even when the local resync request returns immediately.
 
 The composer supports native file/photo/camera attachments and host-backed
 `/commands`, `$skills` and `@files` suggestions. References are highlighted in
@@ -78,6 +79,14 @@ disabled until every question is answered. The Composer draft and attachments
 return when the request clears. A locally queued answer shows a compact receipt
 until the peer resolves it; repeated taps and reopening the session cannot send
 it twice. Failed queue attempts keep the answers available to retry.
+
+While an agent is working, the Composer can queue the next message or steer the
+current turn when the host supports it. Open the queued-message count to see
+the queue. Each row has the same send button as the Composer and an adjacent
+menu with Edit, Move up, Move down, and Delete. Send now steers text without
+requesting an interruption; messages with attachments wait for normal delivery.
+Editing acquires the host's existing edit lease, keeps the row held while the
+editor is open, and preserves its attachments. Unsupported actions are disabled.
 
 ## Development
 

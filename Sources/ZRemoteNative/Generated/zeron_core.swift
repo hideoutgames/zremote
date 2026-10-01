@@ -2872,8 +2872,8 @@ public protocol SessionHandleProtocol: AnyObject, Sendable {
     func composer()  -> ComposerState
 
     /**
-     * A row's primary action: steer text into the live turn (never
-     * interrupts); attachments send now.
+     * A row's primary action: steer text into the live turn without
+     * interrupting. Messages with attachments stay queued.
      */
     func deliverQueuedNow(id: String) async throws  -> Bool
 
@@ -3040,8 +3040,8 @@ open func composer() -> ComposerState  {
 }
 
     /**
-     * A row's primary action: steer text into the live turn (never
-     * interrupts); attachments send now.
+     * A row's primary action: steer text into the live turn without
+     * interrupting. Messages with attachments stay queued.
      */
 open func deliverQueuedNow(id: String)async throws  -> Bool  {
     return

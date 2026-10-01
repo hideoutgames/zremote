@@ -1,5 +1,54 @@
 # Implementation and verification status
 
+## Message queue and steering
+
+The native Composer supports Queue and Steer while a turn is running. A queued
+message count opens a compact list: message content, the shared Composer send
+button, and an adjacent native menu with Edit, Move up, Move down, and Delete.
+There are no per-row instructions or separate steering labels. Empty working
+composers retain Stop; attachment drafts use Queue when supported.
+
+The mobile peer reuses Zeron's existing queue, capability and edit-lease APIs.
+Send now always calls `SteerQueuedMessageNow`, including after a turn becomes
+idle, and never falls back to `SendQueuedMessageNow` or an interrupt. The peer
+checks attachments under its queue lock; attached rows remain queued. Failed
+or unconfirmed actions retain synchronized state for reconciliation. No host
+or relay implementation changed, and the native ABI is unchanged.
+
+Editing acquires the existing host lease before opening, renews it while open,
+and preserves attached files. Save errors retain the edit; dismissal, session
+changes and sign-out attempt to release through the originating client. Late account
+responses cannot replace the current editor state. Demo mode exercises the same
+interface, including queue order, held edits and steering within one live turn.
+Move up/down uses the peer's relative movement API, so another device changing
+the order while a menu is open cannot turn a one-row move into a jump.
+
+The queue view's state and focus storage use internal visibility for Skip's
+generated bridge, matching the shared-view rules added by PR #184. The follow-up
+passed syntax parsing of `MessageQueueView.swift` and a diff check; these do not
+validate bridge generation or a SwiftUI/Skip application build.
+
+Targeted local verification on 2026-10-01 passed 18 distinct Swift cases:
+all eight `AppModelMessageQueueTests`, all five `MessageQueueTests`, and the
+existing first-send failure, attachment-only send, demo interruption, demo exit,
+and demo checkout/session cases. The three movement cases were rerun after the
+relative-move change. Both scoped Rust cases passed:
+`mobile_queue_send_now_only_steers_and_preserves_rejected_rows` and
+`steering_while_busy_sends_a_steer_not_a_queue_row`. All heavy checks used the
+shared runner with stable inputs. The four changed presentation files passed
+Swift syntax parsing, including a queue-view recheck after the movement change.
+The native Swift adapter also passed host typechecking against the real
+generated C ABI and pinned Keychain source with stable inputs; this checks
+types, not platform linking or secure-storage behavior.
+
+This does not establish full SwiftUI/Skip compilation, native appearance,
+VoiceOver/TalkBack behavior, or live Codex host execution. No application build,
+workflow dispatch or distribution was performed. The existing Sessions refresh
+implementation from merged PR #180 also passed its four focused
+`SessionsRefreshTests` during review; those model checks did not validate the
+iOS gesture or recessed layer. The reported Simulator failure is addressed by
+the refresh correction below and still requires native verification.
+
 ## Session controls, checkout selection and Details
 
 Session rows now use provider marks in live and test modes. The active filter
@@ -117,6 +166,41 @@ All six `DrawerGestureRulesTests` passed with stable inputs on 2026-10-01
 passed Swift syntax parsing. These checks do not establish native gesture
 arbitration, keyboard layout, animation feel or device appearance. No application
 compilation, workflow dispatch or distribution was performed for this change.
+
+## Refresh gesture and reveal correction
+
+The iOS refresh attachment now sits in stable scroll content outside the lazy
+rows. Filtering or recycling rows cannot remove it. Vertical bounce is declared
+on the SwiftUI scroll view as well as maintained by its UIKit attachment, so
+short and empty lists remain pullable after view updates.
+
+The native control and recessed layer now share the same `UIScrollView` offset.
+The resting inset is retained while UIKit expands and collapses its refresh
+inset; subtracting that expanded inset would otherwise hide the recess during
+refresh. Safe-area changes adjust that baseline without retaining a false strip
+after rotation. Offset callbacks are coalesced outside layout, and obsolete callbacks,
+observers and refresh tasks are removed on detach. The Composer wallpaper's
+full-window alignment, filter, shadows and unmodified activity glyph remain the
+recess's visual treatment.
+
+Real and demo resync requests can return immediately, before visible refresh
+feedback. The model now holds its refresh state for a minimum of 500 ms, shared
+by concurrent requests. Slower refreshes add no second delay, and account changes
+cancel the old hold. This interval does not imply a host acknowledgement.
+
+Targeted checks on 2026-10-01 passed all seven `SessionsRefreshTests` and four
+`SessionRefreshGeometryTests` through the shared runner with stable inputs
+(`7eb8adf9-d41f-4233-ac94-c71dfdbe0f3f`). The two changed presentation files
+passed Swift syntax parsing, which does not typecheck UIKit/SwiftUI. An initial
+run reused another worktree's stale Swift build graph and is excluded; the
+reported run uses a separate scratch directory for this worktree.
+
+iOS Simulator validation remains outstanding: pull from the top with short,
+empty/filtered and long lists; cancel below the threshold; refresh repeatedly;
+and rotate during refresh. Check the filtered wallpaper against the Composer,
+the plain-background fallback, and the normal activity glyph. The reported
+failure was no refresh in the Sessions sidebar; the project chooser is unchanged.
+No application build, workflow dispatch or distribution was performed.
 
 ## Sessions refresh and haptics
 
