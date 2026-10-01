@@ -25,6 +25,7 @@ enum BackgroundMode: String, CaseIterable, Identifiable, Sendable {
 private struct BackgroundRequest: Hashable {
     let data: Data?
     let effect: String
+    let light: Bool
 }
 
 struct ComposerBackground: View {
@@ -32,6 +33,7 @@ struct ComposerBackground: View {
     let effect: String
     @State private var image: Image?
     @State private var opacity = 0.0
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -50,9 +52,9 @@ struct ComposerBackground: View {
                                         .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
         }
         .allowsHitTesting(false).accessibilityHidden(true)
-        .task(id: BackgroundRequest(data: data, effect: effect)) {
+        .task(id: BackgroundRequest(data: data, effect: effect, light: colorScheme == .light)) {
             image = nil; opacity = 0
-            guard let data, let render = await BackgroundImages.render(data, mode: BackgroundMode(rawValue: effect) ?? .none),
+            guard let data, let render = await BackgroundImages.render(data, mode: BackgroundMode(rawValue: effect) ?? .none, light: colorScheme == .light),
                   !Task.isCancelled else { return }
             #if os(iOS) || os(Android)
             if let decoded = UIImage(data: render.data) {
@@ -83,7 +85,7 @@ enum BackgroundImages {
         #endif
     }
 
-    static func render(_ data: Data, mode: BackgroundMode) async -> Render? {
+    static func render(_ data: Data, mode: BackgroundMode, light: Bool) async -> Render? {
         guard data.count <= 2_000_000 else { return nil }
         #if os(iOS)
         return await Task.detached(priority: .utility) {
@@ -98,7 +100,7 @@ enum BackgroundImages {
                 return true
             }
             guard drawn else { return nil }
-            let result = transformed(pixels, width: width, height: height, mode: mode)
+            let result = transformed(pixels, width: width, height: height, mode: mode, light: light)
             guard let provider = CGDataProvider(data: result.data as CFData),
                   let output = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
                     bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
@@ -113,7 +115,7 @@ enum BackgroundImages {
               width <= 1024, height <= 1024, let pixels = Data(base64Encoded: decoded[2]),
               pixels.count == width * height * 4 else { return nil }
         let result = await Task.detached(priority: .utility) {
-            transformed(pixels, width: width, height: height, mode: mode)
+            transformed(pixels, width: width, height: height, mode: mode, light: light)
         }.value
         guard let png = await androidBackgroundPNG(result.data, width: width, height: height) else { return nil }
         return Render(data: png, opacity: result.opacity)
@@ -122,13 +124,13 @@ enum BackgroundImages {
         #endif
     }
 
-    private static func transformed(_ pixels: Data, width: Int, height: Int, mode: BackgroundMode) -> Render {
+    private static func transformed(_ pixels: Data, width: Int, height: Int, mode: BackgroundMode, light: Bool) -> Render {
         // The exact renderer and contrast guard used by the official iOS app.
-        let output = wallpaperRender(rgba: pixels, width: UInt32(width), height: UInt32(height), effect: mode.native, light: false)
+        let output = wallpaperRender(rgba: pixels, width: UInt32(width), height: UInt32(height), effect: mode.native, light: light)
         let primary = wallpaperSafeOpacity(rgba: output, width: UInt32(width), height: UInt32(height),
-            textRgb: 0xFAFAFA, backgroundRgb: 0x141414, region: 1, minContrast: 4.5, maxOpacity: 1)
+            textRgb: light ? 0x141414 : 0xFAFAFA, backgroundRgb: light ? 0xF6F6F6 : 0x141414, region: 1, minContrast: 4.5, maxOpacity: 1)
         let secondary = wallpaperSafeOpacity(rgba: output, width: UInt32(width), height: UInt32(height),
-            textRgb: 0xB3B3B3, backgroundRgb: 0x141414, region: 1, minContrast: 3, maxOpacity: 1)
+            textRgb: light ? 0x606060 : 0xB3B3B3, backgroundRgb: light ? 0xF6F6F6 : 0x141414, region: 1, minContrast: 3, maxOpacity: 1)
         return Render(data: output, opacity: Double(min(primary, secondary)))
     }
 

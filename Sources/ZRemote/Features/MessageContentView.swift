@@ -17,24 +17,25 @@ struct MessageContentView: View {
                             Label("Copy message", systemImage: "doc.on.doc")
                         }
                     }
+                    .padding(.leading, 36)
             } else if renderedText == message.text, !blocks.isEmpty {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(blocks) { block in
                         if block.isCode {
                             CodeBlockView(code: block.text, language: block.language)
                         } else {
-                            SelectableText(block.text, markdown: !message.streaming)
+                            AgentSelectableText(value: block.text, markdown: !message.streaming, secondary: message.role == "tool")
                         }
                     }
                 }
             } else {
-                SelectableText(message.text, markdown: !message.streaming)
+                AgentSelectableText(value: message.text, markdown: !message.streaming, secondary: message.role == "tool")
             }
         }
         .font(message.role == "tool" ? .subheadline : .body)
         .lineSpacing(5)
         .foregroundStyle(message.role == "tool" ? Palette.secondary : Palette.text)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
         .task(id: message.text) {
             guard message.role != "user" else { return }
             let text = message.text
@@ -102,7 +103,7 @@ private struct CodeBlockView: View {
             }.padding(.horizontal, 14)
             Rectangle().fill(Palette.line).frame(height: 1)
             ScrollView(.horizontal) {
-                SelectableText(code)
+                AgentSelectableText(value: code, code: true)
                     .font(.system(.footnote, design: .monospaced))
                     .lineSpacing(4).padding(14)
                     .fixedSize(horizontal: true, vertical: false)

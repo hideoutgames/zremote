@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import XCTest
 import ZRemoteCore
 
@@ -58,6 +59,9 @@ final class UsageNotificationTests: XCTestCase {
         XCTAssertTrue(preferences.backgroundEnabled)
         XCTAssertNil(preferences.backgroundImageData)
         XCTAssertEqual(preferences.backgroundEffect, "none")
+        XCTAssertEqual(preferences.theme, .system)
+        let futureTheme = try JSONDecoder().decode(LocalPreferences.self, from: Data("{\"theme\":\"future-theme\"}".utf8))
+        XCTAssertEqual(futureTheme.theme, .system)
         XCTAssertFalse(preferences.notifications.enabled)
         let pr = try JSONDecoder().decode(PullRequest.self, from: Data("{\"number\":42,\"title\":\"PR\",\"url\":\"\",\"state\":\"open\"}".utf8))
         XCTAssertFalse(pr.isDraft)
@@ -70,6 +74,9 @@ final class UsageNotificationTests: XCTestCase {
         var preferences = LocalPreferences()
         preferences.backgroundImageData = Data([1, 2, 3]); preferences.backgroundImageName = "Personal image"
         preferences.backgroundEffect = "dither"; preferences.notifications.enabled = true
+        preferences.theme = .light
+        preferences.usageWarnings = [UsageWarning(remainingFraction: 0.05,
+            source: UsageWarningSource(sessionID: "unresolved", hostID: "host", providerID: "codex", accountID: "provider-account", observedAt: Date(timeIntervalSince1970: 40)))]
         preferences.dismissedUsageSessions = ["session"]
         preferences.sessionFinishedAt = ["session": Date(timeIntervalSince1970: 42)]
         try await a.save(preferences)
@@ -77,9 +84,13 @@ final class UsageNotificationTests: XCTestCase {
         XCTAssertEqual(restored.backgroundImageData, preferences.backgroundImageData)
         XCTAssertEqual(restored.sessionFinishedAt["session"], Date(timeIntervalSince1970: 42))
         XCTAssertTrue(restored.notifications.enabled)
+        XCTAssertEqual(restored.theme, .light)
+        XCTAssertEqual(restored.usageWarnings.first?.source?.accountID, "provider-account")
         XCTAssertTrue(restored.dismissedUsageSessions.contains("session"))
         XCTAssertNil(other.backgroundImageData)
         XCTAssertFalse(other.notifications.enabled)
+        XCTAssertEqual(other.theme, .system)
+        XCTAssertTrue(other.usageWarnings.isEmpty)
         XCTAssertTrue(other.dismissedUsageSessions.isEmpty)
     }
     @MainActor func testConnectedNotificationsIgnoreHistoryAndDeliverEachQuestionAndSuccessfulTurnOnce() async throws {
@@ -187,7 +198,7 @@ final class UsageNotificationTests: XCTestCase {
         model.setForeground(false)
     }
 
-    @MainActor func testOtherWorkingHostReceivesUsageAlertWithoutChangingCurrentComposerQuota() async {
+    @MainActor func testOtherWorkingHostRetainsWarningSourceWithoutChangingCurrentComposerQuota() async {
         let client = NotificationTestClient(), notifications = RecordingNotifications()
         client.rows = [
             Session(id: "visible", title: "Visible", hostID: "host", providerID: "codex"),
@@ -200,9 +211,93 @@ final class UsageNotificationTests: XCTestCase {
         client.usedFractionsByHost["other"] = 0.95
         model.setForeground(true); await settle()
         XCTAssertEqual(notifications.events.filter { $0.kind == .usageLimit }.map(\.sessionID), ["elsewhere"])
-        XCTAssertNil(model.usageWarning)
+        XCTAssertEqual(model.usageWarning?.source?.sessionID, "elsewhere")
+        XCTAssertEqual(model.usageWarning?.source?.hostID, "other")
+        XCTAssertEqual(model.agentAccounts.accounts.first?.remainingFraction ?? 0, 0.6, accuracy: 0.000_001)
         XCTAssertEqual(model.selectedSessionID, "visible")
         model.setForeground(false)
+    }
+
+    @MainActor func testUsageWarningSurvivesNavigationRecoveryAndUnavailableDataUntilSourceDismissed() async {
+        let client = NotificationTestClient()
+        client.rows = [
+            Session(id: "source", title: "Source", hostID: "host", working: true, providerID: "codex"),
+            Session(id: "other-session", title: "Other", hostID: "other", providerID: "claude-code")
+        ]
+        client.usedFraction = 0.95; client.usedFractionsByHost["other"] = 0.4
+        let model = AppModel(client: client, makeLiveClient: { NotificationTestClient() })
+        await model.start(); await model.open("source"); await model.refreshAgentAccounts(); await settle()
+        XCTAssertEqual(model.usageWarning?.source?.providerID, "codex")
+        XCTAssertEqual(model.usageWarning?.percentRemaining, 5)
+        await model.open("other-session"); await settle()
+        XCTAssertEqual(model.usageWarning?.source?.sessionID, "source")
+        model.newSession(); model.setHost("host")
+        client.usedFraction = 0.4; await model.refreshAgentAccounts()
+        XCTAssertEqual(model.usageWarning?.percentRemaining, 5, "Quota recovery must not dismiss an unresolved observation")
+        client.snapshotsByHost["host"] = .init(available: false)
+        await model.refreshAgentAccounts()
+        XCTAssertEqual(model.usageWarning?.source?.sessionID, "source")
+        await model.open("other-session"); await settle()
+        model.dismissUsageWarning()
+        XCTAssertNil(model.usageWarning)
+        XCTAssertTrue(model.preferences.dismissedUsageSessions.contains("source"))
+        XCTAssertFalse(model.preferences.dismissedUsageSessions.contains("other-session"))
+        client.snapshotsByHost["other"] = .init(accounts: [AgentAccount(id: "claude-account", harness: "claude-code",
+            usageWindows: [.init(label: "Plan", usedFraction: 0.93)], usageFetchedAt: Int64(Date().timeIntervalSince1970 * 1000))])
+        await model.refreshAgentAccounts()
+        XCTAssertEqual(model.usageWarning?.source?.sessionID, "other-session")
+        XCTAssertEqual(model.usageWarning?.source?.providerID, "claude-code")
+        model.setForeground(false)
+    }
+
+    @MainActor func testRetainedWarningRejectsStaleAmbiguousAndFailedSamplesAndPreservesOriginalAccount() async {
+        let client = NotificationTestClient()
+        client.rows = [Session(id: "source", title: "Source", hostID: "host", providerID: "codex")]
+        var account = AgentAccount(id: "account-a", harness: "codex", usageWindows: [.init(label: "Plan", usedFraction: 0.95)], usageFetchedAt: 1)
+        client.snapshotsByHost["host"] = .init(accounts: [account])
+        let model = AppModel(client: client, makeLiveClient: { NotificationTestClient() })
+        await model.start(); await model.open("source"); await model.refreshAgentAccounts(); await settle()
+        XCTAssertNil(model.usageWarning)
+        account.usageFetchedAt = Int64(Date().timeIntervalSince1970 * 1000)
+        client.snapshotsByHost["host"] = .init(accounts: [account, account]); await model.refreshAgentAccounts()
+        XCTAssertNil(model.usageWarning)
+        account.usageError = "Unavailable"
+        client.snapshotsByHost["host"] = .init(accounts: [account]); await model.refreshAgentAccounts()
+        XCTAssertNil(model.usageWarning)
+        account.usageError = nil
+        client.snapshotsByHost["host"] = .init(accounts: [account]); await model.refreshAgentAccounts()
+        XCTAssertEqual(model.usageWarning?.source?.accountID, "account-a")
+        account.id = "account-b"; account.usageWindows[0].usedFraction = 0.99
+        client.snapshotsByHost["host"] = .init(accounts: [account]); await model.refreshAgentAccounts()
+        XCTAssertEqual(model.usageWarning?.source?.accountID, "account-a")
+        XCTAssertEqual(model.usageWarning?.percentRemaining, 5)
+        model.setForeground(false)
+    }
+
+    @MainActor func testPreferenceRestorationPreservesThemeEditsAndWarningDismissal() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let client = NotificationTestClient(); client.accountKey = "account-a"
+        let store = LocalStateStore(accountKey: "account-a", root: root)
+        var saved = LocalPreferences(); saved.theme = .dark; saved.drafts["new"] = "Restored marker"
+        saved.usageWarnings = [UsageWarning(remainingFraction: 0.04,
+            source: UsageWarningSource(sessionID: "source", hostID: "host", providerID: "codex", accountID: "provider-account", observedAt: Date()))]
+        try await store.save(saved)
+        let model = AppModel(client: client, makeLiveClient: { NotificationTestClient() },
+            makeStore: { LocalStateStore(accountKey: $0, root: root) })
+        model.preferences.usageWarnings = saved.usageWarnings
+        model.dismissUsageWarning()
+        model.setTheme(.light)
+        await model.start()
+        let restored = UsagePreferenceRestorationExpectation(model: model)
+        let result = await restored.wait()
+        XCTAssertEqual(result, .completed)
+        XCTAssertEqual(model.preferences.theme, .light)
+        XCTAssertNil(model.usageWarning)
+        XCTAssertTrue(model.preferences.dismissedUsageSessions.contains("source"))
+        await model.disconnect()
+        XCTAssertEqual(model.preferences.theme, .system)
+        XCTAssertTrue(model.preferences.usageWarnings.isEmpty)
     }
 
     @MainActor private func settle() async { for _ in 0..<40 { await Task.yield() } }
@@ -223,19 +318,24 @@ final class UsageNotificationTests: XCTestCase {
 @MainActor private final class NotificationTestClient: ClientService {
     var onUpdate: (@MainActor (ClientUpdate) -> Void)?
     let isDemo = false
-    let accountKey: String? = nil
+    var accountKey: String? = nil
     var rows: [Session] = []
     var usedFraction = 0.8
     var accountRequestCount = 0
     var usedFractionsByHost: [String: Double] = [:]
+    var snapshotsByHost: [String: AgentAccountsSnapshot] = [:]
     private enum Failure: Error { case unavailable }
     func emit() { onUpdate?(.workspace(WorkspaceState(connection: .online, hosts: [Host(id: "host", name: "Mac", online: true)], sessions: rows))) }
     func restore() async throws { emit() }
     func agentAccounts(hostID: String) async throws -> AgentAccountsSnapshot {
         accountRequestCount += 1
+        if let snapshot = snapshotsByHost[hostID] { return snapshot }
         return AgentAccountsSnapshot(accounts: [AgentAccount(id: "account", harness: "codex", usageWindows: [.init(label: "Plan", usedFraction: usedFractionsByHost[hostID] ?? usedFraction)], usageFetchedAt: Int64(Date().timeIntervalSince1970 * 1000))])
     }
-    func openSession(_ id: String) async throws { onUpdate?(.session(SessionState(id: id, selection: ModelSelection(providerID: "codex"), working: rows.first { $0.id == id }?.working ?? false))) }
+    func openSession(_ id: String) async throws {
+        let row = rows.first { $0.id == id }
+        onUpdate?(.session(SessionState(id: id, selection: ModelSelection(providerID: row?.providerID.isEmpty == false ? row!.providerID : "codex", modelID: row?.modelID), working: row?.working ?? false)))
+    }
     func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String { throw Failure.unavailable }
     func send(sessionID: String, text: String) async throws { throw Failure.unavailable }
     func retryDelivery(sessionID: String) async throws {}
@@ -254,4 +354,24 @@ final class UsageNotificationTests: XCTestCase {
     func addProject(hostID: String, path: String, isRepository: Bool) async throws -> String { throw Failure.unavailable }
     func createRepository(hostID: String, name: String) async throws -> String { throw Failure.unavailable }
     func turnDiff(sessionID: String, turnID: String) async throws -> TurnDiff { throw Failure.unavailable }
+}
+
+
+@MainActor private final class UsagePreferenceRestorationExpectation {
+    let expectation = XCTestExpectation(description: "Account preferences restored")
+    private let model: AppModel
+    private var completed = false
+    init(model: AppModel) { self.model = model; observe() }
+    private func observe() {
+        guard !completed else { return }
+        let draft = withObservationTracking { model.draft } onChange: { [weak self] in
+            Task { @MainActor in self?.observe() }
+        }
+        if draft == "Restored marker" { completed = true; expectation.fulfill() }
+    }
+    func wait() async -> XCTWaiter.Result {
+        let result = await XCTWaiter.fulfillment(of: [expectation], timeout: 3)
+        withExtendedLifetime(self) {}
+        return result
+    }
 }

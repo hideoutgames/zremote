@@ -1,12 +1,11 @@
 import SwiftUI
 import ZRemoteCore
 
-/// A shared compact presentation for host-reported PR and sub-agent activity.
+/// A compact presentation of the sub-agent's task and current activity.
 struct SessionEventCard: View {
     let symbol: String
     let title: String
     let subtitle: String
-    let badge: String
     var active = false
     var disclosure = false
 
@@ -18,7 +17,6 @@ struct SessionEventCard: View {
                 .frame(width: 34, height: 34)
                 .background(Palette.raised, in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 6) {
-                Text(badge).font(.caption).foregroundStyle(Palette.secondary)
                 Text(title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text)
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
@@ -114,8 +112,8 @@ struct PullRequestBadge: View {
     var body: some View {
         let state = PullRequestPresentationState(request)
         HStack(spacing: 5) {
-            Image(systemName: "arrow.triangle.pull").font(.system(size: 11, weight: .medium))
-            Text(compact ? "\(state == .unknown ? "PR" : state.label) #\(request.number)" : state.label)
+            PullRequestIcon(request: request, size: compact ? 13 : 14)
+            Text(compact ? "\(request.number)" : state.label)
                 .font(compact ? .system(.caption2, design: .monospaced).weight(.medium) : .caption.weight(.medium))
         }
         .foregroundStyle(state.color)
@@ -159,16 +157,5 @@ struct PullRequestSummary: View {
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Palette.line))
         .contentShape(RoundedRectangle(cornerRadius: 18))
-    }
-}
-
-private extension PullRequestPresentationState {
-    var color: Color {
-        switch self {
-        case .draft, .unknown: return Palette.secondary
-        case .open: return Palette.addition
-        case .merged: return Color(red: 0.7, green: 0.53, blue: 1)
-        case .closed: return Palette.deletion
-        }
     }
 }

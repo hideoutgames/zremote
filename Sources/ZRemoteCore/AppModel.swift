@@ -81,6 +81,7 @@ public enum SecondaryRoute: Identifiable {
     @ObservationIgnored private var editedDrafts: Set<String> = []
     @ObservationIgnored private var editedFavorites = false
     @ObservationIgnored private var editedBackground = false
+    @ObservationIgnored private var editedTheme = false
     @ObservationIgnored private var changeSizes: [String: Int] = [:]
 
     public init(client: any ClientService, makeLiveClient: @escaping @MainActor () -> any ClientService,
@@ -109,9 +110,10 @@ public enum SecondaryRoute: Identifiable {
     public var working: Bool { state?.working ?? false }
     public var notificationsSupported: Bool { notifications.supported && !isDemo }
     public var usageWarning: UsageWarning? {
-        guard let id = selectedSessionID, !preferences.dismissedUsageSessions.contains(id),
-              agentAccounts.available, accountHostID == (session?.hostID ?? selectedHostID) else { return nil }
-        return UsageLimitRules.warning(remaining: UsageLimitRules.remaining(accounts: agentAccounts.accounts, selection: selection))
+        preferences.usageWarnings.first {
+            guard let source = $0.source else { return false }
+            return !preferences.dismissedUsageSessions.contains(source.sessionID)
+        }
     }
     public var changes: [CapturedTurnChanges] { preferences.changes.filter { $0.sessionID == selectedSessionID } }
     public var attachments: [LocalAttachment] { attachmentDrafts[selectedSessionID ?? "new"] ?? [] }
@@ -170,7 +172,7 @@ public enum SecondaryRoute: Identifiable {
         modelRequest += 1; selectionGeneration += 1
         store = nil; restoredAccount = nil; capturing = []
         loadingPreferences = false; saveAfterRestore = false
-        editedDrafts = []; editedFavorites = false; editedBackground = false; editedNotifications = false
+        editedDrafts = []; editedFavorites = false; editedBackground = false; editedTheme = false; editedNotifications = false
         changeSizes = [:]
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
@@ -408,6 +410,7 @@ public enum SecondaryRoute: Identifiable {
         else { preferences.favorites.insert(id) }
         scheduleSave()
     }
+    public func setTheme(_ theme: AppTheme) { editedTheme = true; preferences.theme = theme; scheduleSave() }
     public func setBackgroundImage(data: Data?, name: String?) {
         guard (data?.count ?? 0) <= 2_000_000 else { error = "Choose a background image smaller than 2 MB."; return }
         editedBackground = true
@@ -421,8 +424,10 @@ public enum SecondaryRoute: Identifiable {
         editedBackground = true; preferences.backgroundEffect = effect; scheduleSave()
     }
     public func dismissUsageWarning() {
-        guard let id = selectedSessionID else { return }
-        preferences.dismissedUsageSessions.insert(id); scheduleSave()
+        guard let id = usageWarning?.source?.sessionID else { return }
+        preferences.dismissedUsageSessions.insert(id)
+        preferences.usageWarnings.removeAll { $0.source?.sessionID == id }
+        scheduleSave()
     }
     public func setNotifications(_ value: NotificationPreferences) {
         editedNotifications = true; preferences.notifications = value; scheduleSave()
@@ -521,7 +526,30 @@ public enum SecondaryRoute: Identifiable {
         }
     }
 
+    private func observeUsageWarnings(_ snapshot: AgentAccountsSnapshot, hostID: String) {
+        guard snapshot.available else { return }
+        var observations: [UsageWarning] = []
+        for row in workspace.sessions where row.hostID == hostID && !preferences.dismissedUsageSessions.contains(row.id) {
+            let existing = preferences.usageWarnings.first { $0.source?.sessionID == row.id }
+            guard row.working || row.id == selectedSessionID || existing != nil else { continue }
+            let currentSelection = row.providerID.isEmpty ? (sessions[row.id]?.selection ?? ModelSelection()) : ModelSelection(providerID: row.providerID, modelID: row.modelID)
+            // Refresh the warning's original provider if the session model changed.
+            let selection = existing?.source.map { ModelSelection(providerID: $0.providerID, modelID: $0.modelID) } ?? currentSelection
+            guard let account = UsageLimitRules.account(accounts: snapshot.accounts, selection: selection),
+                  var warning = UsageLimitRules.warning(remaining: account.remainingFraction),
+                  let fetchedAt = account.usageFetchedAt else { continue }
+            warning.source = UsageWarningSource(sessionID: row.id, hostID: hostID, providerID: selection.providerID,
+                accountID: account.id, upstreamProviderID: account.provider, modelID: selection.modelID,
+                observedAt: Date(timeIntervalSince1970: Double(fetchedAt) / 1000))
+            observations.append(warning)
+        }
+        let retained = UsageLimitRules.mergeWarnings(preferences.usageWarnings, observations: observations,
+            dismissed: preferences.dismissedUsageSessions)
+        if retained != preferences.usageWarnings { preferences.usageWarnings = retained; scheduleSave() }
+    }
+
     private func observeUsageThreshold(previous: AgentAccountsSnapshot, next: AgentAccountsSnapshot, hostID: String) {
+        observeUsageWarnings(next, hostID: hostID)
         guard previous.available, next.available else { return }
         for row in workspace.sessions where row.hostID == hostID && row.working {
             let selection = row.providerID.isEmpty ? (sessions[row.id]?.selection ?? ModelSelection()) : ModelSelection(providerID: row.providerID, modelID: row.modelID)
@@ -756,6 +784,7 @@ public enum SecondaryRoute: Identifiable {
                 var merged = restored
                 for id in self.editedDrafts { merged.drafts[id] = self.preferences.drafts[id] }
                 if self.editedFavorites { merged.favorites = self.preferences.favorites }
+                if self.editedTheme { merged.theme = self.preferences.theme }
                 if self.editedBackground {
                     merged.backgroundEnabled = self.preferences.backgroundEnabled
                     merged.backgroundImageData = self.preferences.backgroundImageData
@@ -764,6 +793,8 @@ public enum SecondaryRoute: Identifiable {
                 }
                 if self.editedNotifications { merged.notifications = self.preferences.notifications }
                 merged.dismissedUsageSessions.formUnion(self.preferences.dismissedUsageSessions)
+                merged.usageWarnings = UsageLimitRules.mergeWarnings(merged.usageWarnings, observations: self.preferences.usageWarnings,
+                    dismissed: merged.dismissedUsageSessions)
                 merged.usageNotifiedSessions.formUnion(self.preferences.usageNotifiedSessions)
                 merged.notificationEvents.formUnion(self.preferences.notificationEvents)
                 merged.sessionFinishedAt.merge(self.preferences.sessionFinishedAt) { old, current in max(old, current) }
@@ -776,7 +807,7 @@ public enum SecondaryRoute: Identifiable {
                         if merged.pullRequests[index].afterMessageID == nil { merged.pullRequests[index].afterMessageID = observed.afterMessageID }
                     } else { merged.pullRequests.append(observed) }
                 }
-                if !self.preferences.pullRequests.isEmpty || !self.preferences.sessionFinishedAt.isEmpty { self.saveAfterRestore = true }
+                if !self.preferences.pullRequests.isEmpty || !self.preferences.sessionFinishedAt.isEmpty || !self.preferences.usageWarnings.isEmpty { self.saveAfterRestore = true }
                 self.preferences = merged
                 for index in self.workspace.sessions.indices where self.workspace.sessions[index].lastFinishedAt == nil {
                     self.workspace.sessions[index].lastFinishedAt = merged.sessionFinishedAt[self.workspace.sessions[index].id]
