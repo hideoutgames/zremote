@@ -31,6 +31,9 @@ The actual build is admitted through `scripts/run-local.py`, uses the shared
 Gradle cache, one worker, a 1536 MB JVM heap, 384 MB metaspace, and the in-process
 Kotlin compiler. The limit overrides the larger default heap added by upstream
 export. A one-hour timeout stops only this build's process tree.
+Admission logs report measured available memory, the configured minimum,
+the current build owner, and how many requests are ahead. A queue timeout is a
+resource admission failure; it does not mean the application compiler ran.
 
 `windows-assembly.json` records exact source and artifact identities, helper and
 tool versions, source hashes before/after, APK hashes, and exit status. Successful

@@ -163,11 +163,13 @@ def main() -> int:
     ticket = {"id": str(uuid.uuid4()), "pid": os.getpid(), "workspace": str(ROOT), "phase": args.phase, "created": time.time()}
     started = time.monotonic()
     last_notice = -60.0
+    required_mb = int(config["minimumAvailableMB"])
     with locked_state() as state:
         state["queue"].append(ticket)
     try:
         while True:
             admitted = False
+            measured_mb = available_mb()
             with locked_state() as state:
                 state["queue"] = [item for item in state["queue"] if alive(item["pid"])]
                 if state["active"] and not alive(state["active"]["pid"]):
@@ -175,17 +177,24 @@ def main() -> int:
                     if child is None or not alive(child):
                         state["active"] = None
                 if state["active"] is None and state["queue"] and state["queue"][0]["id"] == ticket["id"]:
-                    if available_mb() >= int(config["minimumAvailableMB"]):
+                    if measured_mb >= required_mb:
                         state["queue"].pop(0)
                         state["active"] = ticket
                         admitted = True
+                active = state["active"]
+                owner = (f"{active['phase']}:pid={active['pid']}:child={active.get('childPid', 'pending')}"
+                         if active else "none")
+                ahead = next((index for index, item in enumerate(state["queue"]) if item["id"] == ticket["id"]), 0)
             if admitted:
                 break
             elapsed = time.monotonic() - started
             if elapsed >= int(config["maximumQueueSeconds"]):
-                raise RuntimeError("Timed out waiting for shared build admission; no other process was stopped")
+                raise RuntimeError(f"Timed out waiting for shared build admission: availableMB={measured_mb} "
+                                   f"requiredMB={required_mb} active={owner} queuedAhead={ahead}; "
+                                   "no other process was stopped")
             if elapsed - last_notice >= 30:
-                print(f"Waiting for shared {args.phase} admission ({int(elapsed)}s)", flush=True)
+                print(f"Waiting for shared {args.phase} admission ({int(elapsed)}s): availableMB={measured_mb} "
+                      f"requiredMB={required_mb} active={owner} queuedAhead={ahead}", flush=True)
                 last_notice = elapsed
             time.sleep(2)
         environment = os.environ.copy()
@@ -193,7 +202,8 @@ def main() -> int:
                             "CARGO_PROFILE_DEV_DEBUG": "0", "CARGO_PROFILE_TEST_DEBUG": "0",
                             "GRADLE_USER_HOME": str(BASE / "cache" / "gradle"), "ZREMOTE_RESOURCE_PROFILE": "shared"})
         before = provenance(args.phase, command, environment)
-        print(f"Admitted {args.phase}: workers=1 source={before['source']} environment={before['environment']} executable={before['toolchains'][command[0]]['path']}", flush=True)
+        print(f"Admitted {args.phase}: workers=1 availableMB={measured_mb} requiredMB={required_mb} "
+              f"source={before['source']} environment={before['environment']} executable={before['toolchains'][command[0]]['path']}", flush=True)
         child = subprocess.Popen(command, env=environment)
         with locked_state() as state:
             state["active"]["childPid"] = child.pid
@@ -208,7 +218,9 @@ def main() -> int:
         results = BASE / "results"
         results.mkdir(parents=True, exist_ok=True)
         result_path = results / f"{ticket['id']}.json"
-        result_path.write_text(json.dumps({"phase": args.phase, "workspace": str(ROOT), "exitCode": code, "inputsStable": stable, "before": before, "after": after}, indent=2), encoding="utf-8")
+        result_path.write_text(json.dumps({"phase": args.phase, "workspace": str(ROOT), "exitCode": code, "inputsStable": stable,
+                                           "admissionAvailableMB": measured_mb, "admissionRequiredMB": required_mb,
+                                           "before": before, "after": after}, indent=2), encoding="utf-8")
         print(f"Finished {args.phase}: exit={code} inputsStable={stable} result={result_path}", flush=True)
         if not stable:
             print("Source, environment, or toolchain changed during this check; its result is stale.", file=sys.stderr)

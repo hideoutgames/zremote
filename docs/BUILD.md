@@ -72,10 +72,16 @@ Windows Swift/Rust compilation. Keep local Gradle workers and memory bounded;
 Skip's exported default heap settings must not override the shared profile.
 
 The manual `Android Compile Check` workflow runs this exact script on a standard
-`macos-26` runner, using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
+`macos-26-intel` runner (14 GB), using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
 build tools 36.0.0, Swift Android SDK 6.3.3, NDK r27d, and cargo-ndk 4.1.2. The
 matching Swift 6.3.3 host/Android pair avoids Swiftly 1.1.3's incorrect 6.4.0
-host download URL normalization. It
+host download URL normalization. Full iOS builds also use the standard 14 GB
+Intel runner: the 7 GB ARM runner timed out waiting for admission after Android
+tool setup. Admission still requires 3 GB available memory, uses one
+worker, and retains the shared cache and provenance checks. Rust cache paths are
+computed relative to `native/core`, as required by the cache action, while builds
+use the shared `~/.cache/ZRemote/cache/cargo` directory. Android's first cold build
+has a bounded 180-minute job timeout. It
 produces a debug build in the temporary runner workspace and retains the compiler
 log by default. Its `save_debug_apk` input defaults to false; explicitly enabling
 it retains the successful debug APK for one day for local testing. It does not

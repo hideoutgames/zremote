@@ -27,7 +27,7 @@ overall limit. Artifacts are retained for one day.
 
 Inspect `capture-results.json` before presenting any capture as verified.
 `source-run.json` and `apk.json` identify exactly what ran. These are screenshots
-from a cloud emulator, separate from local Windows Kotlin/APK assembly of the
+from a cloud emulator, separate from [local Windows Kotlin/APK assembly](ANDROID_LOCAL_BUILD.md) of the
 same exported sources and native libraries. They do not establish iOS behavior,
 real host integration, animation smoothness, or performance on physical devices.
 

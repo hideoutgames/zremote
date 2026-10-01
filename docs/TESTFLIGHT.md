@@ -1,7 +1,7 @@
 # TestFlight and manual compilation
 
 The retained `.github/workflows/ios-testflight.yml` is manual dispatch only and
-uses standard `macos-26` runners. Its `operation` defaults to `testflight` to
+uses standard 14 GB `macos-26-intel` runners. Its `operation` defaults to `testflight` to
 preserve the existing distribution workflow. Merging a branch does not upload.
 
 For unsigned compile validation, explicitly select `operation=compile` and
