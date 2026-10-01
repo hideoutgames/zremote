@@ -9,6 +9,16 @@ the mobile client writes durable commands and renders synchronized state.
 Both iOS and Android compile that adapter as native Swift. Platform builds link
 the same Rust C ABI; Android does not need a second protocol implementation.
 
+`ZRemoteNative` explicitly links CoreFoundation on iOS/macOS for the resolved
+`iana-time-zone`/`core-foundation-sys` dependency. Its macOS slice also declares
+SystemConfiguration for the host proxy resolver and Network for the
+`zeron-sync/src/net_path.rs` framework declaration. SwiftPM must receive these
+framework requirements when consuming the Rust static archive. CoreText is only
+a macOS development-test dependency in this vendored graph; no additional C++
+runtime requirement was identified from its production source/build scripts.
+Actual Apple archive linking is verified by the platform build, not the Windows
+host typecheck.
+
 Credentials use SkipKeychain (Apple Keychain / Android encrypted preferences).
 Each user/organization receives a separate replica directory. A sign-out shuts
 down the core, invalidates outstanding adapter results, removes credentials and

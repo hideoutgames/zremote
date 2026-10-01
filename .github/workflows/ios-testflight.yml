@@ -49,7 +49,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: testflight
+  group: ${{ inputs.operation == 'compile' && format('compile-{0}-{1}', inputs.platform, github.ref) || 'testflight' }}
   cancel-in-progress: false
 
 jobs:

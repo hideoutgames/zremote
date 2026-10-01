@@ -73,7 +73,9 @@ Skip's exported default heap settings must not override the shared profile.
 
 The manual `Android Compile Check` workflow runs this exact script on a standard
 `macos-26` runner, using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
-build tools 36.0.0, Swift Android SDK 6.4.0, NDK r30, and cargo-ndk 4.1.2. It
+build tools 36.0.0, Swift Android SDK 6.3.3, NDK r27d, and cargo-ndk 4.1.2. The
+matching Swift 6.3.3 host/Android pair avoids Swiftly 1.1.3's incorrect 6.4.0
+host download URL normalization. It
 produces a debug build in the temporary runner workspace and retains the compiler
 log by default. Its `save_debug_apk` input defaults to false; explicitly enabling
 it retains the successful debug APK for one day for local testing. It does not

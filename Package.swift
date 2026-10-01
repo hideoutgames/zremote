@@ -42,7 +42,12 @@ if !coreOnly {
         .product(name: "SkipKeychain", package: "skip-keychain"),
     ]
     package.targets += [
-        .target(name: "ZRemoteNative", dependencies: nativeDependencies),
+        .target(name: "ZRemoteNative", dependencies: nativeDependencies, linkerSettings: [
+            // Carry the Rust static archive's Apple framework requirements into SwiftPM.
+            .linkedFramework("CoreFoundation", .when(platforms: [.iOS, .macOS])),
+            .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),
+            .linkedFramework("Network", .when(platforms: [.macOS])),
+        ]),
         .target(
             name: "ZRemote",
             dependencies: ["ZRemoteCore", "ZRemoteNative", .product(name: "SkipFuseUI", package: "skip-fuse-ui"), .product(name: "SkipAuthenticationServices", package: "skip-authentication-services")],
