@@ -1,9 +1,10 @@
 # Implementation and verification status
 
-This replacement is being validated on `zeron/premium-zeron-client-plan` before
-merging into `hideoutgames/zremote:main`. It incorporates the current main branch's
-TestFlight safeguards. App compilation and device results are recorded separately
-from the completed local domain checks below.
+Implementation and verification are tracked in
+[PR #175](https://github.com/hideoutgames/zremote/pull/175) against
+`hideoutgames/zremote:main`. The replacement incorporates main's TestFlight
+safeguards. App compilation and device results are recorded separately from
+the completed domain checks below.
 
 ## Implemented source
 
@@ -55,7 +56,11 @@ extended native core, rather than hand-written to match the adapter.
 JDK 21, Android SDK 36, platform/build tools, and Gradle 9.2.1 are installed locally.
 The complete Skip Fuse build requires macOS/Xcode for its SwiftUI prebuild; the
 Windows SDK installation alone cannot produce a validated app. No Android device
-is connected and no emulator is configured.
+is connected. The installed Windows emulator failed to boot API 36 and API 28
+images without acceleration; no Windows feature changes or reboot were made.
+The [standalone assembly](ANDROID_LOCAL_BUILD.md) and
+[cloud screenshot](ANDROID_VISUAL_CHECK.md) workflows keep those validation
+results separate.
 
 Before merging, compile both native app targets on a supported Mac and exercise
 demo mode on iPhone/iPad and Android phone/tablet sizes. Validate live sign-in,
