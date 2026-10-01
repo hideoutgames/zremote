@@ -62,8 +62,10 @@ public enum ChatText {
         let source = text as NSString
         guard token.range.location >= 0, NSMaxRange(token.range) <= source.length,
               let current = tokens(in: text).first(where: { $0.range == token.range }), current.kind == token.kind else { return nil }
-        var replacement = value.hasPrefix(token.kind.prefix) ? value : token.kind.prefix + value
-        if token.kind == .file, replacement.contains(where: \.isWhitespace), !replacement.hasPrefix("@\"") {
+        let reference = ComposerReferenceText(value).references.first
+        let canonical = reference?.sourceRange == NSRange(location: 0, length: (value as NSString).length) && reference?.kind == token.kind
+        var replacement = canonical || value.hasPrefix(token.kind.prefix) ? value : token.kind.prefix + value
+        if !canonical, token.kind == .file, replacement.contains(where: \.isWhitespace), !replacement.hasPrefix("@\"") {
             replacement = "@\"" + String(replacement.dropFirst()).replacingOccurrences(of: "\"", with: "") + "\""
         }
         let end = NSMaxRange(token.range)

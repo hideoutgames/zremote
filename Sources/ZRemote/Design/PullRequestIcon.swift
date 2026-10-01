@@ -18,12 +18,13 @@ struct PullRequestIcon: View {
     }
 
     #if os(iOS)
-    @MainActor static func menuImage(for request: PullRequest, size: CGFloat = 18, colorScheme: ColorScheme) -> UIImage {
+    @MainActor static func menuImage(for request: PullRequest?, size: CGFloat = 18, colorScheme: ColorScheme) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         return renderer.image { context in
             let cg = context.cgContext
             let traits = UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
-            cg.setStrokeColor(UIColor(PullRequestPresentationState(request).color).resolvedColor(with: traits).cgColor)
+            let color = request.map { PullRequestPresentationState($0).color } ?? Palette.secondary
+            cg.setStrokeColor(UIColor(color).resolvedColor(with: traits).cgColor)
             cg.setLineWidth(max(1, size / 16))
             cg.setLineCap(.round); cg.setLineJoin(.round)
             cg.addPath(PullRequestGlyph().path(in: CGRect(x: 0, y: 0, width: size, height: size)).cgPath)
