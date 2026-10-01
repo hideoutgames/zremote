@@ -40,7 +40,9 @@ This does not establish full SwiftUI/Skip compilation, native appearance,
 VoiceOver/TalkBack behavior, or live Codex host execution. No application build,
 workflow dispatch or distribution was performed. The existing Sessions refresh
 implementation from merged PR #180 also passed its four focused
-`SessionsRefreshTests` during review; no refresh source change was needed.
+`SessionsRefreshTests` during review. Those model tests do not verify the
+gesture or recessed layer; a reported simulator failure is being addressed
+separately in the refresh branch.
 
 ## Session controls, checkout selection and Details
 
