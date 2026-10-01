@@ -22,69 +22,7 @@ public struct ZRemoteRootView: View {
 
     public var body: some View {
         GeometryReader { geometry in
-            let tablet = isTablet(width: geometry.size.width)
-            let frame = geometry.frame(in: .global)
-            let insets = geometry.safeAreaInsets
-            let leftInset = layoutDirection == .rightToLeft ? insets.trailing : insets.leading
-            let sceneFrame = CGRect(x: frame.minX - leftInset, y: frame.minY - insets.top,
-                                    width: frame.width + insets.leading + insets.trailing,
-                                    height: frame.height + insets.top + insets.bottom)
-            ZStack {
-                Palette.background.ignoresSafeArea()
-                if model.restoring {
-                    ProgressView().tint(Palette.text)
-                } else if model.signedIn {
-                    workspace(tablet: tablet, size: geometry.size, safeAreaInsets: insets)
-                        .environment(\.composerSceneFrame, sceneFrame)
-                } else {
-                    SignInView(model: model)
-                }
-                if !tablet, model.sessionsVisible, model.route == nil {
-                    ModalBackHandler { model.sessionsVisible = false }
-                }
-                if tablet, let route = model.route {
-                    ModalBackHandler { model.route = nil }
-                    Color.black.opacity(0.55).ignoresSafeArea()
-                        .onTapGesture { model.route = nil }
-                    secondary(route)
-                        .frame(width: min(760, max(280, geometry.size.width - 48)), height: max(300, geometry.size.height * 0.84))
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.line))
-                        .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
-                        .accessibilityAddTraits(.isModal)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
-            }
-            .sheet(item: Binding(get: {
-                guard !tablet, let route = model.route else { return nil }
-                if case .settings = route { return nil }
-                return route
-            }, set: { value in
-                // Dismissing a previous sheet must not clear a full-page Settings route.
-                if case .settings? = model.route { return }
-                model.route = value
-            })) { route in
-                secondary(route)
-                    #if os(Android)
-                    // Skip's native sheet currently supports one detent.
-                    .presentationDetents([.large])
-                    #else
-                    .presentationDetents([.medium, .large])
-                    .presentationBackground(Palette.background)
-                    #endif
-                    .presentationDragIndicator(.visible)
-            }
-            .fullScreenCover(isPresented: Binding(get: {
-                guard !tablet else { return false }
-                if case .settings? = model.route { return true }
-                return false
-            }, set: { presented in
-                if !presented, case .settings? = model.route { model.route = nil }
-            })) {
-                secondary(.settings)
-            }
-            .onAppear { model.usesSessionPanel = tablet }
-            .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
+            layout(in: geometry)
         }
         .preferredColorScheme(preferredColorScheme)
         #if os(Android)
@@ -96,6 +34,81 @@ public struct ZRemoteRootView: View {
         .alert("Something needs attention", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK", role: .cancel) { model.error = nil }
         } message: { Text(model.error ?? "") }
+    }
+
+    private func layout(in geometry: GeometryProxy) -> some View {
+        let tablet = isTablet(width: geometry.size.width)
+        let frame = geometry.frame(in: .global)
+        let insets = geometry.safeAreaInsets
+        let leftInset = layoutDirection == .rightToLeft ? insets.trailing : insets.leading
+        let sceneFrame = CGRect(x: frame.minX - leftInset, y: frame.minY - insets.top,
+                                width: frame.width + insets.leading + insets.trailing,
+                                height: frame.height + insets.top + insets.bottom)
+        return ZStack {
+            Palette.background.ignoresSafeArea()
+            if model.restoring {
+                ProgressView().tint(Palette.text)
+            } else if model.signedIn {
+                workspace(tablet: tablet, size: geometry.size, safeAreaInsets: insets)
+                    .environment(\.composerSceneFrame, sceneFrame)
+            } else {
+                SignInView(model: model)
+            }
+            if !tablet, model.sessionsVisible, model.route == nil {
+                ModalBackHandler { model.sessionsVisible = false }
+            }
+            if tablet, let route = model.route {
+                ModalBackHandler { model.route = nil }
+                Color.black.opacity(0.55).ignoresSafeArea()
+                    .onTapGesture { model.route = nil }
+                secondary(route)
+                    .frame(width: min(760, max(280, geometry.size.width - 48)), height: max(300, geometry.size.height * 0.84))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.line))
+                    .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
+                    .accessibilityAddTraits(.isModal)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .sheet(item: phoneSheetRoute(tablet: tablet)) { route in
+            secondary(route)
+                #if os(Android)
+                // Skip's native sheet currently supports one detent.
+                .presentationDetents([.large])
+                #else
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Palette.background)
+                #endif
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: phoneSettingsPresented(tablet: tablet)) {
+            secondary(.settings)
+        }
+        .onAppear { model.usesSessionPanel = tablet }
+        .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
+    }
+
+    // Give the presentation overloads concrete types before composing the view.
+    private func phoneSheetRoute(tablet: Bool) -> Binding<SecondaryRoute?> {
+        Binding<SecondaryRoute?>(get: {
+            guard !tablet, let route = model.route else { return nil }
+            if case .settings = route { return nil }
+            return route
+        }, set: { value in
+            // Dismissing a previous sheet must not clear a full-page Settings route.
+            if case .settings? = model.route { return }
+            model.route = value
+        })
+    }
+
+    private func phoneSettingsPresented(tablet: Bool) -> Binding<Bool> {
+        Binding<Bool>(get: {
+            guard !tablet else { return false }
+            if case .settings? = model.route { return true }
+            return false
+        }, set: { presented in
+            if !presented, case .settings? = model.route { model.route = nil }
+        })
     }
 
     private func isTablet(width: CGFloat) -> Bool {

@@ -182,6 +182,9 @@ Native notification delegate completion handlers retain the SDK's `@Sendable`
 annotation so the tap handler can finish after routing on the main actor under
 Swift 6 concurrency checking. Keep that annotation when changing these callbacks;
 see [Apple's delegate signature](https://developer.apple.com/documentation/usernotifications/unusernotificationcenterdelegate/usernotificationcenter(_:didreceive:withcompletionhandler:)).
+Shared controls also retain `@MainActor` on actions passed to native UIKit controls.
+The root layout and its concretely typed presentation bindings are separate
+expressions to keep SwiftUI typechecking bounded as routes are added.
 
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated

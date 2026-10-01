@@ -23,7 +23,7 @@ enum Palette {
 struct CircleControl: View {
     let symbol: String
     let label: String
-    var action: () -> Void
+    var action: @MainActor () -> Void
 
     @ViewBuilder var body: some View {
         #if os(iOS)
