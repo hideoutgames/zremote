@@ -30,6 +30,9 @@ The Show menu can restrict the list to one project without category headers;
 in Show all, project headers expand and collapse their sessions. Sidebar PR
 badges contain the state-colored icon and number. Native iOS PR menus retain
 those icon colors, and the account menu uses the same control size as its peers.
+The display-options button keeps its slider icon when filters are active, with
+a purple fill. Rare purple accents share the [official Zeron iOS palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
+(`#5B43E8` light / `#8B7CF6` dark), including existing-project folders and merged PRs.
 
 Pull down at the top of Sessions to refresh, including short or empty lists.
 The gesture reveals a recessed strip with the agent's working throbber and

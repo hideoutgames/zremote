@@ -1,5 +1,16 @@
 # Implementation and verification status
 
+## Consistent filter icon and purple accents
+
+The Sessions display-options button retains its slider symbol and uses a purple
+filled circle when filters are active. One named, theme-aware accent now serves
+that control, existing-project folders and merged PRs (including native menus):
+Zeron iOS's `#5B43E8` light / `#8B7CF6` dark. Other controls retain neutral tints.
+
+The three changed Swift files passed syntax parsing; the renamed accent asset
+passed JSON and light/dark value checks. No domain tests, app compilation,
+workflow dispatch or device validation were run for this styling-only change.
+
 ## Agent question flow
 
 Pending agent input now takes the Composer's place in a rounded, theme-aware

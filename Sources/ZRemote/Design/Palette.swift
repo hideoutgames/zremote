@@ -10,7 +10,9 @@ enum Palette {
     static let secondary = Color("PaletteSecondary", bundle: .module)
     static let addition = Color("PaletteAddition", bundle: .module)
     static let deletion = Color("PaletteDeletion", bundle: .module)
-    static let merged = Color("PaletteMerged", bundle: .module)
+    // Zeron iOS violet. Keep rare purple accents on one light/dark token.
+    static let accent = Color("PaletteAccent", bundle: .module)
+    static let merged = accent
     static let usageFill = Color("PaletteUsageFill", bundle: .module)
     static let usageTrack = Color("PaletteUsageTrack", bundle: .module)
 }
