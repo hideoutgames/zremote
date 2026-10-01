@@ -177,6 +177,7 @@ struct ComposerTokenModifier: ContentModifier {
                     lastRequest.value = selectionRequest
                     let position = min(max(0, cursor), options.value.text.length)
                     options.onValueChange(options.value.copy(selection: TextRange(position)))
+                    onComposition(options.value.composition != nil)
                 }
             }
             return options.copy(onValueChange: { value in
