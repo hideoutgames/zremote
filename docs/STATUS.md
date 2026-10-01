@@ -145,6 +145,37 @@ animated project collapse. Sidebar PR badges display just the icon and number.
 UIKit owns the fixed-size profile/PR menu buttons and their Liquid Glass
 presentation; native PR action images retain their state colors in either theme.
 
+The project-list button now uses `UIButton.Configuration.glass()` on iOS 26.
+Profile and PR controls supply their content through the button's native title
+and image, replacing an independently hosted SwiftUI overlay. Initials (including
+test mode's TM), the person-symbol fallback and asynchronously loaded circular
+profile photos belong to the same control as its menu transition. Test mode
+does not load a profile URL. Older iOS and Android retain their existing controls.
+
+Composer suggestions now have 32-point single-line rows, local filtering for the
+current caret query and a fixed scrolling surface, capped at 168 points or 30%
+of the keyboard-adjusted viewport. Commands/skills omit icons; files use a small
+type icon, basename and type description. Durable host references project to
+short, color-coded labels in the editor and user messages (including Copy).
+Selection, caret navigation and deletion consume whole selected references;
+ordinary text, code examples and malformed references remain editable. UIKit
+translates displayed UTF-16 offsets; Compose uses a native visual transformation
+and offset mapping. IME preedit remains with the platform control. Canonical
+insertion no longer prepends an extra trigger or quotes the reference payload.
+
+Local validation for these composer/button changes: 14 focused tests passed in
+`ComposerReferenceTextTests` (8), `ComposerCompletionPresentationTests` (3) and
+`ChatTextBehaviorTests` (3), using the shared single-worker runner with stable
+inputs. Swift syntax parsing passed for the nine edited UI files:
+`ComposerTextInput.swift`, `ComposerReferenceStyle.swift`, `NativeActionMenus.swift`,
+`Palette.swift`, `PullRequestIcon.swift`, `ComposerSuggestions.swift`,
+`ConversationView.swift`, `MessageContentView.swift` and `SessionListView.swift`.
+Changed-file whitespace checks passed. No UI typecheck, native build or device
+run was performed. Device checks still needed: keyboard/landscape layout,
+reference backspace/selection/undo, IME entry, and iOS 26 hamburger/profile menu
+transitions with TM, a loaded photo and a missing photo; also Settings/Sign out
+actions and PR menu colors in both themes.
+
 User messages align right. iOS agent prose/code uses a noneditable, non-scrolling
 UITextView for native range selection, preserving the active range during
 streaming updates and retaining inline formatting/links. Android keeps Compose

@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// Named light/dark colors resolve in the current view's appearance on both platforms.
 enum Palette {
@@ -22,7 +25,19 @@ struct CircleControl: View {
     let label: String
     var action: () -> Void
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            NativeGlassButton(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)),
+                              accessibilityLabel: label, accessibilityValue: "", enabled: true, size: 46, action: action)
+                .frame(width: 46, height: 46)
+        } else { standardButton }
+        #else
+        standardButton
+        #endif
+    }
+
+    private var standardButton: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 19, weight: .regular))

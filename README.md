@@ -27,9 +27,13 @@ Session rows show state (orange awaiting a response, blue finished/unread,
 gray read/idle, red error), a smaller working animation, and the latest observed
 PR's state badge. Compact View hides only the activity/completion-age line.
 The Show menu can restrict the list to one project without category headers;
-in Show all, project headers expand and collapse their sessions. Sidebar PR
+in Show all, project headers expand and collapse their sessions, with the animated
+chevron immediately after the project name, separated by an 8-point gap. Sidebar PR
 badges contain the state-colored icon and number. Native iOS PR menus retain
 those icon colors, and the account menu uses the same control size as its peers.
+On iOS 26, the project-list button uses a native Liquid Glass button. Account
+initials/photos and PR symbols are native button content so they follow the
+button as it opens its menu.
 The display-options button keeps its slider icon when filters are active, with
 a purple fill. Rare purple accents share the [official Zeron iOS palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
 (`#5B43E8` light / `#8B7CF6` dark), including existing-project folders and merged PRs.
@@ -43,7 +47,14 @@ remote updates can arrive after the gesture finishes.
 
 The composer supports native file/photo/camera attachments and host-backed
 `/commands`, `$skills` and `@files` suggestions. References are highlighted in
-the editor and sent messages. User messages align right. Agent text and code use
+the editor and sent messages as short, color-coded labels; caret movement,
+backspace and selection treat each selected reference as one unit. Drafts and
+sends retain the original host reference. Suggestions filter against the current
+caret query, with 32-point single-line rows in a fixed scrolling panel (up to
+168 points, capped to 30% of the keyboard-adjusted viewport). Commands and skills
+show `name ≈ description` with their `/` or `$` prefix and no icons; files show
+a small type icon and `filename ≈ TYPE file`. Long rows truncate with an ellipsis.
+User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
 

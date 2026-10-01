@@ -13,7 +13,7 @@ struct MessageContentView: View {
                     .padding(15)
                     .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22))
                     .nativeContextMenu {
-                        Button { NativeClipboard.copy(message.text) } label: {
+                        Button { NativeClipboard.copy(ComposerReferenceText(message.text).text) } label: {
                             Label("Copy message", systemImage: "doc.on.doc")
                         }
                     }
@@ -53,16 +53,18 @@ struct MessageContentView: View {
 
 struct HighlightedPrompt: View {
     let text: String
+    private var document: ComposerReferenceText { ComposerReferenceText(text) }
 
     #if !os(Android)
     private var highlighted: Text {
-        let source = text as NSString
+        let document = self.document
+        let source = document.text as NSString
         var output = Text("")
         var cursor = 0
-        for token in ChatText.tokens(in: text) where token.range.length > 1 {
-            output = output + Text(source.substring(with: NSRange(location: cursor, length: token.range.location - cursor)))
-            output = output + Text(source.substring(with: token.range)).foregroundColor(Palette.addition).fontWeight(.medium)
-            cursor = NSMaxRange(token.range)
+        for reference in document.references {
+            output = output + Text(source.substring(with: NSRange(location: cursor, length: reference.displayRange.location - cursor)))
+            output = output + Text(reference.label).foregroundColor(reference.kind.referenceColor).fontWeight(.medium)
+            cursor = NSMaxRange(reference.displayRange)
         }
         return output + Text(source.substring(from: cursor))
     }
@@ -70,9 +72,11 @@ struct HighlightedPrompt: View {
 
     var body: some View {
         #if os(Android)
-        Text(text).multilineTextAlignment(.leading)
+        Text(document.text).multilineTextAlignment(.leading)
             .composeModifier {
-                HighlightedPromptModifier(text: text, ranges: ChatText.tokens(in: text).flatMap { [$0.range.location, NSMaxRange($0.range)] }, color: Palette.addition)
+                HighlightedPromptModifier(text: text, ranges: document.references.flatMap { [$0.sourceRange.location, NSMaxRange($0.sourceRange)] },
+                                          labels: document.references.map(\.label), kinds: document.references.map { $0.kind.referenceColorIndex },
+                                          colors: [ComposerTokenKind.command.referenceColor, ComposerTokenKind.skill.referenceColor, ComposerTokenKind.file.referenceColor])
             }
         #else
         highlighted.multilineTextAlignment(.leading)
@@ -125,10 +129,13 @@ import androidx.compose.ui.text.AnnotatedString
 struct HighlightedPromptModifier: ContentModifier {
     let text: String
     let ranges: [Int]
-    let color: Color
+    let labels: [String]
+    let kinds: [Int]
+    let colors: [Color]
     func modify(view: any View) -> any View {
         view.material3Text { options in
-            let annotated = ComposerTokenTransformation(ranges: ranges, color: color.asComposeColor()).filter(AnnotatedString(text)).text
+            let annotated = ComposerTokenTransformation(ranges: ranges, labels: labels, kinds: kinds, colors: colors.map { $0.asComposeColor() })
+                .filter(AnnotatedString(text)).text
             return options.copy(text: nil, annotatedText: annotated)
         }
     }

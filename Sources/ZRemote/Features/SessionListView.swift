@@ -225,7 +225,7 @@ struct SessionListView: View {
     @ViewBuilder private var accountMenu: some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            NativeProfileMenu(avatar: avatar, name: model.workspace.profile?.displayName ?? "", signingOut: signingOut,
+            NativeProfileMenu(avatarURL: avatarURL, name: accountName, accessibilityLabel: model.isDemo ? "Test mode account" : "Account", signingOut: signingOut,
                               settings: { model.route = .settings }, signOut: signOut)
                 .frame(width: 46, height: 46)
         } else { accountMenuControl.nativeGlassControl() }
@@ -253,15 +253,19 @@ struct SessionListView: View {
         signingOut = true
         Task { await model.disconnect(); signingOut = false }
     }
+    private var accountName: String { model.workspace.profile?.displayName ?? (model.isDemo ? "Test mode" : "") }
+    private var avatarURL: URL? {
+        guard !model.isDemo, let value = model.workspace.profile?.avatarURL, let url = URL(string: value),
+              url.scheme == "https", url.user == nil, url.password == nil else { return nil }
+        return url
+    }
     @ViewBuilder private var avatar: some View {
-        if let value = model.workspace.profile?.avatarURL, let url = URL(string: value),
-           url.scheme == "https", url.user == nil, url.password == nil {
+        if let url = avatarURL {
             AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initials }
         } else { initials }
     }
     private var initials: some View {
-        let name = model.workspace.profile?.displayName ?? (model.isDemo ? "Test mode" : "")
-        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
+        let letters = accountName.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
         return Group {
             if letters.isEmpty { Image(systemName: "person.crop.circle").font(.system(size: 24)) }
             else { Text(letters.uppercased()).font(.subheadline.weight(.semibold)) }
@@ -331,9 +335,9 @@ struct SessionListView: View {
             } label: {
                 HStack(spacing: 8) {
                     Label(section.title, systemImage: section.symbol).lineLimit(1)
-                    Spacer(minLength: 8)
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                         .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    Spacer(minLength: 0)
                 }
                 .font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
                 .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())

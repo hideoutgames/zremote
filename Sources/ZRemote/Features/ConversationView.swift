@@ -11,6 +11,7 @@ struct ConversationView: View {
     @State private var suggestions: [ComposerCompletion] = []
     @State private var suggestionToken: ComposerToken?
     @State private var loadingSuggestions = false
+    @State private var viewportHeight: CGFloat = 600
     @State private var following = true
     @State private var userScrolling = false
     @State private var tailPosition: CGFloat = .infinity
@@ -43,6 +44,8 @@ struct ConversationView: View {
     var body: some View {
         GeometryReader { geometry in
             layout(questionHeight: min(420, max(0, geometry.size.height - headerHeight - 20)))
+                .onAppear { viewportHeight = geometry.size.height }
+                .onChange(of: geometry.size.height) { _, height in viewportHeight = height }
         }
         .background {
             ZStack {
@@ -336,8 +339,9 @@ struct ConversationView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 13) {
-            if inputFocused, !inputComposing, let token = suggestionToken {
-                ComposerSuggestions(kind: token.kind, items: suggestions, loading: loadingSuggestions,
+            if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
+                ComposerSuggestions(kind: token.kind, items: ComposerCompletionPresentation.filter(suggestions, kind: token.kind, query: token.query),
+                                    loading: loadingSuggestions, maximumHeight: viewportHeight * 0.3,
                                     unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
             }
             if !model.attachments.isEmpty {
@@ -345,6 +349,7 @@ struct ConversationView: View {
             }
             ComposerTextInput(text: $model.draft, cursor: $cursor, isFocused: $inputFocused,
                               isComposing: $inputComposing, selectionRequest: selectionRequest)
+                .id(model.selectedSessionID ?? "new")
                 .padding(.horizontal, 6)
             HStack(spacing: 10) {
                 AttachmentPicker(model: model)
@@ -394,7 +399,7 @@ struct ConversationView: View {
         guard !Task.isCancelled else { return }
         let values = await model.complete(kind: token.kind, query: token.query)
         guard !Task.isCancelled, ChatText.activeToken(in: model.draft, cursorUTF16: cursor) == token else { return }
-        suggestions = Array(values.prefix(12))
+        suggestions = ComposerCompletionPresentation.filter(values, kind: token.kind, query: token.query)
         loadingSuggestions = false
     }
 

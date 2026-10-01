@@ -11,8 +11,8 @@ struct PullRequestMenu: View {
 
     @ViewBuilder var body: some View {
         #if os(iOS)
-        NativeGlassMenu(content: PullRequestIcon(request: requests.last, size: 18), menu: nativeMenu,
-                        accessibilityLabel: "Session pull requests", accessibilityValue: "", enabled: !requests.isEmpty, size: 44)
+        NativeGlassButton(image: PullRequestIcon.menuImage(for: requests.last, colorScheme: colorScheme), menu: nativeMenu,
+                          accessibilityLabel: "Session pull requests", accessibilityValue: "", enabled: !requests.isEmpty, size: 44)
             .frame(width: 44, height: 44)
         #else
         standardMenu
@@ -50,16 +50,37 @@ struct PullRequestMenu: View {
 
 #if os(iOS)
 @available(iOS 26.0, *)
-struct NativeProfileMenu<Avatar: View>: View {
-    let avatar: Avatar
+struct NativeProfileMenu: View {
+    let avatarURL: URL?
     let name: String
+    let accessibilityLabel: String
     let signingOut: Bool
     let settings: @MainActor () -> Void
     let signOut: @MainActor () -> Void
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
-        NativeGlassMenu(content: avatar.frame(width: 30, height: 30).clipShape(Circle()), menu: menu,
-                        accessibilityLabel: "Account", accessibilityValue: name, enabled: true, size: 46)
+        AsyncImage(url: avatarURL) { phase in
+            let photo = phase.image.flatMap { avatarImage($0) }
+            NativeGlassButton(image: photo ?? fallbackImage, title: photo == nil && !initials.isEmpty ? initials : nil, menu: menu,
+                              accessibilityLabel: accessibilityLabel, accessibilityValue: name, enabled: true, size: 46)
+        }
+    }
+
+    private var initials: String {
+        name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
+    }
+
+    private var fallbackImage: UIImage? {
+        initials.isEmpty ? UIImage(systemName: "person.crop.circle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24)) : nil
+    }
+
+    /// Rasterize only the loaded photo, not the AsyncImage/control hierarchy.
+    /// UIKit then owns the image during the button-to-menu transition.
+    private func avatarImage(_ image: Image) -> UIImage? {
+        let renderer = ImageRenderer(content: image.resizable().scaledToFill().frame(width: 30, height: 30).clipShape(Circle()))
+        renderer.scale = displayScale
+        return renderer.uiImage?.withRenderingMode(.alwaysOriginal)
     }
 
     private var menu: UIMenu {
@@ -75,19 +96,29 @@ struct NativeProfileMenu<Avatar: View>: View {
     }
 }
 
-/// Give UIKit ownership of both the glass control and its primary-action menu.
-/// No SwiftUI button-style padding or separate glass overlay enlarges the source.
-private struct NativeGlassMenu<Content: View>: UIViewRepresentable {
-    let content: Content
-    let menu: UIMenu
+/// The native configuration owns all visible content, so symbols, initials and
+/// photos participate in the same Liquid Glass transition as the button.
+struct NativeGlassButton: UIViewRepresentable {
+    let image: UIImage?
+    var title: String? = nil
+    var menu: UIMenu? = nil
     let accessibilityLabel: String
     let accessibilityValue: String
     let enabled: Bool
     let size: CGFloat
+    var action: (@MainActor () -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(configuration: configuration)
+        button.addAction(UIAction { [weak coordinator = context.coordinator] _ in
+            Task { @MainActor in coordinator?.action?() }
+        }, for: .primaryActionTriggered)
+        return button
+    }
+
+    private var configuration: UIButton.Configuration {
         var configuration: UIButton.Configuration
         if #available(iOS 26.0, *) { configuration = .glass() }
         else {
@@ -96,21 +127,15 @@ private struct NativeGlassMenu<Content: View>: UIViewRepresentable {
         }
         configuration.cornerStyle = .capsule
         configuration.contentInsets = .zero
-        let button = UIButton(configuration: configuration)
-        button.showsMenuAsPrimaryAction = true
-        button.tintColor = UIColor(Palette.text)
-        let hosted = UIHostingConfiguration { content }.margins(.all, 0).makeContentView()
-        hosted.isUserInteractionEnabled = false
-        hosted.translatesAutoresizingMaskIntoConstraints = false
-        button.addSubview(hosted)
-        NSLayoutConstraint.activate([
-            hosted.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-            hosted.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-            hosted.topAnchor.constraint(equalTo: button.topAnchor),
-            hosted.bottomAnchor.constraint(equalTo: button.bottomAnchor),
-        ])
-        context.coordinator.contentView = hosted
-        return button
+        configuration.baseForegroundColor = UIColor(Palette.text)
+        configuration.image = image
+        configuration.title = title
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var attributes = incoming
+            attributes.font = .systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
+            return attributes
+        }
+        return configuration
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
@@ -118,15 +143,18 @@ private struct NativeGlassMenu<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.action = action
+        button.configuration = configuration
         button.menu = menu
-        button.isEnabled = enabled
+        button.showsMenuAsPrimaryAction = menu != nil
+        button.tintColor = UIColor(Palette.text)
+        button.isEnabled = enabled && context.environment.isEnabled
         button.accessibilityLabel = accessibilityLabel
         button.accessibilityValue = accessibilityValue
-        context.coordinator.contentView?.configuration = UIHostingConfiguration { content }.margins(.all, 0)
     }
 
     @MainActor final class Coordinator {
-        var contentView: (UIView & UIContentView)?
+        var action: (@MainActor () -> Void)?
     }
 }
 #endif
