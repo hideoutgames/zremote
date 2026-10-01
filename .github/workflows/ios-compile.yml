@@ -79,6 +79,17 @@ jobs:
               CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
               SKIP_ACTION=none PRODUCT_BUNDLE_IDENTIFIER=dev.zremote.compilecheck \
               build -quiet 2>&1 | tee build.log
+      - name: Save resolved dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-dependency-evidence
+          path: |
+            Project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+            Sources/ZRemote/Resources/SwiftAcknowledgements.json
+            Sources/ZRemote/Resources/Licenses/Swift-*.txt
+          retention-days: 1
+          if-no-files-found: ignore
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4

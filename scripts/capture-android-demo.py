@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import struct
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -78,12 +79,16 @@ class Capture:
         png = self.adb("exec-out", "screencap", "-p", binary=True)
         if not png.startswith(b"\x89PNG\r\n\x1a\n"):
             raise RuntimeError("ADB did not return a PNG screenshot")
+        width, height = struct.unpack(">II", png[16:24])
+        if (width, height) != (self.width, self.height):
+            raise RuntimeError(f"Unexpected screenshot dimensions: {width}x{height}")
         path.write_bytes(png)
         nodes = self.nodes()
         hierarchy = ET.Element("hierarchy")
         hierarchy.extend(nodes[:1])
         ET.ElementTree(hierarchy).write(self.output / f"{self.mode}-{surface}.xml", encoding="utf-8")
         self.results.append({"layout": self.mode, "surface": surface, "file": path.name,
+                             "width": width, "height": height,
                              "sha256": hashlib.sha256(png).hexdigest(), "status": "captured"})
         print(f"Captured {path.name}", flush=True)
 

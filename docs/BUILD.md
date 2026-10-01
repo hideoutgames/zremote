@@ -129,5 +129,11 @@ CI runs the two named Swift regression classes and the single Rust transcript
 projection regression. The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
 
+The iOS Compile Check retains `ios-dependency-evidence` for one day after its
+resolve/build attempt. It contains the workspace `Package.resolved`, generated
+Swift acknowledgements, and full Swift dependency license texts when available.
+Review and commit the resolved workspace lockfile after the first successful
+resolution and whenever package dependencies change.
+
 The native shell was adapted from Skip's Howdy app at
 `bdcae70f50cf388caae99cd69c24df8366e2808a` using its established project layout.
