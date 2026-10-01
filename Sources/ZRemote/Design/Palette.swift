@@ -90,8 +90,8 @@ struct EmptyState: View {
 }
 
 struct ActivityGlyph: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var illuminated = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State var illuminated = false
     var body: some View {
         HStack(spacing: 2.5) {
             ForEach(0..<3) { index in

@@ -142,6 +142,17 @@ def provenance(phase: str, command: list[str], environment: dict[str, str]) -> d
     return {"source": source_digest(phase, environment.get("ZREMOTE_CORE_ONLY") == "1"), "environment": environment_hash, "toolchains": binaries}
 
 
+def wait_for_child(child: subprocess.Popen, phase: str, heartbeat_seconds: float = 60) -> int:
+    """Report liveness during quiet compiler/linker work without logging arguments."""
+    started = time.monotonic()
+    while True:
+        try:
+            return child.wait(timeout=heartbeat_seconds)
+        except subprocess.TimeoutExpired:
+            print(f"Running {phase}: elapsed={int(time.monotonic() - started)}s "
+                  f"availableMB={available_mb()} (child still running)", flush=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", required=True, choices=("rust", "swift", "android", "ios"))
@@ -208,7 +219,7 @@ def main() -> int:
         with locked_state() as state:
             state["active"]["childPid"] = child.pid
         try:
-            code = child.wait()
+            code = wait_for_child(child, args.phase)
         except KeyboardInterrupt:
             # The terminal already delivered the interrupt to our process group.
             # Keep admission until our child has exited; do not stop other agents.

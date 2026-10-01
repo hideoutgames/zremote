@@ -3,11 +3,11 @@ import ZRemoteCore
 
 struct ProjectPickerView: View {
     @Bindable var model: AppModel
-    @State private var hostID = ""
-    @State private var name = ""
-    @State private var busy = false
-    @State private var error: String?
-    @State private var mode = 0
+    @State var hostID = ""
+    @State var name = ""
+    @State var busy = false
+    @State var error: String?
+    @State var mode = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -111,16 +111,16 @@ struct ProjectPickerView: View {
 
 /// A native navigation destination inside the project drawer/modal. Folder
 /// selection is separate from disclosure, so browsing never creates a project.
-private struct ProjectFolderBrowser: View {
+struct ProjectFolderBrowser: View {
     @Bindable var model: AppModel
     let hostID: String
-    @State private var page: FolderPage?
-    @State private var path: String?
-    @State private var selectedPath: String?
-    @State private var foldersByPath: [String: RemoteFolder] = [:]
-    @State private var loading = false
-    @State private var busy = false
-    @State private var error: String?
+    @State var page: FolderPage?
+    @State var path: String?
+    @State var selectedPath: String?
+    @State var foldersByPath: [String: RemoteFolder] = [:]
+    @State var loading = false
+    @State var busy = false
+    @State var error: String?
 
     private var hostOnline: Bool { model.workspace.hosts.first { $0.id == hostID }?.online == true }
     private var selectedFolder: RemoteFolder? { selectedPath.flatMap { foldersByPath[$0] } }
@@ -317,7 +317,7 @@ private struct ProjectFolderBrowser: View {
     }
 }
 
-private struct ProjectFolderIcon: View {
+struct ProjectFolderIcon: View {
     var knownProject = false
 
     var body: some View {
@@ -342,7 +342,7 @@ private struct ProjectFolderIcon: View {
 
 /// Skip's pinned symbol mapping has no folder glyph, so keep the Android
 /// fallback as a small native path while retaining its native settings glyph.
-private struct ProjectFolderOutline: Shape {
+struct ProjectFolderOutline: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.height * 0.2))

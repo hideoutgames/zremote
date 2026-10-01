@@ -23,12 +23,12 @@ enum AttachmentImportFailure: String, Error, LocalizedError, Sendable {
 /// only a filename, MIME type and bounded bytes, never a device-local URL.
 struct AttachmentPicker: View {
     @Bindable var model: AppModel
-    @State private var source: AttachmentSource?
-    @State private var cameraPresented = false
-    @State private var request = ""
-    @State private var importContext = ""
-    @State private var importing = false
-    @State private var failure: String?
+    @State var source: AttachmentSource?
+    @State var cameraPresented = false
+    @State var request = ""
+    @State var importContext = ""
+    @State var importing = false
+    @State var failure: String?
 
     var body: some View {
         Menu {

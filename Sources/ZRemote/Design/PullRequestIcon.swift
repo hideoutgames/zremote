@@ -34,7 +34,7 @@ struct PullRequestIcon: View {
     #endif
 }
 
-private struct PullRequestGlyph: Shape {
+struct PullRequestGlyph: Shape {
     func path(in rect: CGRect) -> Path {
         let scale = min(rect.width, rect.height) / 24
         let origin = CGPoint(x: rect.midX - 12 * scale, y: rect.midY - 12 * scale)

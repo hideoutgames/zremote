@@ -7,10 +7,10 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
     @Binding var isOpen: Bool
     let safeAreaInsets: EdgeInsets
     let gesturesEnabled: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.layoutDirection) private var layoutDirection
-    @State private var dragOriginOpen: Bool?
-    @State private var translation: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.layoutDirection) var layoutDirection
+    @State var dragOriginOpen: Bool?
+    @State var translation: CGFloat = 0
     let menu: () -> MenuContent
     let content: () -> MainContent
 
@@ -149,7 +149,7 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
 }
 
 #if os(iOS)
-private struct DrawerPageClip: Shape {
+struct DrawerPageClip: Shape {
     var reveal: CGFloat
     var animatableData: CGFloat {
         get { reveal }

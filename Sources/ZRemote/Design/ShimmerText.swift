@@ -3,8 +3,8 @@ import SwiftUI
 /// Quiet monochrome activity text. Reduced Motion keeps the readable base label.
 struct ShimmerText: View {
     let text: String
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var animating = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State var animating = false
 
     var body: some View {
         Text(text)

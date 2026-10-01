@@ -3,8 +3,8 @@ import ZRemoteCore
 
 struct CheckoutPickerView: View {
     @Bindable var model: AppModel
-    @State private var context: String?
-    @State private var selectionError: String?
+    @State var context: String?
+    @State var selectionError: String?
 
     private var contextMatches: Bool { context == model.checkoutContext }
 

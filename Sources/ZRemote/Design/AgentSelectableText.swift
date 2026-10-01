@@ -10,8 +10,8 @@ struct AgentSelectableText: View {
     var markdown = false
     var code = false
     var secondary = false
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.sizeCategory) private var sizeCategory
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.sizeCategory) var sizeCategory
 
     var body: some View {
         #if os(iOS)

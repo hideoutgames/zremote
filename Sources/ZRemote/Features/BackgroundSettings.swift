@@ -4,12 +4,12 @@ import ZRemoteCore
 
 struct BackgroundSettings: View {
     @Bindable var model: AppModel
-    @State private var source: AttachmentSource?
-    @State private var request = ""
-    @State private var importContext = ""
-    @State private var importing = false
-    @State private var preparing = false
-    @State private var failure: String?
+    @State var source: AttachmentSource?
+    @State var request = ""
+    @State var importContext = ""
+    @State var importing = false
+    @State var preparing = false
+    @State var failure: String?
 
     var body: some View {
         Section {

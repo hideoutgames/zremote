@@ -5,13 +5,13 @@ import ZRemoteCore
 struct SessionDetailsView: View {
     @Bindable var model: AppModel
     let sessionID: String
-    @State private var editing = false
-    @State private var title = ""
-    @State private var saving = false
-    @State private var error: String?
-    @State private var renameContext: String?
-    @State private var focusDismissal = 0
-    @FocusState private var titleFocused: Bool
+    @State var editing = false
+    @State var title = ""
+    @State var saving = false
+    @State var error: String?
+    @State var renameContext: String?
+    @State var focusDismissal = 0
+    @FocusState var titleFocused: Bool
 
     private var session: Session? { model.workspace.sessions.first { $0.id == sessionID } }
 

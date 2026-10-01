@@ -29,6 +29,9 @@ Swift/Skip. The attributed `native/core` subset is a mobile peer, not an engine.
 - ZRemoteCore: portable models, demo, persistence, native diff parser.
 - ZRemoteNative: platform adapter to the pinned Rust peer core.
 - ZRemote: SwiftUI/Skip views and custom Android components.
+- Shared SwiftUI views and their property-wrapper storage must be internal or
+  public for Skip bridging, including during iOS archives. Keep Kotlin-only
+  helpers with Compose-only API out of the Swift bridge using `SKIP @nobridge`.
 - Never execute agents, Git commands, or terminals on the phone.
 - Do not modify/deploy Zeron host or edge services for this client.
 - Tokens go in Authorization headers, never URLs. Never log secrets, prompts,

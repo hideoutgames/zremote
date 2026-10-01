@@ -5,13 +5,13 @@ import ZRemoteCore
 
 struct ModelPickerView: View {
     @Bindable var model: AppModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var provider = ""
-    @State private var query = ""
-    @State private var applying = false
-    @State private var configurationModel: AgentModel?
-    @FocusState private var searchFocused: Bool
-    @ScaledMetric(relativeTo: .body) private var rowHeight = 44.0
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State var provider = ""
+    @State var query = ""
+    @State var applying = false
+    @State var configurationModel: AgentModel?
+    @FocusState var searchFocused: Bool
+    @ScaledMetric(relativeTo: .body) var rowHeight = 44.0
 
     private let favoritesTab = "__favorites__"
     private var lockedProvider: String? {

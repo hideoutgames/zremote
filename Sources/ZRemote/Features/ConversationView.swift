@@ -3,21 +3,21 @@ import ZRemoteCore
 
 struct ConversationView: View {
     @Bindable var model: AppModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var inputFocused = false
-    @State private var inputComposing = false
-    @State private var cursor = 0
-    @State private var selectionRequest = 0
-    @State private var suggestions: [ComposerCompletion] = []
-    @State private var suggestionToken: ComposerToken?
-    @State private var loadingSuggestions = false
-    @State private var viewportHeight: CGFloat = 600
-    @State private var following = true
-    @State private var userScrolling = false
-    @State private var tailPosition: CGFloat = .infinity
-    @State private var headerHeight: CGFloat = 72
-    @State private var statusHeight: CGFloat = 0
-    @State private var dismissQuestionFocus = 0
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State var inputFocused = false
+    @State var inputComposing = false
+    @State var cursor = 0
+    @State var selectionRequest = 0
+    @State var suggestions: [ComposerCompletion] = []
+    @State var suggestionToken: ComposerToken?
+    @State var loadingSuggestions = false
+    @State var viewportHeight: CGFloat = 600
+    @State var following = true
+    @State var userScrolling = false
+    @State var tailPosition: CGFloat = .infinity
+    @State var headerHeight: CGFloat = 72
+    @State var statusHeight: CGFloat = 0
+    @State var dismissQuestionFocus = 0
 
     private var wallpaper: Bool {
         PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil, sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil)
@@ -461,7 +461,7 @@ struct ConversationView: View {
 
 }
 
-private struct UsageLimitBanner: View {
+struct UsageLimitBanner: View {
     let warning: UsageWarning
     let dismiss: () -> Void
 
@@ -491,7 +491,7 @@ private struct TranscriptTailPosition: PreferenceKey {
     static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }
 
-private struct TranscriptRow: View, Equatable {
+struct TranscriptRow: View, Equatable {
     let message: TranscriptMessage
     var body: some View {
         MessageContentView(message: message)

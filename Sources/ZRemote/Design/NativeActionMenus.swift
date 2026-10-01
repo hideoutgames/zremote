@@ -7,7 +7,7 @@ import UIKit
 struct PullRequestMenu: View {
     let requests: [PullRequest]
     let select: @MainActor (PullRequest) -> Void
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) var colorScheme
 
     @ViewBuilder var body: some View {
         #if os(iOS)
