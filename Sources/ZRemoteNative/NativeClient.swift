@@ -16,7 +16,11 @@ import ZRemoteCore
     private var pendingOrganizations: [AuthOrg] = []
     private var generation = UUID()
     private var handles: [String: SessionHandle] = [:]
+    private var pendingWorktrees: [String: PendingWorktreeIntent] = [:]
+    private var recoveredWorktrees: Set<String> = []
+    private var worktreeStore: PendingWorktreeStore?
     private var projections: [String: MessageCache] = [:]
+    private var transcriptMetadata: [String: TranscriptMetadata.Cache] = [:]
     private var listener: NativeListener?
     private var refreshTask: Task<Void, Never>?
     private var dirtySessions: Set<String> = []
@@ -121,6 +125,7 @@ import ZRemoteCore
     public func closeSession(_ id: String) {
         handles.removeValue(forKey: id)?.setViewAttached(attached: false)
         projections[id] = nil
+        transcriptMetadata[id] = nil
         client?.closeSession(chatId: id)
     }
 
@@ -160,12 +165,76 @@ import ZRemoteCore
     }
 
     public func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String {
+        try await createSession(projectID: projectID, hostID: hostID, selection: selection, checkout: .current)
+    }
+
+    public func checkouts(projectID: String, hostID: String) async throws -> [ProjectCheckout] {
+        let operation = generation
         let core = try requireClient()
         guard core.executionDevices().contains(where: { $0.id == hostID }) else { throw NativeClientError.noHost }
-        if let projectID, core.project(spaceId: projectID)?.deviceId != hostID { throw NativeClientError.noHost }
+        guard let project = core.project(spaceId: projectID), project.deviceId == hostID, project.gitDetected else {
+            throw ClientFailure("Choose a repository on this host first.")
+        }
+        let refs = try await core.listRefs(deviceId: hostID, repoPath: project.path)
+        try ensureCurrent(operation)
+        guard let current = core.project(spaceId: projectID), current.path == project.path, current.deviceId == hostID, current.gitDetected else { throw CancellationError() }
+        var paths: Set<String> = []
+        var values = refs.compactMap { ref -> ProjectCheckout? in
+            guard let path = ref.current ? project.path : ref.worktreePath, !path.isEmpty, paths.insert(path).inserted else { return nil }
+            return ProjectCheckout(branch: ref.name, path: path, isCurrent: ref.current)
+        }
+        // A detached HEAD has no current branch ref, but the project folder is
+        // still a valid existing checkout. Do not invent a branch name for it.
+        if !values.contains(where: \.isCurrent) {
+            if let index = values.firstIndex(where: { $0.path == project.path }) { values[index].isCurrent = true }
+            else { values.insert(ProjectCheckout(branch: "", path: project.path, isCurrent: true), at: 0) }
+        }
+        return values.sorted { left, right in
+            if left.isCurrent != right.isCurrent { return left.isCurrent }
+            return left.branch.localizedStandardCompare(right.branch) == .orderedAscending
+        }
+    }
+
+    public func createSession(projectID: String?, hostID: String, selection: ModelSelection, checkout: CheckoutSelection) async throws -> String {
+        let operation = generation
+        let core = try requireClient()
+        guard core.executionDevices().contains(where: { $0.id == hostID }) else { throw NativeClientError.noHost }
+        let project = projectID.flatMap { core.project(spaceId: $0) }
+        if projectID != nil, project?.deviceId != hostID { throw NativeClientError.noHost }
+        var branch: String?
+        var cwd: String?
+        var worktree: PendingWorktreeIntent?
+        switch checkout {
+        case .current: break
+        case .newWorktree:
+            guard let project, project.gitDetected else { throw ClientFailure("A new worktree requires a repository.") }
+            worktree = PendingWorktreeIntent(projectID: project.id, repoPath: project.path)
+        case .existing(let chosen):
+            guard let project else { throw ClientFailure("Choose a project before its checkout.") }
+            let available = try await checkouts(projectID: project.id, hostID: hostID)
+            try ensureCurrent(operation)
+            guard available.contains(chosen) else { throw ClientFailure("This checkout changed. Choose it again before sending.") }
+            branch = chosen.branch.isEmpty ? nil : chosen.branch
+            cwd = chosen.path
+        }
+        try ensureCurrent(operation)
         let target: SessionTarget = projectID.map { .project(spaceId: $0) } ?? .projectless(deviceId: hostID)
-        let id = try core.createSession(newSession: NewSession(target: target, config: config(selection), branch: nil, cwd: nil, title: nil))
+        let id = try core.createSession(newSession: NewSession(target: target, config: config(selection), branch: branch, cwd: cwd, title: nil))
+        if let worktree {
+            pendingWorktrees[id] = worktree
+            do {
+                guard let worktreeStore else { throw NativeClientError.signedOut }
+                try worktreeStore.save(pendingWorktrees)
+            } catch {
+                pendingWorktrees[id] = nil
+                // No host work has begun. Roll back only the empty row created
+                // in this transaction; the original composer retains its draft.
+                try? core.deleteSession(chatId: id)
+                throw ClientFailure("Couldn't save the new worktree destination. Your message was not sent.")
+            }
+        }
         try await openSession(id)
+        try ensureCurrent(operation)
         publishWorkspace(core)
         return id
     }
@@ -178,9 +247,31 @@ import ZRemoteCore
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
         for attachment in attachments { try attachment.validate() }
         let handle = try requireHandle(sessionID)
+        var worktree: WorktreeSpec?
+        if let intent = pendingWorktrees[sessionID] {
+            let status = handle.transcriptStatus()
+            if status.entryCount > 0 || status.pendingCount > 0 || !handle.composer().pendingSends.isEmpty {
+                // A previous enqueue survived even if removing the intent file
+                // did not. Its durable Run already contains the worktree spec.
+                pendingWorktrees[sessionID] = nil
+                recoveredWorktrees.remove(sessionID)
+                try? worktreeStore?.save(pendingWorktrees)
+            } else {
+                guard !recoveredWorktrees.contains(sessionID) || status.hydrated else {
+                    throw ClientFailure("Wait for this session to finish syncing before retrying its first message.")
+                }
+                worktree = WorktreeSpec(repoPath: intent.repoPath, base: intent.base, spaceId: intent.projectID)
+            }
+        }
         _ = try handle.send(request: SendRequest(text: text, attachments: attachments.map {
             OutgoingAttachment(name: $0.name, mimeType: $0.mimeType, data: $0.data)
-        }, worktree: nil, busy: .queue))
+        }, worktree: worktree, busy: .queue))
+        // The run command now durably owns creation of the isolated checkout.
+        // Retain the choice after a thrown send so a retry keeps its destination.
+        if pendingWorktrees.removeValue(forKey: sessionID) != nil {
+            recoveredWorktrees.remove(sessionID)
+            try? worktreeStore?.save(pendingWorktrees)
+        }
         publishSession(sessionID)
     }
 
@@ -216,6 +307,12 @@ import ZRemoteCore
     public func setPinned(sessionID: String, pinned: Bool) async throws {
         let core = try requireClient()
         if pinned { try core.pinSession(chatId: sessionID) } else { try core.unpinSession(chatId: sessionID) }
+        publishWorkspace(core)
+    }
+    public func renameSession(sessionID: String, title: String) async throws {
+        let core = try requireClient()
+        guard core.sessionRow(chatId: sessionID) != nil else { throw ClientFailure("This session is no longer available.") }
+        try core.renameSession(chatId: sessionID, title: title)
         publishWorkspace(core)
     }
     public func setArchived(sessionID: String, archived: Bool) async throws {
@@ -302,6 +399,10 @@ import ZRemoteCore
         account = nil
         let directory = try accountDirectory(stored)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let intentStore = PendingWorktreeStore(directory: directory)
+        pendingWorktrees = try intentStore.load()
+        recoveredWorktrees = Set(pendingWorktrees.keys)
+        worktreeStore = intentStore
         account = stored
         let deviceID: String
         if let existing = UserDefaults.standard.string(forKey: Self.deviceKey) { deviceID = existing }
@@ -351,7 +452,10 @@ import ZRemoteCore
         client = nil
         listener = nil
         handles.removeAll()
+        pendingWorktrees.removeAll()
+        recoveredWorktrees.removeAll(); worktreeStore = nil
         projections.removeAll()
+        transcriptMetadata.removeAll()
         lastFinished.removeAll(); lastCompleted.removeAll(); observedSessionIDs.removeAll(); observedRunningSessionIDs.removeAll(); inputIdentities.removeAll()
     }
 
@@ -390,22 +494,21 @@ import ZRemoteCore
 
     private func publishWorkspace(_ core: CoreClient) {
         let snapshot = core.workspace()
-        let signalJSON = try? core.sessionSignalsJson()
-        let signalRows = signalJSON.flatMap { try? JSONDecoder().decode([SessionSignal].self, from: Data($0.utf8)) } ?? []
+        let (signalRows, metadataChanged) = readSessionSignals(core)
         let signals = Dictionary(uniqueKeysWithValues: signalRows.map { ($0.sessionID, $0) })
         let ordered = snapshot.front.pinned + snapshot.front.sections.flatMap(\.sessions) + snapshot.front.recent + snapshot.archived
         var seen: Set<String> = []
         let sessions = ordered.filter { seen.insert($0.id).inserted }.map { row in
             let signal = signals[row.id]
             if row.hostIndicator == .working || row.hostIndicator == .awaitingInput { observedRunningSessionIDs.insert(row.id) }
-            if let signal {
-                if let turn = signal.completedTurnID, !signal.failed, observedSessionIDs.contains(row.id), lastCompleted[row.id] != turn,
+            if let signal, let updatedAt = signal.updatedAtMs, let failed = signal.failed {
+                if let turn = signal.completedTurnID, !failed, observedSessionIDs.contains(row.id), lastCompleted[row.id] != turn,
                    lastCompleted[row.id] != nil || observedRunningSessionIDs.contains(row.id) {
                     // Only a host-written successful completion advances this.
-                    lastFinished[row.id] = Date(timeIntervalSince1970: Double(signal.updatedAtMs) / 1000)
+                    lastFinished[row.id] = Date(timeIntervalSince1970: Double(updatedAt) / 1000)
                     if row.hostIndicator != .working && row.hostIndicator != .awaitingInput { observedRunningSessionIDs.remove(row.id) }
                 }
-                if signal.failed { observedRunningSessionIDs.remove(row.id) }
+                if failed { observedRunningSessionIDs.remove(row.id) }
                 lastCompleted[row.id] = signal.completedTurnID
                 observedSessionIDs.insert(row.id)
             }
@@ -425,7 +528,7 @@ import ZRemoteCore
                 awaitingInput: row.indicator == .awaitingInput, failed: signal?.failed == true || row.indicator == .errored || row.sendState == .failed,
                 activity: row.indicator == .awaitingInput ? "Waiting for response" : row.indicator == .working ? "Working" : "",
                 lastFinishedAt: lastFinished[row.id], completedTurnID: signal?.completedTurnID ?? lastCompleted[row.id],
-                inputRequestID: inputID, providerID: row.harness ?? "", modelID: row.model)
+                inputRequestID: inputID, providerID: row.harness ?? "", modelID: row.model, branch: row.branch)
         }
         let connection: ClientConnection
         switch core.connectivity().state {
@@ -435,16 +538,39 @@ import ZRemoteCore
         }
         onUpdate?(.workspace(WorkspaceState(connection: connection,
             hosts: snapshot.devices.filter(\.isExecutionHost).map { Host(id: $0.id, name: $0.name, online: $0.online) },
-            projects: snapshot.projects.map { Project(id: $0.id, name: $0.name, path: $0.path, hostID: $0.deviceId) }, sessions: sessions,
+            projects: snapshot.projects.map { Project(id: $0.id, name: $0.name, path: $0.path, hostID: $0.deviceId, isRepository: $0.gitDetected) }, sessions: sessions,
             profile: account?.profile ?? account.map { UserProfile(id: $0.userID, displayName: "Your account") },
             devices: snapshot.devices.map { ConnectedDevice(id: $0.id, name: $0.name, platform: $0.platform,
                 online: $0.online, isExecutionHost: $0.isExecutionHost, isCurrent: $0.isSelf) })))
+        // Metadata-only deltas can accompany a workspace event without any text
+        // revision. Republish those open transcripts after consuming every delta.
+        for id in metadataChanged { publishSession(id, refreshMetadata: false) }
     }
 
-    private func publishSession(_ id: String) {
+    private func readSessionSignals(_ core: CoreClient) -> ([SessionSignal], [String]) {
+        guard let json = try? core.sessionSignalsJson() else { return ([], []) }
+        var changed: [String] = []
+        if let updates = try? TranscriptMetadata.decode(json) {
+            for (id, update) in updates where handles[id] != nil {
+                var cache = transcriptMetadata[id] ?? TranscriptMetadata.Cache()
+                let previous = cache
+                cache.apply(update)
+                transcriptMetadata[id] = cache
+                if cache != previous { changed.append(id) }
+            }
+        }
+        return ((try? JSONDecoder().decode([SessionSignal].self, from: Data(json.utf8))) ?? [], changed)
+    }
+
+    private func publishSession(_ id: String, refreshMetadata: Bool = true) {
         guard let handle = handles[id], let core = client else { return }
         var cache = projections[id] ?? MessageCache()
         let update = handle.transcriptUpdate(known: cache.revisions)
+        let needsMetadata = transcriptMetadata[id] == nil || update.changed.contains { row in
+            row.role == "user" || !row.streaming || cache.messages[row.id] == nil
+                || row.subagents.map(\.id) != (cache.messages[row.id]?.subagents.map(\.id) ?? [])
+        }
+        let otherMetadataChanges = refreshMetadata && needsMetadata ? readSessionSignals(core).1 : []
         for row in update.changed {
             cache.revisions[row.id] = row.revision
             cache.messages[row.id] = TranscriptMessage(id: row.id, role: row.role, text: row.text, streaming: row.streaming,
@@ -454,6 +580,8 @@ import ZRemoteCore
         let present = Set(update.orderedIds)
         cache.revisions = cache.revisions.filter { present.contains($0.key) }
         cache.messages = cache.messages.filter { present.contains($0.key) }
+        // Metadata's explicit removedIDs/reset deltas own its retention. A
+        // concurrently newer metadata row must survive this transcript order.
         projections[id] = cache
         let composer = handle.composer()
         let config = core.sessionConfig(chatId: id)
@@ -469,13 +597,14 @@ import ZRemoteCore
         case .failed: delivery = "Not delivered"
         case nil: delivery = ""
         }
-        let visibleMessages = update.orderedIds.compactMap { cache.messages[$0] }
-            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !$0.attachments.isEmpty || !$0.subagents.isEmpty }
+        let visibleMessages = TranscriptMetadata.applying(transcriptMetadata[id] ?? .init(),
+            to: update.orderedIds.compactMap { cache.messages[$0] }, latestTurnRunning: composer.live.turnRunning)
         onUpdate?(.session(SessionState(id: id, messages: visibleMessages,
             selection: ModelSelection(providerID: config?.harness ?? "claude-code", modelID: config?.model,
                 effort: config?.reasoning, options: config?.modelOptions ?? [:]),
             working: composer.live.turnRunning, delivery: delivery, deliveryFailed: composer.sendState == .failed,
             turnID: update.turnId, input: input)))
+        for changedID in otherMetadataChanges where changedID != id { publishSession(changedID, refreshMetadata: false) }
     }
 
     private func requireClient() throws -> CoreClient {
@@ -563,6 +692,6 @@ private struct AccountsEnvelope: Decodable {
 private struct SessionSignal: Decodable {
     var sessionID: String
     var completedTurnID: String?
-    var updatedAtMs: Int64
-    var failed: Bool
+    var updatedAtMs: Int64?
+    var failed: Bool?
 }

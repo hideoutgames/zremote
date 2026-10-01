@@ -48,8 +48,12 @@ Local extensions use existing host methods:
   selection before applying it. Polling is bounded while work is active.
 - `session_signals_json`: exposes the already synchronized host completion marker
   and error state to the presentation adapter. Successful completions must not
-  be inferred from a stale working indicator becoming idle. This modifies only
-  the bundled peer; it adds no host or edge protocol requirement.
+  be inferred from a stale working indicator becoming idle. Optional metadata
+  deltas for explicitly opened sessions carry message timestamps, recorded work
+  durations and safe sub-agent titles; text-only streaming changes do not resend
+  unchanged metadata. The platform consumes every delta into a session-scoped
+  cache and clears it on close/sign-out. This extends the existing JSON payload,
+  not the generated C ABI, and adds no host or edge protocol requirement.
 
 - `create_repository`: `CreateRepo { name }`, then project registration. Existing
   folders continue to use `create_project` and `ListFolders`.
@@ -75,10 +79,33 @@ from visible user text and exposes typed attachment references. Retrieval uses
 the core's attachment cache and only accepts refs present in the open transcript.
 
 Subagent cards come from each tool part's actual `subagent_ref`, lifecycle and
-display tail. A resolved spawn tool does not imply its child has finished.
+safe title. A resolved spawn tool does not imply its child has finished.
 Reasoning and raw tool arguments remain excluded from the projection.
 Pin/archive/restore actions use the official peer's replicated session methods;
 created/updated dates and archive/pin flags come from its workspace rows.
+Renaming uses `rename_session` and retains the session identity. Details reads
+the row's host, model, project, branch and checkout path without external lookups.
+
+New-session checkout selection uses `list_refs` to offer the current project
+checkout and refs with actual worktree paths. A branch without a checkout is
+not offered as a destination. Existing paths are revalidated before creation;
+the adapter never runs or requests a checkout switch. New worktrees use the
+existing `SendRequest.worktree` on the first send, so choosing the option does
+not create a worktree. Account/project changes invalidate pending selections.
+The unsent destination is saved atomically in the account's
+`pending-worktrees.json` before the new session returns to the Composer. A thrown
+first send retains it for retry, including after restart. Recovered sessions
+must hydrate before another first send; an existing entry or pending send retires
+the old intent. The peer's existing enqueue-success semantics still apply.
+
+Message timestamps and durations come from the host's recorded entry metadata,
+including historical entries. Unknown timing stays absent. The UI presents a
+completed turn's duration once, after its changed-file summary when available;
+it does not time sync delays, infer runtime from session update dates, or expose
+private reasoning/tool arguments to obtain it.
+The bundled peer's continuation joins carry the latest segment's status, so an
+aborted or unknown ending cannot inherit an earlier segment's successful status.
+This corrects local transcript projection only; it changes no host service.
 
 The pinned edge authentication response supplies identity/name but no profile
 photo URL. Existing accounts fall back to initials; an optional future photo

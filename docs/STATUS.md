@@ -1,9 +1,55 @@
 # Implementation and verification status
 
+## Session controls, checkout selection and Details
+
+Session rows now use provider marks in live and test modes. The active filter
+colors only its existing slider icon, preserving the common glass button.
+Android draws matching slider and checkout branch vectors where the pinned
+renderer does not support the Apple symbols.
+Search keeps one mounted control while its width expands, then focuses after
+the initial expansion; closing it dismisses editing on both platforms. Drawer
+movement is isolated from the contents' layout transactions, including drag and
+cancel, so transcript replacements move with the page. Reduce Motion remains
+supported.
+
+Sub-agent cards contain only a title and state, with a monochrome Working shimmer
+that stops under Reduce Motion. The quota warning keeps its orange icon, gains
+an orange progress fill, and drops the orange border. Settings usage bars remain
+neutral. The blank Composer shows the selected provider's icon above
+“What are we building?” without a subtitle.
+
+New-session checkout selection offers New worktree and host-reported existing
+checkouts. New worktree is requested with the first send; other branch refs do
+not trigger checkout switching. Unsent worktree destinations persist per account
+for first-send recovery. The session actions menu ends with Details, showing the
+editable title, project, branch/path, model, host and creation/update times.
+Loading, retry, account/session changes and stale checkout selections are guarded.
+
+User-message context menus, including attachment tiles, show a recorded message
+timestamp when available. Completed turns show recorded work duration once,
+beneath their changed files when present. The peer's existing JSON signal method
+carries metadata-only deltas for open sessions; the generated ABI and host
+protocol are unchanged. Missing timing stays absent, and text-only token updates
+do not resend unchanged metadata. Local continuation joins retain the final
+segment's status. Raw tool arguments and reasoning remain private.
+
+Targeted domain checks on 2026-10-01: all four `SessionConfigurationTests` and
+eight `TranscriptMetadataTests` passed, covering checkout races and recovery,
+rename isolation, metadata deltas, timestamps and completed-turn footer placement.
+Shared runner result `6c9044fc-1a7c-4e8b-b132-5b9f017ddabf` had stable inputs.
+All twelve changed/new presentation files passed Swift syntax parsing; this
+does not typecheck SwiftUI/Skip. The four new Rust regression cases remain
+unrun, and the Rust changes have source review only. No application or Rust
+build, workflow dispatch or device validation was run for this change.
+The native Swift adapter passed host typechecking against the real generated
+C ABI and pinned Keychain source through the shared runner, with stable inputs
+(`6cc67820-fb1a-4e50-a029-43a12050adba`). This does not exercise the Rust library,
+platform linking, or secure storage on devices.
+
 ## Consistent filter icon and purple accents
 
 The Sessions display-options button retains its slider symbol and uses a purple
-filled circle when filters are active. One named, theme-aware accent now serves
+icon when filters are active. One named, theme-aware accent now serves
 that control, existing-project folders and merged PRs (including native menus):
 Zeron iOS's `#5B43E8` light / `#8B7CF6` dark. Other controls retain neutral tints.
 

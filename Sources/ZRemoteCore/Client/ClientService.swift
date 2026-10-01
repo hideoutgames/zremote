@@ -14,7 +14,17 @@ public struct Project: Identifiable, Hashable, Sendable, Codable {
     public var name: String
     public var path: String
     public var hostID: String
-    public init(id: String, name: String, path: String, hostID: String) { self.id = id; self.name = name; self.path = path; self.hostID = hostID }
+    public var isRepository: Bool
+    public init(id: String, name: String, path: String, hostID: String, isRepository: Bool = false) { self.id = id; self.name = name; self.path = path; self.hostID = hostID; self.isRepository = isRepository }
+    private enum CodingKeys: String, CodingKey { case id, name, path, hostID, isRepository }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        path = try values.decode(String.self, forKey: .path)
+        hostID = try values.decode(String.self, forKey: .hostID)
+        isRepository = try values.decodeIfPresent(Bool.self, forKey: .isRepository) ?? false
+    }
 }
 
 public struct PullRequest: Identifiable, Hashable, Sendable, Codable {
@@ -68,15 +78,16 @@ public struct Session: Identifiable, Hashable, Sendable, Codable {
     public var archived: Bool
     public var createdAt: Date
     public var updatedAt: Date
-    public init(id: String, title: String, projectID: String? = nil, hostID: String, path: String = "", preview: String = "", working: Bool = false, unread: Bool = false, pullRequest: PullRequest? = nil, pinned: Bool = false, archived: Bool = false, createdAt: Date = Date(timeIntervalSince1970: 0), updatedAt: Date = Date(timeIntervalSince1970: 0), awaitingInput: Bool = false, failed: Bool = false, activity: String = "", lastFinishedAt: Date? = nil, completedTurnID: String? = nil, inputRequestID: String? = nil, providerID: String = "", modelID: String? = nil) {
+    public var branch: String?
+    public init(id: String, title: String, projectID: String? = nil, hostID: String, path: String = "", preview: String = "", working: Bool = false, unread: Bool = false, pullRequest: PullRequest? = nil, pinned: Bool = false, archived: Bool = false, createdAt: Date = Date(timeIntervalSince1970: 0), updatedAt: Date = Date(timeIntervalSince1970: 0), awaitingInput: Bool = false, failed: Bool = false, activity: String = "", lastFinishedAt: Date? = nil, completedTurnID: String? = nil, inputRequestID: String? = nil, providerID: String = "", modelID: String? = nil, branch: String? = nil) {
         self.id = id; self.title = title; self.projectID = projectID; self.hostID = hostID; self.path = path; self.preview = preview; self.working = working; self.unread = unread; self.pullRequest = pullRequest
         self.pinned = pinned; self.archived = archived; self.createdAt = createdAt; self.updatedAt = updatedAt
         self.awaitingInput = awaitingInput; self.failed = failed; self.activity = activity; self.lastFinishedAt = lastFinishedAt
-        self.completedTurnID = completedTurnID; self.inputRequestID = inputRequestID; self.providerID = providerID; self.modelID = modelID
+        self.completedTurnID = completedTurnID; self.inputRequestID = inputRequestID; self.providerID = providerID; self.modelID = modelID; self.branch = branch
     }
     private enum CodingKeys: String, CodingKey {
         case id, title, projectID, hostID, path, preview, working, unread, pullRequest, pinned, archived, createdAt, updatedAt
-        case awaitingInput, failed, activity, lastFinishedAt, completedTurnID, inputRequestID, providerID, modelID
+        case awaitingInput, failed, activity, lastFinishedAt, completedTurnID, inputRequestID, providerID, modelID, branch
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -101,6 +112,7 @@ public struct Session: Identifiable, Hashable, Sendable, Codable {
         inputRequestID = try values.decodeIfPresent(String.self, forKey: .inputRequestID)
         providerID = try values.decodeIfPresent(String.self, forKey: .providerID) ?? ""
         modelID = try values.decodeIfPresent(String.self, forKey: .modelID)
+        branch = try values.decodeIfPresent(String.self, forKey: .branch)
     }
 
 }
@@ -159,7 +171,9 @@ public struct TranscriptMessage: Identifiable, Equatable, Sendable {
     public var streaming: Bool
     public var attachments: [RemoteAttachment]
     public var subagents: [SubagentStatus]
-    public init(id: String, role: String, text: String, streaming: Bool = false, attachments: [RemoteAttachment] = [], subagents: [SubagentStatus] = []) { self.id = id; self.role = role; self.text = text; self.streaming = streaming; self.attachments = attachments; self.subagents = subagents }
+    public var timestamp: Date?
+    public var workedDuration: TimeInterval?
+    public init(id: String, role: String, text: String, streaming: Bool = false, attachments: [RemoteAttachment] = [], subagents: [SubagentStatus] = [], timestamp: Date? = nil, workedDuration: TimeInterval? = nil) { self.id = id; self.role = role; self.text = text; self.streaming = streaming; self.attachments = attachments; self.subagents = subagents; self.timestamp = timestamp; self.workedDuration = workedDuration }
 }
 
 public struct SessionState: Equatable, Sendable {
@@ -237,6 +251,9 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
     func closeSession(_ id: String)
     func models(hostID: String) async throws -> [AgentModel]
     func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String
+    func createSession(projectID: String?, hostID: String, selection: ModelSelection, checkout: CheckoutSelection) async throws -> String
+    func checkouts(projectID: String, hostID: String) async throws -> [ProjectCheckout]
+    func renameSession(sessionID: String, title: String) async throws
     func send(sessionID: String, text: String) async throws
     func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws
     func readAttachment(sessionID: String, attachment: RemoteAttachment) async throws -> Data
@@ -258,6 +275,12 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
 // Existing test peers can stay focused on the behavior they exercise. Live and
 // demo clients implement every supported operation explicitly.
 public extension ClientService {
+    func createSession(projectID: String?, hostID: String, selection: ModelSelection, checkout: CheckoutSelection) async throws -> String {
+        guard checkout == .current else { throw ClientFailure("Checkout selection is unavailable from this client.") }
+        return try await createSession(projectID: projectID, hostID: hostID, selection: selection)
+    }
+    func checkouts(projectID: String, hostID: String) async throws -> [ProjectCheckout] { throw ClientFailure("Checkouts are unavailable from this client.") }
+    func renameSession(sessionID: String, title: String) async throws { throw ClientFailure("Renaming is unavailable from this client.") }
     func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws {
         guard attachments.isEmpty else { throw ClientFailure("This client cannot send attachments.") }
         try await send(sessionID: sessionID, text: text)

@@ -25,6 +25,15 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
 
     private var rightToLeft: Bool { layoutDirection == .rightToLeft }
     private var settling: Animation? { reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.88) }
+    private var contentLayoutAnimation: Animation? {
+        #if os(Android)
+        // Skip treats nil as an absent override; a zero-duration animation
+        // prevents the ambient drag spring from moving individual descendants.
+        .linear(duration: 0)
+        #else
+        nil
+        #endif
+    }
 
     var body: some View {
         // Only this phone stage ignores safe areas. The root measures their live
@@ -40,6 +49,7 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
                 menu()
                     .padding(safeAreaInsets)
                     .frame(width: distance, height: geometry.size.height)
+                    .animation(contentLayoutAnimation, value: offset)
                     .allowsHitTesting(isOpen && dragOriginOpen == nil)
                     .accessibilityHidden(!isOpen)
                 content()
@@ -48,6 +58,10 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
                     .padding(safeAreaInsets)
                     .frame(width: width, height: geometry.size.height)
                     .background(Palette.background)
+                    // The spring belongs to the page transform below. A new
+                    // transcript/composer must not inherit it and animate its
+                    // own layout separately inside the moving surface.
+                    .animation(contentLayoutAnimation, value: offset)
                     .overlay {
                         if isOpen {
                             Color.clear.contentShape(Rectangle())

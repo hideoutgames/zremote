@@ -1,36 +1,20 @@
 import SwiftUI
 import ZRemoteCore
 
-/// A compact presentation of the sub-agent's task and current activity.
+/// A sub-agent's task and current state, without repeating transcript details.
 struct SessionEventCard: View {
-    let symbol: String
     let title: String
     let subtitle: String
     var active = false
-    var disclosure = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(active ? Palette.addition : Palette.secondary)
-                .frame(width: 34, height: 34)
-                .background(Palette.raised, in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text)
-                    .multilineTextAlignment(.leading)
-                HStack(spacing: 6) {
-                    if active { Circle().fill(Palette.addition).frame(width: 5, height: 5) }
-                    Text(subtitle).font(.caption).foregroundStyle(Palette.secondary)
-                        .multilineTextAlignment(.leading)
-                }
-            }
-            Spacer(minLength: 0)
-            if disclosure {
-                Image(systemName: "chevron.right").font(.caption.weight(.medium))
-                    .foregroundStyle(Palette.secondary).padding(.top, 10)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text)
+                .multilineTextAlignment(.leading)
+            if active { ShimmerText(text: "Working").font(.caption) }
+            else { Text(subtitle).font(.caption).foregroundStyle(Palette.secondary) }
         }
+        .multilineTextAlignment(.leading)
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
