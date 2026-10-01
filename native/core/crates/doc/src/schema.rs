@@ -1088,6 +1088,9 @@ pub fn join_continuation_entries(entries: Vec<SessionMessageEntry>) -> Vec<Sessi
             Some(root_id) => {
                 if let Some(&at) = root_index.get(root_id) {
                     out[at].parts.extend(entry.parts);
+                    // Match the incremental transcript join: only the latest
+                    // segment can describe completion, abort, or unknown state.
+                    out[at].status = entry.status;
                     if entry.duration_ms.is_some() {
                         out[at].duration_ms = entry.duration_ms;
                     }
@@ -1410,6 +1413,27 @@ pub fn materialize_tail(
 mod tests {
     use super::*;
     use crate::parts::fold_event_into_parts;
+
+    #[test]
+    fn continuation_join_uses_final_status_without_inventing_completion() {
+        let root = SessionMessageEntry {
+            id: "root".into(), role: MessageRole::Assistant, parts: vec![],
+            created_at: 1, device_id: "host".into(),
+            status: Some(MessageStatus::Complete), continuation_of: None,
+            duration_ms: Some(10),
+        };
+        for status in [Some(MessageStatus::Aborted), Some(MessageStatus::Streaming), None] {
+            let mut continuation = root.clone();
+            continuation.id = "continuation".into();
+            continuation.continuation_of = Some(root.id.clone());
+            continuation.status = status;
+            continuation.duration_ms = Some(20);
+            let joined = join_continuation_entries(vec![root.clone(), continuation]);
+            assert_eq!(joined.len(), 1);
+            assert_eq!(joined[0].status, status);
+            assert_eq!(joined[0].duration_ms, Some(20));
+        }
+    }
 
     #[test]
     fn fork_seam_round_trips_through_the_doc() {

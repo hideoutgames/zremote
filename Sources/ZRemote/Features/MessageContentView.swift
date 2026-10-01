@@ -16,6 +16,10 @@ struct MessageContentView: View {
                         Button { NativeClipboard.copy(ComposerReferenceText(message.text).text) } label: {
                             Label("Copy message", systemImage: "doc.on.doc")
                         }
+                        if let timestamp = message.timestamp {
+                            Divider()
+                            Text(messageDate(timestamp))
+                        }
                     }
                     .padding(.leading, 36)
             } else if renderedText == message.text, !blocks.isEmpty {
@@ -48,6 +52,13 @@ struct MessageContentView: View {
             blocks = parsed
             renderedText = text
         }
+    }
+
+    private func messageDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 

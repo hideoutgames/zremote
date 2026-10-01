@@ -35,8 +35,10 @@ On iOS 26, the project-list button uses a native Liquid Glass button. Account
 initials/photos and PR symbols are native button content so they follow the
 button as it opens its menu.
 The display-options button keeps its slider icon when filters are active, with
-a purple fill. Rare purple accents share the [official Zeron iOS palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
+purple applied only to the icon. Rare purple accents share the [official Zeron iOS palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
 (`#5B43E8` light / `#8B7CF6` dark), including existing-project folders and merged PRs.
+Session rows use their provider's icon, including in test mode. Search expands
+as one continuous control before focusing its editor.
 
 Pull down at the top of Sessions to refresh, including short or empty lists.
 The gesture reveals a recessed strip with the agent's working throbber and
@@ -57,6 +59,16 @@ a small type icon and `filename ≈ TYPE file`. Long rows truncate with an ellip
 User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
+Sub-agent cards show only a title and state; Working uses a quiet shimmer that
+stops with Reduce Motion. User-message context menus include the recorded send
+time, and completed turns show their recorded work duration beneath changed
+files when timing is available. No receive-time estimate replaces missing data.
+
+The blank Composer asks “What should we build?” and offers both project and
+checkout selection. Choose the current checkout, another existing checkout, or
+New worktree. Worktree creation travels with the first message to the host;
+selecting it alone creates nothing. Session actions → Details shows the thread
+title (editable), project, checkout, model, host, and creation/update times.
 
 Agent questions temporarily replace the Composer with a matching answer card.
 Each question has full-width choices, an optional multiline custom answer, and
@@ -131,6 +143,7 @@ at 10% remaining for an unambiguous active account. Once raised, it stays visibl
 across project/provider changes until dismissed for its original session, even
 if a later sample recovers or is unavailable. Usage comes from the host's existing account API through this app's
 bundled peer bridge; no upstream Zeron or server changes are required.
+Its warning icon and progress fill are orange; the warning has no orange outline.
 
 Notifications currently use a **temporary, mobile-only** implementation: iOS
 alerts for a new question, a finished turn, and a quota crossing below 10% are

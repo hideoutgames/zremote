@@ -268,6 +268,10 @@ impl Tracker {
                         for &i in &members[1..] {
                             if let Some(part) = self.slots[i].entry.as_ref() {
                                 message.parts.extend(part.parts.iter().cloned());
+                                // The final segment owns the joined run state,
+                                // including a legacy missing state. Keeping the
+                                // root's Complete would mislabel an aborted tail.
+                                message.status = part.status;
                                 if part.duration_ms.is_some() {
                                     message.duration_ms = part.duration_ms;
                                 }
@@ -448,5 +452,34 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].message.parts.len(), 2);
         assert!(rig.tracker.contains_id("c1"));
+    }
+
+    #[test]
+    fn joined_status_follows_the_latest_continuation_even_when_missing() {
+        let mut rig = Rig::new();
+        let mut root = user("root", "a");
+        root.role = MessageRole::Assistant;
+        root.duration_ms = Some(10);
+        rig.doc.push_message(&root).unwrap();
+        rig.refresh();
+
+        for (index, status) in [
+            Some(MessageStatus::Streaming),
+            Some(MessageStatus::Aborted),
+            Some(MessageStatus::Complete),
+            None,
+        ].into_iter().enumerate() {
+            let mut continuation = user(&format!("c{index}"), "b");
+            continuation.role = MessageRole::Assistant;
+            continuation.continuation_of = Some("root".into());
+            continuation.status = status;
+            continuation.duration_ms = Some(20 + index as i64);
+            rig.doc.push_message(&continuation).unwrap();
+            let change = rig.refresh().unwrap();
+            assert_eq!(change.changed, ["root"]);
+            let joined = &rig.tracker.entries()[0].message;
+            assert_eq!(joined.status, status);
+            assert_eq!(joined.duration_ms, continuation.duration_ms);
+        }
     }
 }

@@ -12,9 +12,11 @@
 //! (`snapshot()` / `subscribe()`), never over FFI.
 
 mod session;
+mod transcript_metadata;
 mod types;
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use zeron_client as zc;
 
@@ -55,6 +57,9 @@ where
 #[derive(uniffi::Object)]
 pub struct CoreClient {
     pub(crate) client: zc::Client,
+    // Metadata is projected only for handles explicitly opened by this mobile
+    // client, and discarded when they close. This is not a host subscription.
+    transcript_metadata: Mutex<HashMap<String, transcript_metadata::MetadataCache>>,
 }
 
 #[allow(dead_code)] // consumed in Rust by the layout engine
@@ -87,7 +92,10 @@ impl CoreClient {
             credentials.into(),
             Arc::new(ListenerBridge(listener)),
         )?;
-        Ok(Arc::new(Self { client }))
+        Ok(Arc::new(Self {
+            client,
+            transcript_metadata: Mutex::new(HashMap::new()),
+        }))
     }
 
     pub fn is_demo(&self) -> bool {
@@ -312,7 +320,12 @@ impl CoreClient {
 
     /// Open (or return the open) session — instant from the local snapshot.
     pub fn open_session(&self, chat_id: String) -> CoreResult<Arc<SessionHandle>> {
-        Ok(SessionHandle::new(self.client.open_session(&chat_id)?))
+        let handle = self.client.open_session(&chat_id)?;
+        self.transcript_metadata
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(chat_id, transcript_metadata::MetadataCache::default());
+        Ok(SessionHandle::new(handle))
     }
 
     /// An already-open session.
@@ -322,6 +335,10 @@ impl CoreClient {
 
     /// The view closed; the session stays warm until evicted.
     pub fn close_session(&self, chat_id: String) {
+        self.transcript_metadata
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&chat_id);
         self.client.close_session(&chat_id);
     }
 
@@ -412,9 +429,41 @@ impl CoreClient {
             .map_err(|_| CoreError::Internal { message: "Could not encode account metadata".into() })
     }
 
-    /// Host-written completion identity and error state, without transcript data.
+    /// Host-written run signals and metadata-only deltas for already-open mobile
+    /// handles. Every consumer must retain these deltas, including workspace
+    /// pulls. No message bodies, reasoning, arguments, or attachment data cross.
     pub fn session_signals_json(&self) -> CoreResult<String> {
-        serde_json::to_string(&self.client.session_signals())
+        let mut signals = self.client.session_signals();
+        let mut caches = self.transcript_metadata
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut updates = HashMap::new();
+        for (id, cache) in caches.iter_mut() {
+            // session() only reads an existing handle; it never opens a
+            // room, runs a host RPC, or warms another transcript.
+            let Some(handle) = self.client.session(id) else { continue };
+            if let Some(update) = cache.update(&handle.snapshot()) {
+                let value = serde_json::to_value(update)
+                    .map_err(|_| CoreError::Internal { message: "Could not encode transcript metadata".into() })?;
+                updates.insert(id.clone(), value);
+            }
+        }
+        if let Some(rows) = signals.as_array_mut() {
+            for row in rows.iter_mut() {
+                let Some(id) = row.get("sessionID").and_then(|value| value.as_str()) else { continue };
+                if let Some(update) = updates.remove(id) {
+                    row["messageMetadata"] = update;
+                }
+            }
+            // A newly opened chat can have messages before its host registry
+            // run signal exists. Metadata must not invent a completion signal.
+            let mut remaining: Vec<_> = updates.into_iter().collect();
+            remaining.sort_by(|left, right| left.0.cmp(&right.0));
+            rows.extend(remaining.into_iter().map(|(id, update)| serde_json::json!({
+                "sessionID": id, "messageMetadata": update,
+            })));
+        }
+        serde_json::to_string(&signals)
             .map_err(|_| CoreError::Internal { message: "Could not encode session signals".into() })
     }
 

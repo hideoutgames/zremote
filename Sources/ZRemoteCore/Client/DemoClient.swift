@@ -17,6 +17,8 @@ public struct ClientFailure: LocalizedError, Sendable {
     private var running: [String: Task<Void, Never>] = [:]
     private var patches: [String: TurnDiff] = [:]
     private var attachmentBytes: [String: Data] = [:]
+    private var projectCheckouts: [String: [ProjectCheckout]] = [:]
+    private var turnStarted: [String: Date] = [:]
     private let interval: UInt64
     private var active = false
     private var visibleSessionID: String?
@@ -25,20 +27,25 @@ public struct ClientFailure: LocalizedError, Sendable {
 
     public func restore() async throws {
         active = true
-        let project = Project(id: "demo-project", name: "Personal project", path: "/Users/demo/Projects/personal", hostID: "demo-mac")
+        let project = Project(id: "demo-project", name: "Personal project", path: "/Users/demo/Projects/personal", hostID: "demo-mac", isRepository: true)
+        projectCheckouts[project.id] = [
+            ProjectCheckout(branch: "main", path: project.path, isCurrent: true),
+            ProjectCheckout(branch: "demo/interface", path: "/Users/demo/Worktrees/personal/interface")
+        ]
         let history = Session(id: "demo-welcome", title: "A quieter workspace", projectID: project.id, hostID: project.hostID, path: project.path, preview: "Ready when you are",
-                              pullRequest: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), createdAt: Date().addingTimeInterval(-3600), updatedAt: Date(), lastFinishedAt: Date().addingTimeInterval(-720), completedTurnID: "demo-history-turn", providerID: "codex", modelID: "gpt-6-astra")
+                              pullRequest: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), createdAt: Date().addingTimeInterval(-3600), updatedAt: Date(), lastFinishedAt: Date().addingTimeInterval(-720), completedTurnID: "demo-history-turn", providerID: "codex", modelID: "gpt-6-astra", branch: "main")
         let question = Session(id: "demo-question", title: "A quick design choice", projectID: project.id, hostID: project.hostID, path: project.path, createdAt: Date().addingTimeInterval(-7200), updatedAt: Date().addingTimeInterval(-1800), awaitingInput: true, activity: "Waiting for response", inputRequestID: "demo-input", providerID: "codex", modelID: "gpt-6-astra")
         workspace = WorkspaceState(connection: .online, hosts: [Host(id: "demo-mac", name: "Demo Mac", online: true)], projects: [project], sessions: [history, question], profile: UserProfile(id: "test-mode", displayName: "Test mode"), devices: [
             ConnectedDevice(id: "demo-mac", name: "Demo Mac", platform: "macos", online: true, isExecutionHost: true),
             ConnectedDevice(id: "demo-phone", name: "This device", platform: "ios", online: true, isExecutionHost: false, isCurrent: true)
         ])
         sessions[history.id] = SessionState(id: history.id, messages: [
-            TranscriptMessage(id: "demo-message-1", role: "user", text: "Make this workspace feel a little calmer."),
-            TranscriptMessage(id: "demo-message-2", role: "assistant", text: "Ready when you are. Start a new session, choose a model, or send a message here to try streaming and changed files. Everything in test mode stays on this device.")
-        ], selection: ModelSelection(providerID: "codex", modelID: "gpt-6-astra"))
+            TranscriptMessage(id: "demo-message-1", role: "user", text: "Make this workspace feel a little calmer.", timestamp: Date().addingTimeInterval(-1032)),
+            TranscriptMessage(id: "demo-message-2", role: "assistant", text: "Ready when you are. Start a new session, choose a model, or send a message here to try streaming and changed files. Everything in test mode stays on this device.", timestamp: Date().addingTimeInterval(-720), workedDuration: 312)
+        ], selection: ModelSelection(providerID: "codex", modelID: "gpt-6-astra"), turnID: "demo-history-turn")
+        patches[history.id] = Self.sampleDiff
         sessions[question.id] = SessionState(id: question.id, messages: [
-            TranscriptMessage(id: "demo-question-message", role: "assistant", text: "Before I continue, which details should I focus on? You can choose several or write your own answer.")
+            TranscriptMessage(id: "demo-question-message", role: "assistant", text: "Before I continue, which details should I focus on? You can choose several or write your own answer.", timestamp: Date().addingTimeInterval(-1800))
         ], selection: ModelSelection(providerID: "codex", modelID: "gpt-6-astra"), input: InputRequest(id: "demo-input", questions: [
             InputQuestion(id: "details", title: "What matters most?", options: ["Spacing", "Typography", "Motion"], multiple: true)
         ]))
@@ -51,7 +58,8 @@ public struct ClientFailure: LocalizedError, Sendable {
     public func signOut() async throws {
         active = false; visibleSessionID = nil
         for task in running.values { task.cancel() }
-        running.removeAll(); sessions.removeAll(); patches.removeAll(); attachmentBytes.removeAll()
+        running.removeAll(); sessions.removeAll(); patches.removeAll(); attachmentBytes.removeAll(); projectCheckouts.removeAll()
+        turnStarted.removeAll()
         workspace = WorkspaceState()
         onUpdate?(.workspace(workspace))
     }
@@ -82,9 +90,35 @@ public struct ClientFailure: LocalizedError, Sendable {
     }
 
     public func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String {
+        try await createSession(projectID: projectID, hostID: hostID, selection: selection, checkout: .current)
+    }
+
+    public func checkouts(projectID: String, hostID: String) async throws -> [ProjectCheckout] {
+        guard active, let project = workspace.projects.first(where: { $0.id == projectID && $0.hostID == hostID && $0.isRepository }) else { throw ClientFailure("Choose a test repository first.") }
+        return projectCheckouts[project.id] ?? [ProjectCheckout(branch: "main", path: project.path, isCurrent: true)]
+    }
+
+    public func createSession(projectID: String?, hostID: String, selection: ModelSelection, checkout: CheckoutSelection) async throws -> String {
+        guard active, workspace.hosts.contains(where: { $0.id == hostID }) else { throw ClientFailure("Choose a test host first.") }
         let id = UUID().uuidString
         let project = workspace.projects.first { $0.id == projectID }
-        workspace.sessions.insert(Session(id: id, title: "New session", projectID: projectID, hostID: hostID, path: project?.path ?? "", createdAt: Date(), updatedAt: Date(), providerID: selection.providerID, modelID: selection.modelID), at: 0)
+        guard projectID == nil || project?.hostID == hostID else { throw ClientFailure("The project belongs to another host.") }
+        var path = project?.path ?? ""
+        var branch: String? = project?.isRepository == true ? "main" : nil
+        switch checkout {
+        case .current: break
+        case .newWorktree:
+            guard let project, project.isRepository else { throw ClientFailure("A new worktree requires a test repository.") }
+            let name = String(id.prefix(8)).lowercased()
+            let newBranch = "zeron/" + name
+            branch = newBranch
+            path = "/Users/demo/Worktrees/" + project.id + "/" + name
+            projectCheckouts[project.id, default: [ProjectCheckout(branch: "main", path: project.path, isCurrent: true)]].append(ProjectCheckout(branch: newBranch, path: path))
+        case .existing(let selected):
+            guard let project, try await checkouts(projectID: project.id, hostID: hostID).contains(selected) else { throw ClientFailure("This test checkout is no longer available.") }
+            path = selected.path; branch = selected.branch
+        }
+        workspace.sessions.insert(Session(id: id, title: "New session", projectID: projectID, hostID: hostID, path: path, createdAt: Date(), updatedAt: Date(), providerID: selection.providerID, modelID: selection.modelID, branch: branch), at: 0)
         sessions[id] = SessionState(id: id, selection: selection)
         onUpdate?(.workspace(workspace))
         return id
@@ -108,16 +142,20 @@ public struct ClientFailure: LocalizedError, Sendable {
         // A stopped new turn must never borrow the previous turn's file changes.
         patches[sessionID] = nil
         let userID = UUID().uuidString
-        state.messages.append(TranscriptMessage(id: userID, role: "user", text: clean, attachments: remote))
+        let started = Date()
+        turnStarted[sessionID] = started
+        state.messages.append(TranscriptMessage(id: userID, role: "user", text: clean, attachments: remote, timestamp: started))
         let replyID = UUID().uuidString
         state.messages.append(TranscriptMessage(id: replyID, role: "assistant", text: "", streaming: true,
-            subagents: [SubagentStatus(id: "demo-agent-" + replyID, status: "running", detail: "Checking spacing and accessibility in test mode.")]))
+            subagents: [SubagentStatus(id: "demo-agent-" + replyID, title: "Accessibility review", status: "running", detail: "Checking spacing and accessibility in test mode.")], timestamp: started))
         state.working = true
         state.turnID = userID
         state.delivery = ""
         sessions[sessionID] = state
         if let index = workspace.sessions.firstIndex(where: { $0.id == sessionID }) {
-            workspace.sessions[index].title = clean.isEmpty ? "Attachment review" : String(clean.prefix(58))
+            if workspace.sessions[index].title == "New session" {
+                workspace.sessions[index].title = clean.isEmpty ? "Attachment review" : String(clean.prefix(58))
+            }
             workspace.sessions[index].working = true
             workspace.sessions[index].awaitingInput = false
             workspace.sessions[index].activity = "Working"
@@ -165,6 +203,12 @@ public struct ClientFailure: LocalizedError, Sendable {
         workspace.sessions[index].pinned = pinned
         onUpdate?(.workspace(workspace))
     }
+    public func renameSession(sessionID: String, title: String) async throws {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard active, !clean.isEmpty, let index = workspace.sessions.firstIndex(where: { $0.id == sessionID }) else { throw ClientFailure("This test session is no longer available.") }
+        workspace.sessions[index].title = clean
+        onUpdate?(.workspace(workspace))
+    }
     public func setArchived(sessionID: String, archived: Bool) async throws {
         guard let index = workspace.sessions.firstIndex(where: { $0.id == sessionID }) else { throw ClientFailure("Session unavailable.") }
         workspace.sessions[index].archived = archived
@@ -186,7 +230,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         if let row = workspace.sessions.firstIndex(where: { $0.id == sessionID }) {
             workspace.sessions[row].awaitingInput = false; workspace.sessions[row].activity = ""; workspace.sessions[row].inputRequestID = nil
         }
-        state.messages.append(TranscriptMessage(id: UUID().uuidString, role: "assistant", text: "Your choices are saved for this demo. Send a message to try a streaming reply."))
+        state.messages.append(TranscriptMessage(id: UUID().uuidString, role: "assistant", text: "Your choices are saved for this demo. Send a message to try a streaming reply.", timestamp: Date()))
         sessions[sessionID] = state
         onUpdate?(.session(state))
     }
@@ -194,12 +238,14 @@ public struct ClientFailure: LocalizedError, Sendable {
     private func finish(_ id: String, interrupted: Bool) {
         running[id] = nil
         guard var state = sessions[id] else { return }
+        let started = turnStarted.removeValue(forKey: id)
         state.working = false
         state.delivery = interrupted ? "Stopped" : ""
         if !state.messages.isEmpty {
             state.messages[state.messages.count - 1].streaming = false
+            state.messages[state.messages.count - 1].workedDuration = interrupted ? nil : started.map { max(0, Date().timeIntervalSince($0)) }
             state.messages[state.messages.count - 1].subagents = state.messages[state.messages.count - 1].subagents.map {
-                SubagentStatus(id: $0.id, status: "done", detail: interrupted ? "Stopped in test mode." : "Review completed in test mode.")
+                SubagentStatus(id: $0.id, title: $0.title, status: "done", detail: interrupted ? "Stopped in test mode." : "Review completed in test mode.")
             }
         }
         sessions[id] = state
@@ -240,7 +286,7 @@ public struct ClientFailure: LocalizedError, Sendable {
     }
     public func addProject(hostID: String, path: String, isRepository: Bool) async throws -> String {
         let id = UUID().uuidString
-        workspace.projects.append(Project(id: id, name: path.split(separator: "/").last.map(String.init) ?? "Project", path: path, hostID: hostID))
+        workspace.projects.append(Project(id: id, name: path.split(separator: "/").last.map(String.init) ?? "Project", path: path, hostID: hostID, isRepository: isRepository))
         onUpdate?(.workspace(workspace))
         return id
     }
