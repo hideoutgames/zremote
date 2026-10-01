@@ -36,6 +36,7 @@ public enum SecondaryRoute: Identifiable {
     public var route: SecondaryRoute?
     public var busy = false
     public var restoring = true
+    public private(set) var refreshingSessions = false
     public var error: String?
     public var organizations: [Organization] = []
     public var isDemo = false
@@ -76,12 +77,14 @@ public enum SecondaryRoute: Identifiable {
     @ObservationIgnored private var capturing: Set<String> = []
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var modelTask: Task<Void, Never>?
+    @ObservationIgnored private var sessionsRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var loadingPreferences = false
     @ObservationIgnored private var saveAfterRestore = false
     @ObservationIgnored private var editedDrafts: Set<String> = []
     @ObservationIgnored private var editedFavorites = false
     @ObservationIgnored private var editedBackground = false
     @ObservationIgnored private var editedTheme = false
+    @ObservationIgnored private var editedHaptics = false
     @ObservationIgnored private var changeSizes: [String: Int] = [:]
 
     public init(client: any ClientService, makeLiveClient: @escaping @MainActor () -> any ClientService,
@@ -140,6 +143,31 @@ public enum SecondaryRoute: Identifiable {
         do { try await client.restore() } catch { if epoch == generation { self.error = "Couldn't restore your session. Please sign in again." } }
     }
 
+    /// Refresh the peer's workspace without replacing the current composer.
+    /// Concurrent gestures share one request; account changes invalidate it.
+    public func refreshSessions() async {
+        guard signedIn, !Task.isCancelled else { return }
+        if let task = sessionsRefreshTask { await task.value; return }
+        let epoch = generation, source = client
+        refreshingSessions = true
+        let task = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if epoch == self.generation {
+                    self.refreshingSessions = false
+                    self.sessionsRefreshTask = nil
+                }
+            }
+            do { try await source.refresh() }
+            catch {
+                guard epoch == self.generation, !Task.isCancelled, !(error is CancellationError) else { return }
+                self.error = "Couldn't refresh sessions. Try again when your connection is restored."
+            }
+        }
+        sessionsRefreshTask = task
+        await task.value
+    }
+
     public func enterDemo() async {
         await disconnect()
         client = DemoClient()
@@ -164,6 +192,7 @@ public enum SecondaryRoute: Identifiable {
 
     private func resetAccountState() {
         saveTask?.cancel(); modelTask?.cancel(); notificationTask?.cancel(); accountsTask?.cancel()
+        sessionsRefreshTask?.cancel(); sessionsRefreshTask = nil; refreshingSessions = false
         for task in notificationDeliveries.values { task.cancel() }
         notificationDeliveries = [:]; notificationDeliveryEvents = [:]; queuedNotifications = [:]; observedRunningSessions = []
         notifications.stop(); accountsRequest += 1; accountHostID = nil; accountSnapshotsByHost = [:]; pendingNotificationSession = nil
@@ -172,7 +201,7 @@ public enum SecondaryRoute: Identifiable {
         modelRequest += 1; selectionGeneration += 1
         store = nil; restoredAccount = nil; capturing = []
         loadingPreferences = false; saveAfterRestore = false
-        editedDrafts = []; editedFavorites = false; editedBackground = false; editedTheme = false; editedNotifications = false
+        editedDrafts = []; editedFavorites = false; editedBackground = false; editedTheme = false; editedHaptics = false; editedNotifications = false
         changeSizes = [:]
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
@@ -411,6 +440,7 @@ public enum SecondaryRoute: Identifiable {
         scheduleSave()
     }
     public func setTheme(_ theme: AppTheme) { editedTheme = true; preferences.theme = theme; scheduleSave() }
+    public func setHapticsEnabled(_ enabled: Bool) { editedHaptics = true; preferences.hapticsEnabled = enabled; scheduleSave() }
     public func setBackgroundImage(data: Data?, name: String?) {
         guard (data?.count ?? 0) <= 2_000_000 else { error = "Choose a background image smaller than 2 MB."; return }
         editedBackground = true
@@ -785,6 +815,10 @@ public enum SecondaryRoute: Identifiable {
                 for id in self.editedDrafts { merged.drafts[id] = self.preferences.drafts[id] }
                 if self.editedFavorites { merged.favorites = self.preferences.favorites }
                 if self.editedTheme { merged.theme = self.preferences.theme }
+                if self.editedHaptics {
+                    merged.hapticsEnabled = self.preferences.hapticsEnabled
+                    self.saveAfterRestore = true
+                }
                 if self.editedBackground {
                     merged.backgroundEnabled = self.preferences.backgroundEnabled
                     merged.backgroundImageData = self.preferences.backgroundImageData

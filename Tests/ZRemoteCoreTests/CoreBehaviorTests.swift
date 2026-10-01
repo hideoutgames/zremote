@@ -4,6 +4,53 @@ import XCTest
 import ZRemoteCore
 
 final class CoreBehaviorTests: XCTestCase {
+    func testHapticsPreferenceDefaultsEnabledAndPreservesOptOut() throws {
+        let legacy = Data("{\"theme\":\"dark\",\"drafts\":{\"new\":\"Saved draft\"}}".utf8)
+        var preferences = try JSONDecoder().decode(LocalPreferences.self, from: legacy)
+        XCTAssertTrue(preferences.hapticsEnabled)
+        XCTAssertEqual(preferences.drafts["new"], "Saved draft")
+        preferences.hapticsEnabled = false
+        let restored = try JSONDecoder().decode(LocalPreferences.self, from: JSONEncoder().encode(preferences))
+        XCTAssertFalse(restored.hapticsEnabled)
+        XCTAssertEqual(restored.theme, .dark)
+    }
+
+    func testHapticsPreferenceStaysAccountLocal() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("zremote-haptics-accounts-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = LocalStateStore(accountKey: "first", root: root)
+        let second = LocalStateStore(accountKey: "second", root: root)
+        var preferences = LocalPreferences()
+        preferences.hapticsEnabled = false
+        try await first.save(preferences)
+        let firstRestored = try await first.load()
+        let secondRestored = try await second.load()
+        XCTAssertFalse(firstRestored.hapticsEnabled)
+        XCTAssertTrue(secondRestored.hapticsEnabled)
+    }
+
+    @MainActor
+    func testHapticsEditBeforeRestorationSurvivesLoadAndResetsAtSignOut() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("zremote-haptics-restore-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let client = AppModelTestClient()
+        let store = LocalStateStore(accountKey: client.accountKey!, root: root)
+        var saved = LocalPreferences()
+        saved.drafts["new"] = "Persisted draft"
+        saved.hapticsEnabled = true
+        try await store.save(saved)
+        let model = AppModel(client: client, makeLiveClient: { AppModelTestClient() },
+                             makeStore: { LocalStateStore(accountKey: $0, root: root) })
+        model.setHapticsEnabled(false)
+        await model.start()
+        let restore = DraftRestorationExpectation(model: model, draft: "Persisted draft")
+        let result = await restore.wait()
+        XCTAssertEqual(result, .completed)
+        XCTAssertFalse(model.preferences.hapticsEnabled)
+        await model.disconnect()
+        XCTAssertTrue(model.preferences.hapticsEnabled)
+    }
+
     func testNewComposerDecorationNeverAppearsBehindNavigationAndSummaryStopsAtSix() {
         XCTAssertTrue(PresentationRules.showsBackground(enabled: true, hasSession: false, sessionsVisible: false, secondaryVisible: false))
         for state in [(false, false, false, false), (true, true, false, false),

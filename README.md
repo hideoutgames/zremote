@@ -23,6 +23,13 @@ in Show all, project headers expand and collapse their sessions. Sidebar PR
 badges contain the state-colored icon and number. Native iOS PR menus retain
 those icon colors, and the account menu uses the same control size as its peers.
 
+Pull down at the top of Sessions to refresh, including short or empty lists.
+The gesture reveals a recessed strip with the agent's working throbber and
+inset edge shadows. A selected Composer image keeps its filter, full-window
+scale and position, with a darker overlay; otherwise the strip uses a slightly
+darker page background. Refresh asks the existing peer to resync, and further
+remote updates can arrive after the gesture finishes.
+
 The composer supports native file/photo/camera attachments and host-backed
 `/commands`, `$skills` and `@files` suggestions. References are highlighted in
 the editor and sent messages. User messages align right. Agent text and code use
@@ -75,8 +82,8 @@ them in each session. These are first-observed positions, not historical creatio
 events. PR review opens the supplied HTTPS link. A missing profile photo uses
 initials; the client does not look up an avatar from another service.
 
-The optional background belongs only to a blank new Composer. It is removed
-while Sessions or a secondary view is visible. There is no terminal, general
+The optional background decorates a blank new Composer and the transient
+Sessions refresh recess. It stays hidden on other surfaces. There is no terminal, general
 file browser, repository administration, or direct GitHub integration.
 Settings can import a device-local image and apply Zeron's Original, Dither,
 ASCII, Halftone or Scanlines treatment with its native contrast guard. Images
@@ -85,6 +92,10 @@ are downsampled before account-local storage and never uploaded to the host.
 Settings lists connected devices and host-reported agent accounts/plan usage.
 Theme offers System, Light and Dark with adaptive surfaces and grayscale usage
 bars. Background effects and their text contrast guard follow the chosen theme.
+Haptics enables app-triggered feedback, including one light response when a
+refresh is committed. It defaults on and persists with account preferences.
+System-owned feedback, such as iOS Haptic Touch or the system keyboard, remains
+controlled by the operating system.
 Agent sign-in remains on the host. A quota warning above the Composer appears
 at 10% remaining for an unambiguous active account. Once raised, it stays visible
 across project/provider changes until dismissed for its original session, even

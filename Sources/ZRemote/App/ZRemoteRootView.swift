@@ -22,12 +22,18 @@ public struct ZRemoteRootView: View {
     public var body: some View {
         GeometryReader { geometry in
             let tablet = isTablet(width: geometry.size.width)
+            let frame = geometry.frame(in: .global)
+            let insets = geometry.safeAreaInsets
+            let sceneFrame = CGRect(x: frame.minX - insets.leading, y: frame.minY - insets.top,
+                                    width: frame.width + insets.leading + insets.trailing,
+                                    height: frame.height + insets.top + insets.bottom)
             ZStack {
                 Palette.background.ignoresSafeArea()
                 if model.restoring {
                     ProgressView().tint(Palette.text)
                 } else if model.signedIn {
                     workspace(tablet: tablet, size: geometry.size)
+                        .environment(\.composerSceneFrame, sceneFrame)
                 } else {
                     SignInView(model: model)
                 }
@@ -79,6 +85,9 @@ public struct ZRemoteRootView: View {
             .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
         }
         .preferredColorScheme(preferredColorScheme)
+        #if os(Android)
+        .composeModifier { AndroidHapticsModifier(enabled: model.preferences.hapticsEnabled) }
+        #endif
         .tint(Palette.text)
         .task { await model.start() }
         .onChange(of: scenePhase) { _, phase in model.setForeground(phase == .active) }

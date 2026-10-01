@@ -28,29 +28,48 @@ private struct BackgroundRequest: Hashable {
     let light: Bool
 }
 
+private struct ComposerSceneFrameKey: EnvironmentKey {
+    static let defaultValue: CGRect? = nil
+}
+
+extension EnvironmentValues {
+    /// The whole window, including safe areas, in global coordinates. Both the
+    /// blank Composer and the refresh recess show the same stationary image.
+    var composerSceneFrame: CGRect? {
+        get { self[ComposerSceneFrameKey.self] }
+        set { self[ComposerSceneFrameKey.self] = newValue }
+    }
+}
+
 struct ComposerBackground: View {
     let data: Data?
     let effect: String
     @State private var image: Image?
     @State private var opacity = 0.0
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.composerSceneFrame) private var sceneFrame
 
     var body: some View {
         GeometryReader { geometry in
+            let local = geometry.frame(in: .global)
+            let scene = sceneFrame ?? local
             Group {
                 if let image {
                     image.resizable().scaledToFill()
-                        .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                        .frame(width: scene.width, height: scene.height).clipped()
                         .opacity(opacity)
                 } else if data == nil {
                     RadialGradient(colors: [Color(white: 0.28).opacity(0.45), .clear],
                                    center: .topTrailing, startRadius: 20, endRadius: 580)
                 }
             }
+            .frame(width: scene.width, height: scene.height)
             .mask(LinearGradient(stops: [.init(color: .black, location: 0),
                                         .init(color: .black.opacity(0.8), location: 0.35),
                                         .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+            .position(x: scene.midX - local.minX, y: scene.midY - local.minY)
         }
+        .clipped()
         .allowsHitTesting(false).accessibilityHidden(true)
         .task(id: BackgroundRequest(data: data, effect: effect, light: colorScheme == .light)) {
             image = nil; opacity = 0

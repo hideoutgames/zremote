@@ -1,5 +1,36 @@
 # Implementation and verification status
 
+## Sessions refresh and haptics
+
+Sessions now uses native pull-to-refresh: a transparent UIKit refresh control
+on iOS and Material's nested-scroll refresh state on Android. The revealed
+surface shares the Composer's full-window wallpaper coordinates, effect and
+contrast treatment, with a darker overlay and inset shadows. No image produces
+a slightly darker page surface. The existing agent activity glyph is reused
+without changing its appearance or animation. Short/empty lists remain pullable.
+
+Refresh requests use the existing mobile peer; concurrent requests coalesce,
+composer state is preserved, and account changes discard stale failures. The
+live peer requests resync and republishes its current snapshot; later network
+events can arrive after the indicator settles. No host or relay change is needed.
+
+Settings has one subtitle-free Haptics toggle, enabled by default and stored
+per account. It gates app-triggered refresh feedback and Android's app-context
+menu feedback. OS-owned haptics (including UIKit Haptic Touch) still follow
+system settings; no private API is used to intercept them.
+
+Targeted local checks on 2026-10-01: all four `SessionsRefreshTests` passed
+(snapshot updates/draft preservation, concurrent failure/retry, stale-account
+completion and cancellation). All three `CoreBehaviorTests.testHaptics…` cases
+passed (legacy defaults/opt-out roundtrip, account isolation and restore/sign-out).
+Shared runner results: `138464ab-d531-42e9-9dd2-2a9499ce2573` and
+`9ca91f96-9a71-4d43-a902-2cfc6208c4a6`; both had stable inputs.
+
+Changed presentation files passed Swift syntax parsing. This does not typecheck
+UIKit/SwiftUI/Skip or validate gestures, wallpaper alignment, haptic feel and
+VoiceOver on a device. No full test suite, app build, workflow dispatch or
+distribution was run. Compile and TestFlight workflows remain manual-only.
+
 ## Manual build failure investigation
 
 [Manual compile run 36883320315](https://github.com/hideoutgames/zremote/actions/runs/36883320315)
