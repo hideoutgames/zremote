@@ -18,6 +18,11 @@ gh workflow run ios-testflight.yml --repo hideoutgames/zremote --ref BRANCH \
 Enable `save_debug_apk` only for explicitly requested local Android testing. It
 retains the debug APK for one day, without installing or distributing it.
 
+Android demo screenshots use `operation=screenshots` and `source_run_id` for a
+successful Android build. That mode runs an Android emulator on an Ubuntu runner
+and skips the entire TestFlight job. Screenshot evidence records the build
+revision and APK hash; Windows APK assembly is a separate validation result.
+
 `operation=testflight` retains the `testflight` environment and current secrets:
 `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` (PEM or base64), and
 `APPLE_TEAM_ID`. The optional `IOS_BUNDLE_ID` defaults to `no.hideout.zremote`.

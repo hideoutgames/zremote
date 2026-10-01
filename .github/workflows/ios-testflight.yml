@@ -14,17 +14,19 @@
 # only the iOS device app is archived for TestFlight.
 
 name: iOS TestFlight
+run-name: "${{ inputs.operation == 'testflight' && 'TestFlight' || inputs.operation == 'screenshots' && 'Android screenshots' || format('{0} compile', inputs.platform) }} · ${{ github.ref_name }}"
 
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "Compile only, or archive and upload to TestFlight"
+        description: "Compile, capture Android screenshots, or upload to TestFlight"
         type: choice
         required: true
         default: testflight
         options:
           - compile
+          - screenshots
           - testflight
       platform:
         description: "Platform for compile mode (ignored for TestFlight)"
@@ -40,6 +42,10 @@ on:
         type: boolean
         required: false
         default: false
+      source_run_id:
+        description: "Screenshots mode: successful Android build run ID"
+        type: string
+        required: false
       notes:
         description: "Release notes (informational only)"
         required: false
@@ -47,12 +53,19 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: ${{ inputs.operation == 'compile' && format('compile-{0}-{1}', inputs.platform, github.ref) || 'testflight' }}
+  group: ${{ inputs.operation == 'testflight' && 'testflight' || format('{0}-{1}-{2}', inputs.operation, inputs.platform, github.ref) }}
   cancel-in-progress: false
 
 jobs:
+  screenshots:
+    if: inputs.operation == 'screenshots'
+    uses: ./.github/workflows/android-screenshots.yml
+    with:
+      build_run_id: ${{ inputs.source_run_id }}
+
   compile:
     if: inputs.operation == 'compile'
     uses: ./.github/workflows/ios-compile.yml
