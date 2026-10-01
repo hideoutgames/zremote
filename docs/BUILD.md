@@ -64,6 +64,13 @@ It does not install or distribute it. The custom Skip Gradle hook builds the Swi
 module separately for arm64-v8a and x86_64, linking each architecture's Rust `.so`.
 Both platforms use the same generated UniFFI Swift interface and client behavior.
 
+When explicitly requested, CI also exports standalone Gradle sources alongside
+its debug APK. The export omits native build directories: local Windows assembly
+must recover the already compiled Swift/Rust JNI libraries from that exact APK
+and disable Skip's native rebuild. This validates local Kotlin/APK assembly, not
+Windows Swift/Rust compilation. Keep local Gradle workers and memory bounded;
+Skip's exported default heap settings must not override the shared profile.
+
 The manual `Android Compile Check` workflow runs this exact script on a standard
 `macos-26` runner, using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
 build tools 36.0.0, Swift Android SDK 6.4.0, NDK r30, and cargo-ndk 4.1.2. It
@@ -71,15 +78,14 @@ produces a debug build in the temporary runner workspace and retains the compile
 log by default. Its `save_debug_apk` input defaults to false; explicitly enabling
 it retains the successful debug APK for one day for local testing. It does not
 install the app, use release credentials, or run device tests. Building and saving
-that APK require the user's explicit request. The workflow is prepared in source. Before it is registered on main, dispatch
+that APK require the user's explicit request. Before it is registered on main, dispatch
 `iOS TestFlight` with `operation=compile` and `platform=android` or `both`; that
 mode skips the entire signing job. See [manual compilation](TESTFLIGHT.md).
 
-Before the new Android workflow reaches `main`, use the already registered
-`iOS Compile Check` workflow on the feature branch with its `platform` input set
-to `android` or `both`. It calls the same Android workflow as a reusable job;
-`save_debug_apk` remains opt-in. Both entry points require manual dispatch, and
-neither runs automatically on a push or pull request.
+After these workflows reach `main`, `iOS Compile Check` can also be dispatched
+directly with `platform=android` or `both`. It calls the same Android workflow
+as a reusable job; `save_debug_apk` remains opt-in. All entry points require
+manual dispatch and never run automatically on a push or pull request.
 
 The SDK installation command and matching NDK are verified against
 [Skip 1.9.12's installer implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AndroidCommand.swift#L334)

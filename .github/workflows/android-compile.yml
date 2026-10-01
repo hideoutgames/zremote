@@ -91,20 +91,21 @@ jobs:
         run: |
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
+          echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-linux-android x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-core-mobile
+          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
+          cache-on-failure: true
+      - name: Install pinned cargo-ndk
+        run: |
           python3 scripts/run-local.py --phase rust -- \
             cargo install cargo-ndk --version 4.1.2 --locked --jobs 1
       - name: Compile debug app and verify dependency notices
         run: |
           set -o pipefail
           bash scripts/build-android.sh 2>&1 | tee android-build.log
-      - name: Upload compiler log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-compile-build-log
-          path: android-build.log
-          if-no-files-found: ignore
       - name: Save debug APK for explicitly requested local testing
         if: success() && inputs.save_debug_apk
         uses: actions/upload-artifact@v4
@@ -113,3 +114,24 @@ jobs:
           path: Android/app/build/outputs/apk/debug/**/*.apk
           retention-days: 1
           if-no-files-found: error
+
+      - name: Export standalone sources for requested local Android assembly
+        if: success() && inputs.save_debug_apk
+        run: |
+          skip export --no-build --no-ios --no-android --debug --dir "$RUNNER_TEMP/zremote-export"
+          test -f "$RUNNER_TEMP/zremote-export/ZRemote-project.zip"
+      - name: Save standalone sources for requested local Android assembly
+        if: success() && inputs.save_debug_apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: zremote-standalone-sources
+          path: ${{ runner.temp }}/zremote-export/ZRemote-project.zip
+          retention-days: 1
+          if-no-files-found: error
+      - name: Upload compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-compile-build-log
+          path: android-build.log
+          if-no-files-found: ignore

@@ -135,6 +135,7 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
+          echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
           rustc --version
           rustup target list --installed
@@ -142,7 +143,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ios-core-mobile-dist
-          workspaces: "native/core -> ../artifacts/target"
+          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
           cache-on-failure: true
 
       - name: Build native client core and verify acknowledgements

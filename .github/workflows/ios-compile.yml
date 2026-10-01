@@ -50,7 +50,13 @@ jobs:
           bash scripts/install-ci-skip.sh
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
+          echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ios-core-mobile-dist
+          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
+          cache-on-failure: true
       - name: Build native peer and generate acknowledgements
         env:
           CONFIGURATION: Release
