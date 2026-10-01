@@ -1,5 +1,37 @@
 # Implementation and verification status
 
+## Manual build failure investigation
+
+[Manual compile run 36883320315](https://github.com/hideoutgames/zremote/actions/runs/36883320315)
+failed at two separate stages. iOS reached Skip bridge generation and rejected
+the private `model` and `scenePhase` storage in `ZRemoteRootView`. Those properties
+are now internal, matching the generated bridge's access requirement. Android
+stopped in SDK setup because the NDK r27d download timed out after about 60
+seconds; setup now has a bounded retry for download timeouts and still checks
+the installed NDK/toolchain before continuing.
+
+[Earlier compile run 36876051092](https://github.com/hideoutgames/zremote/actions/runs/36876051092)
+hit the same root-view bridge error on both platforms. Its missing generated
+Android settings file was downstream of that error.
+[Run 36870365505](https://github.com/hideoutgames/zremote/actions/runs/36870365505),
+despite the older "iOS TestFlight" workflow name, selected Android compile mode:
+TestFlight was intentionally skipped. Its earlier resource-admission timeout
+was addressed by the existing Intel runner migration; resource limits are
+unchanged. No current signing/upload failure was observed in these runs.
+
+The compile and TestFlight jobs remain manual-only and now reject automatic
+callers explicitly, including reusable workflow calls. Automatic regression CI
+retains its existing checks and adds five isolated installer cases that use
+stub commands, with no SDK download or app compilation. No workflow was dispatched or rerun during this investigation;
+successful app compilation and TestFlight distribution remain unverified.
+
+Local validation for these fixes: the changed root view passed Swift syntax
+parsing; the installer and its test script passed Bash syntax checks; all five
+stub installer cases passed (success, timeout recovery, permanent failure,
+exhausted retries and timeout followed by permanent failure). Actionlint 1.7.12
+passed on the four changed workflow files with external ShellCheck/Pyflakes
+disabled. No domain suite, native app build, signing or upload was run.
+
 ## Follow-up interaction refinements
 
 The follow-up to merged [PR #177](https://github.com/hideoutgames/zremote/pull/177)

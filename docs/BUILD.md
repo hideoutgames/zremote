@@ -75,7 +75,10 @@ The manual `Android Compile Check` workflow runs this exact script on a standard
 `macos-26-intel` runner (14 GB), using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
 build tools 36.0.0, Swift Android SDK 6.3.3, NDK r27d, and cargo-ndk 4.1.2. The
 matching Swift 6.3.3 host/Android pair avoids Swiftly 1.1.3's incorrect 6.4.0
-host download URL normalization. Full iOS builds also use the standard 14 GB
+host download URL normalization. The setup helper retries installer download
+timeouts up to three attempts, then verifies the NDK and matching toolchain;
+the retry delays are 15 and 30 seconds, and other errors stop immediately.
+Full iOS builds also use the standard 14 GB
 Intel runner: the 7 GB ARM runner timed out waiting for admission after Android
 tool setup. Admission still requires 3 GB available memory, uses one
 worker, and retains the shared cache and provenance checks. Rust cache paths are
@@ -94,6 +97,11 @@ After these workflows reach `main`, `iOS Compile Check` can also be dispatched
 directly with `platform=android` or `both`. It calls the same Android workflow
 as a reusable job; `save_debug_apk` remains opt-in. All entry points require
 manual dispatch and never run automatically on a push or pull request.
+Each app build job also checks `github.event_name == 'workflow_dispatch'`, so a
+future automatic caller cannot start it through `workflow_call`. The reusable
+workflow sees the [original caller's GitHub context](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context).
+The automatic CI workflow runs domain/projection regressions and source syntax
+checks; it does not invoke app compilation or TestFlight.
 
 The SDK installation command and matching NDK are verified against
 [Skip 1.9.12's installer implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AndroidCommand.swift#L334)
@@ -132,7 +140,10 @@ source. It checks types, not linking or platform secure-storage behavior; upstre
 SkipKeychain deliberately throws on this unsupported host platform.
 
 CI runs the three named Swift regression classes and the three Rust transcript
-projection regressions. The iOS Compile Check remains a separate manual unsigned
+projection regressions. Five isolated installer cases use stub commands to
+check retries and failure propagation without downloading an SDK or compiling.
+Run those cases with `bash Tests/Scripts/install-android-toolchain-tests.sh`.
+The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
 
 The iOS build and archive commands pass `-skipPackagePluginValidation` and
@@ -140,6 +151,11 @@ The iOS build and archive commands pass `-skipPackagePluginValidation` and
 runners. These command-scoped flags match
 [Skip 1.9.12's app build](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AppCommand.swift#L115-L125)
 and [archive implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/InitCommand.swift#L299-L311).
+
+Skip generates the bridge while preparing either platform, including an iOS-only
+build. Stored `@State`/`@Environment` properties on the explicitly bridged root
+view must remain internal so the generated bridge can access them. Swift syntax
+parsing alone does not detect a private-state bridge failure.
 
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated
