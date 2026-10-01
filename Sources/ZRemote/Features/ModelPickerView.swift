@@ -43,6 +43,9 @@ struct ModelPickerView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 tabs
+                    #if os(iOS)
+                    .padding(.top, model.usesSessionPanel ? 0 : 20)
+                    #endif
                 rule
                 search
                 rule

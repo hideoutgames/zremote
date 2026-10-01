@@ -4,6 +4,9 @@ import SwiftUI
 /// gains a black scrim so lines disappear gently behind the input surface.
 struct ChromeFade: View {
     let edge: VerticalEdge
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var lowerColor: Color { colorScheme == .dark ? .black : Palette.background }
 
     var body: some View {
         ZStack {
@@ -13,7 +16,7 @@ struct ChromeFade: View {
                     : [.init(color: .clear, location: 0), .init(color: .black, location: 0.55), .init(color: .black, location: 1)],
                     startPoint: .top, endPoint: .bottom))
             if edge == .bottom {
-                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.8), location: 0.5), .init(color: .black, location: 1)],
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: lowerColor.opacity(0.8), location: 0.5), .init(color: lowerColor, location: 1)],
                                startPoint: .top, endPoint: .bottom)
             }
         }

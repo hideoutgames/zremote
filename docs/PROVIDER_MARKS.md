@@ -23,6 +23,11 @@ them as template images; Claude retains the reference orange. Unknown host
 providers receive a neutral processor glyph instead of another provider's mark.
 No generated artwork or network image fetching is involved.
 
+The shared PR glyph in `Design/PullRequestIcon.swift` adapts the node/arrow path
+from [`PRIcon` in `Design/StatusGlyph.swift`](https://github.com/hideoutgames/zeron/blob/d316f79c2f9ad471d1291c785548be79d893b98b/apps/ios/Zeron/Design/StatusGlyph.swift).
+The same path renders the native menu's original-color images using the
+current appearance and host-reported PR state.
+
 The source project is copyright 2026 Wing, MIT licensed. Its notice is retained
 in `Sources/ZRemote/Resources/Licenses/Zeron-MIT.txt`. Provider names and marks
 identify their respective providers; the source license does not grant

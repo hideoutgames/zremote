@@ -8,6 +8,8 @@ struct SessionListView: View {
     @State private var searching = false
     @State private var sort: SessionSort = .recent
     @State private var grouping: SessionGrouping = .project
+    @State private var shownProjectID: String?
+    @State private var collapsedProjects: Set<String> = []
     @State private var status: SessionStatusFilter = .all
     @State private var pullRequest: SessionPRFilter = .all
     @State private var archived: SessionArchiveFilter = .active
@@ -23,6 +25,9 @@ struct SessionListView: View {
     @Namespace private var searchNamespace
     #endif
 
+    private var selectedProjectID: String? {
+        shownProjectID.flatMap { selected in model.workspace.projects.contains(where: { $0.id == selected }) ? selected : nil }
+    }
     private var filtered: [Session] {
         model.workspace.sessions.map { value in
             var session = value
@@ -30,6 +35,7 @@ struct SessionListView: View {
             return session
         }.filter { session in
             (search.isEmpty || session.title.localizedCaseInsensitiveContains(search))
+                && (selectedProjectID == nil || session.projectID == selectedProjectID)
                 && status.includes(session) && pullRequest.includes(session) && archived.includes(session)
                 && (!unreadOnly || session.unread)
                 && created.includes(session.createdAt) && updated.includes(session.updatedAt)
@@ -49,15 +55,18 @@ struct SessionListView: View {
     }
     private var groups: [SessionSection] {
         let rows = filtered
+        if let projectID = selectedProjectID {
+            return [SessionSection(id: "selected-" + projectID, title: "", symbol: "", sessions: rows, showsHeader: false)]
+        }
         switch grouping {
         case .none: return [SessionSection(id: "all", title: "Sessions", symbol: "clock", sessions: rows)]
         case .project:
             var sections = model.workspace.projects.map { project in
-                SessionSection(id: project.id, title: project.name, symbol: "folder", sessions: rows.filter { $0.projectID == project.id })
+                SessionSection(id: "project-" + project.id, title: project.name, symbol: "folder", sessions: rows.filter { $0.projectID == project.id }, collapsible: true)
             }
             let known = Set(model.workspace.projects.map(\.id))
             sections.append(SessionSection(id: "unassigned", title: "Other sessions", symbol: "bubble.left",
-                                           sessions: rows.filter { $0.projectID.map { !known.contains($0) } ?? true }))
+                                           sessions: rows.filter { $0.projectID.map { !known.contains($0) } ?? true }, collapsible: true))
             return sections.filter { !$0.sessions.isEmpty }
         case .host:
             var sections = model.workspace.hosts.map { host in
@@ -74,7 +83,7 @@ struct SessionListView: View {
         }
     }
     private var hasFilters: Bool {
-        status != .all || pullRequest != .all || archived != .active || unreadOnly || created != .any || updated != .any
+        selectedProjectID != nil || status != .all || pullRequest != .all || archived != .active || unreadOnly || created != .any || updated != .any
     }
 
     var body: some View {
@@ -83,10 +92,10 @@ struct SessionListView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(groups) { section in
-                        Label(section.title, systemImage: section.symbol)
-                            .font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                            .padding(.top, 14).padding(.bottom, 4).padding(.horizontal, 10)
-                        ForEach(section.sessions) { session in sessionRow(session) }
+                        if section.showsHeader { sectionHeader(section) }
+                        if !section.collapsible || !collapsedProjects.contains(section.id) {
+                            ForEach(section.sessions) { session in sessionRow(session).transition(.opacity) }
+                        }
                     }
                     if filtered.isEmpty {
                         Text(search.isEmpty && !hasFilters ? "Your sessions will appear here." : "No matching sessions.")
@@ -178,8 +187,9 @@ struct SessionListView: View {
     @ViewBuilder private var accountMenu: some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            accountMenuControl.buttonStyle(.glass).buttonBorderShape(.circle)
-                .controlSize(.large)
+            NativeProfileMenu(avatar: avatar, name: model.workspace.profile?.displayName ?? "", signingOut: signingOut,
+                              settings: { model.route = .settings }, signOut: signOut)
+                .frame(width: 46, height: 46)
         } else { accountMenuControl.nativeGlassControl() }
         #else
         accountMenuControl.nativeGlassControl()
@@ -189,9 +199,7 @@ struct SessionListView: View {
         Menu {
             Button { model.route = .settings } label: { Label("Settings", systemImage: "gearshape") }
             Button(role: .destructive) {
-                guard !signingOut else { return }
-                signingOut = true
-                Task { await model.disconnect(); signingOut = false }
+                signOut()
             } label: {
                 Text("Sign out")
             }.disabled(signingOut)
@@ -201,6 +209,11 @@ struct SessionListView: View {
         .frame(width: 46, height: 46)
         .accessibilityLabel(model.isDemo ? "Test mode account" : "Account")
         .accessibilityValue(model.workspace.profile?.displayName ?? "")
+    }
+    private func signOut() {
+        guard !signingOut else { return }
+        signingOut = true
+        Task { await model.disconnect(); signingOut = false }
     }
     @ViewBuilder private var avatar: some View {
         if let value = model.workspace.profile?.avatarURL, let url = URL(string: value),
@@ -218,6 +231,13 @@ struct SessionListView: View {
     }
     private var organizationMenu: some View {
         Menu {
+            Menu {
+                menuChoice("Show all", selected: selectedProjectID == nil) { shownProjectID = nil }
+                Divider()
+                ForEach(model.workspace.projects) { project in
+                    menuChoice(project.name, selected: selectedProjectID == project.id) { shownProjectID = project.id }
+                }
+            } label: { Label("Show", systemImage: "folder") }
             Menu {
                 ForEach(SessionSort.allCases) { value in menuChoice(value.rawValue, selected: sort == value) { sort = value } }
             } label: { Label("Sort", systemImage: "arrow.up.arrow.down") }
@@ -240,7 +260,7 @@ struct SessionListView: View {
                 menuChoice("Unread only", selected: unreadOnly) { unreadOnly.toggle() }
                 Divider()
                 Button {
-                    status = .all; pullRequest = .all; archived = .active; created = .any; updated = .any; unreadOnly = false
+                    shownProjectID = nil; status = .all; pullRequest = .all; archived = .active; created = .any; updated = .any; unreadOnly = false
                 } label: { Label("Reset filters", systemImage: "arrow.counterclockwise") }.disabled(!hasFilters)
             } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
             Menu {
@@ -257,6 +277,35 @@ struct SessionListView: View {
         Button(action: action) {
             if selected { Label(title, systemImage: "checkmark") }
             else { Text(title) }
+        }
+    }
+    @ViewBuilder private func sectionHeader(_ section: SessionSection) -> some View {
+        if section.collapsible {
+            let collapsed = collapsedProjects.contains(section.id)
+            Button {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.88)) {
+                    if collapsed { collapsedProjects.remove(section.id) }
+                    else { collapsedProjects.insert(section.id) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Label(section.title, systemImage: section.symbol).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
+                }
+                .font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel(section.title)
+                .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+                #if !os(Android)
+                .accessibilityHint(collapsed ? "Show sessions" : "Hide sessions")
+                #endif
+        } else {
+            Label(section.title, systemImage: section.symbol)
+                .font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                .padding(.top, 14).padding(.bottom, 4).padding(.horizontal, 10)
         }
     }
     private func sessionRow(_ session: Session) -> some View {
@@ -331,6 +380,8 @@ private struct SessionSection: Identifiable {
     var title: String
     var symbol: String
     var sessions: [Session]
+    var showsHeader = true
+    var collapsible = false
 }
 private enum SessionSort: String, CaseIterable, Identifiable {
     case recent = "Recently updated", created = "Recently created", title = "Title"

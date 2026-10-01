@@ -18,11 +18,16 @@ Codex and the configurable Devin Fusion fixture.
 Session rows show state (orange awaiting a response, blue finished/unread,
 gray read/idle, red error), a smaller working animation, and the latest observed
 PR's state badge. Compact View hides only the activity/completion-age line.
+The Show menu can restrict the list to one project without category headers;
+in Show all, project headers expand and collapse their sessions. Sidebar PR
+badges contain the state-colored icon and number. Native iOS PR menus retain
+those icon colors, and the account menu uses the same control size as its peers.
 
 The composer supports native file/photo/camera attachments and host-backed
 `/commands`, `$skills` and `@files` suggestions. References are highlighted in
-the editor and sent messages. Agent text stays selectable; fenced code blocks
-have a Copy action. PR and sub-agent cards use only Zeron's metadata.
+the editor and sent messages. User messages align right. Agent text and code use
+native iOS range selection handles (Compose selection on Android); fenced code
+blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
 
 ## Development
 
@@ -56,6 +61,9 @@ favorites, streaming replies, project folders, and sample changes stay in memory
 New projects can be created in the host's managed projects directory, or an
 existing remote folder can be selected. The current host protocol cannot make
 an arbitrary new Desktop folder. No host or edge patch is required.
+Choose existing folder pushes a browser inside the project drawer. Select a
+folder to enable Create project; a registered project uses a purple folder/cog
+icon and Choose project, which selects it without creating a duplicate.
 
 Turn diff snapshots are best-effort and can expire on the host. The client
 captures available patches when a turn completes and retains immutable,
@@ -75,9 +83,12 @@ ASCII, Halftone or Scanlines treatment with its native contrast guard. Images
 are downsampled before account-local storage and never uploaded to the host.
 
 Settings lists connected devices and host-reported agent accounts/plan usage.
+Theme offers System, Light and Dark with adaptive surfaces and grayscale usage
+bars. Background effects and their text contrast guard follow the chosen theme.
 Agent sign-in remains on the host. A quota warning above the Composer appears
-at 10% remaining for an unambiguous active account and can be dismissed per
-session. Usage comes from the host's existing account API through this app's
+at 10% remaining for an unambiguous active account. Once raised, it stays visible
+across project/provider changes until dismissed for its original session, even
+if a later sample recovers or is unavailable. Usage comes from the host's existing account API through this app's
 bundled peer bridge; no upstream Zeron or server changes are required.
 
 Notifications currently use a **temporary, mobile-only** implementation: iOS

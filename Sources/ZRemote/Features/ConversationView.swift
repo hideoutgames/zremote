@@ -69,7 +69,25 @@ struct ConversationView: View {
             content
             bottomChrome
         }
+        #elseif os(iOS)
+        if #available(iOS 26.0, *) {
+            content
+                // Register the custom bar with the scroll view's real backdrop
+                // effect. A material painted on top adds an unwanted color wash.
+                .safeAreaBar(edge: .top, spacing: 0) { header }
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(true, for: .bottom)
+        } else {
+            insetLayout
+        }
         #else
+        insetLayout
+        #endif
+    }
+
+    #if !os(Android)
+    private var insetLayout: some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) {
                 header.background {
@@ -77,8 +95,8 @@ struct ConversationView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
-        #endif
     }
+    #endif
 
     private var content: some View {
         VStack(spacing: 0) {
@@ -143,14 +161,9 @@ struct ConversationView: View {
             Spacer(minLength: 0)
             if let session = model.session {
                 if !model.sessionPullRequests.isEmpty {
-                    Menu {
-                        ForEach(model.sessionPullRequests) { request in
-                            Button { inputFocused = false; model.route = .pullRequest(request) } label: {
-                                Label("#\(request.number) · \(request.title)", systemImage: "arrow.triangle.pull")
-                            }
-                        }
-                    } label: { headerIcon("arrow.triangle.pull") }
-                        .accessibilityLabel("Session pull requests")
+                    PullRequestMenu(requests: model.sessionPullRequests) { request in
+                        inputFocused = false; model.route = .pullRequest(request)
+                    }
                 }
                 Menu {
                     Button { Task { await model.setPinned(session, pinned: !session.pinned) } } label: {
@@ -204,7 +217,7 @@ struct ConversationView: View {
                             ForEach(message.subagents) { agent in
                                 SessionEventCard(symbol: "person.2", title: agent.title,
                                                  subtitle: agent.detail.isEmpty ? agent.status.capitalized : "\(agent.status.capitalized) · \(agent.detail)",
-                                                 badge: "Sub-agent", active: agent.status == "running")
+                                                 active: agent.status == "running")
                             }
                             if let turn = model.changesAfterMessage[message.id] {
                                 ChangedFilesCard(turn: turn, openFile: { model.route = .diff($0.document) }, showAll: { model.route = .changes(turn) })
@@ -392,9 +405,7 @@ private struct UsageLimitBanner: View {
                     .foregroundStyle(Palette.text).frame(minHeight: 44)
             }.font(.caption)
             HStack(spacing: 10) {
-                ProgressView(value: warning.remainingFraction, total: 1).tint(.orange)
-                    .accessibilityLabel("Usage remaining")
-                    .accessibilityValue("\(warning.percentRemaining) percent")
+                UsageProgressBar(remaining: warning.remainingFraction)
                 Text("\(warning.percentRemaining)%").font(.system(.caption, design: .monospaced))
                     .foregroundStyle(Palette.secondary).accessibilityHidden(true)
             }
@@ -477,6 +488,6 @@ private struct TranscriptRow: View, Equatable {
     let message: TranscriptMessage
     var body: some View {
         MessageContentView(message: message)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
     }
 }

@@ -39,8 +39,6 @@ struct BackgroundSettings: View {
                     Button("Remove Background Image", role: .destructive) { model.setBackgroundImage(data: nil, name: nil) }
                 }
             }
-        } footer: {
-            Text("Only appears in a blank Composer. Your image stays on this device.")
         }
         .listRowBackground(Palette.surface)
         #if os(iOS)

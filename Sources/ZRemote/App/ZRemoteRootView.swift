@@ -77,7 +77,7 @@ public struct ZRemoteRootView: View {
             .onAppear { model.usesSessionPanel = tablet }
             .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(preferredColorScheme)
         .tint(Palette.text)
         .task { await model.start() }
         .onChange(of: scenePhase) { _, phase in model.setForeground(phase == .active) }
@@ -94,6 +94,14 @@ public struct ZRemoteRootView: View {
         #else
         true
         #endif
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        switch model.preferences.theme {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 
     @ViewBuilder private func workspace(tablet: Bool, size: CGSize) -> some View {
@@ -144,7 +152,7 @@ public struct ZRemoteRootView: View {
             .toolbarBackground(Palette.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(preferredColorScheme)
         .tint(Palette.text)
     }
 }

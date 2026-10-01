@@ -62,7 +62,7 @@ private struct NativeComposerEditor: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.textColor = .label
-        view.tintColor = .white
+        view.tintColor = UIColor(Palette.text)
         view.isScrollEnabled = false
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.accessibilityLabel = "Message"
@@ -71,6 +71,7 @@ private struct NativeComposerEditor: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
+        view.tintColor = UIColor(Palette.text)
         context.coordinator.parent = self
         context.coordinator.updating = true
         defer { context.coordinator.updating = false }
@@ -139,7 +140,7 @@ private struct NativeComposerEditor: UIViewRepresentable {
             storage.beginEditing()
             storage.setAttributes([.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.label], range: whole)
             for token in ChatText.tokens(in: view.text) where token.range.length > 1 {
-                storage.addAttribute(.foregroundColor, value: UIColor(red: 48/255, green: 209/255, blue: 88/255, alpha: 1), range: token.range)
+                storage.addAttribute(.foregroundColor, value: UIColor(Palette.addition), range: token.range)
             }
             storage.endEditing()
             view.selectedRange = selection

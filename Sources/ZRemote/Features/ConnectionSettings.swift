@@ -22,7 +22,6 @@ struct ConnectionSettings: View {
                             .font(.caption).foregroundStyle(Palette.secondary)
                     }
                     Spacer()
-                    Circle().fill(device.online ? Palette.addition : Palette.secondary.opacity(0.5)).frame(width: 6, height: 6)
                 }
             }
         }.listRowBackground(Palette.surface)
@@ -96,7 +95,7 @@ private struct AgentProviderSettings: View {
                                             Spacer()
                                             Text("\(Int((remaining * 100).rounded()))% left").font(.system(.caption, design: .monospaced))
                                         }.font(.caption).foregroundStyle(Palette.secondary)
-                                        ProgressView(value: remaining, total: 1).tint(remaining <= 0.1 ? .orange : Palette.addition)
+                                        UsageProgressBar(remaining: remaining)
                                     }.padding(.vertical, 4)
                                 }
                             }
@@ -109,8 +108,6 @@ private struct AgentProviderSettings: View {
             if !showUsage {
                 Section {
                     Button { adding = true } label: { Label("Add agent", systemImage: "plus") }
-                } footer: {
-                    Text("Agent sign-in is managed by Zeron on your host.")
                 }.listRowBackground(Palette.surface)
             }
         }
@@ -170,10 +167,6 @@ struct NotificationSettings: View {
             }
         } header: {
             Text("Notifications")
-        } footer: {
-            if model.isDemo { Text("Notifications are off in test mode.") }
-            else if !model.notificationsSupported { Text("Notifications aren't supported on this device yet.") }
-            else { Text("Alerts arrive while this app receives session updates. Delivery pauses when iOS suspends the app. Background push is planned.") }
         }
         .tint(Palette.addition).listRowBackground(Palette.surface)
     }

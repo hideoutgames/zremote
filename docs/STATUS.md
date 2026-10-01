@@ -1,8 +1,54 @@
 # Implementation and verification status
 
+## Follow-up interaction refinements
+
+The follow-up to merged [PR #177](https://github.com/hideoutgames/zremote/pull/177)
+adds room above provider tabs, pushes folder browsing onto its own project
+drawer page, and distinguishes registered folders from new project choices.
+The Show submenu filters to one project without headers; Show all supports
+animated project collapse. Sidebar PR badges display just the icon and number.
+UIKit owns the fixed-size profile/PR menu buttons and their Liquid Glass
+presentation; native PR action images retain their state colors in either theme.
+
+User messages align right. iOS agent prose/code uses a noneditable, non-scrolling
+UITextView for native range selection, preserving the active range during
+streaming updates and retaining inline formatting/links. Android keeps Compose
+selection. iOS 26 registers the chat header using Apple's
+[safe-area bar](https://developer.apple.com/documentation/swiftui/view/safeareabar(edge:alignment:spacing:content:))
+and [soft scroll edge effect](https://developer.apple.com/documentation/swiftui/scrolledgeeffectstyle/soft),
+without a second material layer over the header. Older iOS retains the material
+fallback; Android's existing blur limitation below still applies.
+
+Settings offers persisted System/Light/Dark themes. Named colors, wallpaper
+contrast and the lower chat fade follow the appearance. Usage bars use neutral
+grays. Device status keeps its text and drops the extra dot; decorative Settings
+footers and the redundant sub-agent heading are removed. The temporary local
+notification limitation remains documented in code and the README.
+
+A fresh, unambiguous low-quota observation now retains its session, provider,
+host and account identity. Its banner stays visible until dismissed, across
+navigation, quota recovery and unavailable later samples. Dismissal applies to
+the original warning, never the currently selected session. Preferences and
+retained warnings stay isolated between live accounts and demo mode.
+
+### Follow-up verification (2026-10-01)
+
+| Check | Result and scope |
+| --- | --- |
+| Domain regressions | `UsageNotificationTests` (14) and `ProjectFolderRulesTests` (3) passed, 17 total, with stable inputs. Only the 3 folder cases were rerun after the Windows network-path correction; that rerun also passed with stable inputs. |
+| Presentation source | 18 explicitly changed/new UI Swift files passed syntax parsing; later edits were reparsed only for affected files. This is not SwiftUI/UIKit/Skip typechecking or device validation. |
+| Theme assets | All 10 named colors and references validated. Primary/secondary text and PR state text meet 4.5:1 in the checked light/dark surface combinations; color values were adjusted after the initial contrast check found failures. |
+| Notices and docs | Checked-in-source license audit, local documentation links and changed-file whitespace checks passed. No dependencies or generated native bindings changed. |
+
+Shared result IDs: `cc979312-d40e-475a-a2f6-09b91333af8d` (17 domain cases) and
+`56acd923-9f9a-4d8e-b725-1906e6d2971f` (folder-only rerun).
+No full suite, iOS/Android app build or device run was performed. Native menu
+morphing, selection handles, scroll blur and navigation still need platform
+validation; the earlier adapter/build results below do not verify this UI.
+
 ## Model, session and settings refinement
 
-The current branch adapts the native Hideout Games model picker, including
+PR #177 adapted the native Hideout Games model picker, including
 provider marks, favorites, effort/Fast settings and offline Fusion options.
 Session rows use state indicators, an inline Composer icon and latest observed
 PR badge. Compact View removes only the activity/known completion-age line.
@@ -13,7 +59,7 @@ Background uploads are downsampled, account-local and rendered with the pinned
 core's Dither/ASCII/Halftone/Scanlines effects and contrast guard. Settings exposes
 connected devices, read-only provider accounts and plan usage. The quota banner
 uses the most restrictive valid window of the matching active account; stale,
-errored and ambiguous quota data never drives the warning.
+errored and ambiguous quota data never raises a new warning.
 
 Notifications are intentionally a **temporary mobile-only implementation**, as
 requested. They use device-local alerts for peer-observed questions, successful
@@ -21,8 +67,8 @@ turns and one quota-threshold crossing per session. They do not depend on Zeron'
 APNs service. Reliable delivery while the app is suspended/terminated remains
 out of scope until an independent service exists. Demo never schedules alerts.
 
-iOS chat chrome uses a masked material above the transcript and a black fade
-behind the Composer. The pinned Android UI layer does not implement unclipped
+The original iOS chat chrome used a masked material above the transcript and a
+black fade behind the Composer. The pinned Android UI layer does not implement unclipped
 scrolling, safe-area insets or Gaussian material blur, so Android retains its
 native keyboard layout with a translucent lower fade. The iOS Fusion popover
 uses an in-picker card on Android, where popovers are unsupported.
@@ -77,7 +123,7 @@ are recorded separately from the completed domain checks below.
   haptic session/message menus, and full-page phone Settings.
 - Native file/photo/camera import, removable composer attachments and inline chat
   previews; host-backed command/skill/file suggestions with highlighted references.
-- Left-aligned user messages, selectable agent text and copyable code blocks;
+- Right-aligned user messages, selectable agent text and copyable code blocks;
   inline sub-agent status and observed PR cards with a PR information drawer.
 - Native iOS/Android entry points, pinned Rust subset, license inventory tools,
   a shared local build runner, and adapted manual TestFlight workflow.

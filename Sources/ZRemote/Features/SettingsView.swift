@@ -14,6 +14,13 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                Picker("Theme", selection: Binding(get: { model.preferences.theme }, set: model.setTheme)) {
+                    Text("System").tag(AppTheme.system)
+                    Text("Light").tag(AppTheme.light)
+                    Text("Dark").tag(AppTheme.dark)
+                }
+            }.listRowBackground(Palette.surface)
             BackgroundSettings(model: model)
             ConnectionSettings(model: model)
             NotificationSettings(model: model)
@@ -46,8 +53,6 @@ struct SettingsView: View {
                     .foregroundStyle(Palette.deletion)
                 }
                 .disabled(signingOut)
-            } footer: {
-                if model.isDemo { Text("Test mode uses sample projects and sessions.") }
             }
             .listRowBackground(Color.clear)
         }

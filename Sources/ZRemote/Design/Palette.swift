@@ -1,15 +1,18 @@
 import SwiftUI
 
-/// The quiet charcoal palette sampled from the supplied product references.
+/// Named light/dark colors resolve in the current view's appearance on both platforms.
 enum Palette {
-    static let background = Color(red: 20 / 255, green: 20 / 255, blue: 20 / 255)
-    static let surface = Color(red: 32 / 255, green: 32 / 255, blue: 32 / 255)
-    static let raised = Color(red: 39 / 255, green: 39 / 255, blue: 39 / 255)
-    static let line = Color.white.opacity(0.09)
-    static let text = Color(white: 0.98)
-    static let secondary = Color(white: 0.70)
-    static let addition = Color(red: 48 / 255, green: 209 / 255, blue: 88 / 255)
-    static let deletion = Color(red: 1, green: 69 / 255, blue: 58 / 255)
+    static let background = Color("PaletteBackground", bundle: .module)
+    static let surface = Color("PaletteSurface", bundle: .module)
+    static let raised = Color("PaletteRaised", bundle: .module)
+    static let text = Color("PaletteText", bundle: .module)
+    static let line = text.opacity(0.09)
+    static let secondary = Color("PaletteSecondary", bundle: .module)
+    static let addition = Color("PaletteAddition", bundle: .module)
+    static let deletion = Color("PaletteDeletion", bundle: .module)
+    static let merged = Color("PaletteMerged", bundle: .module)
+    static let usageFill = Color("PaletteUsageFill", bundle: .module)
+    static let usageTrack = Color("PaletteUsageTrack", bundle: .module)
 }
 
 struct CircleControl: View {
