@@ -4,13 +4,35 @@ import ZRemoteCore
 struct ConversationView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @FocusState private var inputFocused: Bool
+    @State private var inputFocused = false
+    @State private var inputComposing = false
+    @State private var cursor = 0
+    @State private var selectionRequest = 0
+    @State private var suggestions: [ComposerCompletion] = []
+    @State private var suggestionToken: ComposerToken?
+    @State private var loadingSuggestions = false
     @State private var following = true
     @State private var userScrolling = false
     @State private var tailPosition: CGFloat = .infinity
 
     private var wallpaper: Bool {
         PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil, sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil)
+    }
+    private var completionRequest: String {
+        [model.selectedSessionID ?? "new", model.selectedHostID, model.selectedProjectID ?? "",
+         model.selection.providerID, model.draft, String(cursor), String(inputFocused), String(inputComposing)].joined(separator: "\u{1F}")
+    }
+    private var completionUnavailableMessage: String? {
+        guard !model.isDemo else { return nil }
+        let host = model.session?.hostID ?? model.selectedHostID
+        if host.isEmpty { return "Choose a project to see suggestions." }
+        if model.workspace.connection != .online || model.workspace.hosts.first(where: { $0.id == host })?.online == false {
+            return "Reconnect to your desktop to see suggestions."
+        }
+        if suggestionToken?.kind == .file && model.selectedSessionID == nil && model.selectedProjectID == nil {
+            return "Choose a project to find files."
+        }
+        return nil
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -55,9 +77,15 @@ struct ConversationView: View {
             }.ignoresSafeArea()
         }
         .foregroundStyle(Palette.text)
-        .onChange(of: model.selectedSessionID) { _, _ in following = true; userScrolling = false }
+        .onAppear { cursor = (model.draft as NSString).length; selectionRequest += 1 }
+        .onChange(of: model.selectedSessionID) { _, _ in
+            following = true; userScrolling = false
+            cursor = (model.draft as NSString).length; selectionRequest += 1
+            suggestions = []; suggestionToken = nil
+        }
         .onChange(of: model.sessionsVisible) { _, open in if open { inputFocused = false } }
         .onChange(of: model.route?.id) { _, route in if route != nil { inputFocused = false } }
+        .task(id: completionRequest) { await updateSuggestions() }
     }
 
     private var header: some View {
@@ -75,11 +103,39 @@ struct ConversationView: View {
                 }.font(.caption).foregroundStyle(Palette.secondary)
             }
             Spacer(minLength: 0)
-            if model.selectedSessionID != nil {
-                CircleControl(symbol: "square.and.pencil", label: "New session") { model.newSession() }
+            if let session = model.session {
+                if !model.sessionPullRequests.isEmpty {
+                    Menu {
+                        ForEach(model.sessionPullRequests) { request in
+                            Button { inputFocused = false; model.route = .pullRequest(request) } label: {
+                                Label("#\(request.number) · \(request.title)", systemImage: "arrow.triangle.pull")
+                            }
+                        }
+                    } label: { headerIcon("arrow.triangle.pull") }
+                        .accessibilityLabel("Session pull requests")
+                }
+                Menu {
+                    Button { Task { await model.setPinned(session, pinned: !session.pinned) } } label: {
+                        Label(session.pinned ? "Unpin session" : "Pin session", systemImage: session.pinned ? "pin.slash" : "pin")
+                    }
+                    Button { NativeClipboard.copy(model.transcriptText) } label: {
+                        Label("Copy transcript", systemImage: "doc.on.doc")
+                    }.disabled(model.state?.messages.isEmpty != false)
+                    Button { Task { await model.archive(session) } } label: {
+                        Label("Archive session", systemImage: "archivebox")
+                    }
+                } label: { headerIcon("ellipsis") }
+                    .accessibilityLabel("Session actions")
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
+    }
+
+    private func headerIcon(_ symbol: String) -> some View {
+        Image(systemName: symbol).font(.system(size: 18, weight: .medium))
+            .foregroundStyle(Palette.text).frame(width: 44, height: 44)
+            .nativeGlassControl()
+            .contentShape(Circle())
     }
 
     private var projectContext: some View {
@@ -101,13 +157,28 @@ struct ConversationView: View {
                     VStack(spacing: 0) {
                     LazyVStack(alignment: .leading, spacing: 22) {
                         ForEach(model.state?.messages ?? []) { message in
-                            TranscriptRow(message: message).equatable()
+                            if !message.text.isEmpty { TranscriptRow(message: message).equatable() }
+                            if !message.attachments.isEmpty, let sessionID = model.selectedSessionID {
+                                MessageAttachments(attachments: message.attachments) {
+                                    try await model.attachmentData(sessionID: sessionID, attachment: $0)
+                                }
+                            }
+                            ForEach(message.subagents) { agent in
+                                SessionEventCard(symbol: "person.2", title: agent.title,
+                                                 subtitle: agent.detail.isEmpty ? agent.status.capitalized : "\(agent.status.capitalized) · \(agent.detail)",
+                                                 badge: "Sub-agent", active: agent.status == "running")
+                            }
                             if let turn = model.changesAfterMessage[message.id] {
                                 ChangedFilesCard(turn: turn, openFile: { model.route = .diff($0.document) }, showAll: { model.route = .changes(turn) })
                             }
+                            ForEach(model.pullRequestsAfterMessage[message.id] ?? []) { request in
+                                PullRequestCard(request: request) { model.route = .pullRequest(request) }
+                            }
                         }
                         if model.working { ActivityGlyph().padding(.leading, 4) }
-                        if let pr = model.session?.pullRequest { PullRequestCard(request: pr) }
+                        ForEach(model.unanchoredPullRequests) { request in
+                            PullRequestCard(request: request) { model.route = .pullRequest(request) }
+                        }
                         #if os(Android)
                         // Skip resolves scroll IDs through its lazy item collector.
                         tailAnchor
@@ -159,6 +230,18 @@ struct ConversationView: View {
                 .onChange(of: model.changesAfterMessage) { _, _ in
                     if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
                 }
+                .onChange(of: model.pullRequestsAfterMessage) { _, _ in
+                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                }
+                .onChange(of: model.unanchoredPullRequests) { _, _ in
+                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                }
+                .onChange(of: model.state?.messages.flatMap(\.subagents)) { _, _ in
+                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                }
+                .onChange(of: model.state?.messages.flatMap(\.attachments)) { _, _ in
+                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                }
                 if !following {
                     CircleControl(symbol: "arrow.down", label: "Jump to latest") {
                         following = true
@@ -180,14 +263,18 @@ struct ConversationView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 13) {
-            TextField("Message your agent", text: $model.draft, axis: .vertical)
-                .lineLimit(8)
-                .font(.body)
-                .focused($inputFocused)
+            if inputFocused, !inputComposing, let token = suggestionToken {
+                ComposerSuggestions(kind: token.kind, items: suggestions, loading: loadingSuggestions,
+                                    unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
+            }
+            if !model.attachments.isEmpty {
+                ComposerAttachments(attachments: model.attachments, remove: model.removeAttachment)
+            }
+            ComposerTextInput(text: $model.draft, cursor: $cursor, isFocused: $inputFocused,
+                              isComposing: $inputComposing, selectionRequest: selectionRequest)
                 .padding(.horizontal, 6)
-                .accessibilityLabel("Message")
-                .onSubmit { if model.canSend { Task { await model.send() } } }
             HStack(spacing: 10) {
+                AttachmentPicker(model: model)
                 Button { model.route = .models } label: {
                     HStack(spacing: 7) {
                         Text(model.modelName).lineLimit(1)
@@ -209,7 +296,9 @@ struct ConversationView: View {
                 }
                 .buttonStyle(.plain).disabled(!model.canSend && !model.working)
                 .accessibilityLabel(model.working ? "Stop agent" : "Send message")
+                #if !os(Android)
                 .keyboardShortcut(.return, modifiers: [.command])
+                #endif
             }
         }
         .padding(14)
@@ -218,6 +307,31 @@ struct ConversationView: View {
         .frame(maxWidth: 700)
         .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 8)
         .frame(maxWidth: .infinity)
+    }
+
+    private func updateSuggestions() async {
+        suggestions = []
+        guard inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) else {
+            suggestionToken = nil; loadingSuggestions = false; return
+        }
+        suggestionToken = token
+        loadingSuggestions = true
+        try? await Task.sleep(nanoseconds: 180_000_000)
+        guard !Task.isCancelled else { return }
+        let values = await model.complete(kind: token.kind, query: token.query)
+        guard !Task.isCancelled, ChatText.activeToken(in: model.draft, cursorUTF16: cursor) == token else { return }
+        suggestions = Array(values.prefix(12))
+        loadingSuggestions = false
+    }
+
+    private func insertSuggestion(_ item: ComposerCompletion) {
+        guard !inputComposing, let token = suggestionToken, token == ChatText.activeToken(in: model.draft, cursorUTF16: cursor),
+              let next = ChatText.inserting(item.insertion, for: token, in: model.draft) else { return }
+        model.draft = next.text
+        cursor = next.cursorUTF16
+        selectionRequest += 1
+        suggestions = []; suggestionToken = nil
+        inputFocused = true
     }
 
 }
@@ -292,19 +406,7 @@ private struct AgentQuestionView: View {
 private struct TranscriptRow: View, Equatable {
     let message: TranscriptMessage
     var body: some View {
-        HStack(alignment: .top) {
-            if message.role == "user" { Spacer(minLength: 32) }
-            SelectableText(message.text, markdown: !message.streaming)
-            .font(message.role == "tool" ? .subheadline : .body)
-            .lineSpacing(5)
-            .foregroundStyle(message.role == "tool" ? Palette.secondary : Palette.text)
-            .padding(message.role == "user" ? 15 : 0)
-            .background(message.role == "user" ? Palette.surface : .clear, in: RoundedRectangle(cornerRadius: 22))
+        MessageContentView(message: message)
             .frame(maxWidth: .infinity, alignment: .leading)
-            if message.role != "user" { Spacer(minLength: 0) }
-        }
-        #if !os(Android)
-        .accessibilityElement(children: .combine)
-        #endif
     }
 }

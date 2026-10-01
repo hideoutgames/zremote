@@ -38,7 +38,7 @@ permissions:
 jobs:
   compile:
     if: inputs.platform != 'android'
-    runs-on: macos-26
+    runs-on: macos-26-intel
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26
@@ -51,11 +51,12 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
           echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
+          echo "CARGO_CACHE_RELATIVE=$(python3 -c 'import os; print(os.path.relpath(os.path.expanduser("~/.cache/ZRemote/cache/cargo"), "native/core"))')" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ios-core-mobile-dist
-          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
+          key: ios-core-mobile-dist-v2
+          workspaces: "native/core -> ${{ env.CARGO_CACHE_RELATIVE }}"
           cache-on-failure: true
       - name: Build native peer and generate acknowledgements
         env:
@@ -74,11 +75,23 @@ jobs:
           set -o pipefail
           python3 scripts/run-local.py --phase ios -- \
             xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+              -skipPackagePluginValidation -skipMacroValidation \
               -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
               CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
               SKIP_ACTION=none PRODUCT_BUNDLE_IDENTIFIER=dev.zremote.compilecheck \
               build -quiet 2>&1 | tee build.log
+      - name: Save resolved dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-dependency-evidence
+          path: |
+            Project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+            Sources/ZRemote/Resources/SwiftAcknowledgements.json
+            Sources/ZRemote/Resources/Licenses/Swift-*.txt
+          retention-days: 1
+          if-no-files-found: ignore
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4

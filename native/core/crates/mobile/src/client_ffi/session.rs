@@ -453,6 +453,22 @@ pub struct TranscriptMessageView {
     pub role: String,
     pub text: String,
     pub streaming: bool,
+    pub attachments: Vec<TranscriptAttachmentView>,
+    pub subagents: Vec<SubagentView>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TranscriptAttachmentView {
+    pub path: String,
+    pub name: String,
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SubagentView {
+    pub id: String,
+    pub status: String,
+    pub tail: String,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -469,14 +485,51 @@ fn visible_parts(parts: &[zeron_doc::MessagePart]) -> String {
     use zeron_doc::MessagePart;
     parts.iter().filter_map(|part| match part {
         MessagePart::Text { text, .. } => Some(text.clone()),
+        MessagePart::Tool { subagent_ref: Some(_), .. } => None,
         MessagePart::Tool { is_error, resolved, .. } => Some(
             if *is_error { "Tool failed" } else if *resolved { "Tool completed" } else { "Running tool" }.to_owned()),
         MessagePart::Error { message, .. } => Some(message.clone()),
-        MessagePart::Image { name, .. } => Some(format!("Attachment: {name}")),
+        MessagePart::Image { .. } => None,
         // Questions have a typed composer presentation. Reasoning is never
         // an assistant answer and must not be folded into visible prose.
         MessagePart::Reasoning { .. } | MessagePart::Input { .. } | MessagePart::Fork { .. } => None,
     }).collect::<Vec<_>>().join("\n\n")
+}
+
+fn visible_message(parts: &[zeron_doc::MessagePart], user: bool) -> String {
+    let text = visible_parts(parts);
+    if user { zc::attachments::parse_user_message(&text).text } else { text }
+}
+
+fn attachment_views(parts: &[zeron_doc::MessagePart], user: bool) -> Vec<TranscriptAttachmentView> {
+    use zeron_doc::MessagePart;
+    let mut attachments = Vec::new();
+    if user {
+        let text = parts.iter().filter_map(|part| match part { MessagePart::Text { text, .. } => Some(text.as_str()), _ => None }).collect::<Vec<_>>().join("\n\n");
+        attachments.extend(zc::attachments::parse_user_message(&text).images.into_iter().map(|image|
+            TranscriptAttachmentView { path: image.path, name: image.name, mime_type: None }));
+    }
+    for part in parts {
+        if let MessagePart::Image { path, name, mime_type, .. } = part {
+            if !attachments.iter().any(|a| a.path == *path) {
+                attachments.push(TranscriptAttachmentView { path: path.clone(), name: name.clone(), mime_type: Some(mime_type.clone()) });
+            }
+        }
+    }
+    attachments
+}
+
+fn subagent_views(parts: &[zeron_doc::MessagePart]) -> Vec<SubagentView> {
+    use zeron_doc::{MessagePart, SubagentStatus};
+    parts.iter().filter_map(|part| match part {
+        MessagePart::Tool { id, subagent_ref: Some(_), subagent_status, subagent_tail, .. } => Some(SubagentView {
+            id: id.clone(), status: match subagent_status {
+                Some(SubagentStatus::Running) => "running", Some(SubagentStatus::Done) => "done",
+                Some(SubagentStatus::Failed) => "failed", None => "unknown",
+            }.into(), tail: subagent_tail.clone().unwrap_or_default(),
+        }),
+        _ => None,
+    }).collect()
 }
 
 impl SessionHandle {
@@ -518,8 +571,10 @@ impl SessionHandle {
                     zeron_doc::MessageRole::Assistant => "assistant",
                     zeron_doc::MessageRole::System => "system",
                 }}.to_owned(),
-                text: visible_parts(entry.parts()),
+                text: visible_message(entry.parts(), entry.role() == zeron_doc::MessageRole::User),
                 streaming: entry.is_streaming(),
+                attachments: attachment_views(entry.parts(), entry.role() == zeron_doc::MessageRole::User),
+                subagents: subagent_views(entry.parts()),
             }).collect();
         TranscriptUpdate {
             revision: snapshot.revision,
@@ -709,7 +764,7 @@ impl SessionHandle {
 
 #[cfg(test)]
 mod projection_regression_tests {
-    use super::visible_parts;
+    use super::{visible_parts, visible_message, attachment_views, subagent_views};
     use zeron_doc::MessagePart;
 
     #[test]
@@ -719,5 +774,32 @@ mod projection_regression_tests {
             MessagePart::Text { id: "answer".into(), text: "Visible answer".into() },
         ];
         assert_eq!(visible_parts(&parts), "Visible answer");
+    }
+
+    #[test]
+    fn attachments_are_typed_without_exposing_transport_trailers() {
+        let text = zeron_client::attachments::with_attachments("Review this", &["/host/uploads/report.pdf".into()]);
+        let parts = vec![MessagePart::Text { id: "prompt".into(), text }];
+        assert_eq!(visible_message(&parts, true), "Review this");
+        let attachments = attachment_views(&parts, true);
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0].name, "report.pdf");
+        assert_eq!(attachments[0].path, "/host/uploads/report.pdf");
+    }
+
+    #[test]
+    fn resolved_spawn_keeps_actual_subagent_running_status() {
+        let parts = vec![MessagePart::Tool {
+            id: "spawn".into(), call: zeron_proto::ToolCall::Exec { command: "private tool arguments".into() },
+            is_error: false, resolved: true, output: None, diff: None, output_ref: None,
+            output_bytes: None, diff_ref: None, diff_stats: None,
+            subagent_ref: Some("agent-doc".into()), subagent_status: Some(zeron_doc::SubagentStatus::Running),
+            subagent_tail: Some("Reviewing the layout".into()),
+        }];
+        assert_eq!(visible_message(&parts, false), "");
+        let agents = subagent_views(&parts);
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].status, "running");
+        assert_eq!(agents[0].tail, "Reviewing the layout");
     }
 }

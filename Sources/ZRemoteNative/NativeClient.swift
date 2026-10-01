@@ -67,7 +67,14 @@ import ZRemoteCore
         }
         let tokens = try await authRefresh(edgeUrl: edgeURL, refreshToken: pendingAuth.tokens.refreshToken, organizationId: id)
         guard generation == operation else { throw CancellationError() }
-        let stored = StoredAccount(userID: pendingAuth.user.id, organizationID: id, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken)
+        let user = pendingAuth.user
+        let name = [user.firstName, user.lastName].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let photo = user.profilePictureUrl.flatMap { value -> String? in
+            guard let url = URL(string: value), url.scheme == "https", url.user == nil, url.password == nil else { return nil }
+            return value
+        }
+        let stored = StoredAccount(userID: user.id, organizationID: id, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken,
+            profile: UserProfile(id: user.id, displayName: name.isEmpty ? (user.email ?? "Your account") : name, avatarURL: photo))
         // Persist the rotated pair before starting rooms: the old pair is spent.
         try save(stored)
         self.pendingAuth = nil
@@ -148,10 +155,57 @@ import ZRemoteCore
     }
 
     public func send(sessionID: String, text: String) async throws {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        try await send(sessionID: sessionID, text: text, attachments: [])
+    }
+
+    public func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
+        for attachment in attachments { try attachment.validate() }
         let handle = try requireHandle(sessionID)
-        _ = try handle.send(request: SendRequest(text: text, attachments: [], worktree: nil, busy: .queue))
+        _ = try handle.send(request: SendRequest(text: text, attachments: attachments.map {
+            OutgoingAttachment(name: $0.name, mimeType: $0.mimeType, data: $0.data)
+        }, worktree: nil, busy: .queue))
         publishSession(sessionID)
+    }
+
+    public func readAttachment(sessionID: String, attachment: RemoteAttachment) async throws -> Data {
+        let operation = generation
+        let core = try requireClient()
+        guard let row = core.sessionRow(chatId: sessionID),
+              projections[sessionID]?.messages.values.contains(where: { $0.attachments.contains(where: { $0.path == attachment.path }) }) == true else {
+            throw ClientFailure("This attachment is no longer available in the open session.")
+        }
+        let bytes = try await core.readAttachment(deviceId: row.deviceId, path: attachment.path)
+        try ensureCurrent(operation)
+        return bytes
+    }
+
+    public func complete(kind: ComposerTokenKind, query: String, hostID: String, sessionID: String?, projectID: String?, providerID: String) async throws -> [ComposerCompletion] {
+        let operation = generation
+        let core = try requireClient()
+        if kind == .file {
+            let files = try await core.searchFiles(deviceId: hostID, chatId: sessionID, spaceId: projectID, query: query)
+            try ensureCurrent(operation)
+            return files.filter { !$0.path.replacingOccurrences(of: "\\", with: "/").split(separator: "/").contains(where: { $0.lowercased() == ".git" }) }.prefix(60).map {
+                ComposerCompletion(id: "file:" + $0.path, kind: .file, title: $0.path, detail: $0.isDir ? "Folder" : "File",
+                    insertion: fileMentionLink(path: $0.path, isDir: $0.isDir))
+            }
+        }
+        let json = try await core.composerCompletionsJson(deviceId: hostID, chatId: sessionID, spaceId: projectID,
+            harness: providerID, kind: kind.rawValue, query: query)
+        try ensureCurrent(operation)
+        return try JSONDecoder().decode([ComposerCompletion].self, from: Data(json.utf8))
+    }
+
+    public func setPinned(sessionID: String, pinned: Bool) async throws {
+        let core = try requireClient()
+        if pinned { try core.pinSession(chatId: sessionID) } else { try core.unpinSession(chatId: sessionID) }
+        publishWorkspace(core)
+    }
+    public func setArchived(sessionID: String, archived: Bool) async throws {
+        let core = try requireClient()
+        if archived { try core.archiveSession(chatId: sessionID) } else { try core.unarchiveSession(chatId: sessionID) }
+        publishWorkspace(core)
     }
 
     public func interrupt(sessionID: String) async throws { try requireHandle(sessionID).interrupt() }
@@ -316,16 +370,18 @@ import ZRemoteCore
 
     private func publishWorkspace(_ core: CoreClient) {
         let snapshot = core.workspace()
-        let ordered = snapshot.front.pinned + snapshot.front.sections.flatMap(\.sessions) + snapshot.front.recent
+        let ordered = snapshot.front.pinned + snapshot.front.sections.flatMap(\.sessions) + snapshot.front.recent + snapshot.archived
         var seen: Set<String> = []
         let sessions = ordered.filter { seen.insert($0.id).inserted }.map { row in
             let request = row.pullRequest.map { pr in
                 ZRemoteCore.PullRequest(number: pr.number, title: pr.title, url: pr.url,
-                    state: pr.state == .open ? "open" : pr.state == .merged ? "merged" : "closed")
+                    state: pr.state == .open ? "open" : pr.state == .merged ? "merged" : "closed",
+                    provider: pr.provider, baseRef: pr.baseRef, headRef: pr.headRef)
             }
             return Session(id: row.id, title: row.title, projectID: row.project?.id, hostID: row.deviceId,
                 path: row.cwd ?? "", preview: row.preview ?? "", working: row.indicator == .working,
-                unread: row.unseen, pullRequest: request)
+                unread: row.unseen, pullRequest: request, pinned: row.pinned, archived: row.archived,
+                createdAt: Date(timeIntervalSince1970: Double(row.createdAtMs) / 1000), updatedAt: Date(timeIntervalSince1970: Double(row.lastActivityMs) / 1000))
         }
         let connection: ClientConnection
         switch core.connectivity().state {
@@ -335,7 +391,8 @@ import ZRemoteCore
         }
         onUpdate?(.workspace(WorkspaceState(connection: connection,
             hosts: snapshot.devices.filter(\.isExecutionHost).map { Host(id: $0.id, name: $0.name, online: $0.online) },
-            projects: snapshot.projects.map { Project(id: $0.id, name: $0.name, path: $0.path, hostID: $0.deviceId) }, sessions: sessions)))
+            projects: snapshot.projects.map { Project(id: $0.id, name: $0.name, path: $0.path, hostID: $0.deviceId) }, sessions: sessions,
+            profile: account?.profile ?? account.map { UserProfile(id: $0.userID, displayName: "Your account") })))
     }
 
     private func publishSession(_ id: String) {
@@ -344,7 +401,9 @@ import ZRemoteCore
         let update = handle.transcriptUpdate(known: cache.revisions)
         for row in update.changed {
             cache.revisions[row.id] = row.revision
-            cache.messages[row.id] = TranscriptMessage(id: row.id, role: row.role, text: row.text, streaming: row.streaming)
+            cache.messages[row.id] = TranscriptMessage(id: row.id, role: row.role, text: row.text, streaming: row.streaming,
+                attachments: row.attachments.map { RemoteAttachment(path: $0.path, name: $0.name, mimeType: $0.mimeType) },
+                subagents: row.subagents.map { ZRemoteCore.SubagentStatus(id: $0.id, status: $0.status, detail: $0.tail) })
         }
         let present = Set(update.orderedIds)
         cache.revisions = cache.revisions.filter { present.contains($0.key) }
@@ -365,7 +424,7 @@ import ZRemoteCore
         case nil: delivery = ""
         }
         let visibleMessages = update.orderedIds.compactMap { cache.messages[$0] }
-            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !$0.attachments.isEmpty || !$0.subagents.isEmpty }
         onUpdate?(.session(SessionState(id: id, messages: visibleMessages,
             selection: ModelSelection(providerID: config?.harness ?? "claude-code", modelID: config?.model,
                 effort: config?.reasoning, options: config?.modelOptions ?? [:]),
@@ -412,6 +471,7 @@ private struct StoredAccount: Codable {
     var organizationID: String
     var accessToken: String
     var refreshToken: String
+    var profile: UserProfile?
 }
 
 private struct MessageCache {

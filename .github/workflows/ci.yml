@@ -34,10 +34,10 @@ jobs:
       ZREMOTE_CORE_ONLY: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: Compile and run the two production regression classes
+      - name: Compile and run the named production regression classes
         run: |
           python3 scripts/run-local.py --phase swift -- \
-            swift test --jobs 1 --filter 'CoreBehaviorTests|UnifiedDiffParserTests'
+            swift test --jobs 1 --filter 'CoreBehaviorTests|UnifiedDiffParserTests|ChatTextBehaviorTests'
 
   native-projection:
     name: Native transcript projection
@@ -48,11 +48,11 @@ jobs:
         run: |
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
-      - name: Protect the visible answer from reasoning content
+      - name: Protect reasoning, attachment and sub-agent transcript projection
         run: |
           python3 scripts/run-local.py --phase rust -- \
             cargo test --manifest-path native/core/Cargo.toml --locked -p zeron-mobile \
-              --lib client_ffi::session::projection_regression_tests::reasoning_does_not_leak_into_visible_answer -- --exact
+              --lib client_ffi::session::projection_regression_tests
 
   sources:
     name: Native source syntax

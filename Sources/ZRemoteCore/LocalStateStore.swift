@@ -1,11 +1,28 @@
 import Foundation
 
+public struct ObservedPullRequest: Codable, Sendable {
+    public var sessionID: String
+    public var afterMessageID: String?
+    public var request: PullRequest
+    public init(sessionID: String, afterMessageID: String?, request: PullRequest) { self.sessionID = sessionID; self.afterMessageID = afterMessageID; self.request = request }
+}
+
 public struct LocalPreferences: Codable, Sendable {
     public var drafts: [String: String] = [:]
     public var favorites: Set<String> = []
     public var backgroundEnabled = false
     public var changes: [CapturedTurnChanges] = []
+    public var pullRequests: [ObservedPullRequest] = []
     public init() {}
+    private enum CodingKeys: String, CodingKey { case drafts, favorites, backgroundEnabled, changes, pullRequests }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        drafts = try values.decodeIfPresent([String: String].self, forKey: .drafts) ?? [:]
+        favorites = try values.decodeIfPresent(Set<String>.self, forKey: .favorites) ?? []
+        backgroundEnabled = try values.decodeIfPresent(Bool.self, forKey: .backgroundEnabled) ?? false
+        changes = try values.decodeIfPresent([CapturedTurnChanges].self, forKey: .changes) ?? []
+        pullRequests = try values.decodeIfPresent([ObservedPullRequest].self, forKey: .pullRequests) ?? []
+    }
 }
 
 /// One bounded file per account. Demo deliberately never constructs this store.

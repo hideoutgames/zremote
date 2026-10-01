@@ -1241,6 +1241,48 @@ impl Client {
         }
     }
 
+    /// Provider/workspace-specific catalogs from existing host RPCs. Canonical
+    /// references preserve skill identity across editing and durable delivery.
+    pub async fn composer_completions(
+        &self, device_id: &str, chat_id: Option<String>, space_id: Option<String>,
+        harness: &str, kind: &str, query: &str,
+    ) -> Result<serde_json::Value> {
+        let method = match kind {
+            "command" => zeron_rpc::methods::LIST_COMMANDS,
+            "skill" => zeron_rpc::methods::LIST_SKILLS,
+            _ => return Err(ClientError::HostError("Unsupported completion catalog".into())),
+        };
+        let Backend::Live(live) = self.inner.backend() else { return Ok(serde_json::json!([])); };
+        let value = live.relay.call(device_id, method,
+            serde_json::json!({ "harness": harness, "chatId": chat_id, "spaceId": space_id })).await?;
+        let query = query.to_lowercase();
+        let mut result = Vec::new();
+        if kind == "command" {
+            let commands: Vec<zeron_proto::SlashCommand> = serde_json::from_value(value)
+                .map_err(|e| ClientError::HostError(e.to_string()))?;
+            for command in commands.into_iter().filter(|c| zeron_proto::invocation::valid_invocation_name(&c.name)
+                && (query.is_empty() || c.name.to_lowercase().contains(&query))) {
+                let invocation = zeron_proto::invocation::Invocation::Command { name: command.name.clone() };
+                result.push(serde_json::json!({ "id": format!("command:{}", command.name), "kind": kind,
+                    "title": command.name, "detail": command.description, "insertion": invocation.link() }));
+            }
+        } else {
+            let skills: Vec<zeron_proto::invocation::Skill> = serde_json::from_value(value)
+                .map_err(|e| ClientError::HostError(e.to_string()))?;
+            for skill in skills.into_iter().filter(|s| s.enabled
+                && zeron_proto::invocation::valid_invocation_name(&s.name)
+                && zeron_proto::invocation::valid_skill_path(&s.path)
+                && (query.is_empty() || s.name.to_lowercase().contains(&query))) {
+                let invocation = zeron_proto::invocation::Invocation::Skill {
+                    name: skill.name.clone(), path: skill.path.clone(), command: skill.command };
+                result.push(serde_json::json!({ "id": format!("skill:{}", skill.path), "kind": kind,
+                    "title": skill.name, "detail": skill.description, "insertion": invocation.link() }));
+            }
+        }
+        result.truncate(60);
+        Ok(serde_json::Value::Array(result))
+    }
+
     /// Workspace file search for composer `@` mentions (host `SearchFiles`,
     /// gitignore-aware; an empty query returns the chat's featured files).
     pub async fn search_files(

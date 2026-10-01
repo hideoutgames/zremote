@@ -127,6 +127,8 @@ pub struct AuthUser {
     pub first_name: Option<String>,
     #[serde(default)]
     pub last_name: Option<String>,
+    #[serde(default, alias = "avatarUrl")]
+    pub profile_picture_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

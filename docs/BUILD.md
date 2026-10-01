@@ -72,10 +72,16 @@ Windows Swift/Rust compilation. Keep local Gradle workers and memory bounded;
 Skip's exported default heap settings must not override the shared profile.
 
 The manual `Android Compile Check` workflow runs this exact script on a standard
-`macos-26` runner, using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
+`macos-26-intel` runner (14 GB), using Skip 1.9.12, Java 21, Gradle 9.2.1, Android platform 36,
 build tools 36.0.0, Swift Android SDK 6.3.3, NDK r27d, and cargo-ndk 4.1.2. The
 matching Swift 6.3.3 host/Android pair avoids Swiftly 1.1.3's incorrect 6.4.0
-host download URL normalization. It
+host download URL normalization. Full iOS builds also use the standard 14 GB
+Intel runner: the 7 GB ARM runner timed out waiting for admission after Android
+tool setup. Admission still requires 3 GB available memory, uses one
+worker, and retains the shared cache and provenance checks. Rust cache paths are
+computed relative to `native/core`, as required by the cache action, while builds
+use the shared `~/.cache/ZRemote/cache/cargo` directory. Android's first cold build
+has a bounded 180-minute job timeout. It
 produces a debug build in the temporary runner workspace and retains the compiler
 log by default. Its `save_debug_apk` input defaults to false; explicitly enabling
 it retains the successful debug APK for one day for local testing. It does not
@@ -125,9 +131,21 @@ checks the actual adapter against the generated C module and pinned SkipKeychain
 source. It checks types, not linking or platform secure-storage behavior; upstream
 SkipKeychain deliberately throws on this unsupported host platform.
 
-CI runs the two named Swift regression classes and the single Rust transcript
-projection regression. The iOS Compile Check remains a separate manual unsigned
+CI runs the three named Swift regression classes and the three Rust transcript
+projection regressions. The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
+
+The iOS build and archive commands pass `-skipPackagePluginValidation` and
+`-skipMacroValidation` for the trusted, pinned Skip dependencies on fresh CI
+runners. These command-scoped flags match
+[Skip 1.9.12's app build](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AppCommand.swift#L115-L125)
+and [archive implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/InitCommand.swift#L299-L311).
+
+The iOS Compile Check retains `ios-dependency-evidence` for one day after its
+resolve/build attempt. It contains the workspace `Package.resolved`, generated
+Swift acknowledgements, and full Swift dependency license texts when available.
+Review and commit the resolved workspace lockfile after the first successful
+resolution and whenever package dependencies change.
 
 The native shell was adapted from Skip's Howdy app at
 `bdcae70f50cf388caae99cd69c24df8366e2808a` using its established project layout.

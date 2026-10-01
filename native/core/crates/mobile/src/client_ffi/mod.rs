@@ -394,6 +394,16 @@ impl CoreClient {
         Ok(refs.into_iter().map(Into::into).collect())
     }
 
+    /// Host-advertised commands/skills with canonical invocation references.
+    pub async fn composer_completions_json(&self, device_id: String, chat_id: Option<String>,
+        space_id: Option<String>, harness: String, kind: String, query: String) -> CoreResult<String> {
+        let client = self.client.clone();
+        let value = on_runtime(async move {
+            client.composer_completions(&device_id, chat_id, space_id, &harness, &kind, &query).await
+        }).await?;
+        serde_json::to_string(&value).map_err(|_| CoreError::Internal { message: "Could not encode catalog".into() })
+    }
+
     /// Files matching `query` in the chat's (or project's) workspace, for
     /// composer `@` mentions.
     pub async fn search_files(

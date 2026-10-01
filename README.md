@@ -5,9 +5,15 @@ SwiftUI, Skip Fuse, and Zeron's Rust mobile core. Agents and project operations
 execute on your remote computer. The mobile app never runs an agent or shell.
 
 The Composer is the main view. Phones slide it aside to reveal Sessions;
-tablets use a side panel. Model selection, project creation, Settings, and
-changed-file details open in phone bottom sheets or centered tablet modals.
-PR cards contain only metadata supplied by Zeron and an optional HTTPS link.
+tablets use a side panel. Model selection, project creation, PR information,
+and changed-file details open in phone bottom sheets or centered tablet modals.
+Settings is a full-page phone modal. Native account, filtering and session menus
+keep the sidebar compact. Model modes and effort controls remain in the picker.
+
+The composer supports native file/photo/camera attachments and host-backed
+`/commands`, `$skills` and `@files` suggestions. References are highlighted in
+the editor and sent messages. Agent text stays selectable; fenced code blocks
+have a Copy action. PR and sub-agent cards use only Zeron's metadata.
 
 ## Development
 
@@ -46,7 +52,11 @@ Turn diff snapshots are best-effort and can expire on the host. The client
 captures available patches when a turn completes and retains immutable,
 account-scoped revisions. Concurrent checkout edits may also appear in the
 host's turn diff; it is not an audit log of agent-only filesystem activity.
-Unavailable data is never substituted with a later checkout diff.
+Unavailable data is never substituted with a later checkout diff. Zeron exposes
+the current PR for a branch, so the client retains distinct PRs as it observes
+them in each session. These are first-observed positions, not historical creation
+events. PR review opens the supplied HTTPS link. A missing profile photo uses
+initials; the client does not look up an avatar from another service.
 
 The optional background belongs only to a blank new Composer. It is removed
 while Sessions or a secondary view is visible. There is no terminal, general

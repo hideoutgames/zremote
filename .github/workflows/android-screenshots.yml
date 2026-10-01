@@ -1,0 +1,114 @@
+name: Android Demo Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Completed compile run containing zremote-debug-apk
+        required: true
+        type: string
+      expected_head_sha:
+        description: Exact 40-character source commit of that APK
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      build_run_id:
+        required: true
+        type: string
+      expected_head_sha:
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: android-demo-screenshots-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_RUN_ID: ${{ inputs.build_run_id }}
+      EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source run and record provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ -z "$EXPECTED_HEAD_SHA" || "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p screenshots
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" > screenshots/source-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts" > screenshots/source-artifacts.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          run = json.loads(Path('screenshots/source-run.json').read_text())
+          assert run['status'] == 'completed', 'The compile run must finish before capture'
+          expected = os.environ['EXPECTED_HEAD_SHA'] or run['head_sha']
+          assert run['head_sha'] == expected, 'APK source commit mismatch'
+          assert run['head_repository']['full_name'] == os.environ['GITHUB_REPOSITORY'], 'Unexpected source repository'
+          artifacts = json.loads(Path('screenshots/source-artifacts.json').read_text())['artifacts']
+          matches = [item for item in artifacts if item['name'] == 'zremote-debug-apk' and not item['expired']]
+          assert len(matches) == 1, 'Expected one unexpired debug APK artifact'
+          artifact = matches[0]
+          assert artifact['workflow_run']['head_sha'] == expected, 'Artifact source commit mismatch'
+          # A debug artifact is uploaded only after the Android compile succeeds;
+          # an unrelated iOS job can still make the overall source run fail.
+          Path('screenshots/source-run.json').write_text(json.dumps({
+              'runID': run['id'], 'url': run['html_url'], 'sourceHead': run['head_sha'],
+              'captureHelperHead': os.environ['GITHUB_SHA'], 'artifactID': artifact['id'],
+              'artifactDigest': artifact.get('digest'),
+              'environment': 'GitHub Ubuntu KVM emulator; separate from Windows Gradle assembly'
+          }, indent=2) + '\n')
+          Path('screenshots/source-artifacts.json').unlink()
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('SOURCE_HEAD=' + expected + '\n')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: zremote-debug-apk
+          path: downloaded-apk
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable KVM access on this temporary runner
+        run: |
+          test -e /dev/kvm
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-zremote-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Capture the actual demo in phone and tablet configurations
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: default
+          arch: x86_64
+          cores: 1
+          ram-size: 3072M
+          heap-size: 384M
+          disk-size: 2048M
+          emulator-boot-timeout: 300
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: python3 scripts/capture-android-demo.py --apk-directory downloaded-apk --output screenshots --timeout 720
+      - name: Save screenshots and exact capture results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zremote-demo-screenshots
+          path: screenshots/
+          retention-days: 1
+          if-no-files-found: error

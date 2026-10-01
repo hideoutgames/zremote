@@ -193,6 +193,73 @@ final class CoreBehaviorTests: XCTestCase {
         XCTAssertEqual(model.preferences.favorites, saved.favorites)
         await model.disconnect()
     }
+    @MainActor
+    func testAttachmentOnlySendPreservesBytesAndRejectsStalePickerContext() async throws {
+        let client = DemoClient(intervalNanoseconds: 1_000_000_000)
+        let model = AppModel(client: client, makeLiveClient: { DemoClient() })
+        await model.start()
+        await model.open("demo-welcome")
+        let attachment = LocalAttachment(name: "notes.txt", mimeType: "text/plain", data: Data("Exact attachment bytes".utf8))
+        let context = model.attachmentContext
+        try model.addAttachment(attachment, context: context)
+        model.newSession()
+        XCTAssertThrowsError(try model.addAttachment(attachment, context: context))
+        await model.open("demo-welcome")
+        XCTAssertEqual(model.attachments.map(\.id), [attachment.id])
+        XCTAssertTrue(model.canSend)
+        await model.send()
+        let sent = try XCTUnwrap(model.state?.messages.last(where: { $0.role == "user" })?.attachments.first)
+        let bytes = try await model.attachmentData(sessionID: "demo-welcome", attachment: sent)
+        XCTAssertEqual(bytes, attachment.data)
+        XCTAssertTrue(model.attachments.isEmpty)
+        XCTAssertThrowsError(try LocalAttachment(name: "too-big.bin", mimeType: "application/octet-stream", data: Data(count: LocalAttachment.maximumBytes + 1)).validate())
+        await model.disconnect()
+        XCTAssertTrue(model.attachments.isEmpty)
+    }
+
+    @MainActor
+    func testPinAndArchiveActionsFollowPeerStateAndRestore() async throws {
+        let client = DemoClient()
+        let model = AppModel(client: client, makeLiveClient: { DemoClient() })
+        await model.start()
+        let session = try XCTUnwrap(model.workspace.sessions.first)
+        await model.togglePin(session)
+        XCTAssertEqual(model.workspace.sessions.first(where: { $0.id == session.id })?.pinned, true)
+        await model.archive(session)
+        XCTAssertEqual(model.workspace.sessions.first(where: { $0.id == session.id })?.archived, true)
+        await model.unarchive(session)
+        XCTAssertEqual(model.workspace.sessions.first(where: { $0.id == session.id })?.archived, false)
+        await model.disconnect()
+    }
+
+    @MainActor
+    func testObservedPullRequestsKeepFirstAnchorAndUpdateStateWithoutDuplicating() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("zremote-pr-tests-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let client = AppModelTestClient()
+        let model = AppModel(client: client, makeLiveClient: { AppModelTestClient() }, makeStore: { LocalStateStore(accountKey: $0, root: root) })
+        await model.start()
+        await model.open("session")
+        let first = PullRequest(number: 1, title: "First", url: "https://example.test/pull/1", state: "open")
+        let second = PullRequest(number: 2, title: "Second", url: "https://example.test/pull/2", state: "open")
+        func publish(_ request: PullRequest) {
+            client.onUpdate?(.workspace(WorkspaceState(connection: .online, sessions: [Session(id: "session", title: "Work", hostID: "host", pullRequest: request)])))
+        }
+        client.onUpdate?(.session(SessionState(id: "session", messages: [TranscriptMessage(id: "one", role: "assistant", text: "First result")])))
+        publish(first)
+        client.onUpdate?(.session(SessionState(id: "session", messages: [TranscriptMessage(id: "one", role: "assistant", text: "First result"), TranscriptMessage(id: "two", role: "assistant", text: "Follow-up")])))
+        publish(second)
+        var merged = first; merged.state = "merged"
+        publish(merged)
+        XCTAssertEqual(model.sessionPullRequests.count, 2)
+        XCTAssertEqual(model.pullRequestsAfterMessage["one"]?.first?.state, "merged")
+        XCTAssertEqual(model.pullRequestsAfterMessage["two"]?.first?.id, second.id)
+        let oldPreferences = Data("{\"drafts\":{\"new\":\"saved\"},\"favorites\":[],\"backgroundEnabled\":false,\"changes\":[]}".utf8)
+        XCTAssertEqual(try JSONDecoder().decode(LocalPreferences.self, from: oldPreferences).drafts["new"], "saved")
+        let restored = try JSONDecoder().decode(LocalPreferences.self, from: JSONEncoder().encode(model.preferences))
+        XCTAssertEqual(restored.pullRequests.count, 2)
+        await model.disconnect()
+    }
 }
 
 /// Waits for an observable outcome, without assuming when disk IO is scheduled.

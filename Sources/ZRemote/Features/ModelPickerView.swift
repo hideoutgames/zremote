@@ -41,13 +41,14 @@ struct ModelPickerView: View {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(visibleModels) { choice in modelRow(choice) }
+                        if let choice = model.selectedModel, !choice.efforts.isEmpty || !choice.options.isEmpty {
+                            configuration(choice).padding(.top, 18)
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 20)
                 }
-            }
-            if let choice = model.selectedModel, !choice.efforts.isEmpty || !choice.options.isEmpty {
-                configuration(choice)
+                .scrollDismissesKeyboard(.interactively)
             }
         }
         .foregroundStyle(Palette.text)
@@ -160,6 +161,10 @@ struct ModelPickerView: View {
 
     private func configuration(_ choice: AgentModel) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(choice.name).font(.subheadline.weight(.semibold))
+                Text("Model options").font(.caption).foregroundStyle(Palette.secondary)
+            }
             if !choice.efforts.isEmpty {
                 optionRow("Reasoning", choices: [ModelChoice(id: "", label: "Default")] + choice.efforts.map {
                     ModelChoice(id: $0, label: $0.capitalized)
@@ -181,7 +186,8 @@ struct ModelPickerView: View {
             }
         }
         .padding(16)
-        .background(Palette.surface)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
         .disabled(applying)
     }
 

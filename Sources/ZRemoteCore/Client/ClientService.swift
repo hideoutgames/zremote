@@ -17,12 +17,19 @@ public struct Project: Identifiable, Hashable, Sendable, Codable {
     public init(id: String, name: String, path: String, hostID: String) { self.id = id; self.name = name; self.path = path; self.hostID = hostID }
 }
 
-public struct PullRequest: Hashable, Sendable, Codable {
+public struct PullRequest: Identifiable, Hashable, Sendable, Codable {
+    public var id: String { url.isEmpty ? provider + ":" + String(number) : url }
     public var number: UInt64
     public var title: String
     public var url: String
     public var state: String
-    public init(number: UInt64, title: String, url: String, state: String) { self.number = number; self.title = title; self.url = url; self.state = state }
+    public var provider: String
+    public var baseRef: String
+    public var headRef: String
+    public init(number: UInt64, title: String, url: String, state: String, provider: String = "", baseRef: String = "", headRef: String = "") {
+        self.number = number; self.title = title; self.url = url; self.state = state
+        self.provider = provider; self.baseRef = baseRef; self.headRef = headRef
+    }
 }
 
 public struct Session: Identifiable, Hashable, Sendable, Codable {
@@ -35,8 +42,13 @@ public struct Session: Identifiable, Hashable, Sendable, Codable {
     public var working: Bool
     public var unread: Bool
     public var pullRequest: PullRequest?
-    public init(id: String, title: String, projectID: String? = nil, hostID: String, path: String = "", preview: String = "", working: Bool = false, unread: Bool = false, pullRequest: PullRequest? = nil) {
+    public var pinned: Bool
+    public var archived: Bool
+    public var createdAt: Date
+    public var updatedAt: Date
+    public init(id: String, title: String, projectID: String? = nil, hostID: String, path: String = "", preview: String = "", working: Bool = false, unread: Bool = false, pullRequest: PullRequest? = nil, pinned: Bool = false, archived: Bool = false, createdAt: Date = Date(timeIntervalSince1970: 0), updatedAt: Date = Date(timeIntervalSince1970: 0)) {
         self.id = id; self.title = title; self.projectID = projectID; self.hostID = hostID; self.path = path; self.preview = preview; self.working = working; self.unread = unread; self.pullRequest = pullRequest
+        self.pinned = pinned; self.archived = archived; self.createdAt = createdAt; self.updatedAt = updatedAt
     }
 }
 
@@ -45,7 +57,8 @@ public struct WorkspaceState: Equatable, Sendable {
     public var hosts: [Host]
     public var projects: [Project]
     public var sessions: [Session]
-    public init(connection: ClientConnection = .signedOut, hosts: [Host] = [], projects: [Project] = [], sessions: [Session] = []) { self.connection = connection; self.hosts = hosts; self.projects = projects; self.sessions = sessions }
+    public var profile: UserProfile?
+    public init(connection: ClientConnection = .signedOut, hosts: [Host] = [], projects: [Project] = [], sessions: [Session] = [], profile: UserProfile? = nil) { self.connection = connection; self.hosts = hosts; self.projects = projects; self.sessions = sessions; self.profile = profile }
 }
 
 public struct ModelChoice: Identifiable, Hashable, Sendable, Codable {
@@ -89,7 +102,9 @@ public struct TranscriptMessage: Identifiable, Equatable, Sendable {
     public var role: String
     public var text: String
     public var streaming: Bool
-    public init(id: String, role: String, text: String, streaming: Bool = false) { self.id = id; self.role = role; self.text = text; self.streaming = streaming }
+    public var attachments: [RemoteAttachment]
+    public var subagents: [SubagentStatus]
+    public init(id: String, role: String, text: String, streaming: Bool = false, attachments: [RemoteAttachment] = [], subagents: [SubagentStatus] = []) { self.id = id; self.role = role; self.text = text; self.streaming = streaming; self.attachments = attachments; self.subagents = subagents }
 }
 
 public struct SessionState: Equatable, Sendable {
@@ -168,6 +183,11 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
     func models(hostID: String) async throws -> [AgentModel]
     func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String
     func send(sessionID: String, text: String) async throws
+    func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws
+    func readAttachment(sessionID: String, attachment: RemoteAttachment) async throws -> Data
+    func complete(kind: ComposerTokenKind, query: String, hostID: String, sessionID: String?, projectID: String?, providerID: String) async throws -> [ComposerCompletion]
+    func setPinned(sessionID: String, pinned: Bool) async throws
+    func setArchived(sessionID: String, archived: Bool) async throws
     func interrupt(sessionID: String) async throws
     func retryDelivery(sessionID: String) async throws
     func respondInput(sessionID: String, requestID: String, answers: [String: [String]]) async throws
@@ -177,4 +197,17 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
     func createRepository(hostID: String, name: String) async throws -> String
     func turnDiff(sessionID: String, turnID: String) async throws -> TurnDiff
     func setForeground(_ foreground: Bool)
+}
+
+// Existing test peers can stay focused on the behavior they exercise. Live and
+// demo clients implement every supported operation explicitly.
+public extension ClientService {
+    func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws {
+        guard attachments.isEmpty else { throw ClientFailure("This client cannot send attachments.") }
+        try await send(sessionID: sessionID, text: text)
+    }
+    func readAttachment(sessionID: String, attachment: RemoteAttachment) async throws -> Data { throw ClientFailure("This attachment is unavailable.") }
+    func complete(kind: ComposerTokenKind, query: String, hostID: String, sessionID: String?, projectID: String?, providerID: String) async throws -> [ComposerCompletion] { [] }
+    func setPinned(sessionID: String, pinned: Bool) async throws { throw ClientFailure("Pinning is unavailable.") }
+    func setArchived(sessionID: String, archived: Bool) async throws { throw ClientFailure("Archiving is unavailable.") }
 }

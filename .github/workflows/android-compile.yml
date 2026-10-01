@@ -28,8 +28,8 @@ concurrency:
 
 jobs:
   compile:
-    runs-on: macos-26
-    timeout-minutes: 120
+    runs-on: macos-26-intel
+    timeout-minutes: 180
     env:
       SKIP_ZREMOTE_SWIFT_VERSION: "6.3.3"
       CONFIGURATION: Debug
@@ -94,11 +94,12 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
           echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
+          echo "CARGO_CACHE_RELATIVE=$(python3 -c 'import os; print(os.path.relpath(os.path.expanduser("~/.cache/ZRemote/cache/cargo"), "native/core"))')" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-linux-android x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
-          key: android-core-mobile
-          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
+          key: android-core-mobile-v2
+          workspaces: "native/core -> ${{ env.CARGO_CACHE_RELATIVE }}"
           cache-on-failure: true
       - name: Install pinned cargo-ndk
         run: |

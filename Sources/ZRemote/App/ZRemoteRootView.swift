@@ -26,6 +26,9 @@ public struct ZRemoteRootView: View {
                 } else {
                     SignInView(model: model)
                 }
+                if !tablet, model.sessionsVisible, model.route == nil {
+                    ModalBackHandler { model.sessionsVisible = false }
+                }
                 if tablet, let route = model.route {
                     ModalBackHandler { model.route = nil }
                     Color.black.opacity(0.55).ignoresSafeArea()
@@ -39,7 +42,15 @@ public struct ZRemoteRootView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
-            .sheet(item: Binding(get: { tablet ? nil : model.route }, set: { model.route = $0 })) { route in
+            .sheet(item: Binding(get: {
+                guard !tablet, let route = model.route else { return nil }
+                if case .settings = route { return nil }
+                return route
+            }, set: { value in
+                // Dismissing a previous sheet must not clear a full-page Settings route.
+                if case .settings? = model.route { return }
+                model.route = value
+            })) { route in
                 secondary(route)
                     #if os(Android)
                     // Skip's native sheet currently supports one detent.
@@ -49,6 +60,15 @@ public struct ZRemoteRootView: View {
                     .presentationBackground(Palette.background)
                     #endif
                     .presentationDragIndicator(.visible)
+            }
+            .fullScreenCover(isPresented: Binding(get: {
+                guard !tablet else { return false }
+                if case .settings? = model.route { return true }
+                return false
+            }, set: { presented in
+                if !presented, case .settings? = model.route { model.route = nil }
+            })) {
+                secondary(.settings)
             }
             .onAppear { model.usesSessionPanel = tablet }
             .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
@@ -102,6 +122,8 @@ public struct ZRemoteRootView: View {
                 case .models: ModelPickerView(model: model)
                 case .projects: ProjectPickerView(model: model)
                 case .settings: SettingsView(model: model)
+                case .pullRequest(let request):
+                    PullRequestDetailView(request: model.sessionPullRequests.first(where: { $0.id == request.id }) ?? request)
                 case .changes(let turn): ChangedFilesList(turn: turn)
                 case .diff(let document): NativeDiffView(document: document).navigationTitle("Changes")
                 }
