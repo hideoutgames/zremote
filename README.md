@@ -10,6 +10,14 @@ and changed-file details open in phone bottom sheets or centered tablet modals.
 Settings is a full-page phone modal. Native account, filtering and session menus
 keep the sidebar compact. Model modes and effort controls remain in the picker.
 
+The phone drawer moves the entire Composer/chat page, including its safe-area
+backgrounds, over a full-window Sessions layer. It reveals 80% of the screen
+with large continuous corners and a spring settle. Swipe right from the broad
+leading edge to open, or left across Sessions/the exposed page to close
+(directions mirror in right-to-left layouts). Short flicks and predominantly
+vertical drags do not toggle it; scrolling, refresh and text-selection gestures
+keep their own interaction. Tablets retain their Sessions side panel.
+
 The picker follows Zeron's compact provider tabs, favorites and scoped search,
 using original provider marks in the picker and Composer. The Composer includes
 the effective reasoning level and Fast mode. Test mode includes Claude Code,

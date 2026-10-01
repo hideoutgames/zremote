@@ -1,5 +1,36 @@
 # Implementation and verification status
 
+## Full-window phone drawer and swipe intent
+
+The phone drawer now moves the main page's full-window surface, including its
+top and bottom safe-area backgrounds, over a full-window Sessions underlay.
+Its reveal is 80% of the window with 56-point continuous corners. Root-measured
+safe-area padding is restored inside each layer before clipping/movement;
+keyboard avoidance and the separate tablet side panel are retained. This is an
+independent implementation of the interaction described by
+[SwiftSideDrawer](https://github.com/cynicalight/SwiftSideDrawer); its code is
+not incorporated.
+
+iOS keeps the corner radius fixed throughout the position animation, becoming
+square only when closed. Android uses its native rounded-shape interpolation;
+the pinned Skip bridge does not forward custom shape animation data.
+
+Opening uses a broad leading-edge region (up to 200 points); closing works over
+both Sessions and the exposed main page. Native recognizers require clear
+horizontal intent, and commit only with 30% travel or a deliberate, sufficiently
+long flick. iOS rejects native controls, editors, active selection, horizontal
+scrolling and presented controllers; its touched vertical scroll waits for the
+drawer direction decision so a close swipe cannot also trigger refresh.
+Android gives child-consumed movement priority and rejects held touches.
+Cancellation, multi-touch, rotation, route changes and right-to-left direction
+are handled explicitly. No invisible edge overlay intercepts ordinary taps.
+
+All six `DrawerGestureRulesTests` passed with stable inputs on 2026-10-01
+(`f60af7d8-f719-4b87-8e1f-e5ad5295cd5a`). The four changed/new presentation files
+passed Swift syntax parsing. These checks do not establish native gesture
+arbitration, keyboard layout, animation feel or device appearance. No application
+compilation, workflow dispatch or distribution was performed for this change.
+
 ## Sessions refresh and haptics
 
 Sessions now uses native pull-to-refresh: a transparent UIKit refresh control
