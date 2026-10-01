@@ -739,8 +739,8 @@ impl SessionHandle {
         on_runtime(async move { inner.send_queued_now(&id).await }).await
     }
 
-    /// A row's primary action: steer text into the live turn (never
-    /// interrupts); attachments send now.
+    /// A row's primary action: steer text into the live turn without
+    /// interrupting. Messages with attachments stay queued.
     pub async fn deliver_queued_now(&self, id: String) -> CoreResult<bool> {
         let inner = self.inner.clone();
         on_runtime(async move { inner.deliver_queued_now(&id).await }).await

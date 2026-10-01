@@ -19,6 +19,10 @@ public struct ClientFailure: LocalizedError, Sendable {
     private var attachmentBytes: [String: Data] = [:]
     private var projectCheckouts: [String: [ProjectCheckout]] = [:]
     private var turnStarted: [String: Date] = [:]
+    private var queuedAttachments: [String: [RemoteAttachment]] = [:]
+    private var queueEdits: [String: QueuedMessageEdit] = [:]
+    private var pausedQueues: Set<String> = []
+    private static let queueCapabilities = MessageQueueCapabilities(canQueue: true, canQueueAttachments: true, canSteer: true, canEdit: true, canAct: true)
     private let interval: UInt64
     private var active = false
     private var visibleSessionID: String?
@@ -49,6 +53,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         ], selection: ModelSelection(providerID: "codex", modelID: "gpt-6-astra"), input: InputRequest(id: "demo-input", questions: [
             InputQuestion(id: "details", title: "What matters most?", options: ["Spacing", "Typography", "Motion"], multiple: true)
         ]))
+        for id in sessions.keys { sessions[id]?.queueCapabilities = Self.queueCapabilities }
         onUpdate?(.workspace(workspace))
     }
 
@@ -60,6 +65,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         for task in running.values { task.cancel() }
         running.removeAll(); sessions.removeAll(); patches.removeAll(); attachmentBytes.removeAll(); projectCheckouts.removeAll()
         turnStarted.removeAll()
+        queuedAttachments.removeAll(); queueEdits.removeAll(); pausedQueues.removeAll()
         workspace = WorkspaceState()
         onUpdate?(.workspace(workspace))
     }
@@ -71,7 +77,14 @@ public struct ClientFailure: LocalizedError, Sendable {
         onUpdate?(.workspace(workspace))
         onUpdate?(.session(state))
     }
-    public func closeSession(_ id: String) { if visibleSessionID == id { visibleSessionID = nil } }
+    public func closeSession(_ id: String) {
+        if visibleSessionID == id { visibleSessionID = nil }
+        for edit in queueEdits.values.filter({ $0.sessionID == id }) {
+            queueEdits[edit.leaseID] = nil
+            if let row = sessions[id]?.queue.firstIndex(where: { $0.id == edit.id }) { sessions[id]?.queue[row].deliveryBlocked = false }
+        }
+        drainQueue(id)
+    }
     public func agentAccounts(hostID: String) async throws -> AgentAccountsSnapshot {
         guard active, hostID == "demo-mac" else { return AgentAccountsSnapshot(available: false) }
         let using = workspace.sessions.contains { $0.working }
@@ -119,7 +132,7 @@ public struct ClientFailure: LocalizedError, Sendable {
             path = selected.path; branch = selected.branch
         }
         workspace.sessions.insert(Session(id: id, title: "New session", projectID: projectID, hostID: hostID, path: path, createdAt: Date(), updatedAt: Date(), providerID: selection.providerID, modelID: selection.modelID, branch: branch), at: 0)
-        sessions[id] = SessionState(id: id, selection: selection)
+        sessions[id] = SessionState(id: id, selection: selection, queueCapabilities: Self.queueCapabilities)
         onUpdate?(.workspace(workspace))
         return id
     }
@@ -129,19 +142,46 @@ public struct ClientFailure: LocalizedError, Sendable {
     }
 
     public func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws {
+        try await send(sessionID: sessionID, text: text, attachments: attachments, busy: .queue)
+    }
+
+    public func send(sessionID: String, text: String, attachments: [LocalAttachment], busy: MessageSendMode) async throws {
         guard active, var state = sessions[sessionID] else { throw ClientFailure("Open a session first.") }
-        guard !state.working else { throw ClientFailure("Wait for the reply, or stop it first.") }
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty || !attachments.isEmpty else { return }
+        guard busy != .steer || attachments.isEmpty else { throw ClientFailure("Messages with files must wait in the queue.") }
         for attachment in attachments { try attachment.validate() }
         let remote = attachments.map { attachment -> RemoteAttachment in
             let path = "demo://" + sessionID + "/" + attachment.id
             attachmentBytes[path] = attachment.data
             return RemoteAttachment(path: path, name: attachment.name, mimeType: attachment.mimeType)
         }
+        pausedQueues.remove(sessionID)
+        if state.working || state.input != nil {
+            if busy == .queue {
+                let id = UUID().uuidString
+                state.queue.append(QueuedMessage(id: id, text: clean, attachments: remote.map(\.path)))
+                queuedAttachments[id] = remote
+                sessions[sessionID] = state
+                emit(sessionID)
+                return
+            }
+            if state.working {
+                state.messages.append(TranscriptMessage(id: UUID().uuidString, role: "user", text: clean, timestamp: Date()))
+                sessions[sessionID] = state
+                emit(sessionID)
+                return
+            }
+        }
+        startTurn(sessionID, text: clean, attachments: remote)
+    }
+
+    private func startTurn(_ sessionID: String, text clean: String, attachments remote: [RemoteAttachment], messageID: String = UUID().uuidString) {
+        guard var state = sessions[sessionID] else { return }
+        state.input = nil
         // A stopped new turn must never borrow the previous turn's file changes.
         patches[sessionID] = nil
-        let userID = UUID().uuidString
+        let userID = messageID
         let started = Date()
         turnStarted[sessionID] = started
         state.messages.append(TranscriptMessage(id: userID, role: "user", text: clean, attachments: remote, timestamp: started))
@@ -216,6 +256,7 @@ public struct ClientFailure: LocalizedError, Sendable {
     }
 
     public func interrupt(sessionID: String) async throws {
+        pausedQueues.insert(sessionID)
         running[sessionID]?.cancel()
         finish(sessionID, interrupted: true)
     }
@@ -233,6 +274,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         state.messages.append(TranscriptMessage(id: UUID().uuidString, role: "assistant", text: "Your choices are saved for this demo. Send a message to try a streaming reply.", timestamp: Date()))
         sessions[sessionID] = state
         onUpdate?(.session(state))
+        drainQueue(sessionID)
     }
 
     private func finish(_ id: String, interrupted: Bool) {
@@ -241,10 +283,10 @@ public struct ClientFailure: LocalizedError, Sendable {
         let started = turnStarted.removeValue(forKey: id)
         state.working = false
         state.delivery = interrupted ? "Stopped" : ""
-        if !state.messages.isEmpty {
-            state.messages[state.messages.count - 1].streaming = false
-            state.messages[state.messages.count - 1].workedDuration = interrupted ? nil : started.map { max(0, Date().timeIntervalSince($0)) }
-            state.messages[state.messages.count - 1].subagents = state.messages[state.messages.count - 1].subagents.map {
+        if let reply = state.messages.lastIndex(where: { $0.role == "assistant" && $0.streaming }) {
+            state.messages[reply].streaming = false
+            state.messages[reply].workedDuration = interrupted ? nil : started.map { max(0, Date().timeIntervalSince($0)) }
+            state.messages[reply].subagents = state.messages[reply].subagents.map {
                 SubagentStatus(id: $0.id, title: $0.title, status: "done", detail: interrupted ? "Stopped in test mode." : "Review completed in test mode.")
             }
         }
@@ -263,6 +305,92 @@ public struct ClientFailure: LocalizedError, Sendable {
             }
         }
         emit(id)
+        if !interrupted { drainQueue(id) }
+    }
+
+    private func drainQueue(_ sessionID: String) {
+        guard active, !pausedQueues.contains(sessionID), var state = sessions[sessionID], !state.working,
+              state.input == nil, let row = state.queue.first, !row.deliveryBlocked else { return }
+        state.queue.removeFirst()
+        sessions[sessionID] = state
+        startTurn(sessionID, text: row.text, attachments: queuedAttachments.removeValue(forKey: row.id) ?? [], messageID: row.id)
+    }
+
+    public func sendQueuedNow(sessionID: String, id: String) async throws {
+        guard active, var state = sessions[sessionID], let index = state.queue.firstIndex(where: { $0.id == id }) else { throw ClientFailure("This message has already left the queue.") }
+        let row = state.queue[index]
+        guard row.attachments.isEmpty else { throw ClientFailure("Messages with files wait for the turn to finish.") }
+        guard !row.deliveryBlocked else { throw ClientFailure("This message is being edited.") }
+        state.queue.remove(at: index)
+        queuedAttachments[id] = nil
+        pausedQueues.remove(sessionID)
+        if state.working {
+            state.messages.append(TranscriptMessage(id: id, role: "user", text: row.text, timestamp: Date()))
+            sessions[sessionID] = state
+            emit(sessionID)
+        } else {
+            sessions[sessionID] = state
+            startTurn(sessionID, text: row.text, attachments: [], messageID: id)
+        }
+    }
+
+    public func moveQueuedMessage(sessionID: String, id: String, delta: Int) async throws {
+        guard active, var state = sessions[sessionID], let index = state.queue.firstIndex(where: { $0.id == id }) else { throw ClientFailure("This message has already left the queue.") }
+        guard !state.queue[index].deliveryBlocked, !state.queue[index].actionPending else { throw ClientFailure("This queued message is currently being edited or sent.") }
+        let (destination, overflow) = index.addingReportingOverflow(delta)
+        guard !overflow, delta != 0, destination >= 0, destination < state.queue.count else { throw ClientFailure("This message could not be moved. Check the queue and try again.") }
+        let row = state.queue.remove(at: index)
+        state.queue.insert(row, at: destination)
+        sessions[sessionID] = state
+        emit(sessionID)
+    }
+
+    public func deleteQueuedMessage(sessionID: String, id: String) async throws {
+        guard active, var state = sessions[sessionID], let index = state.queue.firstIndex(where: { $0.id == id }) else { throw ClientFailure("This message has already left the queue.") }
+        state.queue.remove(at: index)
+        queuedAttachments[id] = nil
+        sessions[sessionID] = state
+        emit(sessionID)
+        drainQueue(sessionID)
+    }
+
+    public func beginQueuedMessageEdit(sessionID: String, id: String) async throws -> QueuedMessageEdit {
+        guard active, var state = sessions[sessionID], let index = state.queue.firstIndex(where: { $0.id == id }) else { throw ClientFailure("This message has already left the queue.") }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        guard !queueEdits.values.contains(where: { $0.sessionID == sessionID && $0.id == id && $0.expiresAtMilliseconds > now }) else { throw ClientFailure("This message is already being edited.") }
+        let row = state.queue[index]
+        let edit = QueuedMessageEdit(id: id, sessionID: sessionID, leaseID: UUID().uuidString, text: row.text,
+            baseTextHash: UUID().uuidString, expiresAtMilliseconds: now + 60_000, hasAttachments: !row.attachments.isEmpty)
+        queueEdits[edit.leaseID] = edit
+        state.queue[index].deliveryBlocked = true
+        sessions[sessionID] = state
+        emit(sessionID)
+        return edit
+    }
+
+    public func renewQueuedMessageEdit(_ edit: QueuedMessageEdit) async throws -> Bool {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        guard active, var saved = queueEdits[edit.leaseID], saved.expiresAtMilliseconds > now,
+              sessions[edit.sessionID]?.queue.contains(where: { $0.id == edit.id }) == true else { return false }
+        saved.expiresAtMilliseconds = now + 60_000
+        queueEdits[edit.leaseID] = saved
+        return true
+    }
+
+    public func finishQueuedMessageEdit(_ edit: QueuedMessageEdit, text: String?) async throws {
+        guard active, let saved = queueEdits[edit.leaseID], saved.sessionID == edit.sessionID,
+              saved.expiresAtMilliseconds > Int64(Date().timeIntervalSince1970 * 1000),
+              var state = sessions[edit.sessionID], let index = state.queue.firstIndex(where: { $0.id == edit.id }) else { throw ClientFailure("This edit is no longer active. Reopen the queued message.") }
+        guard state.queue[index].text == saved.text else { throw ClientFailure("This message changed. Copy your edit and reopen it.") }
+        if let text {
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !state.queue[index].attachments.isEmpty else { throw ClientFailure("Enter a message, or use Delete to remove it.") }
+            state.queue[index].text = text
+        }
+        state.queue[index].deliveryBlocked = false
+        queueEdits[edit.leaseID] = nil
+        sessions[edit.sessionID] = state
+        emit(edit.sessionID)
+        drainQueue(edit.sessionID)
     }
 
     private func emit(_ id: String) {

@@ -79,6 +79,14 @@ return when the request clears. A locally queued answer shows a compact receipt
 until the peer resolves it; repeated taps and reopening the session cannot send
 it twice. Failed queue attempts keep the answers available to retry.
 
+While an agent is working, the Composer can queue the next message or steer the
+current turn when the host supports it. Open the queued-message count to see
+the queue. Each row has the same send button as the Composer and an adjacent
+menu with Edit, Move up, Move down, and Delete. Send now steers text without
+requesting an interruption; messages with attachments wait for normal delivery.
+Editing acquires the host's existing edit lease, keeps the row held while the
+editor is open, and preserves its attachments. Unsupported actions are disabled.
+
 ## Development
 
 Full app builds require macOS 15+, Xcode 26+, Skip, Android SDK/NDK, Swift 6.1+,
