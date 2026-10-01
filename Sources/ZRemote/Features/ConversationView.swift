@@ -14,6 +14,9 @@ struct ConversationView: View {
     @State private var following = true
     @State private var userScrolling = false
     @State private var tailPosition: CGFloat = .infinity
+    @State private var headerHeight: CGFloat = 72
+    @State private var statusHeight: CGFloat = 0
+    @State private var dismissQuestionFocus = 0
 
     private var wallpaper: Bool {
         PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil, sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil)
@@ -38,7 +41,9 @@ struct ConversationView: View {
         return nil
     }
     var body: some View {
-        layout
+        GeometryReader { geometry in
+            layout(questionHeight: min(420, max(0, geometry.size.height - headerHeight - 20)))
+        }
         .background {
             ZStack {
                 Palette.background
@@ -55,19 +60,24 @@ struct ConversationView: View {
             cursor = (model.draft as NSString).length; selectionRequest += 1
             suggestions = []; suggestionToken = nil
         }
-        .onChange(of: model.sessionsVisible) { _, open in if open { inputFocused = false } }
-        .onChange(of: model.route?.id) { _, route in if route != nil { inputFocused = false } }
+        .onChange(of: model.sessionsVisible) { _, open in
+            if open { inputFocused = false; dismissQuestionFocus += 1 }
+        }
+        .onChange(of: model.state?.input) { _, input in if input != nil { inputFocused = false } }
+        .onChange(of: model.route?.id) { _, route in
+            if route != nil { inputFocused = false; dismissQuestionFocus += 1 }
+        }
         .task(id: completionRequest) { await updateSuggestions() }
     }
 
-    @ViewBuilder private var layout: some View {
+    @ViewBuilder private func layout(questionHeight: CGFloat) -> some View {
         #if os(Android)
         // Skip's native ScrollView does not yet expose safeAreaInset or unclipped
         // scrolling. Retain native keyboard sizing on this platform.
         VStack(spacing: 0) {
             header
             content
-            bottomChrome
+            bottomChrome(questionHeight: questionHeight)
         }
         #elseif os(iOS)
         if #available(iOS 26.0, *) {
@@ -75,26 +85,26 @@ struct ConversationView: View {
                 // Register the custom bar with the scroll view's real backdrop
                 // effect. A material painted on top adds an unwanted color wash.
                 .safeAreaBar(edge: .top, spacing: 0) { header }
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome(questionHeight: questionHeight) }
                 .scrollEdgeEffectStyle(.soft, for: .top)
                 .scrollEdgeEffectHidden(true, for: .bottom)
         } else {
-            insetLayout
+            insetLayout(questionHeight: questionHeight)
         }
         #else
-        insetLayout
+        insetLayout(questionHeight: questionHeight)
         #endif
     }
 
     #if !os(Android)
-    private var insetLayout: some View {
+    private func insetLayout(questionHeight: CGFloat) -> some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) {
                 header.background {
                     ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome(questionHeight: questionHeight) }
     }
     #endif
 
@@ -117,27 +127,35 @@ struct ConversationView: View {
         }
     }
 
-    private var bottomChrome: some View {
+    private func bottomChrome(questionHeight: CGFloat) -> some View {
         VStack(spacing: 0) {
-            if let input = model.state?.input {
-                AgentQuestionView(input: input, sending: model.answering) { answers in
-                    Task { await model.answer(requestID: input.id, answers: answers) }
-                }.id(input.id)
+            VStack(spacing: 0) {
+                if let status = model.state?.delivery, !status.isEmpty {
+                    HStack(spacing: 12) {
+                        Text(status).font(.caption).foregroundStyle(Palette.secondary)
+                        if model.state?.deliveryFailed == true {
+                            Button("Retry") { Task { await model.retryDelivery() } }
+                                .font(.caption.weight(.medium)).disabled(model.busy)
+                        }
+                    }.padding(.bottom, 8)
+                }
+                if let warning = model.usageWarning {
+                    UsageLimitBanner(warning: warning, dismiss: model.dismissUsageWarning)
+                        .frame(maxWidth: 700).padding(.horizontal, 16)
+                }
             }
-            if let status = model.state?.delivery, !status.isEmpty {
-                HStack(spacing: 12) {
-                    Text(status).font(.caption).foregroundStyle(Palette.secondary)
-                    if model.state?.deliveryFailed == true {
-                        Button("Retry") { Task { await model.retryDelivery() } }
-                            .font(.caption.weight(.medium)).disabled(model.busy)
-                    }
-                }.padding(.bottom, 8)
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { statusHeight = $0 }
+            if let input = model.state?.input, let sessionID = model.selectedSessionID {
+                AgentQuestionView(input: input, providerID: model.state?.selection.providerID ?? model.selection.providerID,
+                                  sending: model.answering, submitted: model.answerSubmitted,
+                                  maximumHeight: max(0, questionHeight - statusHeight),
+                                  dismissFocus: dismissQuestionFocus,
+                                  reload: { Task { await model.refreshSessions() } }) { answers in
+                    await model.answer(sessionID: sessionID, input: input, answers: answers)
+                }.id([sessionID, input.id])
+            } else {
+                composer
             }
-            if let warning = model.usageWarning {
-                UsageLimitBanner(warning: warning, dismiss: model.dismissUsageWarning)
-                    .frame(maxWidth: 700).padding(.horizontal, 16)
-            }
-            composer
         }
         .background {
             ChromeFade(edge: .bottom).padding(.top, -40).ignoresSafeArea(edges: .bottom)
@@ -180,6 +198,7 @@ struct ConversationView: View {
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { headerHeight = $0 }
     }
 
     private func headerIcon(_ symbol: String) -> some View {
@@ -420,68 +439,6 @@ private struct UsageLimitBanner: View {
 private struct TranscriptTailPosition: PreferenceKey {
     static let defaultValue: CGFloat? = nil
     static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
-}
-
-private struct AgentQuestionView: View {
-    let input: InputRequest
-    let sending: Bool
-    let submit: ([String: [String]]) -> Void
-    @State private var selected: [String: [String]] = [:]
-    @State private var custom: [String: String] = [:]
-
-    private var answers: [String: [String]] {
-        Dictionary(uniqueKeysWithValues: input.questions.map { item in
-            var values = selected[item.id] ?? []
-            let text = (custom[item.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty, !values.contains(text) { values.append(text) }
-            return (item.id, values)
-        })
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-            ForEach(input.questions) { item in
-                Text(item.title).font(.subheadline.weight(.medium))
-                if !item.options.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(item.options, id: \.self) { option in
-                                Button(option) {
-                                    if item.multiple {
-                                        var values = selected[item.id] ?? []
-                                        if values.contains(option) { values.removeAll { $0 == option } }
-                                        else { values.append(option) }
-                                        selected[item.id] = values
-                                    } else {
-                                        selected[item.id] = [option]
-                                        custom[item.id] = ""
-                                    }
-                                }
-                                    .buttonStyle(.bordered)
-                                    .tint((selected[item.id] ?? []).contains(option) ? Palette.text : Palette.secondary)
-                                    .accessibilityValue((selected[item.id] ?? []).contains(option) ? "Selected" : "")
-                            }
-                        }
-                    }
-                }
-                TextField("Your answer", text: Binding(get: { custom[item.id] ?? "" }, set: {
-                    custom[item.id] = $0
-                    if !item.multiple { selected[item.id] = [] }
-                }))
-                    .textFieldStyle(.roundedBorder)
-            }
-            }
-            }
-            Button(sending ? "Sending…" : "Send answer") { submit(answers) }
-                .frame(minHeight: 44)
-                .disabled(sending || input.questions.contains { (answers[$0.id] ?? []).isEmpty })
-        }.disabled(sending)
-            .padding(16)
-            .frame(maxWidth: 700, maxHeight: 280)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20)).padding(.horizontal, 16)
-    }
 }
 
 private struct TranscriptRow: View, Equatable {

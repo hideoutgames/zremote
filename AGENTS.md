@@ -19,7 +19,8 @@ Swift/Skip. The attributed `native/core` subset is a mobile peer, not an engine.
   Retain the captured revision; never substitute later checkout changes.
 - PRs use only Zeron metadata and an optional link. No direct GitHub API,
   transcript link discovery, or GitHub authentication.
-- Background appears only in the blank Composer with no other surface visible.
+- Background appears in the blank Composer and the transient Sessions refresh
+  recess. Both use the same image, filter and full-window alignment.
 - Demo has no network/credential access and shares the live client interface.
 - Maintain Settings → Acknowledgements for all shipped open-source libraries.
 

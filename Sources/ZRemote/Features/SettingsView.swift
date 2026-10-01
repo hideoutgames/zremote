@@ -20,6 +20,7 @@ struct SettingsView: View {
                     Text("Light").tag(AppTheme.light)
                     Text("Dark").tag(AppTheme.dark)
                 }
+                Toggle("Haptics", isOn: Binding(get: { model.preferences.hapticsEnabled }, set: model.setHapticsEnabled))
             }.listRowBackground(Palette.surface)
             BackgroundSettings(model: model)
             ConnectionSettings(model: model)

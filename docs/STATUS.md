@@ -1,5 +1,97 @@
 # Implementation and verification status
 
+## Agent question flow
+
+Pending agent input now takes the Composer's place in a rounded, theme-aware
+card with its provider icon. Questions appear one at a time with wrapped,
+full-width choice rows, radio/check indicators, Back/Next, and optional custom
+text. Multiline answers retain their keyboard newline. Answer drafts survive
+question navigation and failed queue attempts; the separate Composer draft and
+attachments are retained. Bounded scrolling keeps long questions usable, with a
+whole-card scroll fallback when the keyboard or large text leaves little room.
+Opening Sessions or another view dismisses question editing.
+
+The final action requires an answer to each question. Single-choice custom text
+replaces the choice; multiple-choice custom text is additive. Blank/duplicate
+choices and malformed question IDs cannot produce invalid answer dictionaries.
+Submission captures the session and complete request schema, rejects duplicate
+sends, and isolates late results after session, schema or account changes.
+An accepted local queue call shows `Answer queued` until the peer changes or
+clears the input. This is not a host-execution acknowledgement; the current peer
+does not expose delivery acknowledgements for this command. No host change is
+required.
+
+Targeted domain checks on 2026-10-01: all six `QuestionAnswerDraftTests` and
+four `QuestionAnswerSubmissionTests` passed, including retry, duplicate sends,
+synchronous question resolution and stale-session/account replies. Shared
+runner result `490c2e7f-927d-4768-96f8-8c3966631879` had stable inputs.
+The three changed/new presentation files passed Swift syntax parsing. This
+does not typecheck SwiftUI/Skip or validate keyboard behavior, scrolling,
+accessibility and appearance on devices. No application build, workflow dispatch
+or distribution was run for this change.
+
+## Full-window phone drawer and swipe intent
+
+The phone drawer now moves the main page's full-window surface, including its
+top and bottom safe-area backgrounds, over a full-window Sessions underlay.
+Its reveal is 80% of the window with 56-point continuous corners. Root-measured
+safe-area padding is restored inside each layer before clipping/movement;
+keyboard avoidance and the separate tablet side panel are retained. This is an
+independent implementation of the interaction described by
+[SwiftSideDrawer](https://github.com/cynicalight/SwiftSideDrawer); its code is
+not incorporated.
+
+iOS keeps the corner radius fixed throughout the position animation, becoming
+square only when closed. Android uses its native rounded-shape interpolation;
+the pinned Skip bridge does not forward custom shape animation data.
+
+Opening uses a broad leading-edge region (up to 200 points); closing works over
+both Sessions and the exposed main page. Native recognizers require clear
+horizontal intent, and commit only with 30% travel or a deliberate, sufficiently
+long flick. iOS rejects native controls, editors, active selection, horizontal
+scrolling and presented controllers; its touched vertical scroll waits for the
+drawer direction decision so a close swipe cannot also trigger refresh.
+Android gives child-consumed movement priority and rejects held touches.
+Cancellation, multi-touch, rotation, route changes and right-to-left direction
+are handled explicitly. No invisible edge overlay intercepts ordinary taps.
+
+All six `DrawerGestureRulesTests` passed with stable inputs on 2026-10-01
+(`f60af7d8-f719-4b87-8e1f-e5ad5295cd5a`). The four changed/new presentation files
+passed Swift syntax parsing. These checks do not establish native gesture
+arbitration, keyboard layout, animation feel or device appearance. No application
+compilation, workflow dispatch or distribution was performed for this change.
+
+## Sessions refresh and haptics
+
+Sessions now uses native pull-to-refresh: a transparent UIKit refresh control
+on iOS and Material's nested-scroll refresh state on Android. The revealed
+surface shares the Composer's full-window wallpaper coordinates, effect and
+contrast treatment, with a darker overlay and inset shadows. No image produces
+a slightly darker page surface. The existing agent activity glyph is reused
+without changing its appearance or animation. Short/empty lists remain pullable.
+
+Refresh requests use the existing mobile peer; concurrent requests coalesce,
+composer state is preserved, and account changes discard stale failures. The
+live peer requests resync and republishes its current snapshot; later network
+events can arrive after the indicator settles. No host or relay change is needed.
+
+Settings has one subtitle-free Haptics toggle, enabled by default and stored
+per account. It gates app-triggered refresh feedback and Android's app-context
+menu feedback. OS-owned haptics (including UIKit Haptic Touch) still follow
+system settings; no private API is used to intercept them.
+
+Targeted local checks on 2026-10-01: all four `SessionsRefreshTests` passed
+(snapshot updates/draft preservation, concurrent failure/retry, stale-account
+completion and cancellation). All three `CoreBehaviorTests.testHaptics…` cases
+passed (legacy defaults/opt-out roundtrip, account isolation and restore/sign-out).
+Shared runner results: `138464ab-d531-42e9-9dd2-2a9499ce2573` and
+`9ca91f96-9a71-4d43-a902-2cfc6208c4a6`; both had stable inputs.
+
+Changed presentation files passed Swift syntax parsing. This does not typecheck
+UIKit/SwiftUI/Skip or validate gestures, wallpaper alignment, haptic feel and
+VoiceOver on a device. No full test suite, app build, workflow dispatch or
+distribution was run. Compile and TestFlight workflows remain manual-only.
+
 ## Manual build failure investigation
 
 [Manual compile run 36883320315](https://github.com/hideoutgames/zremote/actions/runs/36883320315)

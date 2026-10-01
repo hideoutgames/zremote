@@ -19,6 +19,7 @@ struct SessionListView: View {
     @State private var compact = true
     @State private var now = Date()
     @State private var signingOut = false
+    @State private var refreshReveal: CGFloat = 0
     @FocusState private var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
@@ -88,22 +89,8 @@ struct SessionListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            header.padding(.top, 12)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(groups) { section in
-                        if section.showsHeader { sectionHeader(section) }
-                        if !section.collapsible || !collapsedProjects.contains(section.id) {
-                            ForEach(section.sessions) { session in sessionRow(session).transition(.opacity) }
-                        }
-                    }
-                    if filtered.isEmpty {
-                        Text(search.isEmpty && !hasFilters ? "Your sessions will appear here." : "No matching sessions.")
-                            .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
-                    }
-                }
-            }
-            .scrollDismissesKeyboard(.interactively)
+            header.padding(.top, 12).padding(.horizontal, 16)
+            refreshingList
             HStack {
                 organizationMenu
                 Spacer()
@@ -112,9 +99,9 @@ struct SessionListView: View {
                         .font(.subheadline.weight(.semibold)).padding(.horizontal, 16).padding(.vertical, 14)
                         .foregroundStyle(Palette.background).background(Palette.text, in: Capsule())
                 }.buttonStyle(.plain)
-            }.padding(.bottom, 12)
+            }.padding(.bottom, 12).padding(.horizontal, 16)
         }
-        .padding(.horizontal, 16).foregroundStyle(Palette.text).background(Palette.background)
+        .foregroundStyle(Palette.text).background(Palette.background)
         .accessibilityIdentifier("sessions-list")
         .task(id: compact) {
             guard !compact else { return }
@@ -129,6 +116,57 @@ struct SessionListView: View {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { model.sessionsVisible = false }
         }
         #endif
+    }
+
+    @ViewBuilder private var refreshingList: some View {
+        #if os(Android)
+        ComposeView {
+            SessionRefreshComposer(content: sessionScroll, recess: SessionRefreshRecess(model: model),
+                                   refreshing: model.refreshingSessions, hapticsEnabled: model.preferences.hapticsEnabled) {
+                Task { await model.refreshSessions() }
+            }
+        }
+        #else
+        sessionScroll
+            .coordinateSpace(name: "session-refresh")
+            .onPreferenceChange(SessionPullPosition.self) { refreshReveal = max(0, $0) }
+            .overlay(alignment: .top) {
+                SessionRefreshRecess(model: model)
+                    .frame(height: refreshReveal)
+            }
+            .clipped()
+        #endif
+    }
+
+    private var sessionScroll: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 4) {
+                ForEach(groups) { section in
+                    if section.showsHeader { sectionHeader(section) }
+                    if !section.collapsible || !collapsedProjects.contains(section.id) {
+                        ForEach(section.sessions) { session in sessionRow(session).transition(.opacity) }
+                    }
+                }
+                if filtered.isEmpty {
+                    Text(search.isEmpty && !hasFilters ? "Your sessions will appear here." : "No matching sessions.")
+                        .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
+                }
+            }
+            .padding(.horizontal, 16)
+            #if os(iOS)
+            .background(NativeSessionRefresh(hapticsEnabled: model.preferences.hapticsEnabled) { await model.refreshSessions() })
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: SessionPullPosition.self,
+                                           value: geometry.frame(in: .named("session-refresh")).minY)
+                }
+            }
+            #endif
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .accessibilityAction(named: Text("Refresh sessions")) {
+            Task { await model.refreshSessions() }
+        }
     }
 
     @ViewBuilder private var header: some View {
@@ -373,6 +411,11 @@ struct SessionListView: View {
         case .idle, .working: return Palette.secondary.opacity(0.5)
         }
     }
+}
+
+private struct SessionPullPosition: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 private struct SessionSection: Identifiable {

@@ -17,17 +17,25 @@ public struct ZRemoteRootView: View {
     @State var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() })
     #endif
     @Environment(\.scenePhase) var scenePhase
+    @Environment(\.layoutDirection) var layoutDirection
     public init() {}
 
     public var body: some View {
         GeometryReader { geometry in
             let tablet = isTablet(width: geometry.size.width)
+            let frame = geometry.frame(in: .global)
+            let insets = geometry.safeAreaInsets
+            let leftInset = layoutDirection == .rightToLeft ? insets.trailing : insets.leading
+            let sceneFrame = CGRect(x: frame.minX - leftInset, y: frame.minY - insets.top,
+                                    width: frame.width + insets.leading + insets.trailing,
+                                    height: frame.height + insets.top + insets.bottom)
             ZStack {
                 Palette.background.ignoresSafeArea()
                 if model.restoring {
                     ProgressView().tint(Palette.text)
                 } else if model.signedIn {
-                    workspace(tablet: tablet, size: geometry.size)
+                    workspace(tablet: tablet, size: geometry.size, safeAreaInsets: insets)
+                        .environment(\.composerSceneFrame, sceneFrame)
                 } else {
                     SignInView(model: model)
                 }
@@ -79,6 +87,9 @@ public struct ZRemoteRootView: View {
             .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
         }
         .preferredColorScheme(preferredColorScheme)
+        #if os(Android)
+        .composeModifier { AndroidHapticsModifier(enabled: model.preferences.hapticsEnabled) }
+        #endif
         .tint(Palette.text)
         .task { await model.start() }
         .onChange(of: scenePhase) { _, phase in model.setForeground(phase == .active) }
@@ -105,7 +116,7 @@ public struct ZRemoteRootView: View {
         }
     }
 
-    @ViewBuilder private func workspace(tablet: Bool, size: CGSize) -> some View {
+    @ViewBuilder private func workspace(tablet: Bool, size: CGSize, safeAreaInsets: EdgeInsets) -> some View {
         if tablet {
             HStack(spacing: 0) {
                 if model.sessionsVisible {
@@ -119,7 +130,8 @@ public struct ZRemoteRootView: View {
             .onAppear { model.sessionsVisible = true }
             .accessibilityHidden(model.route != nil)
         } else {
-            PhoneSessionDrawer(isOpen: $model.sessionsVisible) {
+            PhoneSessionDrawer(isOpen: $model.sessionsVisible, safeAreaInsets: safeAreaInsets,
+                               gesturesEnabled: model.route == nil && model.error == nil) {
                 SessionListView(model: model)
             } content: {
                 ConversationView(model: model)

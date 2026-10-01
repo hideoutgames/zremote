@@ -10,6 +10,14 @@ and changed-file details open in phone bottom sheets or centered tablet modals.
 Settings is a full-page phone modal. Native account, filtering and session menus
 keep the sidebar compact. Model modes and effort controls remain in the picker.
 
+The phone drawer moves the entire Composer/chat page, including its safe-area
+backgrounds, over a full-window Sessions layer. It reveals 80% of the screen
+with large continuous corners and a spring settle. Swipe right from the broad
+leading edge to open, or left across Sessions/the exposed page to close
+(directions mirror in right-to-left layouts). Short flicks and predominantly
+vertical drags do not toggle it; scrolling, refresh and text-selection gestures
+keep their own interaction. Tablets retain their Sessions side panel.
+
 The picker follows Zeron's compact provider tabs, favorites and scoped search,
 using original provider marks in the picker and Composer. The Composer includes
 the effective reasoning level and Fast mode. Test mode includes Claude Code,
@@ -23,11 +31,26 @@ in Show all, project headers expand and collapse their sessions. Sidebar PR
 badges contain the state-colored icon and number. Native iOS PR menus retain
 those icon colors, and the account menu uses the same control size as its peers.
 
+Pull down at the top of Sessions to refresh, including short or empty lists.
+The gesture reveals a recessed strip with the agent's working throbber and
+inset edge shadows. A selected Composer image keeps its filter, full-window
+scale and position, with a darker overlay; otherwise the strip uses a slightly
+darker page background. Refresh asks the existing peer to resync, and further
+remote updates can arrive after the gesture finishes.
+
 The composer supports native file/photo/camera attachments and host-backed
 `/commands`, `$skills` and `@files` suggestions. References are highlighted in
 the editor and sent messages. User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
+
+Agent questions temporarily replace the Composer with a matching answer card.
+Each question has full-width choices, an optional multiline custom answer, and
+Back/Next navigation that preserves answers. The final Send answer action stays
+disabled until every question is answered. The Composer draft and attachments
+return when the request clears. A locally queued answer shows a compact receipt
+until the peer resolves it; repeated taps and reopening the session cannot send
+it twice. Failed queue attempts keep the answers available to retry.
 
 ## Development
 
@@ -75,8 +98,8 @@ them in each session. These are first-observed positions, not historical creatio
 events. PR review opens the supplied HTTPS link. A missing profile photo uses
 initials; the client does not look up an avatar from another service.
 
-The optional background belongs only to a blank new Composer. It is removed
-while Sessions or a secondary view is visible. There is no terminal, general
+The optional background decorates a blank new Composer and the transient
+Sessions refresh recess. It stays hidden on other surfaces. There is no terminal, general
 file browser, repository administration, or direct GitHub integration.
 Settings can import a device-local image and apply Zeron's Original, Dither,
 ASCII, Halftone or Scanlines treatment with its native contrast guard. Images
@@ -85,6 +108,10 @@ are downsampled before account-local storage and never uploaded to the host.
 Settings lists connected devices and host-reported agent accounts/plan usage.
 Theme offers System, Light and Dark with adaptive surfaces and grayscale usage
 bars. Background effects and their text contrast guard follow the chosen theme.
+Haptics enables app-triggered feedback, including one light response when a
+refresh is committed. It defaults on and persists with account preferences.
+System-owned feedback, such as iOS Haptic Touch or the system keyboard, remains
+controlled by the operating system.
 Agent sign-in remains on the host. A quota warning above the Composer appears
 at 10% remaining for an unambiguous active account. Once raised, it stays visible
 across project/provider changes until dismissed for its original session, even
