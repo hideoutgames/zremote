@@ -19,6 +19,7 @@ public struct ClientFailure: LocalizedError, Sendable {
     private var attachmentBytes: [String: Data] = [:]
     private let interval: UInt64
     private var active = false
+    private var visibleSessionID: String?
 
     public init(intervalNanoseconds: UInt64 = 45_000_000) { interval = intervalNanoseconds }
 
@@ -26,9 +27,12 @@ public struct ClientFailure: LocalizedError, Sendable {
         active = true
         let project = Project(id: "demo-project", name: "Personal project", path: "/Users/demo/Projects/personal", hostID: "demo-mac")
         let history = Session(id: "demo-welcome", title: "A quieter workspace", projectID: project.id, hostID: project.hostID, path: project.path, preview: "Ready when you are",
-                              pullRequest: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), createdAt: Date().addingTimeInterval(-3600), updatedAt: Date())
-        let question = Session(id: "demo-question", title: "A quick design choice", projectID: project.id, hostID: project.hostID, path: project.path, createdAt: Date().addingTimeInterval(-7200), updatedAt: Date().addingTimeInterval(-1800))
-        workspace = WorkspaceState(connection: .online, hosts: [Host(id: "demo-mac", name: "Demo Mac", online: true)], projects: [project], sessions: [history, question], profile: UserProfile(id: "test-mode", displayName: "Test mode"))
+                              pullRequest: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), createdAt: Date().addingTimeInterval(-3600), updatedAt: Date(), lastFinishedAt: Date().addingTimeInterval(-720), completedTurnID: "demo-history-turn", providerID: "codex", modelID: "gpt-6-astra")
+        let question = Session(id: "demo-question", title: "A quick design choice", projectID: project.id, hostID: project.hostID, path: project.path, createdAt: Date().addingTimeInterval(-7200), updatedAt: Date().addingTimeInterval(-1800), awaitingInput: true, activity: "Waiting for response", inputRequestID: "demo-input", providerID: "codex", modelID: "gpt-6-astra")
+        workspace = WorkspaceState(connection: .online, hosts: [Host(id: "demo-mac", name: "Demo Mac", online: true)], projects: [project], sessions: [history, question], profile: UserProfile(id: "test-mode", displayName: "Test mode"), devices: [
+            ConnectedDevice(id: "demo-mac", name: "Demo Mac", platform: "macos", online: true, isExecutionHost: true),
+            ConnectedDevice(id: "demo-phone", name: "This device", platform: "ios", online: true, isExecutionHost: false, isCurrent: true)
+        ])
         sessions[history.id] = SessionState(id: history.id, messages: [
             TranscriptMessage(id: "demo-message-1", role: "user", text: "Make this workspace feel a little calmer."),
             TranscriptMessage(id: "demo-message-2", role: "assistant", text: "Ready when you are. Start a new session, choose a model, or send a message here to try streaming and changed files. Everything in test mode stays on this device.")
@@ -45,7 +49,7 @@ public struct ClientFailure: LocalizedError, Sendable {
     public func exchangeCode(_ code: String) async throws -> [Organization] { throw ClientFailure("Test mode does not use credentials.") }
     public func selectOrganization(_ id: String) async throws { throw ClientFailure("Test mode does not use organizations.") }
     public func signOut() async throws {
-        active = false
+        active = false; visibleSessionID = nil
         for task in running.values { task.cancel() }
         running.removeAll(); sessions.removeAll(); patches.removeAll(); attachmentBytes.removeAll()
         workspace = WorkspaceState()
@@ -54,22 +58,33 @@ public struct ClientFailure: LocalizedError, Sendable {
     public func refresh() async throws { guard active else { return }; onUpdate?(.workspace(workspace)) }
     public func openSession(_ id: String) async throws {
         guard let state = sessions[id] else { throw ClientFailure("This session is no longer available.") }
+        visibleSessionID = id
+        if let row = workspace.sessions.firstIndex(where: { $0.id == id }) { workspace.sessions[row].unread = false }
+        onUpdate?(.workspace(workspace))
         onUpdate?(.session(state))
     }
-    public func closeSession(_ id: String) {}
+    public func closeSession(_ id: String) { if visibleSessionID == id { visibleSessionID = nil } }
+    public func agentAccounts(hostID: String) async throws -> AgentAccountsSnapshot {
+        guard active, hostID == "demo-mac" else { return AgentAccountsSnapshot(available: false) }
+        let using = workspace.sessions.contains { $0.working }
+        return AgentAccountsSnapshot(accounts: [
+            AgentAccount(id: "demo-codex-account", harness: "codex", planLabel: "Test plan",
+                usageWindows: [AgentUsageWindow(label: "Session limit", usedFraction: using ? 0.93 : 0.84)],
+                usageFetchedAt: Int64(Date().timeIntervalSince1970 * 1000), displayName: "Demo account"),
+            AgentAccount(id: "demo-claude-account", harness: "claude-code", planLabel: "Test plan",
+                usageWindows: [AgentUsageWindow(label: "Weekly limit", usedFraction: 0.38)],
+                usageFetchedAt: Int64(Date().timeIntervalSince1970 * 1000), displayName: "Demo account")
+        ])
+    }
 
     public func models(hostID: String) async throws -> [AgentModel] {
-        [
-            AgentModel(providerID: "codex", providerName: "Codex", modelID: "gpt-6-astra", name: "GPT-6-Astra", detail: "Test mode · pinned Zeron catalog", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], options: [ModelOption(id: "serviceTier", label: "Service Tier", choices: [ModelChoice(id: "default", label: "Standard"), ModelChoice(id: "fast", label: "Fast")], defaultChoice: "default")]),
-            AgentModel(providerID: "codex", providerName: "Codex", modelID: "gpt-5.6-luna", name: "GPT-5.6-Luna", detail: "Test mode · pinned Zeron catalog", efforts: ["low", "medium", "high", "xhigh", "max"]),
-            AgentModel(providerID: "claude-code", providerName: "Claude Code", modelID: "claude-opus-5", name: "Opus 5", detail: "Test mode · pinned Zeron catalog", efforts: ["low", "medium", "high", "xhigh", "max", "ultracode", "ultrathink"], options: [ModelOption(id: "contextWindow", label: "Context Window", choices: [ModelChoice(id: "200k", label: "200K"), ModelChoice(id: "1m", label: "1M")], defaultChoice: "200k"), ModelOption(id: "fastMode", label: "Fast Mode", choices: [ModelChoice(id: "off", label: "Off"), ModelChoice(id: "on", label: "On")], defaultChoice: "off")])
-        ]
+        DemoModelCatalog.models
     }
 
     public func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String {
         let id = UUID().uuidString
         let project = workspace.projects.first { $0.id == projectID }
-        workspace.sessions.insert(Session(id: id, title: "New session", projectID: projectID, hostID: hostID, path: project?.path ?? "", createdAt: Date(), updatedAt: Date()), at: 0)
+        workspace.sessions.insert(Session(id: id, title: "New session", projectID: projectID, hostID: hostID, path: project?.path ?? "", createdAt: Date(), updatedAt: Date(), providerID: selection.providerID, modelID: selection.modelID), at: 0)
         sessions[id] = SessionState(id: id, selection: selection)
         onUpdate?(.workspace(workspace))
         return id
@@ -104,6 +119,8 @@ public struct ClientFailure: LocalizedError, Sendable {
         if let index = workspace.sessions.firstIndex(where: { $0.id == sessionID }) {
             workspace.sessions[index].title = clean.isEmpty ? "Attachment review" : String(clean.prefix(58))
             workspace.sessions[index].working = true
+            workspace.sessions[index].awaitingInput = false
+            workspace.sessions[index].activity = "Working"
             workspace.sessions[index].updatedAt = Date()
         }
         emit(sessionID)
@@ -166,6 +183,9 @@ public struct ClientFailure: LocalizedError, Sendable {
     public func respondInput(sessionID: String, requestID: String, answers: [String: [String]]) async throws {
         guard var state = sessions[sessionID], state.input?.id == requestID else { throw ClientFailure("This question is no longer waiting for an answer.") }
         state.input = nil
+        if let row = workspace.sessions.firstIndex(where: { $0.id == sessionID }) {
+            workspace.sessions[row].awaitingInput = false; workspace.sessions[row].activity = ""; workspace.sessions[row].inputRequestID = nil
+        }
         state.messages.append(TranscriptMessage(id: UUID().uuidString, role: "assistant", text: "Your choices are saved for this demo. Send a message to try a streaming reply."))
         sessions[sessionID] = state
         onUpdate?(.session(state))
@@ -185,6 +205,13 @@ public struct ClientFailure: LocalizedError, Sendable {
         sessions[id] = state
         if let row = workspace.sessions.firstIndex(where: { $0.id == id }) {
             workspace.sessions[row].working = false
+            workspace.sessions[row].awaitingInput = false
+            workspace.sessions[row].activity = ""
+            if !interrupted {
+                workspace.sessions[row].lastFinishedAt = Date()
+                workspace.sessions[row].completedTurnID = state.turnID
+                workspace.sessions[row].unread = visibleSessionID != id
+            }
             if !interrupted, workspace.sessions[row].pullRequest?.number == 42 {
                 workspace.sessions[row].pullRequest = PullRequest(number: 43, title: "Sample accessibility follow-up", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/accessibility")
             }

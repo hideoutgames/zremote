@@ -1241,6 +1241,32 @@ impl Client {
         }
     }
 
+    /// Read-only account and plan usage metadata from an execution host. The
+    /// host owns credentials and quota probing; the peer never receives tokens.
+    pub async fn agent_accounts(&self, device_id: &str) -> Result<zeron_proto::AgentAccountsSnapshot> {
+        if !self.workspace().execution_devices().iter().any(|device| device.id == device_id) {
+            return Err(ClientError::InvalidArgument("Choose an execution host".into()));
+        }
+        let value = self.inner.host_rpc(
+            device_id, zeron_rpc::methods::LIST_AGENT_ACCOUNTS,
+            serde_json::json!({ "forceUsage": false }),
+        ).await?;
+        serde_json::from_value(value)
+            .map_err(|_| ClientError::HostError("The host returned invalid account metadata".into()))
+    }
+
+    /// Minimal registry run signals for mobile alert deduplication. A successful
+    /// completion marker is never inferred from a stopped/stale working flag.
+    pub fn session_signals(&self) -> serde_json::Value {
+        let (state, _) = self.inner.workspace.state();
+        serde_json::Value::Array(state.sessions.iter().map(|session| serde_json::json!({
+            "sessionID": session.chat_id,
+            "completedTurnID": session.last_completed_turn,
+            "updatedAtMs": session.updated_at.timestamp_millis(),
+            "failed": session.status == zeron_proto::SessionStatus::Errored,
+        })).collect())
+    }
+
     /// Provider/workspace-specific catalogs from existing host RPCs. Canonical
     /// references preserve skill identity across editing and durable delivery.
     pub async fn composer_completions(

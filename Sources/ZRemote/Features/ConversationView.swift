@@ -18,6 +18,9 @@ struct ConversationView: View {
     private var wallpaper: Bool {
         PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil, sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil)
     }
+    private var modelLabel: String {
+        ModelPresentation.composerLabel(model: ModelPresentation.resolvedModel(in: model.catalog, selection: model.selection), selection: model.selection)
+    }
     private var completionRequest: String {
         [model.selectedSessionID ?? "new", model.selectedHostID, model.selectedProjectID ?? "",
          model.selection.providerID, model.draft, String(cursor), String(inputFocused), String(inputComposing)].joined(separator: "\u{1F}")
@@ -35,8 +38,50 @@ struct ConversationView: View {
         return nil
     }
     var body: some View {
+        layout
+        .background {
+            ZStack {
+                Palette.background
+                if wallpaper {
+                    ComposerBackground(data: model.preferences.backgroundImageData,
+                                       effect: model.preferences.backgroundEffect)
+                }
+            }.ignoresSafeArea()
+        }
+        .foregroundStyle(Palette.text)
+        .onAppear { cursor = (model.draft as NSString).length; selectionRequest += 1 }
+        .onChange(of: model.selectedSessionID) { _, _ in
+            following = true; userScrolling = false
+            cursor = (model.draft as NSString).length; selectionRequest += 1
+            suggestions = []; suggestionToken = nil
+        }
+        .onChange(of: model.sessionsVisible) { _, open in if open { inputFocused = false } }
+        .onChange(of: model.route?.id) { _, route in if route != nil { inputFocused = false } }
+        .task(id: completionRequest) { await updateSuggestions() }
+    }
+
+    @ViewBuilder private var layout: some View {
+        #if os(Android)
+        // Skip's native ScrollView does not yet expose safeAreaInset or unclipped
+        // scrolling. Retain native keyboard sizing on this platform.
         VStack(spacing: 0) {
             header
+            content
+            bottomChrome
+        }
+        #else
+        content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                header.background {
+                    ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+        #endif
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
             if model.selectedSessionID == nil {
                 Spacer(minLength: 20)
                 VStack(spacing: 12) {
@@ -51,6 +96,11 @@ struct ConversationView: View {
             } else {
                 transcript
             }
+        }
+    }
+
+    private var bottomChrome: some View {
+        VStack(spacing: 0) {
             if let input = model.state?.input {
                 AgentQuestionView(input: input, sending: model.answering) { answers in
                     Task { await model.answer(requestID: input.id, answers: answers) }
@@ -65,27 +115,15 @@ struct ConversationView: View {
                     }
                 }.padding(.bottom, 8)
             }
+            if let warning = model.usageWarning {
+                UsageLimitBanner(warning: warning, dismiss: model.dismissUsageWarning)
+                    .frame(maxWidth: 700).padding(.horizontal, 16)
+            }
             composer
         }
         .background {
-            ZStack {
-                Palette.background
-                if wallpaper {
-                    // A native material treatment, with no image or generated artwork.
-                    RadialGradient(colors: [Color(white: 0.28).opacity(0.45), .clear], center: .topTrailing, startRadius: 20, endRadius: 580)
-                }
-            }.ignoresSafeArea()
+            ChromeFade(edge: .bottom).padding(.top, -40).ignoresSafeArea(edges: .bottom)
         }
-        .foregroundStyle(Palette.text)
-        .onAppear { cursor = (model.draft as NSString).length; selectionRequest += 1 }
-        .onChange(of: model.selectedSessionID) { _, _ in
-            following = true; userScrolling = false
-            cursor = (model.draft as NSString).length; selectionRequest += 1
-            suggestions = []; suggestionToken = nil
-        }
-        .onChange(of: model.sessionsVisible) { _, open in if open { inputFocused = false } }
-        .onChange(of: model.route?.id) { _, route in if route != nil { inputFocused = false } }
-        .task(id: completionRequest) { await updateSuggestions() }
     }
 
     private var header: some View {
@@ -195,6 +233,9 @@ struct ConversationView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .coordinateSpace(name: "transcript")
+                #if !os(Android)
+                .scrollClipDisabled()
+                #endif
                 .onPreferenceChange(TranscriptTailPosition.self) { position in
                     tailPosition = position ?? .infinity
                     guard let position else { return }
@@ -277,11 +318,12 @@ struct ConversationView: View {
                 AttachmentPicker(model: model)
                 Button { model.route = .models } label: {
                     HStack(spacing: 7) {
-                        Text(model.modelName).lineLimit(1)
+                        ProviderIcon(providerID: model.selection.providerID, size: 17)
+                        Text(modelLabel).lineLimit(1)
                         Image(systemName: "chevron.down").font(.caption2)
                     }.font(.subheadline).foregroundStyle(Palette.secondary)
                         .padding(.horizontal, 6).frame(minHeight: 44)
-                }.buttonStyle(.plain).accessibilityLabel("Choose model, \(model.modelName)")
+                }.buttonStyle(.plain).accessibilityLabel("Choose model, \(modelLabel)")
                 Spacer(minLength: 0)
                 Button {
                     Task { if model.working { await model.stop() } else { following = true; await model.send() } }
@@ -334,6 +376,34 @@ struct ConversationView: View {
         inputFocused = true
     }
 
+}
+
+private struct UsageLimitBanner: View {
+    let warning: UsageWarning
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                Text("Usage limits approaching.").lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
+                Button("Dismiss", action: dismiss).fontWeight(.semibold)
+                    .foregroundStyle(Palette.text).frame(minHeight: 44)
+            }.font(.caption)
+            HStack(spacing: 10) {
+                ProgressView(value: warning.remainingFraction, total: 1).tint(.orange)
+                    .accessibilityLabel("Usage remaining")
+                    .accessibilityValue("\(warning.percentRemaining) percent")
+                Text("\(warning.percentRemaining)%").font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Palette.secondary).accessibilityHidden(true)
+            }
+            .padding(.bottom, 12)
+        }
+        .padding(.horizontal, 14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.orange.opacity(0.2)))
+    }
 }
 
 private struct TranscriptTailPosition: PreferenceKey {

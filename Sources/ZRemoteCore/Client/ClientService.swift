@@ -26,10 +26,24 @@ public struct PullRequest: Identifiable, Hashable, Sendable, Codable {
     public var provider: String
     public var baseRef: String
     public var headRef: String
-    public init(number: UInt64, title: String, url: String, state: String, provider: String = "", baseRef: String = "", headRef: String = "") {
+    public var isDraft: Bool
+    public init(number: UInt64, title: String, url: String, state: String, provider: String = "", baseRef: String = "", headRef: String = "", isDraft: Bool = false) {
         self.number = number; self.title = title; self.url = url; self.state = state
-        self.provider = provider; self.baseRef = baseRef; self.headRef = headRef
+        self.provider = provider; self.baseRef = baseRef; self.headRef = headRef; self.isDraft = isDraft
     }
+    private enum CodingKeys: String, CodingKey { case number, title, url, state, provider, baseRef, headRef, isDraft }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        number = try values.decode(UInt64.self, forKey: .number)
+        title = try values.decode(String.self, forKey: .title)
+        url = try values.decode(String.self, forKey: .url)
+        state = try values.decode(String.self, forKey: .state)
+        provider = try values.decodeIfPresent(String.self, forKey: .provider) ?? ""
+        baseRef = try values.decodeIfPresent(String.self, forKey: .baseRef) ?? ""
+        headRef = try values.decodeIfPresent(String.self, forKey: .headRef) ?? ""
+        isDraft = try values.decodeIfPresent(Bool.self, forKey: .isDraft) ?? false
+    }
+
 }
 
 public struct Session: Identifiable, Hashable, Sendable, Codable {
@@ -41,24 +55,64 @@ public struct Session: Identifiable, Hashable, Sendable, Codable {
     public var preview: String
     public var working: Bool
     public var unread: Bool
+    public var awaitingInput: Bool
+    public var failed: Bool
+    public var activity: String
+    public var lastFinishedAt: Date?
+    public var completedTurnID: String?
+    public var inputRequestID: String?
+    public var providerID: String
+    public var modelID: String?
     public var pullRequest: PullRequest?
     public var pinned: Bool
     public var archived: Bool
     public var createdAt: Date
     public var updatedAt: Date
-    public init(id: String, title: String, projectID: String? = nil, hostID: String, path: String = "", preview: String = "", working: Bool = false, unread: Bool = false, pullRequest: PullRequest? = nil, pinned: Bool = false, archived: Bool = false, createdAt: Date = Date(timeIntervalSince1970: 0), updatedAt: Date = Date(timeIntervalSince1970: 0)) {
+    public init(id: String, title: String, projectID: String? = nil, hostID: String, path: String = "", preview: String = "", working: Bool = false, unread: Bool = false, pullRequest: PullRequest? = nil, pinned: Bool = false, archived: Bool = false, createdAt: Date = Date(timeIntervalSince1970: 0), updatedAt: Date = Date(timeIntervalSince1970: 0), awaitingInput: Bool = false, failed: Bool = false, activity: String = "", lastFinishedAt: Date? = nil, completedTurnID: String? = nil, inputRequestID: String? = nil, providerID: String = "", modelID: String? = nil) {
         self.id = id; self.title = title; self.projectID = projectID; self.hostID = hostID; self.path = path; self.preview = preview; self.working = working; self.unread = unread; self.pullRequest = pullRequest
         self.pinned = pinned; self.archived = archived; self.createdAt = createdAt; self.updatedAt = updatedAt
+        self.awaitingInput = awaitingInput; self.failed = failed; self.activity = activity; self.lastFinishedAt = lastFinishedAt
+        self.completedTurnID = completedTurnID; self.inputRequestID = inputRequestID; self.providerID = providerID; self.modelID = modelID
     }
+    private enum CodingKeys: String, CodingKey {
+        case id, title, projectID, hostID, path, preview, working, unread, pullRequest, pinned, archived, createdAt, updatedAt
+        case awaitingInput, failed, activity, lastFinishedAt, completedTurnID, inputRequestID, providerID, modelID
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        title = try values.decode(String.self, forKey: .title)
+        projectID = try values.decodeIfPresent(String.self, forKey: .projectID)
+        hostID = try values.decode(String.self, forKey: .hostID)
+        path = try values.decodeIfPresent(String.self, forKey: .path) ?? ""
+        preview = try values.decodeIfPresent(String.self, forKey: .preview) ?? ""
+        working = try values.decodeIfPresent(Bool.self, forKey: .working) ?? false
+        unread = try values.decodeIfPresent(Bool.self, forKey: .unread) ?? false
+        pullRequest = try values.decodeIfPresent(PullRequest.self, forKey: .pullRequest)
+        pinned = try values.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+        archived = try values.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+        createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        updatedAt = try values.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        awaitingInput = try values.decodeIfPresent(Bool.self, forKey: .awaitingInput) ?? false
+        failed = try values.decodeIfPresent(Bool.self, forKey: .failed) ?? false
+        activity = try values.decodeIfPresent(String.self, forKey: .activity) ?? ""
+        lastFinishedAt = try values.decodeIfPresent(Date.self, forKey: .lastFinishedAt)
+        completedTurnID = try values.decodeIfPresent(String.self, forKey: .completedTurnID)
+        inputRequestID = try values.decodeIfPresent(String.self, forKey: .inputRequestID)
+        providerID = try values.decodeIfPresent(String.self, forKey: .providerID) ?? ""
+        modelID = try values.decodeIfPresent(String.self, forKey: .modelID)
+    }
+
 }
 
 public struct WorkspaceState: Equatable, Sendable {
     public var connection: ClientConnection
     public var hosts: [Host]
+    public var devices: [ConnectedDevice]
     public var projects: [Project]
     public var sessions: [Session]
     public var profile: UserProfile?
-    public init(connection: ClientConnection = .signedOut, hosts: [Host] = [], projects: [Project] = [], sessions: [Session] = [], profile: UserProfile? = nil) { self.connection = connection; self.hosts = hosts; self.projects = projects; self.sessions = sessions; self.profile = profile }
+    public init(connection: ClientConnection = .signedOut, hosts: [Host] = [], projects: [Project] = [], sessions: [Session] = [], profile: UserProfile? = nil, devices: [ConnectedDevice] = []) { self.devices = devices; self.connection = connection; self.hosts = hosts; self.projects = projects; self.sessions = sessions; self.profile = profile }
 }
 
 public struct ModelChoice: Identifiable, Hashable, Sendable, Codable {
@@ -83,9 +137,10 @@ public struct AgentModel: Identifiable, Hashable, Sendable, Codable {
     public var name: String
     public var detail: String
     public var efforts: [String]
+    public var defaultEffort: String?
     public var options: [ModelOption]
-    public init(providerID: String, providerName: String, modelID: String, name: String, detail: String = "", efforts: [String] = [], options: [ModelOption] = []) {
-        self.providerID = providerID; self.providerName = providerName; self.modelID = modelID; self.name = name; self.detail = detail; self.efforts = efforts; self.options = options
+    public init(providerID: String, providerName: String, modelID: String, name: String, detail: String = "", efforts: [String] = [], options: [ModelOption] = [], defaultEffort: String? = nil) {
+        self.providerID = providerID; self.providerName = providerName; self.modelID = modelID; self.name = name; self.detail = detail; self.efforts = efforts; self.options = options; self.defaultEffort = defaultEffort
     }
 }
 
@@ -197,6 +252,7 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
     func createRepository(hostID: String, name: String) async throws -> String
     func turnDiff(sessionID: String, turnID: String) async throws -> TurnDiff
     func setForeground(_ foreground: Bool)
+    func agentAccounts(hostID: String) async throws -> AgentAccountsSnapshot
 }
 
 // Existing test peers can stay focused on the behavior they exercise. Live and
@@ -210,4 +266,8 @@ public extension ClientService {
     func complete(kind: ComposerTokenKind, query: String, hostID: String, sessionID: String?, projectID: String?, providerID: String) async throws -> [ComposerCompletion] { [] }
     func setPinned(sessionID: String, pinned: Bool) async throws { throw ClientFailure("Pinning is unavailable.") }
     func setArchived(sessionID: String, archived: Bool) async throws { throw ClientFailure("Archiving is unavailable.") }
+}
+
+public extension ClientService {
+    func agentAccounts(hostID: String) async throws -> AgentAccountsSnapshot { .init(available: false) }
 }

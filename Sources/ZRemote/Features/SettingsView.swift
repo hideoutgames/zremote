@@ -14,16 +14,9 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section {
-                Toggle("New composer background", isOn: Binding(
-                    get: { model.preferences.backgroundEnabled },
-                    set: { model.setBackground($0) }
-                ))
-                .tint(Palette.addition)
-            } footer: {
-                Text("Only appears when starting a new conversation.")
-            }
-            .listRowBackground(Palette.surface)
+            BackgroundSettings(model: model)
+            ConnectionSettings(model: model)
+            NotificationSettings(model: model)
 
             Section {
                 NavigationLink {
@@ -40,23 +33,23 @@ struct SettingsView: View {
             .listRowBackground(Palette.surface)
 
             Section {
-                Button {
+                Button(role: .destructive) {
                     guard !signingOut else { return }
                     signingOut = true
                     Task { await model.disconnect(); signingOut = false }
                 } label: {
                     HStack {
-                        Text(model.isDemo ? "Exit test mode" : "Sign out")
+                        Text("Sign out")
                         Spacer()
                         if signingOut { ProgressView() }
                     }
-                    .foregroundStyle(Palette.text)
+                    .foregroundStyle(Palette.deletion)
                 }
                 .disabled(signingOut)
             } footer: {
                 if model.isDemo { Text("Test mode uses sample projects and sessions.") }
             }
-            .listRowBackground(Palette.surface)
+            .listRowBackground(Color.clear)
         }
         .scrollContentBackground(.hidden)
         .background(Palette.background)
@@ -74,13 +67,16 @@ private struct OpenSourceNotice: Decodable, Identifiable, Sendable {
 }
 
 private struct AcknowledgementsView: View {
+    var showAll = false
     @State private var notices: [OpenSourceNotice] = []
+    @State private var featuredIDs: Set<String> = []
     @State private var query = ""
     @State private var failed = false
 
     private var filtered: [OpenSourceNotice] {
         let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return search.isEmpty ? notices : notices.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        if !search.isEmpty { return notices.filter { $0.name.localizedCaseInsensitiveContains(search) } }
+        return showAll ? notices : notices.filter { featuredIDs.contains($0.id) }
     }
 
     var body: some View {
@@ -108,11 +104,15 @@ private struct AcknowledgementsView: View {
                 }
                 .listRowBackground(Palette.surface)
             }
+            if !showAll, query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                NavigationLink("Additional open-source licenses") { AcknowledgementsView(showAll: true) }
+                    .listRowBackground(Palette.surface)
+            }
         }
         .searchable(text: $query, prompt: "Search libraries")
         .scrollContentBackground(.hidden)
         .background(Palette.background)
-        .navigationTitle("Acknowledgements")
+        .navigationTitle(showAll ? "Open-source licenses" : "Acknowledgements")
         .task { await load() }
     }
 
@@ -120,6 +120,7 @@ private struct AcknowledgementsView: View {
         let result = await Task.detached(priority: .userInitiated) {
             let manifests = ["Acknowledgements", "SwiftAcknowledgements", "CargoAcknowledgements", "GradleAcknowledgements"]
             var entries: [String: OpenSourceNotice] = [:]
+            var featured: Set<String> = []
             var failed = false
             for name in manifests {
                 guard let url = Bundle.module.url(forResource: name, withExtension: "json") else {
@@ -129,13 +130,19 @@ private struct AcknowledgementsView: View {
                 do {
                     let decoded = try JSONDecoder().decode([OpenSourceNotice].self, from: Data(contentsOf: url))
                     for notice in decoded { entries[notice.id] = notice }
+                    if name == "Acknowledgements" {
+                        // Build tooling and additional copies of the same project's
+                        // source remain in the complete offline license inventory.
+                        featured = Set(decoded.filter { $0.name != "skip" && !$0.id.hasPrefix("source:zeron-model-picker") }.map(\.id))
+                    }
                 } catch { failed = true }
             }
-            return (entries.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }, failed)
+            return (entries.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }, failed, featured)
         }.value
         guard !Task.isCancelled else { return }
         notices = result.0
         failed = result.1
+        featuredIDs = result.2
     }
 }
 

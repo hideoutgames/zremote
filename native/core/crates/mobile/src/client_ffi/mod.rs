@@ -404,6 +404,20 @@ impl CoreClient {
         serde_json::to_string(&value).map_err(|_| CoreError::Internal { message: "Could not encode catalog".into() })
     }
 
+    /// Read-only account/plan quotas, using the existing host account RPC.
+    pub async fn agent_accounts_json(&self, device_id: String) -> CoreResult<String> {
+        let client = self.client.clone();
+        let snapshot = on_runtime(async move { client.agent_accounts(&device_id).await }).await?;
+        serde_json::to_string(&snapshot)
+            .map_err(|_| CoreError::Internal { message: "Could not encode account metadata".into() })
+    }
+
+    /// Host-written completion identity and error state, without transcript data.
+    pub fn session_signals_json(&self) -> CoreResult<String> {
+        serde_json::to_string(&self.client.session_signals())
+            .map_err(|_| CoreError::Internal { message: "Could not encode session signals".into() })
+    }
+
     /// Files matching `query` in the chat's (or project's) workspace, for
     /// composer `@` mentions.
     pub async fn search_files(

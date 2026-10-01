@@ -40,12 +40,30 @@ public enum SecondaryRoute: Identifiable {
     public var organizations: [Organization] = []
     public var isDemo = false
     public var preferences = LocalPreferences()
+    public var agentAccounts = AgentAccountsSnapshot(available: false)
+    public var loadingAccounts = false
+    public var accountsError: String?
+    public var notificationAuthorization = NotificationAuthorization.notDetermined
+    public var notificationError: String?
     public var fetchingModels = false
     public var answering = false
     public var changesAfterMessage: [String: CapturedTurnChanges] = [:]
     public var pullRequestsAfterMessage: [String: [PullRequest]] = [:]
     private var attachmentDrafts: [String: [LocalAttachment]] = [:]
 
+    @ObservationIgnored private let notifications: any NotificationService
+    @ObservationIgnored private var notificationTask: Task<Void, Never>?
+    @ObservationIgnored private var accountsTask: Task<Void, Never>?
+    @ObservationIgnored private var editedNotifications = false
+    @ObservationIgnored private var accountsRequest = 0
+    @ObservationIgnored private var accountHostID: String?
+    @ObservationIgnored private var accountSnapshotsByHost: [String: AgentAccountsSnapshot] = [:]
+    @ObservationIgnored private var foreground = true
+    @ObservationIgnored private var pendingNotificationSession: String?
+    @ObservationIgnored private var notificationDeliveries: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var notificationDeliveryEvents: [String: SessionNotification] = [:]
+    @ObservationIgnored private var queuedNotifications: [String: SessionNotification] = [:]
+    @ObservationIgnored private var observedRunningSessions: Set<String> = []
     @ObservationIgnored private var client: any ClientService
     @ObservationIgnored private let makeLiveClient: @MainActor () -> any ClientService
     @ObservationIgnored private let makeStore: (String) -> LocalStateStore
@@ -66,10 +84,19 @@ public enum SecondaryRoute: Identifiable {
     @ObservationIgnored private var changeSizes: [String: Int] = [:]
 
     public init(client: any ClientService, makeLiveClient: @escaping @MainActor () -> any ClientService,
-                makeStore: @escaping (String) -> LocalStateStore = { LocalStateStore(accountKey: $0) }) {
+                makeStore: @escaping (String) -> LocalStateStore = { LocalStateStore(accountKey: $0) },
+                notifications: any NotificationService = UnavailableNotifications()) {
         self.client = client
+        self.isDemo = client.isDemo
         self.makeLiveClient = makeLiveClient
         self.makeStore = makeStore
+        self.notifications = notifications
+        notificationAuthorization = notifications.supported ? .notDetermined : .unavailable
+        notifications.onSession = { [weak self] id in
+            guard let self, !self.isDemo else { return }
+            self.pendingNotificationSession = id
+            self.openPendingNotification()
+        }
         bindClient()
     }
 
@@ -80,6 +107,12 @@ public enum SecondaryRoute: Identifiable {
     public var selectedModel: AgentModel? { catalog.first { $0.providerID == selection.providerID && $0.modelID == selection.modelID } }
     public var modelName: String { selectedModel?.name ?? selection.modelID ?? "Choose model" }
     public var working: Bool { state?.working ?? false }
+    public var notificationsSupported: Bool { notifications.supported && !isDemo }
+    public var usageWarning: UsageWarning? {
+        guard let id = selectedSessionID, !preferences.dismissedUsageSessions.contains(id),
+              agentAccounts.available, accountHostID == (session?.hostID ?? selectedHostID) else { return nil }
+        return UsageLimitRules.warning(remaining: UsageLimitRules.remaining(accounts: agentAccounts.accounts, selection: selection))
+    }
     public var changes: [CapturedTurnChanges] { preferences.changes.filter { $0.sessionID == selectedSessionID } }
     public var attachments: [LocalAttachment] { attachmentDrafts[selectedSessionID ?? "new"] ?? [] }
     public var attachmentContext: String { "\(generation):\(selectedSessionID ?? "new"):\(session?.hostID ?? selectedHostID):\(session?.projectID ?? selectedProjectID ?? "")" }
@@ -128,11 +161,16 @@ public enum SecondaryRoute: Identifiable {
     }
 
     private func resetAccountState() {
-        saveTask?.cancel(); modelTask?.cancel()
+        saveTask?.cancel(); modelTask?.cancel(); notificationTask?.cancel(); accountsTask?.cancel()
+        for task in notificationDeliveries.values { task.cancel() }
+        notificationDeliveries = [:]; notificationDeliveryEvents = [:]; queuedNotifications = [:]; observedRunningSessions = []
+        notifications.stop(); accountsRequest += 1; accountHostID = nil; accountSnapshotsByHost = [:]; pendingNotificationSession = nil
+        agentAccounts = AgentAccountsSnapshot(available: false); loadingAccounts = false; accountsError = nil
+        notificationAuthorization = notifications.supported ? .notDetermined : .unavailable; notificationError = nil
         modelRequest += 1; selectionGeneration += 1
         store = nil; restoredAccount = nil; capturing = []
         loadingPreferences = false; saveAfterRestore = false
-        editedDrafts = []; editedFavorites = false; editedBackground = false
+        editedDrafts = []; editedFavorites = false; editedBackground = false; editedNotifications = false
         changeSizes = [:]
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
@@ -153,11 +191,25 @@ public enum SecondaryRoute: Identifiable {
                 generation += 1
                 resetAccountState()
             }
+            let previousWorkspace = workspace
             workspace = next
+            var finishedChanged = false
+            for index in workspace.sessions.indices {
+                let row = workspace.sessions[index]
+                if let finished = row.lastFinishedAt {
+                    if preferences.sessionFinishedAt[row.id] != finished { preferences.sessionFinishedAt[row.id] = finished; finishedChanged = true }
+                } else { workspace.sessions[index].lastFinishedAt = preferences.sessionFinishedAt[row.id] }
+            }
+            if finishedChanged { scheduleSave() }
+            observeSessionNotifications(previous: previousWorkspace, next: next)
             observePullRequests()
             if selectedHostID.isEmpty { selectedHostID = next.hosts.first(where: { $0.online })?.id ?? next.hosts.first?.id ?? "" }
             if catalog.isEmpty && !fetchingModels { loadModels() }
             restorePreferencesIfNeeded()
+            let oldActiveHosts = Set(previousWorkspace.sessions.filter(\.working).map(\.hostID))
+            let activeHosts = Set(next.sessions.filter(\.working).map(\.hostID))
+            if oldActiveHosts != activeHosts { restartUsageMonitoring() }
+            openPendingNotification()
         case .session(let next):
             let previous = sessions[next.id]
             sessions[next.id] = next
@@ -169,6 +221,7 @@ public enum SecondaryRoute: Identifiable {
             // A turn can finish while its session is closed or the app is suspended.
             // Reopening also attempts the latest completed snapshot while it exists.
             if !next.working && next.input == nil { captureChanges(next) }
+            if previous?.working != next.working { restartUsageMonitoring() }
             trimSessionCache()
         case .authenticationExpired:
             generation += 1
@@ -321,6 +374,7 @@ public enum SecondaryRoute: Identifiable {
         fetchingModels = true
         let currentGeneration = generation
         let source = client
+        restartUsageMonitoring()
         modelTask = Task { [weak self] in
             guard let self, !Task.isCancelled, currentGeneration == self.generation else { return }
             defer { if currentGeneration == self.generation, request == self.modelRequest { self.fetchingModels = false } }
@@ -353,6 +407,156 @@ public enum SecondaryRoute: Identifiable {
         if preferences.favorites.contains(id) { preferences.favorites.remove(id) }
         else { preferences.favorites.insert(id) }
         scheduleSave()
+    }
+    public func setBackgroundImage(data: Data?, name: String?) {
+        guard (data?.count ?? 0) <= 2_000_000 else { error = "Choose a background image smaller than 2 MB."; return }
+        editedBackground = true
+        preferences.backgroundImageData = data
+        preferences.backgroundImageName = data == nil ? nil : name
+        if data != nil { preferences.backgroundEnabled = true }
+        scheduleSave()
+    }
+    public func setBackgroundEffect(_ effect: String) {
+        guard ["none", "dither", "ascii", "halftone", "scanlines"].contains(effect) else { return }
+        editedBackground = true; preferences.backgroundEffect = effect; scheduleSave()
+    }
+    public func dismissUsageWarning() {
+        guard let id = selectedSessionID else { return }
+        preferences.dismissedUsageSessions.insert(id); scheduleSave()
+    }
+    public func setNotifications(_ value: NotificationPreferences) {
+        editedNotifications = true; preferences.notifications = value; scheduleSave()
+        for (id, event) in notificationDeliveryEvents where !notificationEnabled(event.kind) {
+            notificationDeliveries[id]?.cancel()
+        }
+        queuedNotifications = queuedNotifications.filter { notificationEnabled($0.value.kind) }
+        syncNotifications(requestPermission: value.enabled)
+    }
+    public func syncNotifications(requestPermission: Bool = false) {
+        guard signedIn, !isDemo, notifications.supported, !loadingPreferences else { return }
+        notificationTask?.cancel()
+        let epoch = generation, prefs = preferences.notifications
+        notificationTask = Task { [weak self] in
+            guard let self else { return }
+            let authorization = await self.notifications.authorization(request: requestPermission && prefs.enabled)
+            guard epoch == self.generation, !Task.isCancelled else { return }
+            self.notificationAuthorization = authorization
+            if !prefs.enabled {
+                for task in self.notificationDeliveries.values { task.cancel() }
+                self.notificationDeliveries = [:]; self.notificationDeliveryEvents = [:]; self.queuedNotifications = [:]
+                self.notifications.stop()
+            } else if authorization == .authorized {
+                self.flushNotifications()
+            }
+        }
+    }
+
+    private func observeSessionNotifications(previous: WorkspaceState, next: WorkspaceState) {
+        let previousRows = Dictionary(uniqueKeysWithValues: previous.sessions.map { ($0.id, $0) })
+        for row in next.sessions {
+            defer {
+                if row.working { observedRunningSessions.insert(row.id) }
+                else if row.failed { observedRunningSessions.remove(row.id) }
+            }
+            guard previous.connection == .online, next.connection == .online,
+                  let old = previousRows[row.id] else { continue }
+            if row.awaitingInput,
+               !old.awaitingInput || (old.inputRequestID != nil && row.inputRequestID != nil && old.inputRequestID != row.inputRequestID && !old.inputRequestID!.hasPrefix("pending:")),
+               let request = row.inputRequestID {
+                queueNotification(SessionNotification(id: "question:" + row.id + ":" + request, sessionID: row.id, kind: .question))
+            }
+            if let turn = row.completedTurnID, turn != old.completedTurnID, observedRunningSessions.contains(row.id) {
+                queueNotification(SessionNotification(id: "finished:" + row.id + ":" + turn, sessionID: row.id, kind: .finished))
+                if !row.working && !row.awaitingInput { observedRunningSessions.remove(row.id) }
+            }
+        }
+    }
+
+    private func notificationEnabled(_ kind: SessionNotificationKind) -> Bool {
+        let prefs = preferences.notifications
+        guard prefs.enabled else { return false }
+        switch kind {
+        case .question: return prefs.questions
+        case .finished: return prefs.finished
+        case .usageLimit: return prefs.usageLimits
+        }
+    }
+
+    private func queueNotification(_ event: SessionNotification) {
+        guard !isDemo, notifications.supported, !preferences.notificationEvents.contains(event.id),
+              notificationDeliveries[event.id] == nil,
+              loadingPreferences || notificationEnabled(event.kind) else { return }
+        queuedNotifications[event.id] = event
+        flushNotifications()
+    }
+
+    private func flushNotifications() {
+        guard !loadingPreferences, !isDemo, signedIn, notifications.supported else { return }
+        for event in Array(queuedNotifications.values) {
+            guard notificationEnabled(event.kind), !preferences.notificationEvents.contains(event.id),
+                  notificationDeliveries[event.id] == nil else { queuedNotifications[event.id] = nil; continue }
+            if event.kind == .usageLimit, preferences.usageNotifiedSessions.contains(event.sessionID) { queuedNotifications[event.id] = nil; continue }
+            let epoch = generation
+            queuedNotifications[event.id] = nil
+            notificationDeliveryEvents[event.id] = event
+            notificationDeliveries[event.id] = Task { [weak self] in
+                guard let self else { return }
+                defer { if epoch == self.generation { self.notificationDeliveries[event.id] = nil; self.notificationDeliveryEvents[event.id] = nil } }
+                let authorization = await self.notifications.authorization(request: false)
+                guard epoch == self.generation, !Task.isCancelled, self.notificationEnabled(event.kind), authorization == .authorized else { return }
+                do {
+                    try await self.notifications.deliver(event)
+                    guard epoch == self.generation, !Task.isCancelled else { return }
+                    self.preferences.notificationEvents.insert(event.id)
+                    if event.kind == .usageLimit { self.preferences.usageNotifiedSessions.insert(event.sessionID) }
+                    self.notificationError = nil
+                    self.scheduleSave()
+                } catch {
+                    if epoch == self.generation, !Task.isCancelled {
+                        self.queuedNotifications[event.id] = event
+                        self.notificationError = "A notification couldn't be delivered. Check notification permissions."
+                    }
+                }
+            }
+        }
+    }
+
+    private func observeUsageThreshold(previous: AgentAccountsSnapshot, next: AgentAccountsSnapshot, hostID: String) {
+        guard previous.available, next.available else { return }
+        for row in workspace.sessions where row.hostID == hostID && row.working {
+            let selection = row.providerID.isEmpty ? (sessions[row.id]?.selection ?? ModelSelection()) : ModelSelection(providerID: row.providerID, modelID: row.modelID)
+            let old = UsageLimitRules.remaining(accounts: previous.accounts, selection: selection)
+            let remaining = UsageLimitRules.remaining(accounts: next.accounts, selection: selection)
+            if UsageLimitRules.crossedThreshold(previous: old, remaining: remaining, working: true,
+                                               alreadyNotified: preferences.usageNotifiedSessions.contains(row.id)) {
+                queueNotification(SessionNotification(id: "usage:" + row.id, sessionID: row.id, kind: .usageLimit))
+            }
+        }
+    }
+
+    public func fetchAgentAccounts(hostID: String) async throws -> AgentAccountsSnapshot {
+        let epoch = generation
+        let snapshot = try await client.agentAccounts(hostID: hostID)
+        guard epoch == generation else { throw CancellationError() }
+        return snapshot
+    }
+    public func refreshAgentAccounts() async {
+        let host = session?.hostID ?? selectedHostID
+        guard !host.isEmpty else { agentAccounts = AgentAccountsSnapshot(available: false); return }
+        accountsRequest += 1
+        let request = accountsRequest, epoch = generation
+        if accountHostID != host { agentAccounts = AgentAccountsSnapshot(available: false); accountHostID = host }
+        loadingAccounts = true
+        defer { if epoch == generation, request == accountsRequest { loadingAccounts = false } }
+        do {
+            let snapshot = try await client.agentAccounts(hostID: host)
+            guard epoch == generation, request == accountsRequest, host == (session?.hostID ?? selectedHostID) else { return }
+            observeUsageThreshold(previous: accountSnapshotsByHost[host] ?? agentAccounts, next: snapshot, hostID: host)
+            accountSnapshotsByHost[host] = snapshot
+            agentAccounts = snapshot; accountsError = nil
+        } catch {
+            if epoch == generation, request == accountsRequest { accountsError = "Usage is unavailable from this host right now." }
+        }
     }
     public func setBackground(_ enabled: Bool) { editedBackground = true; preferences.backgroundEnabled = enabled; scheduleSave() }
     public func setHost(_ id: String) { updateHost(id); selectedProjectID = nil; loadModels() }
@@ -395,7 +599,48 @@ public enum SecondaryRoute: Identifiable {
         do { try await client.respondInput(sessionID: id, requestID: requestID, answers: answers) }
         catch { if epoch == generation { self.error = "Couldn't send your answer. Please try again." } }
     }
-    public func setForeground(_ foreground: Bool) { client.setForeground(foreground) }
+    public func setForeground(_ foreground: Bool) {
+        self.foreground = foreground
+        client.setForeground(foreground)
+        if foreground { syncNotifications(); restartUsageMonitoring() }
+        else { accountsTask?.cancel() }
+    }
+
+    private func restartUsageMonitoring() {
+        accountsTask?.cancel()
+        guard foreground, signedIn else { return }
+        let epoch = generation
+        accountsTask = Task { [weak self] in
+            while let self, epoch == self.generation, !Task.isCancelled {
+                await self.refreshAgentAccounts()
+                guard !Task.isCancelled else { return }
+                let host = self.session?.hostID ?? self.selectedHostID
+                let otherHosts = Set(self.workspace.sessions.filter { $0.working && $0.hostID != host }.map(\.hostID))
+                for otherHost in otherHosts.sorted() {
+                    guard !Task.isCancelled, epoch == self.generation else { return }
+                    if let snapshot = try? await self.client.agentAccounts(hostID: otherHost) {
+                        guard !Task.isCancelled, epoch == self.generation else { return }
+                        self.observeUsageThreshold(previous: self.accountSnapshotsByHost[otherHost] ?? .init(available: false), next: snapshot, hostID: otherHost)
+                        self.accountSnapshotsByHost[otherHost] = snapshot
+                    }
+                }
+                guard self.foreground, self.workspace.sessions.contains(where: \.working) else { return }
+                do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { return }
+            }
+        }
+    }
+
+    private func openPendingNotification() {
+        guard signedIn, !isDemo, let id = pendingNotificationSession,
+              workspace.sessions.contains(where: { $0.id == id }) else { return }
+        pendingNotificationSession = nil
+        let epoch = generation
+        Task {
+            guard epoch == generation, signedIn, !isDemo else { return }
+            route = nil
+            await open(id)
+        }
+    }
 
     private func captureChanges(_ session: SessionState) {
         guard let turn = session.turnID else { return }
@@ -511,7 +756,17 @@ public enum SecondaryRoute: Identifiable {
                 var merged = restored
                 for id in self.editedDrafts { merged.drafts[id] = self.preferences.drafts[id] }
                 if self.editedFavorites { merged.favorites = self.preferences.favorites }
-                if self.editedBackground { merged.backgroundEnabled = self.preferences.backgroundEnabled }
+                if self.editedBackground {
+                    merged.backgroundEnabled = self.preferences.backgroundEnabled
+                    merged.backgroundImageData = self.preferences.backgroundImageData
+                    merged.backgroundImageName = self.preferences.backgroundImageName
+                    merged.backgroundEffect = self.preferences.backgroundEffect
+                }
+                if self.editedNotifications { merged.notifications = self.preferences.notifications }
+                merged.dismissedUsageSessions.formUnion(self.preferences.dismissedUsageSessions)
+                merged.usageNotifiedSessions.formUnion(self.preferences.usageNotifiedSessions)
+                merged.notificationEvents.formUnion(self.preferences.notificationEvents)
+                merged.sessionFinishedAt.merge(self.preferences.sessionFinishedAt) { old, current in max(old, current) }
                 for turn in self.preferences.changes where !merged.changes.contains(where: { $0.sessionID == turn.sessionID && $0.turnID == turn.turnID }) {
                     merged.changes.append(turn)
                 }
@@ -521,10 +776,14 @@ public enum SecondaryRoute: Identifiable {
                         if merged.pullRequests[index].afterMessageID == nil { merged.pullRequests[index].afterMessageID = observed.afterMessageID }
                     } else { merged.pullRequests.append(observed) }
                 }
-                if !self.preferences.pullRequests.isEmpty { self.saveAfterRestore = true }
+                if !self.preferences.pullRequests.isEmpty || !self.preferences.sessionFinishedAt.isEmpty { self.saveAfterRestore = true }
                 self.preferences = merged
+                for index in self.workspace.sessions.indices where self.workspace.sessions[index].lastFinishedAt == nil {
+                    self.workspace.sessions[index].lastFinishedAt = merged.sessionFinishedAt[self.workspace.sessions[index].id]
+                }
                 self.changeSizes.merge(sizes) { current, _ in current }
                 self.loadingPreferences = false
+                self.syncNotifications()
                 self.trimChanges()
                 self.placeChangeCards()
                 self.placePullRequestCards()
@@ -558,7 +817,7 @@ public enum SecondaryRoute: Identifiable {
     }
 
     private func updateHost(_ id: String) {
-        if id != selectedHostID { catalog = []; newSelection = ModelSelection() }
+        if id != selectedHostID { catalog = []; newSelection = ModelSelection(); agentAccounts = AgentAccountsSnapshot(available: false); accountsRequest += 1 }
         selectedHostID = id
     }
 }

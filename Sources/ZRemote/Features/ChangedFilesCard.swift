@@ -72,11 +72,9 @@ struct PullRequestCard: View {
     var open: () -> Void
     var body: some View {
         Button(action: open) {
-            SessionEventCard(symbol: "arrow.triangle.pull", title: request.title,
-                             subtitle: "#\(request.number) · \(request.state.capitalized)",
-                             badge: "Pull request", active: request.state.lowercased() == "open", disclosure: true)
+            PullRequestSummary(request: request)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Pull request \(request.number), \(request.title), \(request.state)")
+        .accessibilityLabel("Pull request \(request.number), \(request.title), \(PullRequestPresentationState(request).label)")
     }
 }
