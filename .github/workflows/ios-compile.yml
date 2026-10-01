@@ -1,0 +1,94 @@
+# Manual native compilation: unsigned iOS, with optional Android debug artifact.
+name: iOS Compile Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to compile"
+        type: choice
+        required: true
+        default: ios
+        options:
+          - ios
+          - android
+          - both
+      save_debug_apk:
+        description: "Save an Android debug APK for local testing (one-day retention)"
+        type: boolean
+        required: false
+        default: false
+
+  workflow_call:
+    inputs:
+      platform:
+        description: "Platform to compile"
+        type: string
+        required: false
+        default: ios
+      save_debug_apk:
+        description: "Save an Android debug APK for local testing"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    if: inputs.platform != 'android'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          if [ -d /Applications/Xcode_26.app ]; then sudo xcode-select -s /Applications/Xcode_26.app; fi
+          xcodebuild -version
+      - name: Install pinned Skip and native toolchain
+        run: |
+          bash scripts/install-ci-skip.sh
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ios-core-mobile-dist
+          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
+          cache-on-failure: true
+      - name: Build native peer and generate acknowledgements
+        env:
+          CONFIGURATION: Release
+        run: |
+          bash scripts/build-native-core.sh ios
+          xcodebuild -resolvePackageDependencies -workspace Project.xcworkspace \
+            -scheme "ZRemote App" -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages"
+          python3 scripts/generate-swift-notices.py \
+            --resolved Project.xcworkspace/xcshareddata/swiftpm/Package.resolved \
+            --checkouts "$RUNNER_TEMP/swift-packages/checkouts" --output Sources/ZRemote/Resources
+          python3 scripts/verify-notices.py --required swift,cargo \
+            --resolved Project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - name: Build unsigned Release
+        run: |
+          set -o pipefail
+          python3 scripts/run-local.py --phase ios -- \
+            xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+              -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+              -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              SKIP_ACTION=none PRODUCT_BUNDLE_IDENTIFIER=dev.zremote.compilecheck \
+              build -quiet 2>&1 | tee build.log
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-compile-build-log
+          path: build.log
+          if-no-files-found: ignore
+
+  android:
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    uses: ./.github/workflows/android-compile.yml
+    with:
+      save_debug_apk: ${{ inputs.save_debug_apk }}

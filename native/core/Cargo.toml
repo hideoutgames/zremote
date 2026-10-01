@@ -1,0 +1,81 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/client",
+    "crates/mobile",
+    "crates/proto",
+    "crates/doc",
+    "crates/sync",
+    "crates/rpc",
+    "crates/text",
+    "crates/markdown",
+    "crates/syntax",
+]
+
+[workspace.package]
+version = "0.2.101"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+zeron-proto = { path = "crates/proto" }
+zeron-doc = { path = "crates/doc" }
+zeron-sync = { path = "crates/sync" }
+zeron-rpc = { path = "crates/rpc" }
+zeron-syntax = { path = "crates/syntax" }
+zeron-markdown = { path = "crates/markdown" }
+zeron-client = { path = "crates/client" }
+zeron-text = { path = "crates/text" }
+loro = "1.13"
+loro-protocol = "0.3"
+similar = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures = "0.3"
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+anyhow = "1"
+tempfile = "3"
+thiserror = "2"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+pulldown-cmark = "0.12"
+unicode-segmentation = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "system-proxy"] }
+
+[profile.release]
+# Distribution profile (scripts/package-linux.sh): thin LTO buys most of fat
+# LTO's size/speed win at a fraction of the link time; strip debug symbols.
+lto = "thin"
+strip = "symbols"
+
+[profile.dev]
+# Local adapter checks use the inexpensive dev profile. App binaries always
+# link the optimized mobile/mobile-dist profiles below.
+opt-level = 0
+debug = 0
+
+[profile.dev.package."*"]
+opt-level = 0
+
+# Mobile core (scripts/ios/build-core.sh). Always optimized — layout and sync
+# run on the phone's hot paths, so even Debug app builds link an -O core.
+[profile.mobile]
+inherits = "release"
+lto = false
+strip = false
+debug = "line-tables-only"
+incremental = true
+codegen-units = 16
+
+# TestFlight/App Store archives.
+[profile.mobile-dist]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

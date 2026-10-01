@@ -1,0 +1,75 @@
+[
+  {
+    "id": "source:swift-diffs@7005d406fa362f1bbcc5c76551a9bf222c9a8eb6",
+    "name": "Swift-Diffs / Pierre Diffs",
+    "version": "7005d406 (Pierre Diffs 1.4.2 adaptation)",
+    "source": "https://github.com/fayazara/Swift-Diffs/tree/7005d406fa362f1bbcc5c76551a9bf222c9a8eb6",
+    "licenseFiles": [
+      "SwiftDiffs-Apache-2.0.txt",
+      "SwiftDiffs-NOTICE.txt"
+    ]
+  },
+  {
+    "id": "swift:skip@1.9.12",
+    "name": "skip",
+    "version": "1.9.12",
+    "source": "https://github.com/skiptools/skip",
+    "licenseFiles": [
+      "Skip-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "swift:skip-fuse-ui@1.19.0",
+    "name": "skip-fuse-ui",
+    "version": "1.19.0",
+    "source": "https://github.com/skiptools/skip-fuse-ui",
+    "licenseFiles": [
+      "SkipFuseUI-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "swift:skip-fuse@1.0.3",
+    "name": "skip-fuse",
+    "version": "1.0.3",
+    "source": "https://github.com/skiptools/skip-fuse",
+    "licenseFiles": [
+      "SkipFuse-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "swift:skip-keychain@0.3.4",
+    "name": "skip-keychain",
+    "version": "0.3.4",
+    "source": "https://github.com/skiptools/skip-keychain",
+    "licenseFiles": [
+      "SkipKeychain-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "swift:skip-authentication-services@0.1.0",
+    "name": "skip-authentication-services",
+    "version": "0.1.0",
+    "source": "https://github.com/skiptools/skip-authentication-services",
+    "licenseFiles": [
+      "SkipAuthenticationServices-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "source:zeron@b42fc2b8fbf247dd92796c2917f277535cea91ac",
+    "name": "Zeron mobile core",
+    "version": "0.2.101 (b42fc2b8)",
+    "source": "https://github.com/zeronsh/zeron/tree/b42fc2b8fbf247dd92796c2917f277535cea91ac",
+    "licenseFiles": [
+      "Zeron-MIT.txt"
+    ]
+  },
+  {
+    "id": "source:zeron-model-picker@d316f79c2f9ad471d1291c785548be79d893b98b",
+    "name": "Zeron model picker (Hideout Games fork)",
+    "version": "d316f79c",
+    "source": "https://github.com/hideoutgames/zeron/blob/d316f79c2f9ad471d1291c785548be79d893b98b/apps/ios/Zeron/Composer/ModelPicker.swift",
+    "licenseFiles": [
+      "Zeron-MIT.txt"
+    ]
+  }
+]

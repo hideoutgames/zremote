@@ -8,21 +8,38 @@
 # accepted) / APPLE_TEAM_ID. Optional variable IOS_BUNDLE_ID (default
 # no.hideout.zremote). See docs/TESTFLIGHT.md.
 #
-# One macOS runner, and only when someone starts this workflow.
-# Pull requests do not start it, and it does not build the iOS Simulator
-# slice — that build already runs in Zeron PR CI. This job archives the
-# device app and uploads it.
-#
-# The Xcode "Rust core" phase runs scripts/ios/build-core.sh, which
-# calls cargo with a scrubbed environment whose PATH includes
-# ~/.cargo/bin. Rustup must live there, with the device target from
-# rust-toolchain.toml installed.
+# Manual distribution retains the existing device-only archive. Compile mode is
+# a separate reusable job with no signing environment or secrets. Shared Skip
+# core preparation creates XCFramework slices needed by package resolution;
+# only the iOS device app is archived for TestFlight.
 
 name: iOS TestFlight
 
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: "Compile only, or archive and upload to TestFlight"
+        type: choice
+        required: true
+        default: testflight
+        options:
+          - compile
+          - testflight
+      platform:
+        description: "Platform for compile mode (ignored for TestFlight)"
+        type: choice
+        required: true
+        default: ios
+        options:
+          - ios
+          - android
+          - both
+      save_debug_apk:
+        description: "Compile mode: save debug APK for local testing (one day)"
+        type: boolean
+        required: false
+        default: false
       notes:
         description: "Release notes (informational only)"
         required: false
@@ -32,11 +49,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: testflight
+  group: ${{ inputs.operation == 'compile' && format('compile-{0}-{1}', inputs.platform, github.ref) || 'testflight' }}
   cancel-in-progress: false
 
 jobs:
+  compile:
+    if: inputs.operation == 'compile'
+    uses: ./.github/workflows/ios-compile.yml
+    with:
+      platform: ${{ inputs.platform }}
+      save_debug_apk: ${{ inputs.save_debug_apk }}
+
   testflight:
+    if: inputs.operation == 'testflight'
     runs-on: macos-26
     environment: testflight
     timeout-minutes: 120
@@ -89,7 +114,7 @@ jobs:
           case "$ver" in
             26*) ;;
             *)
-              echo "Xcode 26 is required. The app's deployment target is iOS 26.0 (found Xcode $ver)."
+              echo "Xcode 26 is required. Found Xcode $ver."
               exit 1
               ;;
           esac
@@ -99,28 +124,39 @@ jobs:
           fi
           xcodebuild -showsdks | grep -E "iphoneos|iOS" || true
 
-      - name: Rust toolchain + iOS targets
+      - name: Install pinned Skip and Rust toolchain
         run: |
           set -euo pipefail
-          # build-core.sh scrubs the environment and only looks for cargo in
-          # ~/.cargo/bin. Install rustup there when the image doesn't have it.
+          bash scripts/install-ci-skip.sh
           if [ ! -x "$HOME/.cargo/bin/cargo" ]; then
             curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain none
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.cargo/bin:$PATH"
-          # rust-toolchain.toml selects stable and the device target. rustup
-          # errors on cargo if that target is missing. Do not add the
-          # simulator target here; simulator builds are not this job.
-          rustup show active-toolchain || rustup toolchain install
-          rustup target add aarch64-apple-ios
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
           rustc --version
           rustup target list --installed
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ios-core-mobile-dist
+          workspaces: "native/core -> ${{ env.CARGO_TARGET_DIR }}"
           cache-on-failure: true
+
+      - name: Build native client core and verify acknowledgements
+        env:
+          CONFIGURATION: Release
+        run: |
+          bash scripts/build-native-core.sh ios
+          xcodebuild -resolvePackageDependencies -workspace Project.xcworkspace \
+            -scheme "ZRemote App" -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages"
+          resolved="Project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          python3 scripts/generate-swift-notices.py --resolved "$resolved" \
+            --checkouts "$RUNNER_TEMP/swift-packages/checkouts" --output Sources/ZRemote/Resources
+          python3 scripts/verify-notices.py --required swift,cargo --resolved "$resolved"
 
       - name: App Store Connect key and build number
         env:
@@ -212,7 +248,6 @@ jobs:
           echo "Preparing TestFlight build $build_number of $BUNDLE_ID ($app_name) from $GITHUB_SHA."
 
       - name: Archive (unsigned)
-        working-directory: apps/ios
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -223,13 +258,15 @@ jobs:
           # team's 3-certificate cap. Export (below) is the only step that
           # talks to Apple for signing — it reuses the one cloud-managed
           # Distribution cert.
-          # Release selects the mobile-dist cargo profile inside build-core.sh.
-          xcodebuild -project Zeron.xcodeproj -scheme Zeron \
+          # The core preparation step uses the mobile-dist Cargo profile.
+          python3 scripts/run-local.py --phase ios -- \
+            xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/ZRemote.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="" SKIP_ACTION=none \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
@@ -279,8 +316,8 @@ jobs:
             -authenticationKeyPath "$AC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee apps/ios/export.log || {
-              grep -E "error:|error\[|fatal error|ld: " apps/ios/export.log | tail -80 || true
+            2>&1 | tee export.log || {
+              grep -E "error:|error\[|fatal error|ld: " export.log | tail -80 || true
               exit 1
             }
 
@@ -348,9 +385,9 @@ jobs:
           # Belt and braces: the logs must never contain key material. If
           # they do, delete them so the artifact upload below has nothing
           # to leak, then fail the job loudly.
-          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" apps/ios/build.log apps/ios/export.log 2>/dev/null; then
+          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" build.log export.log 2>/dev/null; then
             echo "Log file contains key material — deleting logs and failing."
-            rm -f apps/ios/build.log apps/ios/export.log
+            rm -f build.log export.log
             exit 1
           fi
           rm -rf "$RUNNER_TEMP/asc"
@@ -361,6 +398,6 @@ jobs:
         with:
           name: testflight-logs
           path: |
-            apps/ios/build.log
-            apps/ios/export.log
+            build.log
+            export.log
           if-no-files-found: ignore
