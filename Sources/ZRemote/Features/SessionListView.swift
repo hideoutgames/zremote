@@ -307,8 +307,11 @@ struct SessionListView: View {
             Divider()
             menuChoice("Compact view", selected: compact) { compact.toggle() }
         } label: {
-            Image(systemName: hasFilters ? "line.3.horizontal.decrease.circle.fill" : "slider.horizontal.3")
-                .font(.system(size: 19)).frame(width: 46, height: 46).nativeGlassControl()
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 19)).frame(width: 46, height: 46)
+                .foregroundStyle(hasFilters ? Color.white : Palette.text)
+                .background(hasFilters ? Palette.accent : Color.clear, in: Circle())
+                .nativeGlassControl()
         }.accessibilityLabel("Session display options").accessibilityValue(hasFilters ? "Filters active" : "")
     }
     private func menuChoice(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {

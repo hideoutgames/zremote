@@ -335,7 +335,7 @@ private struct ProjectFolderIcon: View {
             }
         }
         .frame(width: 28, height: 25)
-        .foregroundStyle(knownProject ? Color.purple : Palette.secondary)
+        .foregroundStyle(knownProject ? Palette.accent : Palette.secondary)
         .accessibilityHidden(true)
     }
 }
