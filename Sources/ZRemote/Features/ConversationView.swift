@@ -115,10 +115,13 @@ struct ConversationView: View {
         VStack(spacing: 0) {
             if model.selectedSessionID == nil {
                 Spacer(minLength: 20)
-                Text("What should we build?")
-                    .font(.system(.largeTitle, design: .default, weight: .medium))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                VStack(spacing: 18) {
+                    ProviderIcon(providerID: model.selection.providerID, size: 48)
+                    Text("What are we building?")
+                        .font(.system(.largeTitle, design: .default, weight: .medium))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 32)
                 Spacer(minLength: 20)
                 projectContext
             } else {

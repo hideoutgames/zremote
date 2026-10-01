@@ -64,8 +64,9 @@ stops with Reduce Motion. User-message context menus include the recorded send
 time, and completed turns show their recorded work duration beneath changed
 files when timing is available. No receive-time estimate replaces missing data.
 
-The blank Composer asks “What should we build?” and offers both project and
-checkout selection. Choose the current checkout, another existing checkout, or
+The blank Composer shows the selected provider's icon above “What are we
+building?” and offers both project and checkout selection. Choose the current
+checkout, another existing checkout, or
 New worktree. Worktree creation travels with the first message to the host;
 selecting it alone creates nothing. Session actions → Details shows the thread
 title (editable), project, checkout, model, host, and creation/update times.

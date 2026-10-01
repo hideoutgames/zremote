@@ -15,7 +15,8 @@ supported.
 Sub-agent cards contain only a title and state, with a monochrome Working shimmer
 that stops under Reduce Motion. The quota warning keeps its orange icon, gains
 an orange progress fill, and drops the orange border. Settings usage bars remain
-neutral. The blank Composer reads “What should we build?” without a subtitle.
+neutral. The blank Composer shows the selected provider's icon above
+“What are we building?” without a subtitle.
 
 New-session checkout selection offers New worktree and host-reported existing
 checkouts. New worktree is requested with the first send; other branch refs do
