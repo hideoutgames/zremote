@@ -4,6 +4,84 @@ import ZRemoteCore
 
 final class SessionsRefreshTests: XCTestCase {
     @MainActor
+    func testImmediatePeerKeepsRefreshFeedbackVisibleAndCoalescesRepeatedPulls() async {
+        let client = SessionsRefreshClient()
+        client.completesImmediately = true
+        let model = AppModel(client: client, makeLiveClient: { SessionsRefreshClient() })
+        await model.start()
+        let started = expectation(description: "Immediate peer refresh begins")
+        client.onRefreshStarted = { started.fulfill() }
+        let beginning = ContinuousClock.now
+        let first = Task { await model.refreshSessions() }
+        await fulfillment(of: [started], timeout: 3)
+
+        XCTAssertTrue(model.refreshingSessions, "A synchronous resync must not hide the indicator before it is visible")
+        let second = Task { await model.refreshSessions() }
+        await first.value
+        await second.value
+
+        XCTAssertGreaterThanOrEqual(beginning.duration(to: .now), .milliseconds(500))
+        XCTAssertEqual(client.refreshCount, 1, "Repeated pulls during the feedback hold share the request")
+        XCTAssertFalse(model.refreshingSessions)
+        XCTAssertNil(model.error)
+        await model.disconnect()
+    }
+
+    @MainActor
+    func testAccountChangeCancelsOldFeedbackWithoutEndingNewRefresh() async {
+        let oldClient = SessionsRefreshClient()
+        oldClient.completesImmediately = true
+        let newClient = SessionsRefreshClient()
+        let model = AppModel(client: oldClient, makeLiveClient: { newClient })
+        await model.start()
+        let oldStarted = expectation(description: "Old account enters refresh feedback")
+        oldClient.onRefreshStarted = { oldStarted.fulfill() }
+        let oldRefresh = Task { await model.refreshSessions() }
+        await fulfillment(of: [oldStarted], timeout: 3)
+        XCTAssertTrue(model.refreshingSessions)
+
+        await model.disconnect()
+        XCTAssertFalse(model.refreshingSessions)
+        await model.start()
+        let newStarted = expectation(description: "New account refresh proceeds independently")
+        newClient.onRefreshStarted = { newStarted.fulfill() }
+        let newRefresh = Task { await model.refreshSessions() }
+        await fulfillment(of: [newStarted], timeout: 3)
+        await oldRefresh.value
+
+        XCTAssertEqual(newClient.refreshCount, 1)
+        XCTAssertTrue(model.refreshingSessions)
+        XCTAssertNil(model.error)
+        newClient.finishRefresh(.success(()))
+        await newRefresh.value
+        XCTAssertFalse(model.refreshingSessions)
+        await model.disconnect()
+    }
+
+    @MainActor
+    func testSlowPeerRemainsActiveUntilCompletionWithoutAnotherFeedbackDelay() async {
+        let client = SessionsRefreshClient()
+        let model = AppModel(client: client, makeLiveClient: { SessionsRefreshClient() })
+        await model.start()
+        let started = expectation(description: "Slow peer refresh begins")
+        let completed = expectation(description: "Refresh ends when the slower peer finishes")
+        client.onRefreshStarted = { started.fulfill() }
+        let refresh = Task {
+            await model.refreshSessions()
+            completed.fulfill()
+        }
+        await fulfillment(of: [started], timeout: 3)
+        try? await Task.sleep(for: .milliseconds(550))
+        XCTAssertTrue(model.refreshingSessions, "The feedback minimum must not end an unfinished refresh")
+
+        client.finishRefresh(.success(()))
+        await fulfillment(of: [completed], timeout: 0.3)
+        await refresh.value
+        XCTAssertFalse(model.refreshingSessions)
+        await model.disconnect()
+    }
+
+    @MainActor
     func testRefreshPublishesSessionChangesWithoutReplacingComposer() async {
         let client = SessionsRefreshClient()
         let model = AppModel(client: client, makeLiveClient: { SessionsRefreshClient() })
@@ -130,15 +208,20 @@ final class SessionsRefreshTests: XCTestCase {
         Session(id: "existing", title: "Existing session", hostID: "host"),
     ])
     var onRefreshStarted: (() -> Void)?
+    var completesImmediately = false
     private(set) var refreshCount = 0
     private var pendingRefresh: CheckedContinuation<Void, Error>?
 
     func restore() async throws { onUpdate?(.workspace(snapshot)) }
     func refresh() async throws {
         refreshCount += 1
-        try await withCheckedThrowingContinuation { continuation in
-            pendingRefresh = continuation
+        if completesImmediately {
             onRefreshStarted?()
+        } else {
+            try await withCheckedThrowingContinuation { continuation in
+                pendingRefresh = continuation
+                onRefreshStarted?()
+            }
         }
         onUpdate?(.workspace(snapshot))
     }

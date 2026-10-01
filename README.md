@@ -45,7 +45,8 @@ The gesture reveals a recessed strip with the agent's working throbber and
 inset edge shadows. A selected Composer image keeps its filter, full-window
 scale and position, with a darker overlay; otherwise the strip uses a slightly
 darker page background. Refresh asks the existing peer to resync, and further
-remote updates can arrive after the gesture finishes.
+remote updates can arrive after the gesture finishes. The indicator stays visible
+for at least half a second even when the local resync request returns immediately.
 
 The composer supports native file/photo/camera attachments and host-backed
 `/commands`, `$skills` and `@files` suggestions. References are highlighted in
