@@ -20,11 +20,9 @@ struct SessionListView: View {
     @State var now = Date()
     @State var signingOut = false
     @State var refreshReveal: CGFloat = 0
+    @State var searchFocusDismissal = 0
     @FocusState var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
-    #if os(iOS)
-    @Namespace private var searchNamespace
-    #endif
 
     private var selectedProjectID: String? {
         shownProjectID.flatMap { selected in model.workspace.projects.contains(where: { $0.id == selected }) ? selected : nil }
@@ -169,36 +167,58 @@ struct SessionListView: View {
         }
     }
 
-    @ViewBuilder private var header: some View {
-        #if os(iOS)
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 14) {
-                HStack(spacing: 12) {
-                    if searching {
-                        searchField.glassEffect(.regular.interactive(), in: Capsule())
-                            .glassEffectID("session-search", in: searchNamespace)
-                    } else {
-                        searchButton.glassEffect(.regular.interactive(), in: Capsule())
-                            .glassEffectID("session-search", in: searchNamespace)
-                        Spacer(minLength: 0)
-                        accountMenu
-                    }
-                }
-            }
-        } else { standardHeader }
-        #else
-        standardHeader
-        #endif
-    }
-    private var standardHeader: some View {
-        HStack(spacing: 12) {
-            if searching { searchField.nativeGlassControl() }
-            else {
-                searchButton.nativeGlassControl()
+    private var header: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                searchControl(expandedWidth: max(46, geometry.size.width))
                 Spacer(minLength: 0)
                 accountMenu
+                    .frame(width: searching ? 0 : 46, height: 46)
+                    .opacity(searching ? 0 : 1)
+                    .clipped()
+                    .allowsHitTesting(!searching)
+                    .accessibilityHidden(searching)
             }
         }
+        .frame(height: 46)
+        .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.92), value: searching)
+        .task(id: [searching && model.sessionsVisible && model.route == nil, reduceMotion]) {
+            guard searching, model.sessionsVisible, model.route == nil else { dismissSearchFocus(); return }
+            // Let the capsule widen before the keyboard changes the drawer's
+            // layout. A newer focus request or dismissal cancels this task.
+            if !reduceMotion {
+                do { try await Task.sleep(nanoseconds: 220_000_000) }
+                catch { return }
+            } else { await Task.yield() }
+            guard !Task.isCancelled, searching, model.sessionsVisible, model.route == nil else { return }
+            searchFocused = true
+        }
+        #if os(Android)
+        .composeModifier { AndroidQuestionFocusModifier(dismissal: searchFocusDismissal) }
+        #endif
+        .onDisappear { dismissSearchFocus() }
+    }
+    @ViewBuilder private func searchControl(expandedWidth: CGFloat) -> some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            searchContents(expandedWidth: expandedWidth).glassEffect(.regular.interactive(), in: Capsule())
+        } else { searchContents(expandedWidth: expandedWidth).nativeGlassControl() }
+        #else
+        searchContents(expandedWidth: expandedWidth).nativeGlassControl()
+        #endif
+    }
+    private func searchContents(expandedWidth: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            searchField.frame(width: expandedWidth, height: 46)
+                .opacity(searching ? 1 : 0)
+                .allowsHitTesting(searching)
+                .accessibilityHidden(!searching)
+            searchButton.opacity(searching ? 0 : 1)
+                .allowsHitTesting(!searching)
+                .accessibilityHidden(searching)
+        }
+        .frame(width: searching ? expandedWidth : 46, height: 46, alignment: .leading)
+        .clipped()
     }
     private var searchButton: some View {
         Button { setSearching(true) } label: {
@@ -216,11 +236,15 @@ struct SessionListView: View {
             }.buttonStyle(.plain).accessibilityLabel("Close search")
         }
         .padding(.leading, 16).padding(.trailing, 3).frame(height: 46)
-        .task { searchFocused = true }
     }
     private func setSearching(_ value: Bool) {
-        if !value { searchFocused = false; search = "" }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)) { searching = value }
+        if !value { dismissSearchFocus(); search = "" }
+        searching = value
+    }
+    private func dismissSearchFocus() {
+        guard searchFocused else { return }
+        searchFocused = false
+        searchFocusDismissal += 1
     }
     @ViewBuilder private var accountMenu: some View {
         #if os(iOS)
@@ -311,10 +335,9 @@ struct SessionListView: View {
             Divider()
             menuChoice("Compact view", selected: compact) { compact.toggle() }
         } label: {
-            Image(systemName: "slider.horizontal.3")
+            SessionFilterIcon()
                 .font(.system(size: 19)).frame(width: 46, height: 46)
-                .foregroundStyle(hasFilters ? Color.white : Palette.text)
-                .background(hasFilters ? Palette.accent : Color.clear, in: Circle())
+                .foregroundStyle(hasFilters ? Palette.accent : Palette.text)
                 .nativeGlassControl()
         }.accessibilityLabel("Session display options").accessibilityValue(hasFilters ? "Filters active" : "")
     }
@@ -359,9 +382,7 @@ struct SessionListView: View {
                 sessionIndicator(session).frame(width: 16, height: 22).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(Palette.secondary).accessibilityHidden(true)
+                        ProviderIcon(providerID: session.providerID, size: 14)
                         Text(session.title).font(.body.weight(session.unread ? .medium : .regular)).lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         if session.pinned {

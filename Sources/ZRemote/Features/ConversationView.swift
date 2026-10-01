@@ -115,13 +115,13 @@ struct ConversationView: View {
         VStack(spacing: 0) {
             if model.selectedSessionID == nil {
                 Spacer(minLength: 20)
-                VStack(spacing: 12) {
-                    Text("What would you like to build?")
+                VStack(spacing: 18) {
+                    ProviderIcon(providerID: model.selection.providerID, size: 48)
+                    Text("What are we building?")
                         .font(.system(.largeTitle, design: .default, weight: .medium))
                         .multilineTextAlignment(.center)
-                    Text(model.isDemo ? "A little space to try things out." : "Your agents. Your workspace. Wherever you are.")
-                        .font(.subheadline).foregroundStyle(Palette.secondary)
-                }.padding(.horizontal, 32)
+                }
+                .padding(.horizontal, 32)
                 Spacer(minLength: 20)
                 projectContext
             } else {
@@ -196,6 +196,10 @@ struct ConversationView: View {
                     Button { Task { await model.archive(session) } } label: {
                         Label("Archive session", systemImage: "archivebox")
                     }
+                    Divider()
+                    Button { model.route = .sessionDetails(session.id) } label: {
+                        Label("Details", systemImage: "info.circle")
+                    }
                 } label: { headerIcon("ellipsis") }
                     .accessibilityLabel("Session actions")
             }
@@ -212,14 +216,26 @@ struct ConversationView: View {
     }
 
     private var projectContext: some View {
-        Button { model.route = .projects } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "folder")
-                Text(model.project?.name ?? "Choose a project")
-                Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
-            }.font(.subheadline).foregroundStyle(Palette.secondary)
-                .padding(.horizontal, 16).padding(.vertical, 12)
-        }.buttonStyle(.plain)
+        VStack(spacing: 0) {
+            Button { model.route = .projects } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                    Text(model.project?.name ?? "Choose a project").lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                }.font(.subheadline).foregroundStyle(Palette.secondary)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+            }.buttonStyle(.plain)
+            if model.canChooseCheckout {
+                Button { model.route = .checkouts } label: {
+                    HStack(spacing: 8) {
+                        CheckoutBranchIcon()
+                        Text(model.checkoutLabel).lineLimit(1)
+                        Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                    }.font(.subheadline).foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                }.buttonStyle(.plain).accessibilityLabel("Checkout: \(model.checkoutLabel)")
+            }
+        }
     }
 
     private var transcript: some View {
@@ -232,17 +248,21 @@ struct ConversationView: View {
                         ForEach(model.state?.messages ?? []) { message in
                             if !message.text.isEmpty { TranscriptRow(message: message).equatable() }
                             if !message.attachments.isEmpty, let sessionID = model.selectedSessionID {
-                                MessageAttachments(attachments: message.attachments) {
+                                MessageAttachments(attachments: message.attachments, timestamp: message.role == "user" ? message.timestamp : nil) {
                                     try await model.attachmentData(sessionID: sessionID, attachment: $0)
                                 }
                             }
                             ForEach(message.subagents) { agent in
-                                SessionEventCard(symbol: "person.2", title: agent.title,
-                                                 subtitle: agent.detail.isEmpty ? agent.status.capitalized : "\(agent.status.capitalized) · \(agent.detail)",
+                                SessionEventCard(title: agent.title, subtitle: agent.status.capitalized,
                                                  active: agent.status == "running")
                             }
                             if let turn = model.changesAfterMessage[message.id] {
-                                ChangedFilesCard(turn: turn, openFile: { model.route = .diff($0.document) }, showAll: { model.route = .changes(turn) })
+                                VStack(alignment: .leading, spacing: 10) {
+                                    ChangedFilesCard(turn: turn, openFile: { model.route = .diff($0.document) }, showAll: { model.route = .changes(turn) })
+                                    workedFor(message)
+                                }
+                            } else {
+                                workedFor(message)
                             }
                             ForEach(model.pullRequestsAfterMessage[message.id] ?? []) { request in
                                 PullRequestCard(request: request) { model.route = .pullRequest(request) }
@@ -337,6 +357,13 @@ struct ConversationView: View {
             .id("tail")
     }
 
+    @ViewBuilder private func workedFor(_ message: TranscriptMessage) -> some View {
+        if let label = TranscriptMetadata.workLabel(duration: message.workedDuration) {
+            Text(label).font(.caption2.weight(.light)).foregroundStyle(Palette.secondary.opacity(0.85))
+                .accessibilityIdentifier("turn-work-duration")
+        }
+    }
+
     private var composer: some View {
         VStack(alignment: .leading, spacing: 13) {
             if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
@@ -429,7 +456,7 @@ struct UsageLimitBanner: View {
                     .foregroundStyle(Palette.text).frame(minHeight: 44)
             }.font(.caption)
             HStack(spacing: 10) {
-                UsageProgressBar(remaining: warning.remainingFraction)
+                UsageProgressBar(remaining: warning.remainingFraction, warning: true)
                 Text("\(warning.percentRemaining)%").font(.system(.caption, design: .monospaced))
                     .foregroundStyle(Palette.secondary).accessibilityHidden(true)
             }
@@ -437,7 +464,6 @@ struct UsageLimitBanner: View {
         }
         .padding(.horizontal, 14)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.orange.opacity(0.2)))
     }
 }
 

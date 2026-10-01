@@ -7,7 +7,8 @@ import SkipFuse
 #endif
 
 public enum SecondaryRoute: Identifiable {
-    case models, projects, settings
+    case models, projects, settings, checkouts
+    case sessionDetails(String)
     case changes(CapturedTurnChanges)
     case diff(DiffDocument)
     case pullRequest(PullRequest)
@@ -16,6 +17,8 @@ public enum SecondaryRoute: Identifiable {
         case .models: return "models"
         case .projects: return "projects"
         case .settings: return "settings"
+        case .checkouts: return "checkouts"
+        case .sessionDetails(let id): return "session-details-" + id
         case .changes(let turn): return "changes-" + turn.turnID
         case .diff(let document): return "diff-" + document.id
         case .pullRequest(let request): return "pull-request-" + request.id
@@ -28,6 +31,10 @@ public enum SecondaryRoute: Identifiable {
     public var selectedSessionID: String?
     public var selectedHostID = ""
     public var selectedProjectID: String?
+    public private(set) var checkoutSelection = CheckoutSelection.current
+    public private(set) var checkouts: [ProjectCheckout] = []
+    public private(set) var loadingCheckouts = false
+    public private(set) var checkoutError: String?
     public var newSelection = ModelSelection()
     public var catalog: [AgentModel] = []
     public var state: SessionState?
@@ -79,6 +86,11 @@ public enum SecondaryRoute: Identifiable {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var selectionGeneration = 0
     @ObservationIgnored private var modelRequest = 0
+    @ObservationIgnored private var checkoutRequest = 0
+    @ObservationIgnored private var loadedCheckoutContext: String?
+    @ObservationIgnored private var loadingCheckoutContext: String?
+    @ObservationIgnored private var selectedCheckoutContext: String?
+    @ObservationIgnored private var renamingSessions: Set<String> = []
     @ObservationIgnored private var sessions: [String: SessionState] = [:]
     @ObservationIgnored private var capturing: Set<String> = []
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -113,6 +125,17 @@ public enum SecondaryRoute: Identifiable {
     public var signedIn: Bool { workspace.connection != .signedOut && workspace.connection != .expired }
     public var session: Session? { workspace.sessions.first { $0.id == selectedSessionID } }
     public var project: Project? { workspace.projects.first { $0.id == (session?.projectID ?? selectedProjectID) } }
+    public var canChooseCheckout: Bool { signedIn && selectedSessionID == nil && !busy && project?.hostID == selectedHostID && project?.isRepository == true }
+    public var checkoutContext: String { "\(generation):\(selectionGeneration):\(selectedHostID):\(selectedProjectID ?? ""):\(project?.path ?? "")" }
+    public var checkoutLabel: String {
+        switch checkoutSelection {
+        case .current:
+            let branch = checkouts.first(where: \.isCurrent)?.branch.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return branch.isEmpty ? "Current checkout" : branch
+        case .newWorktree: return "New worktree"
+        case .existing(let checkout): return checkout.branch.isEmpty ? "Existing checkout" : checkout.branch
+        }
+    }
     public var selection: ModelSelection { state?.selection ?? newSelection }
     public var selectedModel: AgentModel? { catalog.first { $0.providerID == selection.providerID && $0.modelID == selection.modelID } }
     public var modelName: String { selectedModel?.name ?? selection.modelID ?? "Choose model" }
@@ -148,6 +171,8 @@ public enum SecondaryRoute: Identifiable {
         signedIn && !busy && !working && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
             && !(session?.hostID ?? selectedHostID).isEmpty
             && (selectedSessionID != nil || newSelection.modelID != nil)
+            && (selectedSessionID != nil || checkoutSelection == .current || selectedCheckoutContext == checkoutContext)
+            && (selectedSessionID != nil || selectedCheckoutIsAvailable)
     }
 
     public func start() async {
@@ -212,6 +237,7 @@ public enum SecondaryRoute: Identifiable {
         agentAccounts = AgentAccountsSnapshot(available: false); loadingAccounts = false; accountsError = nil
         notificationAuthorization = notifications.supported ? .notDetermined : .unavailable; notificationError = nil
         modelRequest += 1; selectionGeneration += 1
+        resetCheckoutSelection(); renamingSessions = []
         store = nil; restoredAccount = nil; capturing = []
         loadingPreferences = false; saveAfterRestore = false
         editedDrafts = []; editedFavorites = false; editedBackground = false; editedTheme = false; editedHaptics = false; editedNotifications = false
@@ -237,6 +263,11 @@ public enum SecondaryRoute: Identifiable {
             }
             let previousWorkspace = workspace
             workspace = next
+            let priorProject = previousWorkspace.projects.first { $0.id == selectedProjectID }
+            let nextProject = next.projects.first { $0.id == selectedProjectID }
+            if priorProject?.path != nextProject?.path || priorProject?.hostID != nextProject?.hostID || priorProject?.isRepository != nextProject?.isRepository {
+                resetCheckoutSelection()
+            }
             let sessionIDs = Set(next.sessions.map(\.id))
             answerSubmissions = answerSubmissions.filter { sessionIDs.contains($0.key) }
             var finishedChanged = false
@@ -282,6 +313,7 @@ public enum SecondaryRoute: Identifiable {
 
     public func newSession() {
         selectionGeneration += 1
+        resetCheckoutSelection()
         if let id = selectedSessionID { client.closeSession(id) }
         selectedSessionID = nil; state = nil; changesAfterMessage = [:]; pullRequestsAfterMessage = [:]
         if !usesSessionPanel { sessionsVisible = false }
@@ -290,6 +322,7 @@ public enum SecondaryRoute: Identifiable {
 
     public func open(_ id: String) async {
         selectionGeneration += 1
+        resetCheckoutSelection()
         let epoch = generation
         let selectionEpoch = selectionGeneration
         if let old = selectedSessionID, old != id { client.closeSession(old) }
@@ -320,7 +353,7 @@ public enum SecondaryRoute: Identifiable {
             let id: String
             if let selectedSessionID { id = selectedSessionID }
             else {
-                id = try await source.createSession(projectID: selectedProjectID, hostID: selectedHostID, selection: newSelection)
+                id = try await source.createSession(projectID: selectedProjectID, hostID: selectedHostID, selection: newSelection, checkout: checkoutSelection)
                 guard epoch == generation else { return }
                 // Transfer the editable draft before any later operation can fail.
                 // Navigation during creation must not redirect the user back here.
@@ -390,6 +423,23 @@ public enum SecondaryRoute: Identifiable {
         catch { if epoch == generation { self.error = "Couldn't update the pinned session." } }
     }
     public func togglePin(_ session: Session) async { await setPinned(session, pinned: !session.pinned) }
+    public func sessionDetailsContext(_ sessionID: String) -> String { "\(generation):\(sessionID)" }
+    public func renameSession(sessionID: String, title: String, context: String) async throws {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard context == sessionDetailsContext(sessionID) else { throw CancellationError() }
+        guard signedIn, !Task.isCancelled, !clean.isEmpty,
+              let original = workspace.sessions.first(where: { $0.id == sessionID }),
+              renamingSessions.insert(sessionID).inserted else { throw ClientFailure("This session can't be renamed right now.") }
+        let epoch = generation, source = client
+        defer { if epoch == generation { renamingSessions.remove(sessionID) } }
+        do {
+            try await source.renameSession(sessionID: sessionID, title: clean)
+            guard epoch == generation, workspace.sessions.contains(where: { $0.id == sessionID && $0.hostID == original.hostID && $0.projectID == original.projectID }) else { throw CancellationError() }
+        } catch {
+            guard epoch == generation else { throw CancellationError() }
+            throw error
+        }
+    }
     public func archive(_ session: Session) async { await setArchived(session, archived: true) }
     public func unarchive(_ session: Session) async { await setArchived(session, archived: false) }
     private func setArchived(_ session: Session, archived: Bool) async {
@@ -635,19 +685,67 @@ public enum SecondaryRoute: Identifiable {
         }
     }
     public func setBackground(_ enabled: Bool) { editedBackground = true; preferences.backgroundEnabled = enabled; scheduleSave() }
-    public func setHost(_ id: String) { updateHost(id); selectedProjectID = nil; loadModels() }
-    public func selectProject(_ project: Project) { updateHost(project.hostID); selectedProjectID = project.id; loadModels(); route = nil }
+    public func setHost(_ id: String) { selectionGeneration += 1; resetCheckoutSelection(); updateHost(id); selectedProjectID = nil; loadModels() }
+    public func selectProject(_ project: Project) { selectionGeneration += 1; resetCheckoutSelection(); updateHost(project.hostID); selectedProjectID = project.id; loadModels(); route = nil }
+    public func loadCheckouts() async {
+        guard canChooseCheckout, let project else { return }
+        let context = checkoutContext
+        guard loadingCheckoutContext != context else { return }
+        checkoutRequest += 1
+        let request = checkoutRequest, epoch = generation, source = client
+        loadingCheckouts = true; loadingCheckoutContext = context; checkoutError = nil
+        if loadedCheckoutContext != context { checkouts = [] }
+        defer {
+            if epoch == generation, request == checkoutRequest { loadingCheckouts = false; loadingCheckoutContext = nil }
+        }
+        do {
+            let values = try await source.checkouts(projectID: project.id, hostID: project.hostID)
+            guard !Task.isCancelled, epoch == generation, request == checkoutRequest, context == checkoutContext else { return }
+            var paths: Set<String> = []
+            checkouts = values.filter { !$0.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && paths.insert($0.path).inserted }
+            loadedCheckoutContext = context
+            if case .existing(let selected) = checkoutSelection, !checkouts.contains(selected) {
+                checkoutError = "The selected checkout is no longer available. Choose a checkout before sending."
+            }
+        } catch {
+            guard !Task.isCancelled, !(error is CancellationError), epoch == generation, request == checkoutRequest, context == checkoutContext else { return }
+            checkoutError = "Couldn't load checkouts. Try again when the host is online."
+        }
+    }
+    @discardableResult
+    public func selectCheckout(_ selection: CheckoutSelection, context: String) -> Bool {
+        guard canChooseCheckout, context == checkoutContext else { return false }
+        if case .existing(let checkout) = selection {
+            guard loadedCheckoutContext == context, checkouts.contains(checkout) else { return false }
+        }
+        checkoutSelection = selection
+        selectedCheckoutContext = context
+        route = nil
+        return true
+    }
+    private func resetCheckoutSelection() {
+        checkoutRequest += 1
+        checkoutSelection = .current; checkouts = []; checkoutError = nil; loadingCheckouts = false
+        loadedCheckoutContext = nil; loadingCheckoutContext = nil
+        selectedCheckoutContext = nil
+    }
+    private var selectedCheckoutIsAvailable: Bool {
+        guard case .existing(let selected) = checkoutSelection else { return true }
+        return loadedCheckoutContext == checkoutContext && checkouts.contains(selected)
+    }
     public func folders(hostID: String, path: String?) async throws -> FolderPage { try await client.listFolders(hostID: hostID, path: path) }
     public func addProject(hostID: String, folder: RemoteFolder) async throws {
         let epoch = generation
         let id = try await client.addProject(hostID: hostID, path: folder.path, isRepository: folder.isRepository)
         guard epoch == generation else { throw CancellationError() }
+        selectionGeneration += 1; resetCheckoutSelection()
         updateHost(hostID); selectedProjectID = id; loadModels(); route = nil
     }
     public func createProject(hostID: String, name: String) async throws {
         let epoch = generation
         let id = try await client.createRepository(hostID: hostID, name: name)
         guard epoch == generation else { throw CancellationError() }
+        selectionGeneration += 1; resetCheckoutSelection()
         updateHost(hostID); selectedProjectID = id; loadModels(); route = nil
     }
     public func authorizeURL(state: String) throws -> URL { try client.authorizationURL(state: state) }

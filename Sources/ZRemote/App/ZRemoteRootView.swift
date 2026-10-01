@@ -146,6 +146,8 @@ public struct ZRemoteRootView: View {
                 switch route {
                 case .models: ModelPickerView(model: model)
                 case .projects: ProjectPickerView(model: model)
+                case .sessionDetails(let sessionID): SessionDetailsView(model: model, sessionID: sessionID)
+                case .checkouts: CheckoutPickerView(model: model)
                 case .settings: SettingsView(model: model)
                 case .pullRequest(let request):
                     PullRequestDetailView(request: model.sessionPullRequests.first(where: { $0.id == request.id }) ?? request)

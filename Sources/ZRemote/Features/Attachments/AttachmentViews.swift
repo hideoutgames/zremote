@@ -27,6 +27,7 @@ struct ComposerAttachments: View {
 
 struct MessageAttachments: View {
     let attachments: [RemoteAttachment]
+    var timestamp: Date? = nil
     let load: (RemoteAttachment) async throws -> Data
     @ScaledMetric(relativeTo: .caption) var captionHeight: CGFloat = 34
 
@@ -37,6 +38,11 @@ struct MessageAttachments: View {
                     AttachmentTile(id: attachment.id, name: attachment.name,
                                    mime: attachment.mimeType ?? "application/octet-stream",
                                    compact: false, remove: nil, load: { try await load(attachment) })
+                        .nativeContextMenu {
+                            if let timestamp {
+                                Text(DateFormatter.localizedString(from: timestamp, dateStyle: .medium, timeStyle: .short))
+                            }
+                        }
                 }
             }.padding(.vertical, 4)
         }
