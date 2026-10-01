@@ -4,7 +4,7 @@ import SwiftUI
 /// gains a black scrim so lines disappear gently behind the input surface.
 struct ChromeFade: View {
     let edge: VerticalEdge
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) var colorScheme
 
     private var lowerColor: Color { colorScheme == .dark ? .black : Palette.background }
 

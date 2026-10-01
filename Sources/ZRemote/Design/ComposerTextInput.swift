@@ -12,7 +12,7 @@ struct ComposerTextInput: View {
     @Binding var isFocused: Bool
     @Binding var isComposing: Bool
     let selectionRequest: Int
-    @FocusState private var androidFocused: Bool
+    @FocusState var androidFocused: Bool
 
     var body: some View {
         #if os(iOS)

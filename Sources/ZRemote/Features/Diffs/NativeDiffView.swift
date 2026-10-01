@@ -5,7 +5,7 @@ import ZRemoteCore
 /// On Android SkipFuseUI renders the shared view through the native Compose bridge.
 public struct NativeDiffView: View {
     public let document: DiffDocument
-    @State private var parsed: ParsedDiff?
+    @State var parsed: ParsedDiff?
 
     public init(document: DiffDocument) {
         self.document = document
@@ -106,7 +106,7 @@ public struct NativeDiffView: View {
     }
 }
 
-private struct DiffCodeRow: View {
+struct DiffCodeRow: View {
     let line: UnifiedDiffLine
 
     private var tint: Color {

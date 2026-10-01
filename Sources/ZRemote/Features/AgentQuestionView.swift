@@ -12,16 +12,16 @@ struct AgentQuestionView: View {
     let dismissFocus: Int
     let reload: () -> Void
     let submit: @MainActor ([String: [String]]) async -> Bool
-    @State private var draft = QuestionAnswerDraft()
-    @State private var index = 0
-    @State private var submissionToken: UUID?
-    @State private var focusRequest: String?
-    @State private var focusDismissal = 0
-    @State private var contentHeight: CGFloat = 180
-    @State private var headerHeight: CGFloat = 22
-    @State private var footerHeight: CGFloat = 48
-    @State private var cardHeight: CGFloat = 320
-    @FocusState private var writingAnswer: Bool
+    @State var draft = QuestionAnswerDraft()
+    @State var index = 0
+    @State var submissionToken: UUID?
+    @State var focusRequest: String?
+    @State var focusDismissal = 0
+    @State var contentHeight: CGFloat = 180
+    @State var headerHeight: CGFloat = 22
+    @State var footerHeight: CGFloat = 48
+    @State var cardHeight: CGFloat = 320
+    @FocusState var writingAnswer: Bool
 
     private var question: InputQuestion? {
         guard QuestionAnswerDraft.isValid(input), input.questions.indices.contains(index) else { return nil }

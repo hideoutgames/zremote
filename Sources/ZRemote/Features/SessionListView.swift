@@ -4,24 +4,24 @@ import ZRemoteCore
 
 struct SessionListView: View {
     @Bindable var model: AppModel
-    @State private var search = ""
-    @State private var searching = false
-    @State private var sort: SessionSort = .recent
-    @State private var grouping: SessionGrouping = .project
-    @State private var shownProjectID: String?
-    @State private var collapsedProjects: Set<String> = []
-    @State private var status: SessionStatusFilter = .all
-    @State private var pullRequest: SessionPRFilter = .all
-    @State private var archived: SessionArchiveFilter = .active
-    @State private var created: SessionDateFilter = .any
-    @State private var updated: SessionDateFilter = .any
-    @State private var unreadOnly = false
-    @State private var compact = true
-    @State private var now = Date()
-    @State private var signingOut = false
-    @State private var refreshReveal: CGFloat = 0
-    @FocusState private var searchFocused: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State var search = ""
+    @State var searching = false
+    @State var sort: SessionSort = .recent
+    @State var grouping: SessionGrouping = .project
+    @State var shownProjectID: String?
+    @State var collapsedProjects: Set<String> = []
+    @State var status: SessionStatusFilter = .all
+    @State var pullRequest: SessionPRFilter = .all
+    @State var archived: SessionArchiveFilter = .active
+    @State var created: SessionDateFilter = .any
+    @State var updated: SessionDateFilter = .any
+    @State var unreadOnly = false
+    @State var compact = true
+    @State var now = Date()
+    @State var signingOut = false
+    @State var refreshReveal: CGFloat = 0
+    @FocusState var searchFocused: Bool
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     #if os(iOS)
     @Namespace private var searchNamespace
     #endif
@@ -433,15 +433,15 @@ private struct SessionSection: Identifiable {
     var showsHeader = true
     var collapsible = false
 }
-private enum SessionSort: String, CaseIterable, Identifiable {
+enum SessionSort: String, CaseIterable, Identifiable {
     case recent = "Recently updated", created = "Recently created", title = "Title"
     var id: String { rawValue }
 }
-private enum SessionGrouping: String, CaseIterable, Identifiable {
+enum SessionGrouping: String, CaseIterable, Identifiable {
     case project = "Project", host = "Host", status = "Status", none = "None"
     var id: String { rawValue }
 }
-private enum SessionStatusFilter: String, CaseIterable, Identifiable {
+enum SessionStatusFilter: String, CaseIterable, Identifiable {
     case all = "All statuses", working = "Working", awaitingInput = "Waiting for response"
     case unread = "Finished, unread", failed = "Error", idle = "Read, not running"
     var id: String { rawValue }
@@ -465,12 +465,12 @@ private enum SessionStatusFilter: String, CaseIterable, Identifiable {
         }
     }
 }
-private enum SessionArchiveFilter: String, CaseIterable, Identifiable {
+enum SessionArchiveFilter: String, CaseIterable, Identifiable {
     case active = "Active", archived = "Archived", all = "All sessions"
     var id: String { rawValue }
     func includes(_ session: Session) -> Bool { self == .all || (self == .archived ? session.archived : !session.archived) }
 }
-private enum SessionPRFilter: String, CaseIterable, Identifiable {
+enum SessionPRFilter: String, CaseIterable, Identifiable {
     case all = "Any", withPR = "With pull request", withoutPR = "Without pull request"
     case draft = "Draft", open = "Open", merged = "Merged", closed = "Closed"
     var id: String { rawValue }
@@ -484,7 +484,7 @@ private enum SessionPRFilter: String, CaseIterable, Identifiable {
         }
     }
 }
-private enum SessionDateFilter: String, CaseIterable, Identifiable {
+enum SessionDateFilter: String, CaseIterable, Identifiable {
     case any = "Any time", today = "Today", week = "Last 7 days", month = "Last 30 days"
     var id: String { rawValue }
     func includes(_ date: Date) -> Bool {

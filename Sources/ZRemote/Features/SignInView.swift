@@ -4,9 +4,9 @@ import ZRemoteCore
 
 struct SignInView: View {
     @Bindable var model: AppModel
-    @Environment(\.webAuthenticationSession) private var authentication
-    @State private var authorizing = false
-    @State private var selectingOrganization = false
+    @Environment(\.webAuthenticationSession) var authentication
+    @State var authorizing = false
+    @State var selectingOrganization = false
 
     var body: some View {
         VStack(spacing: 24) {

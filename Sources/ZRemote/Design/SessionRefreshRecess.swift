@@ -6,7 +6,7 @@ import ZRemoteCore
 /// without stretching it to fit this small strip.
 struct SessionRefreshRecess: View {
     @Bindable var model: AppModel
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         GeometryReader { geometry in

@@ -44,10 +44,10 @@ extension EnvironmentValues {
 struct ComposerBackground: View {
     let data: Data?
     let effect: String
-    @State private var image: Image?
-    @State private var opacity = 0.0
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.composerSceneFrame) private var sceneFrame
+    @State var image: Image?
+    @State var opacity = 0.0
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.composerSceneFrame) var sceneFrame
 
     var body: some View {
         GeometryReader { geometry in

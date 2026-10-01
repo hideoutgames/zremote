@@ -4,7 +4,7 @@ import ZRemoteCore
 
 struct SettingsView: View {
     @Bindable var model: AppModel
-    @State private var signingOut = false
+    @State var signingOut = false
 
     private var version: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
@@ -64,7 +64,7 @@ struct SettingsView: View {
     }
 }
 
-private struct OpenSourceNotice: Decodable, Identifiable, Sendable {
+struct OpenSourceNotice: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
     let version: String
@@ -72,12 +72,12 @@ private struct OpenSourceNotice: Decodable, Identifiable, Sendable {
     let licenseFiles: [String]
 }
 
-private struct AcknowledgementsView: View {
+struct AcknowledgementsView: View {
     var showAll = false
-    @State private var notices: [OpenSourceNotice] = []
-    @State private var featuredIDs: Set<String> = []
-    @State private var query = ""
-    @State private var failed = false
+    @State var notices: [OpenSourceNotice] = []
+    @State var featuredIDs: Set<String> = []
+    @State var query = ""
+    @State var failed = false
 
     private var filtered: [OpenSourceNotice] {
         let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -152,9 +152,9 @@ private struct AcknowledgementsView: View {
     }
 }
 
-private struct LicenseDetailView: View {
+struct LicenseDetailView: View {
     let notice: OpenSourceNotice
-    @State private var text = ""
+    @State var text = ""
 
     var body: some View {
         ScrollView {

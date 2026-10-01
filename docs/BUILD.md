@@ -40,6 +40,9 @@ environment, and toolchain fingerprints before and after execution; changed inpu
 make the result stale and fail the check. Result records live in `ZRemote/results`
 alongside the resource configuration. No cached test result is substituted for a
 requested command. Gradle workers and Cargo jobs remain one.
+While a child is running, the runner reports elapsed time and available memory
+every minute without logging command arguments. This indicates liveness, not
+compiler progress, and does not alter FIFO admission or provenance checks.
 
 ## Build
 
@@ -143,6 +146,10 @@ CI runs the three named Swift regression classes and the three Rust transcript
 projection regressions. Five isolated installer cases use stub commands to
 check retries and failure propagation without downloading an SDK or compiling.
 Run those cases with `bash Tests/Scripts/install-android-toolchain-tests.sh`.
+Four additional scoped cases check quiet-child liveness, exit status propagation,
+the combined host build, and all required iOS framework slices using stub tools:
+`python3 Tests/Scripts/test_run_local.py` and
+`python3 Tests/Scripts/test_build_native_core.py`. They do not compile an app.
 The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
 
@@ -153,9 +160,13 @@ runners. These command-scoped flags match
 and [archive implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/InitCommand.swift#L299-L311).
 
 Skip generates the bridge while preparing either platform, including an iOS-only
-build. Stored `@State`/`@Environment` properties on the explicitly bridged root
-view must remain internal so the generated bridge can access them. Swift syntax
-parsing alone does not detect a private-state bridge failure.
+build. **All shared SwiftUI views**, including nested/helper views, and their
+property-wrapper storage (`@State`, `@Environment`, `@FocusState`, etc.) must use
+internal or public visibility so the generated bridge can access them. Types
+used in that storage must also be visible. Ordinary implementation helpers and
+iOS-only UIKit representables can remain private. This applies beyond the
+explicitly bridged root view; see [Skip's SwiftUI visibility rules](https://skip.dev/docs/app-development/#swiftui).
+Swift syntax parsing alone does not detect a private-state bridge failure.
 
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated

@@ -41,6 +41,7 @@ jobs:
     # from automatic callers as well as keeping this entry point manual-only.
     if: github.event_name == 'workflow_dispatch' && inputs.platform != 'android'
     runs-on: macos-26-intel
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26
@@ -55,28 +56,44 @@ jobs:
           echo "CARGO_TARGET_DIR=$HOME/.cache/ZRemote/cache/cargo" >> "$GITHUB_ENV"
           echo "CARGO_CACHE_RELATIVE=$(python3 -c 'import os; print(os.path.relpath(os.path.expanduser("~/.cache/ZRemote/cache/cargo"), "native/core"))')" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-      - uses: Swatinem/rust-cache@v2
+      - name: Restore shared iOS Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          key: ios-core-mobile-dist-v2
+          # Reuse the existing main-branch TestFlight cache on either entry point.
+          shared-key: ios-core-mobile-dist-v2-testflight
           workspaces: "native/core -> ${{ env.CARGO_CACHE_RELATIVE }}"
           cache-on-failure: true
-      - name: Build native peer and generate acknowledgements
+      - name: Build native client core
+        timeout-minutes: 120
         env:
           CONFIGURATION: Release
         run: |
-          bash scripts/build-native-core.sh ios
-          xcodebuild -resolvePackageDependencies -workspace Project.xcworkspace \
-            -scheme "ZRemote App" -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages"
+          set -euo pipefail
+          bash scripts/build-native-core.sh ios 2>&1 | tee native-core.log
+      - name: Resolve Swift packages
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -quiet -workspace Project.xcworkspace \
+            -scheme "ZRemote App" -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
+            2>&1 | tee package-resolve.log
+      - name: Generate and verify acknowledgements
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
           python3 scripts/generate-swift-notices.py \
             --resolved Project.xcworkspace/xcshareddata/swiftpm/Package.resolved \
-            --checkouts "$RUNNER_TEMP/swift-packages/checkouts" --output Sources/ZRemote/Resources
+            --checkouts "$RUNNER_TEMP/swift-packages/checkouts" --output Sources/ZRemote/Resources \
+            2>&1 | tee acknowledgements.log
           python3 scripts/verify-notices.py --required swift,cargo \
-            --resolved Project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+            --resolved Project.xcworkspace/xcshareddata/swiftpm/Package.resolved \
+            2>&1 | tee -a acknowledgements.log
       - name: Build unsigned Release
+        timeout-minutes: 60
         run: |
           set -o pipefail
           python3 scripts/run-local.py --phase ios -- \
-            xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+            xcodebuild -jobs 1 -workspace Project.xcworkspace -scheme "ZRemote App" \
               -skipPackagePluginValidation -skipMacroValidation \
               -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
@@ -99,7 +116,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-compile-build-log
-          path: build.log
+          path: |
+            native-core.log
+            package-resolve.log
+            acknowledgements.log
+            build.log
           if-no-files-found: ignore
 
   android:

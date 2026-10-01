@@ -36,15 +36,15 @@ struct ConnectionSettings: View {
     }
 }
 
-private struct AgentProviderSettings: View {
+struct AgentProviderSettings: View {
     @Bindable var model: AppModel
     let showUsage: Bool
-    @State private var hostID = ""
-    @State private var snapshot = AgentAccountsSnapshot(available: false)
-    @State private var loading = false
-    @State private var failed = false
-    @State private var adding = false
-    @State private var revision = 0
+    @State var hostID = ""
+    @State var snapshot = AgentAccountsSnapshot(available: false)
+    @State var loading = false
+    @State var failed = false
+    @State var adding = false
+    @State var revision = 0
 
     private var selectedHost: String { hostID.isEmpty ? model.session?.hostID ?? model.selectedHostID : hostID }
     private var request: String { "\(selectedHost):\(revision)" }
@@ -143,7 +143,7 @@ private struct AgentProviderSettings: View {
 
 struct NotificationSettings: View {
     @Bindable var model: AppModel
-    @Environment(\.openURL) private var openURL
+    @Environment(\.openURL) var openURL
 
     var body: some View {
         Section {

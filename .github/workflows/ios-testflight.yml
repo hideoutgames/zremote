@@ -77,7 +77,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'testflight'
     runs-on: macos-26-intel
     environment: testflight
-    timeout-minutes: 120
+    # A measured cold native build takes 94 minutes before archive/upload.
+    timeout-minutes: 240
     env:
       BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'no.hideout.zremote' }}
     steps:
@@ -154,23 +155,40 @@ jobs:
           rustc --version
           rustup target list --installed
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Restore shared iOS Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          key: ios-core-mobile-dist-v2
+          # Retain the existing TestFlight cache identity, shared with compile.
+          shared-key: ios-core-mobile-dist-v2-testflight
           workspaces: "native/core -> ${{ env.CARGO_CACHE_RELATIVE }}"
           cache-on-failure: true
 
-      - name: Build native client core and verify acknowledgements
+      - name: Build native client core
+        timeout-minutes: 120
         env:
           CONFIGURATION: Release
         run: |
-          bash scripts/build-native-core.sh ios
-          xcodebuild -resolvePackageDependencies -workspace Project.xcworkspace \
-            -scheme "ZRemote App" -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages"
+          set -euo pipefail
+          bash scripts/build-native-core.sh ios 2>&1 | tee native-core.log
+
+      - name: Resolve Swift packages
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -quiet -workspace Project.xcworkspace \
+            -scheme "ZRemote App" -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
+            2>&1 | tee package-resolve.log
+
+      - name: Generate and verify acknowledgements
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
           resolved="Project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
           python3 scripts/generate-swift-notices.py --resolved "$resolved" \
-            --checkouts "$RUNNER_TEMP/swift-packages/checkouts" --output Sources/ZRemote/Resources
-          python3 scripts/verify-notices.py --required swift,cargo --resolved "$resolved"
+            --checkouts "$RUNNER_TEMP/swift-packages/checkouts" --output Sources/ZRemote/Resources \
+            2>&1 | tee acknowledgements.log
+          python3 scripts/verify-notices.py --required swift,cargo --resolved "$resolved" \
+            2>&1 | tee -a acknowledgements.log
 
       - name: App Store Connect key and build number
         env:
@@ -262,6 +280,7 @@ jobs:
           echo "Preparing TestFlight build $build_number of $BUNDLE_ID ($app_name) from $GITHUB_SHA."
 
       - name: Archive (unsigned)
+        timeout-minutes: 60
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -274,7 +293,7 @@ jobs:
           # Distribution cert.
           # The core preparation step uses the mobile-dist Cargo profile.
           python3 scripts/run-local.py --phase ios -- \
-            xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+            xcodebuild -quiet -jobs 1 -workspace Project.xcworkspace -scheme "ZRemote App" \
             -skipPackagePluginValidation -skipMacroValidation \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
             -configuration Release \
@@ -318,6 +337,7 @@ jobs:
           EOF
 
       - name: Export + upload to App Store Connect
+        timeout-minutes: 30
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -337,6 +357,7 @@ jobs:
             }
 
       - name: Verify App Store Connect processing
+        timeout-minutes: 35
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -397,15 +418,16 @@ jobs:
       - name: Cleanup key material + guard logs
         if: always()
         run: |
+          rm -rf "$RUNNER_TEMP/asc"
           # Belt and braces: the logs must never contain key material. If
           # they do, delete them so the artifact upload below has nothing
           # to leak, then fail the job loudly.
-          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" build.log export.log 2>/dev/null; then
+          logs=(native-core.log package-resolve.log acknowledgements.log build.log export.log)
+          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" "${logs[@]}" 2>/dev/null; then
             echo "Log file contains key material — deleting logs and failing."
-            rm -f build.log export.log
+            rm -f "${logs[@]}"
             exit 1
           fi
-          rm -rf "$RUNNER_TEMP/asc"
 
       - name: Upload build logs
         if: always()
@@ -413,6 +435,9 @@ jobs:
         with:
           name: testflight-logs
           path: |
+            native-core.log
+            package-resolve.log
+            acknowledgements.log
             build.log
             export.log
           if-no-files-found: ignore

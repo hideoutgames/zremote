@@ -2,7 +2,7 @@ import SwiftUI
 
 struct UsageProgressBar: View {
     let remaining: Double
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) var colorScheme
 
     private var fraction: Double { remaining.isFinite ? min(1, max(0, remaining)) : 0 }
 

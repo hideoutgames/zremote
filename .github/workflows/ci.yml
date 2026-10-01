@@ -68,3 +68,7 @@ jobs:
             scripts/generate-swift-notices.py scripts/generate-gradle-notices.py scripts/verify-notices.py
       - name: Check installer retries without downloading or compiling
         run: bash Tests/Scripts/install-android-toolchain-tests.sh
+      - name: Check native build progress and failure propagation without compiling
+        run: |
+          python3 Tests/Scripts/test_run_local.py
+          python3 Tests/Scripts/test_build_native_core.py

@@ -3,8 +3,8 @@ import ZRemoteCore
 
 struct MessageContentView: View {
     let message: TranscriptMessage
-    @State private var blocks: [MessageTextBlock] = []
-    @State private var renderedText = ""
+    @State var blocks: [MessageTextBlock] = []
+    @State var renderedText = ""
 
     var body: some View {
         Group {
@@ -84,10 +84,10 @@ struct HighlightedPrompt: View {
     }
 }
 
-private struct CodeBlockView: View {
+struct CodeBlockView: View {
     let code: String
     let language: String?
-    @State private var copied = false
+    @State var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

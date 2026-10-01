@@ -10,7 +10,7 @@ import QuickLook
 struct ComposerAttachments: View {
     let attachments: [LocalAttachment]
     let remove: (String) -> Void
-    @ScaledMetric(relativeTo: .caption) private var captionHeight: CGFloat = 34
+    @ScaledMetric(relativeTo: .caption) var captionHeight: CGFloat = 34
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -28,7 +28,7 @@ struct ComposerAttachments: View {
 struct MessageAttachments: View {
     let attachments: [RemoteAttachment]
     let load: (RemoteAttachment) async throws -> Data
-    @ScaledMetric(relativeTo: .caption) private var captionHeight: CGFloat = 34
+    @ScaledMetric(relativeTo: .caption) var captionHeight: CGFloat = 34
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -44,19 +44,19 @@ struct MessageAttachments: View {
     }
 }
 
-private struct AttachmentTile: View {
+struct AttachmentTile: View {
     let id: String
     let name: String
     let mime: String
     let compact: Bool
     let remove: (() -> Void)?
     let load: () async throws -> Data
-    @State private var thumbnail: Image?
-    @State private var loading = false
-    @State private var preview: AttachmentPreviewFile?
-    @State private var previewURL: URL?
-    @State private var failure: String?
-    @State private var previewTask: Task<Void, Never>?
+    @State var thumbnail: Image?
+    @State var loading = false
+    @State var preview: AttachmentPreviewFile?
+    @State var previewURL: URL?
+    @State var failure: String?
+    @State var previewTask: Task<Void, Never>?
 
     private var isImage: Bool { mime.hasPrefix("image/") }
 
@@ -157,7 +157,7 @@ private struct AttachmentTile: View {
     }
 }
 
-private struct AttachmentPreviewFile: Identifiable {
+struct AttachmentPreviewFile: Identifiable {
     let url: URL
     var id: String { url.path }
 }
