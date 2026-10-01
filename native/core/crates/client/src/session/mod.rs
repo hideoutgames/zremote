@@ -1291,6 +1291,11 @@ impl SessionHandle {
             if st.queue_actions_pending.contains(id) || (send_now && row.delivery_gate.is_some()) {
                 return Ok(false);
             }
+            if action == QueueAction::Steer && !row.attachments.is_empty() {
+                return Err(ClientError::HostUnavailable(
+                    "Messages with files wait for the turn to finish.".into(),
+                ));
+            }
             st.queue_actions_pending.insert(id.to_owned());
             st.queue_error = None;
         }
@@ -1355,19 +1360,10 @@ impl SessionHandle {
         self.queue_action(id, QueueAction::Steer).await
     }
 
-    /// A row's primary action, as the desktop resolves it: text never
-    /// interrupts the turn (steer / send next); only attachments, which need
-    /// a fresh request, send now.
+    /// ZRemote's Send now always steers. Files remain queued; never choose
+    /// the interrupting path, including if attachments change before dispatch.
     pub async fn deliver_queued_now(&self, id: &str) -> Result<bool> {
-        let has_attachments = lock(&self.core.state)
-            .queue
-            .iter()
-            .any(|q| q.id == id && !q.attachments.is_empty());
-        if has_attachments {
-            self.send_queued_now(id).await
-        } else {
-            self.steer_queued_now(id).await
-        }
+        self.steer_queued_now(id).await
     }
 
     /// Remove a queued row (applied locally only after the host acks).

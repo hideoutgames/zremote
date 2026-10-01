@@ -504,6 +504,8 @@ struct HostService {
     chunks: Mutex<std::collections::BTreeMap<(String, u64), String>>,
     committed: Mutex<Vec<(String, String, Vec<u8>)>>,
     spaces: Mutex<Vec<String>>,
+    queue_calls: Mutex<Vec<(String, serde_json::Value)>>,
+    reject_steer: std::sync::atomic::AtomicBool,
 }
 
 const HOST_IMAGE: &str = "/Users/dev/.zeron/uploads/host.png";
@@ -522,6 +524,14 @@ impl zeron_rpc::RpcService for HostService {
         use serde_json::json;
         use zeron_rpc::{RpcReply, methods as m};
         let value = match method {
+            m::STEER_QUEUED_MESSAGE_NOW => {
+                self.queue_calls.lock().unwrap().push((method.to_owned(), params));
+                json!({ "sent": !self.reject_steer.load(std::sync::atomic::Ordering::SeqCst) })
+            }
+            m::SEND_QUEUED_MESSAGE_NOW => {
+                self.queue_calls.lock().unwrap().push((method.to_owned(), params));
+                panic!("mobile Send now must never use the interrupting RPC")
+            }
             m::LIST_HARNESSES => json!([
                 {"id": "claude-code", "name": "Claude Code", "supportsSteering": true,
                  "steeringMode": "step-boundary", "reasoningLevels": ["high"], "installed": true,
@@ -595,6 +605,41 @@ impl zeron_rpc::RpcService for HostService {
         };
         Ok(RpcReply::Value(value))
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn mobile_queue_send_now_only_steers_and_preserves_rejected_rows() {
+    let edge = MockEdge::start().await;
+    let _host = HostRegistry::start(&edge).await;
+    let service = Arc::new(HostService::default());
+    let _relay = zeron_rpc::HostRelay::spawn(
+        zeron_rpc::HostRelayConfig::new(edge.edge_url(), HOST, Arc::new(zeron_rpc::StaticToken("t".into()))),
+        service.clone(), Arc::new(|_| true),
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let client = phone(&edge, dir.path());
+    let start = Instant::now();
+    while !(edge.relay_host_connected(HOST) && client.workspace().session(CHAT).is_some()) {
+        assert!(start.elapsed() < Duration::from_secs(10), "host never reachable");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let session = client.open_session(CHAT).unwrap();
+    let id = session.enqueue("change direction", Vec::new(), true).unwrap();
+    assert!(session.deliver_queued_now(&id).await.unwrap());
+    assert_eq!(service.queue_calls.lock().unwrap().as_slice(), &[
+        (zeron_rpc::methods::STEER_QUEUED_MESSAGE_NOW.to_owned(), serde_json::json!({ "chatId": CHAT, "id": id }))
+    ]);
+    // A rejected ACK must preserve the row, and must not retry with an interrupt.
+    service.reject_steer.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(session.deliver_queued_now(&id).await.is_err());
+    assert!(session.composer().queue.iter().any(|row| row.id == id));
+    assert!(session.composer().queue_error.is_some());
+    assert_eq!(service.queue_calls.lock().unwrap().len(), 2);
+    let files = session.enqueue("see files", vec!["pending://image/one.png".to_owned()], true).unwrap();
+    assert!(session.deliver_queued_now(&files).await.is_err());
+    assert_eq!(service.queue_calls.lock().unwrap().len(), 2);
+    assert!(session.composer().queue.iter().any(|row| row.id == files));
+    client.shutdown();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

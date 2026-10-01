@@ -9,6 +9,7 @@ import SkipFuse
 public enum SecondaryRoute: Identifiable {
     case models, projects, settings, checkouts
     case sessionDetails(String)
+    case queue(String)
     case changes(CapturedTurnChanges)
     case diff(DiffDocument)
     case pullRequest(PullRequest)
@@ -19,6 +20,7 @@ public enum SecondaryRoute: Identifiable {
         case .settings: return "settings"
         case .checkouts: return "checkouts"
         case .sessionDetails(let id): return "session-details-" + id
+        case .queue(let id): return "queue-" + id
         case .changes(let turn): return "changes-" + turn.turnID
         case .diff(let document): return "diff-" + document.id
         case .pullRequest(let request): return "pull-request-" + request.id
@@ -42,6 +44,8 @@ public enum SecondaryRoute: Identifiable {
     public var usesSessionPanel = false
     public var route: SecondaryRoute?
     public var busy = false
+    public var busyMessageMode = MessageSendMode.queue
+    public private(set) var pendingQueueActions: Set<String> = []
     public var restoring = true
     public private(set) var refreshingSessions = false
     public var error: String?
@@ -58,6 +62,13 @@ public enum SecondaryRoute: Identifiable {
     public var pullRequestsAfterMessage: [String: [PullRequest]] = [:]
     private var attachmentDrafts: [String: [LocalAttachment]] = [:]
     private var answerSubmissions: [String: AnswerSubmission] = [:]
+    @ObservationIgnored private var queueEditOwners: [String: QueueEditOwner] = [:]
+    @ObservationIgnored private var finishingQueueEdits: Set<String> = []
+
+    private struct QueueEditOwner {
+        let client: any ClientService
+        let generation: Int
+    }
 
     private struct AnswerSubmission {
         let input: InputRequest
@@ -168,11 +179,20 @@ public enum SecondaryRoute: Identifiable {
         set { setDraft(newValue, for: selectedSessionID ?? "new"); scheduleSave() }
     }
     public var canSend: Bool {
-        signedIn && !busy && !working && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
+        signedIn && !busy && (!working || canQueueDraft || canSteerDraft) && hasMessageDraft
             && !(session?.hostID ?? selectedHostID).isEmpty
             && (selectedSessionID != nil || newSelection.modelID != nil)
             && (selectedSessionID != nil || checkoutSelection == .current || selectedCheckoutContext == checkoutContext)
             && (selectedSessionID != nil || selectedCheckoutIsAvailable)
+    }
+    public var hasMessageDraft: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty }
+    public var composerStops: Bool { working && !hasMessageDraft }
+    public var canQueueDraft: Bool {
+        state?.queueCapabilities.canQueue == true && (attachments.isEmpty || state?.queueCapabilities.canQueueAttachments == true)
+    }
+    public var canSteerDraft: Bool { attachments.isEmpty && state?.queueCapabilities.canSteer == true }
+    public var messageSendMode: MessageSendMode {
+        canSteerDraft && (busyMessageMode == .steer || !canQueueDraft) ? .steer : .queue
     }
 
     public func start() async {
@@ -248,6 +268,7 @@ public enum SecondaryRoute: Identifiable {
         attachmentDrafts = [:]; pullRequestsAfterMessage = [:]; answerSubmissions = [:]
         newSelection = ModelSelection()
         sessionsVisible = false; isDemo = false; busy = false; fetchingModels = false
+        busyMessageMode = .queue; pendingQueueActions = []
     }
 
     private func bindClient() {
@@ -339,6 +360,98 @@ public enum SecondaryRoute: Identifiable {
         }
     }
 
+    public func queuedMessages(sessionID: String) -> [QueuedMessage] {
+        (state?.id == sessionID ? state : sessions[sessionID])?.queue ?? []
+    }
+
+    public func queueCapabilities(sessionID: String) -> MessageQueueCapabilities {
+        (state?.id == sessionID ? state : sessions[sessionID])?.queueCapabilities ?? .init()
+    }
+
+    public func queueActionPending(sessionID: String, id: String) -> Bool {
+        pendingQueueActions.contains(queueActionKey(sessionID: sessionID, id: id))
+            || queuedMessages(sessionID: sessionID).first(where: { $0.id == id })?.actionPending == true
+    }
+
+    private func queueActionKey(sessionID: String, id: String) -> String { "\(generation):\(sessionID):\(id)" }
+
+    public func sendQueuedNow(sessionID: String, id: String) async {
+        await performQueueAction(sessionID: sessionID, id: id) { source in
+            try await source.sendQueuedNow(sessionID: sessionID, id: id)
+        }
+    }
+
+    public func moveQueuedMessage(sessionID: String, id: String, delta: Int) async {
+        await performQueueAction(sessionID: sessionID, id: id) { source in
+            try await source.moveQueuedMessage(sessionID: sessionID, id: id, delta: delta)
+        }
+    }
+
+    public func deleteQueuedMessage(sessionID: String, id: String) async {
+        await performQueueAction(sessionID: sessionID, id: id) { source in
+            try await source.deleteQueuedMessage(sessionID: sessionID, id: id)
+        }
+    }
+
+    private func performQueueAction(sessionID: String, id: String,
+                                    operation: @MainActor (any ClientService) async throws -> Void) async {
+        guard !queueActionPending(sessionID: sessionID, id: id) else { return }
+        let key = queueActionKey(sessionID: sessionID, id: id), epoch = generation
+        let source = client
+        pendingQueueActions.insert(key)
+        defer { pendingQueueActions.remove(key) }
+        do { try await operation(source) }
+        catch { if epoch == generation && selectedSessionID == sessionID { self.error = "Couldn't update the queued message. Check the queue before trying again." } }
+    }
+
+    public func beginQueuedMessageEdit(sessionID: String, id: String) async -> QueuedMessageEdit? {
+        guard !queueActionPending(sessionID: sessionID, id: id) else { return nil }
+        let key = queueActionKey(sessionID: sessionID, id: id), epoch = generation
+        let source = client
+        pendingQueueActions.insert(key)
+        defer { pendingQueueActions.remove(key) }
+        do {
+            let edit = try await source.beginQueuedMessageEdit(sessionID: sessionID, id: id)
+            guard epoch == generation, selectedSessionID == sessionID else {
+                try? await source.finishQueuedMessageEdit(edit, text: nil)
+                return nil
+            }
+            queueEditOwners[edit.leaseID] = QueueEditOwner(client: source, generation: epoch)
+            return edit
+        } catch {
+            if epoch == generation && selectedSessionID == sessionID { self.error = "Couldn't edit this queued message. Check that the host supports queue editing." }
+            return nil
+        }
+    }
+
+    public func renewQueuedMessageEdit(_ edit: QueuedMessageEdit) async -> Bool {
+        guard let owner = queueEditOwners[edit.leaseID], owner.generation == generation, selectedSessionID == edit.sessionID else { return false }
+        do {
+            let renewed = try await owner.client.renewQueuedMessageEdit(edit)
+            return renewed && owner.generation == generation && selectedSessionID == edit.sessionID
+        }
+        catch { return false }
+    }
+
+    @discardableResult public func finishQueuedMessageEdit(_ edit: QueuedMessageEdit, text: String?) async -> Bool {
+        guard let owner = queueEditOwners[edit.leaseID], !finishingQueueEdits.contains(edit.leaseID) else { return false }
+        finishingQueueEdits.insert(edit.leaseID)
+        defer { finishingQueueEdits.remove(edit.leaseID) }
+        // A dismissed/account-switched editor releases through the client that
+        // acquired its lease, never a newly signed-in account's client.
+        let current = owner.generation == generation && selectedSessionID == edit.sessionID
+        do {
+            try await owner.client.finishQueuedMessageEdit(edit, text: current ? text : nil)
+            queueEditOwners[edit.leaseID] = nil
+            return owner.generation == generation && selectedSessionID == edit.sessionID
+        } catch {
+            let stillCurrent = owner.generation == generation && selectedSessionID == edit.sessionID
+            if text == nil || !stillCurrent { queueEditOwners[edit.leaseID] = nil }
+            if stillCurrent && text != nil { self.error = "Couldn't save the queued message. Your edit is still here." }
+            return false
+        }
+    }
+
     public func send() async {
         guard canSend else { return }
         busy = true
@@ -348,6 +461,7 @@ public enum SecondaryRoute: Identifiable {
         defer { if epoch == generation { busy = false } }
         let text = draft
         let submittedAttachments = attachments
+        let submittedMode = messageSendMode
         let oldDraftKey = selectedSessionID ?? "new"
         do {
             let id: String
@@ -374,7 +488,7 @@ public enum SecondaryRoute: Identifiable {
                 try await source.openSession(id)
             }
             guard epoch == generation else { return }
-            try await source.send(sessionID: id, text: text, attachments: submittedAttachments)
+            try await source.send(sessionID: id, text: text, attachments: submittedAttachments, busy: submittedMode)
             guard epoch == generation else { return }
             // Clear only the exact draft submitted; a later edit must survive.
             if preferences.drafts[id] == text { setDraft(nil, for: id) }

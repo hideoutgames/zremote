@@ -185,7 +185,10 @@ public struct SessionState: Equatable, Sendable {
     public var deliveryFailed: Bool
     public var turnID: String?
     public var input: InputRequest?
-    public init(id: String, messages: [TranscriptMessage] = [], selection: ModelSelection = .init(), working: Bool = false, delivery: String = "", deliveryFailed: Bool = false, turnID: String? = nil, input: InputRequest? = nil) { self.id = id; self.messages = messages; self.selection = selection; self.working = working; self.delivery = delivery; self.deliveryFailed = deliveryFailed; self.turnID = turnID; self.input = input }
+    public var queue: [QueuedMessage]
+    public var queueCapabilities: MessageQueueCapabilities
+    public var queueError: String?
+    public init(id: String, messages: [TranscriptMessage] = [], selection: ModelSelection = .init(), working: Bool = false, delivery: String = "", deliveryFailed: Bool = false, turnID: String? = nil, input: InputRequest? = nil, queue: [QueuedMessage] = [], queueCapabilities: MessageQueueCapabilities = .init(), queueError: String? = nil) { self.id = id; self.messages = messages; self.selection = selection; self.working = working; self.delivery = delivery; self.deliveryFailed = deliveryFailed; self.turnID = turnID; self.input = input; self.queue = queue; self.queueCapabilities = queueCapabilities; self.queueError = queueError }
 }
 
 public struct InputQuestion: Identifiable, Equatable, Sendable {
@@ -256,6 +259,14 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
     func renameSession(sessionID: String, title: String) async throws
     func send(sessionID: String, text: String) async throws
     func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws
+    func send(sessionID: String, text: String, attachments: [LocalAttachment], busy: MessageSendMode) async throws
+    func sendQueuedNow(sessionID: String, id: String) async throws
+    func moveQueuedMessage(sessionID: String, id: String, delta: Int) async throws
+    func deleteQueuedMessage(sessionID: String, id: String) async throws
+    func beginQueuedMessageEdit(sessionID: String, id: String) async throws -> QueuedMessageEdit
+    func renewQueuedMessageEdit(_ edit: QueuedMessageEdit) async throws -> Bool
+    /// A nil text cancels the edit; only a confirmed host commit saves text.
+    func finishQueuedMessageEdit(_ edit: QueuedMessageEdit, text: String?) async throws
     func readAttachment(sessionID: String, attachment: RemoteAttachment) async throws -> Data
     func complete(kind: ComposerTokenKind, query: String, hostID: String, sessionID: String?, projectID: String?, providerID: String) async throws -> [ComposerCompletion]
     func setPinned(sessionID: String, pinned: Bool) async throws
@@ -275,6 +286,16 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
 // Existing test peers can stay focused on the behavior they exercise. Live and
 // demo clients implement every supported operation explicitly.
 public extension ClientService {
+    func send(sessionID: String, text: String, attachments: [LocalAttachment], busy: MessageSendMode) async throws {
+        guard busy == .queue else { throw ClientFailure("Steering is unavailable from this client.") }
+        try await send(sessionID: sessionID, text: text, attachments: attachments)
+    }
+    func sendQueuedNow(sessionID: String, id: String) async throws { throw ClientFailure("Queue actions are unavailable from this client.") }
+    func moveQueuedMessage(sessionID: String, id: String, delta: Int) async throws { throw ClientFailure("Queue actions are unavailable from this client.") }
+    func deleteQueuedMessage(sessionID: String, id: String) async throws { throw ClientFailure("Queue actions are unavailable from this client.") }
+    func beginQueuedMessageEdit(sessionID: String, id: String) async throws -> QueuedMessageEdit { throw ClientFailure("Update the chat host to edit queued messages safely.") }
+    func renewQueuedMessageEdit(_ edit: QueuedMessageEdit) async throws -> Bool { false }
+    func finishQueuedMessageEdit(_ edit: QueuedMessageEdit, text: String?) async throws { throw ClientFailure("Queue editing is unavailable from this client.") }
     func createSession(projectID: String?, hostID: String, selection: ModelSelection, checkout: CheckoutSelection) async throws -> String {
         guard checkout == .current else { throw ClientFailure("Checkout selection is unavailable from this client.") }
         return try await createSession(projectID: projectID, hostID: hostID, selection: selection)

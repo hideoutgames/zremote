@@ -1,5 +1,47 @@
 # Implementation and verification status
 
+## Message queue and steering
+
+The native Composer supports Queue and Steer while a turn is running. A queued
+message count opens a compact list: message content, the shared Composer send
+button, and an adjacent native menu with Edit, Move up, Move down, and Delete.
+There are no per-row instructions or separate steering labels. Empty working
+composers retain Stop; attachment drafts use Queue when supported.
+
+The mobile peer reuses Zeron's existing queue, capability and edit-lease APIs.
+Send now always calls `SteerQueuedMessageNow`, including after a turn becomes
+idle, and never falls back to `SendQueuedMessageNow` or an interrupt. The peer
+checks attachments under its queue lock; attached rows remain queued. Failed
+or unconfirmed actions retain synchronized state for reconciliation. No host
+or relay implementation changed, and the native ABI is unchanged.
+
+Editing acquires the existing host lease before opening, renews it while open,
+and preserves attached files. Save errors retain the edit; dismissal, session
+changes and sign-out attempt to release through the originating client. Late account
+responses cannot replace the current editor state. Demo mode exercises the same
+interface, including queue order, held edits and steering within one live turn.
+Move up/down uses the peer's relative movement API, so another device changing
+the order while a menu is open cannot turn a one-row move into a jump.
+
+Targeted local verification on 2026-10-01 passed 18 distinct Swift cases:
+all eight `AppModelMessageQueueTests`, all five `MessageQueueTests`, and the
+existing first-send failure, attachment-only send, demo interruption, demo exit,
+and demo checkout/session cases. The three movement cases were rerun after the
+relative-move change. Both scoped Rust cases passed:
+`mobile_queue_send_now_only_steers_and_preserves_rejected_rows` and
+`steering_while_busy_sends_a_steer_not_a_queue_row`. All heavy checks used the
+shared runner with stable inputs. The four changed presentation files passed
+Swift syntax parsing, including a queue-view recheck after the movement change.
+The native Swift adapter also passed host typechecking against the real
+generated C ABI and pinned Keychain source with stable inputs; this checks
+types, not platform linking or secure-storage behavior.
+
+This does not establish full SwiftUI/Skip compilation, native appearance,
+VoiceOver/TalkBack behavior, or live Codex host execution. No application build,
+workflow dispatch or distribution was performed. The existing Sessions refresh
+implementation from merged PR #180 also passed its four focused
+`SessionsRefreshTests` during review; no refresh source change was needed.
+
 ## Session controls, checkout selection and Details
 
 Session rows now use provider marks in live and test modes. The active filter

@@ -365,54 +365,73 @@ struct ConversationView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
-                ComposerSuggestions(kind: token.kind, items: ComposerCompletionPresentation.filter(suggestions, kind: token.kind, query: token.query),
-                                    loading: loadingSuggestions, maximumHeight: viewportHeight * 0.3,
-                                    unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
+        VStack(spacing: 0) {
+            if let sessionID = model.selectedSessionID, !model.queuedMessages(sessionID: sessionID).isEmpty {
+                HStack {
+                    Button { inputFocused = false; model.route = .queue(sessionID) } label: {
+                        Text("\(model.queuedMessages(sessionID: sessionID).count) queued")
+                            .font(.subheadline.weight(.medium)).padding(.horizontal, 16).frame(minHeight: 44)
+                            .nativeGlassControl()
+                    }.buttonStyle(.plain).accessibilityLabel("Message queue")
+                    Spacer()
+                }.frame(maxWidth: 700).padding(.horizontal, 16)
             }
-            if !model.attachments.isEmpty {
-                ComposerAttachments(attachments: model.attachments, remove: model.removeAttachment)
-            }
-            ComposerTextInput(text: $model.draft, cursor: $cursor, isFocused: $inputFocused,
-                              isComposing: $inputComposing, selectionRequest: selectionRequest)
-                .id(model.selectedSessionID ?? "new")
-                .padding(.horizontal, 6)
-            HStack(spacing: 10) {
-                AttachmentPicker(model: model)
-                Button { model.route = .models } label: {
-                    HStack(spacing: 7) {
-                        ProviderIcon(providerID: model.selection.providerID, size: 17)
-                        Text(modelLabel).lineLimit(1)
-                        Image(systemName: "chevron.down").font(.caption2)
-                    }.font(.subheadline).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 6).frame(minHeight: 44)
-                }.buttonStyle(.plain).accessibilityLabel("Choose model, \(modelLabel)")
-                Spacer(minLength: 0)
-                Button {
-                    Task { if model.working { await model.stop() } else { following = true; await model.send() } }
-                } label: {
-                    Group {
-                        if model.busy { ProgressView().tint(Palette.background) }
-                        else { Image(systemName: model.working ? "stop.fill" : "arrow.up").font(.system(size: 18, weight: .semibold)) }
-                    }
-                    .frame(width: 44, height: 44)
-                    .foregroundStyle((model.canSend || model.working) ? Palette.background : Palette.secondary)
-                    .background((model.canSend || model.working) ? Palette.text : Palette.raised, in: Circle())
+            VStack(alignment: .leading, spacing: 13) {
+                if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
+                    ComposerSuggestions(kind: token.kind, items: ComposerCompletionPresentation.filter(suggestions, kind: token.kind, query: token.query),
+                                        loading: loadingSuggestions, maximumHeight: viewportHeight * 0.3,
+                                        unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
                 }
-                .buttonStyle(.plain).disabled(!model.canSend && !model.working)
-                .accessibilityLabel(model.working ? "Stop agent" : "Send message")
-                #if !os(Android)
-                .keyboardShortcut(.return, modifiers: [.command])
-                #endif
+                if !model.attachments.isEmpty {
+                    ComposerAttachments(attachments: model.attachments, remove: model.removeAttachment)
+                }
+                ComposerTextInput(text: $model.draft, cursor: $cursor, isFocused: $inputFocused,
+                                  isComposing: $inputComposing, selectionRequest: selectionRequest)
+                    .id(model.selectedSessionID ?? "new")
+                    .padding(.horizontal, 6)
+                HStack(spacing: 10) {
+                    AttachmentPicker(model: model)
+                    if model.working, model.canQueueDraft || model.canSteerDraft {
+                        Menu {
+                            if model.canQueueDraft {
+                                Button("Queue") { model.busyMessageMode = .queue }
+                            }
+                            if model.canSteerDraft {
+                                Button("Steer") { model.busyMessageMode = .steer }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(model.messageSendMode == .steer ? "Steer" : "Queue")
+                                Image(systemName: "chevron.down").font(.caption2)
+                            }.font(.subheadline).foregroundStyle(Palette.secondary).frame(minHeight: 44)
+                        }.accessibilityLabel("Send behavior")
+                    }
+                    Button { model.route = .models } label: {
+                        HStack(spacing: 7) {
+                            ProviderIcon(providerID: model.selection.providerID, size: 17)
+                            Text(modelLabel).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.caption2)
+                        }.font(.subheadline).foregroundStyle(Palette.secondary)
+                            .padding(.horizontal, 6).frame(minHeight: 44)
+                    }.buttonStyle(.plain).accessibilityLabel("Choose model, \(modelLabel)")
+                    Spacer(minLength: 0)
+                    ComposerActionButton(stopping: model.composerStops, busy: model.busy,
+                                         enabled: model.canSend || model.composerStops,
+                                         label: model.composerStops ? "Stop agent" : "Send message") {
+                        Task { if model.composerStops { await model.stop() } else { following = true; await model.send() } }
+                    }
+                    #if !os(Android)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    #endif
+                }
             }
+            .padding(14)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(Palette.line))
+            .frame(maxWidth: 700)
+            .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 8)
+            .frame(maxWidth: .infinity)
         }
-        .padding(14)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(Palette.line))
-        .frame(maxWidth: 700)
-        .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 8)
-        .frame(maxWidth: .infinity)
     }
 
     private func updateSuggestions() async {

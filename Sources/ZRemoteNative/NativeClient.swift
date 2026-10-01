@@ -16,6 +16,8 @@ import ZRemoteCore
     private var pendingOrganizations: [AuthOrg] = []
     private var generation = UUID()
     private var handles: [String: SessionHandle] = [:]
+    private var queueEdits: [String: (sessionID: String, handle: SessionHandle, lease: QueueEditLease)] = [:]
+    private var pendingQueueEdits: Set<String> = []
     private var pendingWorktrees: [String: PendingWorktreeIntent] = [:]
     private var recoveredWorktrees: Set<String> = []
     private var worktreeStore: PendingWorktreeStore?
@@ -93,6 +95,14 @@ import ZRemoteCore
 
     public func signOut() async throws {
         let previous = account
+        generation = UUID()
+        let operation = generation
+        let edits = Array(queueEdits.values)
+        queueEdits.removeAll()
+        for edit in edits {
+            _ = await edit.handle.finishQueuedEdit(lease: edit.lease, action: .cancel, text: nil)
+        }
+        try ensureCurrent(operation)
         shutdown()
         try Keychain.shared.removeValue(forKey: Self.credentialKey)
         account = nil
@@ -123,6 +133,11 @@ import ZRemoteCore
     }
 
     public func closeSession(_ id: String) {
+        let edits = queueEdits.filter { $0.value.sessionID == id }
+        for (key, edit) in edits {
+            queueEdits[key] = nil
+            Task { _ = await edit.handle.finishQueuedEdit(lease: edit.lease, action: .cancel, text: nil) }
+        }
         handles.removeValue(forKey: id)?.setViewAttached(attached: false)
         projections[id] = nil
         transcriptMetadata[id] = nil
@@ -244,9 +259,17 @@ import ZRemoteCore
     }
 
     public func send(sessionID: String, text: String, attachments: [LocalAttachment]) async throws {
+        try await send(sessionID: sessionID, text: text, attachments: attachments, busy: .queue)
+    }
+
+    public func send(sessionID: String, text: String, attachments: [LocalAttachment], busy: MessageSendMode) async throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
         for attachment in attachments { try attachment.validate() }
         let handle = try requireHandle(sessionID)
+        if busy == .steer {
+            guard attachments.isEmpty else { throw ClientFailure("Messages with files must wait in the queue.") }
+            guard handle.composer().host.capabilities.midTurnSteering == true else { throw ClientFailure("This agent cannot steer during a turn. Choose Queue.") }
+        }
         var worktree: WorktreeSpec?
         if let intent = pendingWorktrees[sessionID] {
             let status = handle.transcriptStatus()
@@ -265,7 +288,7 @@ import ZRemoteCore
         }
         _ = try handle.send(request: SendRequest(text: text, attachments: attachments.map {
             OutgoingAttachment(name: $0.name, mimeType: $0.mimeType, data: $0.data)
-        }, worktree: worktree, busy: .queue))
+        }, worktree: worktree, busy: busy == .steer ? .steer : .queue))
         // The run command now durably owns creation of the isolated checkout.
         // Retain the choice after a thrown send so a retry keeps its destination.
         if pendingWorktrees.removeValue(forKey: sessionID) != nil {
@@ -273,6 +296,92 @@ import ZRemoteCore
             try? worktreeStore?.save(pendingWorktrees)
         }
         publishSession(sessionID)
+    }
+
+    public func sendQueuedNow(sessionID: String, id: String) async throws {
+        let operation = generation
+        let handle = try requireHandle(sessionID)
+        let composer = handle.composer()
+        guard composer.host.capabilities.queueActions, composer.host.capabilities.midTurnSteering == true else { throw ClientFailure("This host cannot steer queued messages.") }
+        guard let row = composer.queue.first(where: { $0.id == id }) else { throw ClientFailure("This message has already left the queue.") }
+        guard row.attachments.isEmpty else { throw ClientFailure("Messages with files wait for the turn to finish.") }
+        guard row.gate == nil, !row.actionPending else { throw ClientFailure("This queued message is currently being edited or sent.") }
+        guard try await handle.deliverQueuedNow(id: id) else { throw ClientFailure("The host did not confirm this message. Check the queue before retrying.") }
+        try ensureCurrent(operation)
+        publishSession(sessionID)
+    }
+
+    public func moveQueuedMessage(sessionID: String, id: String, delta: Int) async throws {
+        let handle = try requireHandle(sessionID)
+        guard handle.composer().host.capabilities.messageQueue else { throw ClientFailure("This host does not support a message queue.") }
+        guard handle.composer().queue.contains(where: { $0.id == id && !$0.actionPending && $0.gate == nil }) else { throw ClientFailure("This queued message is currently being edited, sent, or is no longer available.") }
+        guard try handle.moveQueuedBy(id: id, delta: Int32(clamping: delta)) else { throw ClientFailure("This message could not be moved. Check the queue and try again.") }
+        publishSession(sessionID)
+    }
+
+    public func deleteQueuedMessage(sessionID: String, id: String) async throws {
+        let operation = generation
+        let handle = try requireHandle(sessionID)
+        guard handle.composer().host.capabilities.queueActions else { throw ClientFailure("This host does not support queue actions.") }
+        guard try await handle.removeQueued(id: id) else { throw ClientFailure("The host did not confirm removal. Check the queue before retrying.") }
+        try ensureCurrent(operation)
+        publishSession(sessionID)
+    }
+
+    public func beginQueuedMessageEdit(sessionID: String, id: String) async throws -> QueuedMessageEdit {
+        let operation = generation
+        let handle = try requireHandle(sessionID)
+        guard handle.composer().host.capabilities.queueEditLease else { throw ClientFailure("Update the chat host to edit queued messages safely.") }
+        let key = sessionID + "\u{1F}" + id
+        guard pendingQueueEdits.insert(key).inserted else { throw ClientFailure("This message is already opening for editing.") }
+        defer { pendingQueueEdits.remove(key) }
+        let result = await handle.beginQueuedEdit(id: id, instanceId: UUID().uuidString)
+        if case .acquired(let lease) = result {
+            guard operation == generation, handles[sessionID] === handle else {
+                _ = await handle.finishQueuedEdit(lease: lease, action: .cancel, text: nil)
+                throw NativeClientError.sessionClosed
+            }
+            queueEdits[lease.leaseId] = (sessionID, handle, lease)
+            publishSession(sessionID)
+            return QueuedMessageEdit(id: id, sessionID: sessionID, leaseID: lease.leaseId, text: lease.text,
+                baseTextHash: lease.baseTextHash, expiresAtMilliseconds: lease.expiresAtMs,
+                hasAttachments: handle.composer().queue.first(where: { $0.id == id }).map { !$0.attachments.isEmpty } ?? false)
+        }
+        try ensureCurrent(operation)
+        switch result {
+        case .locked: throw ClientFailure("This message is being edited on another device.")
+        case .missing: throw ClientFailure("This message has already left the queue.")
+        default: throw ClientFailure("Couldn't open this message for editing. Check the host connection.")
+        }
+    }
+
+    public func renewQueuedMessageEdit(_ edit: QueuedMessageEdit) async throws -> Bool {
+        let operation = generation
+        guard let current = queueEdits[edit.leaseID], current.sessionID == edit.sessionID,
+              current.lease.rowId == edit.id, handles[edit.sessionID] === current.handle else { return false }
+        let renewed = await current.handle.renewQueuedEdit(lease: current.lease)
+        try ensureCurrent(operation)
+        return renewed
+    }
+
+    public func finishQueuedMessageEdit(_ edit: QueuedMessageEdit, text: String?) async throws {
+        let operation = generation
+        guard let current = queueEdits[edit.leaseID], current.sessionID == edit.sessionID,
+              current.lease.rowId == edit.id, handles[edit.sessionID] === current.handle else { throw ClientFailure("This edit is no longer active. Reopen the queued message.") }
+        if let text, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !edit.hasAttachments {
+            throw ClientFailure("Enter a message, or use Delete to remove it.")
+        }
+        let result = await current.handle.finishQueuedEdit(lease: current.lease, action: text == nil ? .cancel : .commit, text: text)
+        try ensureCurrent(operation)
+        switch result {
+        case .finished:
+            queueEdits[edit.leaseID] = nil
+            publishSession(edit.sessionID)
+        case .missing: throw ClientFailure("This message has already left the queue. Your edit was not saved.")
+        case .conflict: throw ClientFailure("This message changed on another device. Copy your edit and reopen it.")
+        case .lost: throw ClientFailure("This edit expired. Copy your edit and reopen the queued message.")
+        case .unavailable: throw ClientFailure("Couldn't save this edit. Check the host connection and try again.")
+        }
     }
 
     public func readAttachment(sessionID: String, attachment: RemoteAttachment) async throws -> Data {
@@ -452,6 +561,7 @@ import ZRemoteCore
         client = nil
         listener = nil
         handles.removeAll()
+        queueEdits.removeAll(); pendingQueueEdits.removeAll()
         pendingWorktrees.removeAll()
         recoveredWorktrees.removeAll(); worktreeStore = nil
         projections.removeAll()
@@ -603,7 +713,14 @@ import ZRemoteCore
             selection: ModelSelection(providerID: config?.harness ?? "claude-code", modelID: config?.model,
                 effort: config?.reasoning, options: config?.modelOptions ?? [:]),
             working: composer.live.turnRunning, delivery: delivery, deliveryFailed: composer.sendState == .failed,
-            turnID: update.turnId, input: input)))
+              turnID: update.turnId, input: input,
+              queue: composer.queue.map { QueuedMessage(id: $0.id, text: $0.visibleText, attachments: $0.attachments,
+                  holdForTurnEnd: $0.holdForTurnEnd, deliveryBlocked: $0.gate != nil, actionPending: $0.actionPending) },
+              queueCapabilities: MessageQueueCapabilities(canQueue: composer.host.capabilities.messageQueue,
+                  canQueueAttachments: composer.host.capabilities.messageQueue && composer.host.capabilities.queueAttachments && composer.host.capabilities.queuedAttachments,
+                  canSteer: composer.host.capabilities.midTurnSteering == true,
+                  canEdit: composer.host.capabilities.queueEditLease, canAct: composer.host.capabilities.queueActions),
+              queueError: composer.queueError)))
         for changedID in otherMetadataChanges where changedID != id { publishSession(changedID, refreshMetadata: false) }
     }
 
