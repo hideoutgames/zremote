@@ -24,6 +24,7 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
                     .frame(width: distance)
                     .accessibilityHidden(!isOpen)
                 content()
+                    .accessibilityHidden(isOpen)
                     .background(Palette.background)
                     .clipShape(RoundedRectangle(cornerRadius: offset > 0 ? 28 : 0, style: .continuous))
                     .overlay {
@@ -44,7 +45,6 @@ struct PhoneSessionDrawer<MenuContent: View, MainContent: View>: View {
                         }
                     }
                     .offset(x: offset * direction)
-                    .accessibilityHidden(isOpen)
                     #if os(Android)
                     // Optional<Gesture> is not bridged by the pinned Skip version.
                     .simultaneousGesture(pan(distance: distance, direction: direction), isEnabled: isOpen)

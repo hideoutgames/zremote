@@ -221,6 +221,7 @@ pub struct AuthUser {
     pub email: Option<String>,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
+    pub profile_picture_url: Option<String>,
 }
 
 impl From<zc::auth::AuthUser> for AuthUser {
@@ -230,6 +231,7 @@ impl From<zc::auth::AuthUser> for AuthUser {
             email: u.email,
             first_name: u.first_name,
             last_name: u.last_name,
+            profile_picture_url: u.profile_picture_url,
         }
     }
 }

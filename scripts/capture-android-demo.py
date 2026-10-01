@@ -95,7 +95,7 @@ class Capture:
     def show_sessions(self):
         if self.mode == "phone":
             self.tap("Show sessions")
-        self.find("Sessions")
+        self.find("Test mode account")
 
     def show_completed_changes(self):
         # Scroll only within the actual transcript area, at most six times.
@@ -108,8 +108,10 @@ class Capture:
                 if attempt == 6:
                     raise
                 x = int(self.width * 0.78)
-                self.adb("shell", "input", "swipe", str(x), str(int(self.height * 0.65)),
-                         str(x), str(int(self.height * 0.30)), "350")
+                # Completion follows the latest edge. The file card is above
+                # subsequent PR/activity cards, so reveal earlier content.
+                self.adb("shell", "input", "swipe", str(x), str(int(self.height * 0.30)),
+                         str(x), str(int(self.height * 0.65)), "350")
                 time.sleep(0.8)
 
     def layout(self, mode: str, width: int, height: int, density: int):
@@ -127,6 +129,19 @@ class Capture:
         self.find("What would you like to build?")
         self.save("composer")
 
+        self.tap("Message")
+        self.adb("shell", "input", "text", "/")
+        self.find("Commands suggestions")
+        self.find("review")
+        self.save("autocomplete")
+        self.adb("shell", "input", "keyevent", "KEYCODE_DEL")
+        self.adb("shell", "input", "keyevent", "KEYCODE_BACK")
+
+        self.tap("Add attachment")
+        self.find("Camera")
+        self.save("attachment-sources")
+        self.adb("shell", "input", "keyevent", "KEYCODE_BACK")
+
         self.tap("Choose model,", prefix=True)
         self.find("Search models in selected tab")
         self.save("models")
@@ -134,14 +149,30 @@ class Capture:
 
         self.show_sessions()
         self.save("sessions")
+        self.tap("Session display options")
+        self.find("Filter")
+        self.save("session-options")
+        self.tap("Filter")
+        self.find("Status")
+        self.save("session-filters")
+        self.adb("shell", "input", "keyevent", "KEYCODE_BACK")
+        self.tap("Test mode account")
         self.tap("Settings")
         self.find("Acknowledgements")
         self.save("settings")
         self.tap("Done")
 
         self.tap("A quieter workspace")
-        self.find("Sample interface changes")
+        self.find("Pull request 42,", prefix=True)
         self.save("conversation")
+        self.tap("Session actions")
+        self.find("Pin session")
+        self.save("session-actions")
+        self.adb("shell", "input", "keyevent", "KEYCODE_BACK")
+        self.tap("Pull request 42,", prefix=True)
+        self.find("Pull request #42")
+        self.save("pull-request")
+        self.tap("Done")
         self.tap("Message")
         self.adb("shell", "input", "text", "Polish%sthe%sspacing")
         self.adb("shell", "input", "keyevent", "KEYCODE_BACK")
@@ -186,7 +217,7 @@ def main() -> int:
     finally:
         (args.output / "capture-results.json").write_text(json.dumps({
             "captures": capture.results, "failures": failures,
-            "passed": not failures and len(capture.results) == 16
+            "passed": not failures and len(capture.results) == 28
         }, indent=2) + "\n")
         try:
             (args.output / "android-runtime-errors.txt").write_text(capture.adb("logcat", "-d", "-s", "AndroidRuntime:E"))

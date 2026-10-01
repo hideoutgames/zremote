@@ -69,23 +69,14 @@ struct ChangedFilesList: View {
 
 struct PullRequestCard: View {
     let request: PullRequest
+    var open: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Pull request").font(.caption).foregroundStyle(Palette.secondary)
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "arrow.triangle.pull").foregroundStyle(Palette.secondary)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(request.title).font(.subheadline.weight(.medium))
-                    Text("#\(request.number) · \(request.state.capitalized)").font(.caption).foregroundStyle(Palette.secondary)
-                }
-                Spacer(minLength: 0)
-                if let url = PresentationRules.reviewURL(request.url) {
-                    Link(destination: url) { Image(systemName: "arrow.up.right").frame(width: 44, height: 44) }
-                        .accessibilityLabel("Open pull request \(request.number) in browser")
-                }
-            }
+        Button(action: open) {
+            SessionEventCard(symbol: "arrow.triangle.pull", title: request.title,
+                             subtitle: "#\(request.number) · \(request.state.capitalized)",
+                             badge: "Pull request", active: request.state.lowercased() == "open", disclosure: true)
         }
-        .padding(16).foregroundStyle(Palette.text)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
+        .buttonStyle(.plain)
+        .accessibilityLabel("Pull request \(request.number), \(request.title), \(request.state)")
     }
 }

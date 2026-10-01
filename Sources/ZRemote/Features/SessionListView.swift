@@ -1,58 +1,96 @@
+import Foundation
 import SwiftUI
 import ZRemoteCore
 
 struct SessionListView: View {
     @Bindable var model: AppModel
     @State private var search = ""
+    @State private var searching = false
+    @State private var sort: SessionSort = .recent
+    @State private var grouping: SessionGrouping = .project
+    @State private var status: SessionStatusFilter = .all
+    @State private var pullRequest: SessionPRFilter = .all
+    @State private var archived: SessionArchiveFilter = .active
+    @State private var created: SessionDateFilter = .any
+    @State private var updated: SessionDateFilter = .any
+    @State private var unreadOnly = false
+    @State private var compact = false
+    @State private var signingOut = false
+    @FocusState private var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    @Namespace private var searchNamespace
+    #endif
 
     private var filtered: [Session] {
-        model.workspace.sessions.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) }
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("Sessions").font(.title2.weight(.semibold))
-                Spacer()
-                if model.isDemo { Text("Test mode").font(.caption).foregroundStyle(Palette.secondary) }
-                CircleControl(symbol: "xmark", label: "Hide sessions") {
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { model.sessionsVisible = false }
-                }
-            }.padding(.top, 16)
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                TextField("Search sessions", text: $search)
-                    .autocorrectionDisabled()
+        model.workspace.sessions.filter { session in
+            (search.isEmpty || session.title.localizedCaseInsensitiveContains(search))
+                && status.includes(session) && pullRequest.includes(session) && archived.includes(session)
+                && (!unreadOnly || session.unread)
+                && created.includes(session.createdAt) && updated.includes(session.updatedAt)
+        }.sorted { lhs, rhs in
+            if lhs.pinned != rhs.pinned { return lhs.pinned }
+            switch sort {
+            case .recent:
+                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+            case .created:
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+            case .title:
+                let order = lhs.title.localizedStandardCompare(rhs.title)
+                if order != .orderedSame { return order == .orderedAscending }
             }
-            .font(.subheadline)
-            .foregroundStyle(Palette.secondary)
-            .padding(12)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+            return lhs.id < rhs.id
+        }
+    }
+    private var groups: [SessionSection] {
+        let rows = filtered
+        switch grouping {
+        case .none: return [SessionSection(id: "all", title: "Sessions", symbol: "clock", sessions: rows)]
+        case .project:
+            var sections = model.workspace.projects.map { project in
+                SessionSection(id: project.id, title: project.name, symbol: "folder", sessions: rows.filter { $0.projectID == project.id })
+            }
+            let known = Set(model.workspace.projects.map(\.id))
+            sections.append(SessionSection(id: "unassigned", title: "Other sessions", symbol: "bubble.left",
+                                           sessions: rows.filter { $0.projectID.map { !known.contains($0) } ?? true }))
+            return sections.filter { !$0.sessions.isEmpty }
+        case .host:
+            var sections = model.workspace.hosts.map { host in
+                SessionSection(id: host.id, title: host.name, symbol: "desktopcomputer", sessions: rows.filter { $0.hostID == host.id })
+            }
+            let known = Set(model.workspace.hosts.map(\.id))
+            sections.append(SessionSection(id: "other-hosts", title: "Other hosts", symbol: "desktopcomputer", sessions: rows.filter { !known.contains($0.hostID) }))
+            return sections.filter { !$0.sessions.isEmpty }
+        case .status:
+            return [SessionSection(id: "working", title: "Working", symbol: "circle.dotted", sessions: rows.filter(\.working)),
+                    SessionSection(id: "idle", title: "Idle", symbol: "circle", sessions: rows.filter { !$0.working })]
+                .filter { !$0.sessions.isEmpty }
+        }
+    }
+    private var hasFilters: Bool {
+        status != .all || pullRequest != .all || archived != .active || unreadOnly || created != .any || updated != .any
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header.padding(.top, 12)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(model.workspace.projects) { project in
-                        let rows = filtered.filter { $0.projectID == project.id }
-                        if !rows.isEmpty {
-                            Label(project.name, systemImage: "folder")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Palette.secondary)
-                                .padding(.top, 12).padding(.horizontal, 10)
-                            ForEach(rows) { session in sessionRow(session) }
-                        }
-                    }
-                    let loose = filtered.filter { value in !model.workspace.projects.contains { $0.id == value.projectID } }
-                    if !loose.isEmpty {
-                        Text("Recent").font(.subheadline).foregroundStyle(Palette.secondary).padding(10)
-                        ForEach(loose) { session in sessionRow(session) }
+                LazyVStack(alignment: .leading, spacing: compact ? 2 : 6) {
+                    ForEach(groups) { section in
+                        Label(section.title, systemImage: section.symbol)
+                            .font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                            .padding(.top, 14).padding(.bottom, 4).padding(.horizontal, 10)
+                        ForEach(section.sessions) { session in sessionRow(session) }
                     }
                     if filtered.isEmpty {
-                        Text(search.isEmpty ? "Your sessions will appear here." : "No matching sessions.")
+                        Text(search.isEmpty && !hasFilters ? "Your sessions will appear here." : "No matching sessions.")
                             .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             HStack {
-                CircleControl(symbol: "slider.horizontal.3", label: "Settings") { model.route = .settings }
+                organizationMenu
                 Spacer()
                 Button { model.newSession() } label: {
                     Label("New session", systemImage: "square.and.pencil")
@@ -61,23 +99,230 @@ struct SessionListView: View {
                 }.buttonStyle(.plain)
             }.padding(.bottom, 12)
         }
-        .padding(.horizontal, 16)
-        .foregroundStyle(Palette.text)
-        .background(Palette.background)
+        .padding(.horizontal, 16).foregroundStyle(Palette.text).background(Palette.background)
+        .accessibilityIdentifier("sessions-list")
+        #if os(iOS)
+        .accessibilityAction(.escape) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { model.sessionsVisible = false }
+        }
+        #endif
+    }
+
+    @ViewBuilder private var header: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 14) {
+                HStack(spacing: 12) {
+                    if searching {
+                        searchField.glassEffect(.regular.interactive(), in: Capsule())
+                            .glassEffectID("session-search", in: searchNamespace)
+                    } else {
+                        searchButton.glassEffect(.regular.interactive(), in: Capsule())
+                            .glassEffectID("session-search", in: searchNamespace)
+                        Spacer(minLength: 0)
+                        accountMenu
+                    }
+                }
+            }
+        } else { standardHeader }
+        #else
+        standardHeader
+        #endif
+    }
+    private var standardHeader: some View {
+        HStack(spacing: 12) {
+            if searching { searchField.nativeGlassControl() }
+            else {
+                searchButton.nativeGlassControl()
+                Spacer(minLength: 0)
+                accountMenu
+            }
+        }
+    }
+    private var searchButton: some View {
+        Button { setSearching(true) } label: {
+            Image(systemName: "magnifyingglass").font(.system(size: 20))
+                .frame(width: 46, height: 46).contentShape(Circle())
+        }.buttonStyle(.plain).accessibilityLabel("Search sessions")
+    }
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary).accessibilityHidden(true)
+            TextField("Search sessions", text: $search)
+                .font(.subheadline).autocorrectionDisabled().focused($searchFocused).submitLabel(.search)
+            Button { setSearching(false) } label: {
+                Image(systemName: "xmark").font(.system(size: 14, weight: .medium)).frame(width: 36, height: 44)
+            }.buttonStyle(.plain).accessibilityLabel("Close search")
+        }
+        .padding(.leading, 16).padding(.trailing, 3).frame(height: 46)
+        .task { searchFocused = true }
+    }
+    private func setSearching(_ value: Bool) {
+        if !value { searchFocused = false; search = "" }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)) { searching = value }
+    }
+    private var accountMenu: some View {
+        Menu {
+            Button { model.route = .settings } label: { Label("Settings", systemImage: "gearshape") }
+            Button {
+                guard !signingOut else { return }
+                signingOut = true
+                Task { await model.disconnect(); signingOut = false }
+            } label: {
+                Label(model.isDemo ? "Exit test mode" : "Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+            }.disabled(signingOut)
+        } label: {
+            avatar.frame(width: 46, height: 46).clipShape(Circle()).nativeGlassControl()
+        }
+        .accessibilityLabel(model.isDemo ? "Test mode account" : "Account")
+        .accessibilityValue(model.workspace.profile?.displayName ?? "")
+    }
+    @ViewBuilder private var avatar: some View {
+        if let value = model.workspace.profile?.avatarURL, let url = URL(string: value),
+           url.scheme == "https", url.user == nil, url.password == nil {
+            AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initials }
+        } else { initials }
+    }
+    private var initials: some View {
+        let name = model.workspace.profile?.displayName ?? (model.isDemo ? "Test mode" : "")
+        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
+        return Group {
+            if letters.isEmpty { Image(systemName: "person.crop.circle").font(.system(size: 24)) }
+            else { Text(letters.uppercased()).font(.subheadline.weight(.semibold)) }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).foregroundStyle(Palette.text)
+    }
+    private var organizationMenu: some View {
+        Menu {
+            Menu {
+                ForEach(SessionSort.allCases) { value in menuChoice(value.rawValue, selected: sort == value) { sort = value } }
+            } label: { Label("Sort", systemImage: "arrow.up.arrow.down") }
+            Menu {
+                Menu {
+                    ForEach(SessionStatusFilter.allCases) { value in menuChoice(value.rawValue, selected: status == value) { status = value } }
+                } label: { Label("Status", systemImage: "circle.dotted") }
+                Menu {
+                    ForEach(SessionPRFilter.allCases) { value in menuChoice(value.rawValue, selected: pullRequest == value) { pullRequest = value } }
+                } label: { Label("Pull request", systemImage: "arrow.triangle.branch") }
+                Menu {
+                    ForEach(SessionArchiveFilter.allCases) { value in menuChoice(value.rawValue, selected: archived == value) { archived = value } }
+                } label: { Label("Archived", systemImage: "archivebox") }
+                Menu {
+                    ForEach(SessionDateFilter.allCases) { value in menuChoice(value.rawValue, selected: created == value) { created = value } }
+                } label: { Label("Created date", systemImage: "calendar") }
+                Menu {
+                    ForEach(SessionDateFilter.allCases) { value in menuChoice(value.rawValue, selected: updated == value) { updated = value } }
+                } label: { Label("Updated date", systemImage: "calendar.badge.clock") }
+                menuChoice("Unread only", selected: unreadOnly) { unreadOnly.toggle() }
+                Divider()
+                Button {
+                    status = .all; pullRequest = .all; archived = .active; created = .any; updated = .any; unreadOnly = false
+                } label: { Label("Reset filters", systemImage: "arrow.counterclockwise") }.disabled(!hasFilters)
+            } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
+            Menu {
+                ForEach(SessionGrouping.allCases) { value in menuChoice(value.rawValue, selected: grouping == value) { grouping = value } }
+            } label: { Label("Group", systemImage: "square.grid.2x2") }
+            Divider()
+            menuChoice("Compact view", selected: compact) { compact.toggle() }
+        } label: {
+            Image(systemName: hasFilters ? "line.3.horizontal.decrease.circle.fill" : "slider.horizontal.3")
+                .font(.system(size: 19)).frame(width: 46, height: 46).nativeGlassControl()
+        }.accessibilityLabel("Session display options").accessibilityValue(hasFilters ? "Filters active" : "")
+    }
+    private func menuChoice(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if selected { Label(title, systemImage: "checkmark") }
+            else { Text(title) }
+        }
     }
     private func sessionRow(_ session: Session) -> some View {
         Button { Task { await model.open(session.id) } } label: {
             HStack(spacing: 10) {
-                if session.working { ActivityGlyph() }
-                else { Circle().fill(session.unread ? Palette.text : Palette.secondary.opacity(0.4)).frame(width: 5, height: 5) }
-                Text(session.title).font(.body).lineLimit(2).multilineTextAlignment(.leading)
+                Group {
+                    if session.working { ActivityGlyph() }
+                    else { Circle().fill(session.unread ? Palette.text : Palette.secondary.opacity(0.4)).frame(width: 5, height: 5) }
+                }
+                .frame(width: 20, height: 20).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(session.title).font(.body).lineLimit(compact ? 1 : 2)
+                    if !compact, !session.preview.isEmpty {
+                        Text(session.preview).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                    }
+                }.multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
+                if session.pinned { Image(systemName: "pin.fill").font(.caption).foregroundStyle(Palette.secondary).accessibilityHidden(true) }
             }
-            .padding(.horizontal, 12).padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, compact ? 10 : 13)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(model.selectedSessionID == session.id ? Palette.surface : .clear, in: RoundedRectangle(cornerRadius: 16))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityValue(session.working ? "Agent working" : session.unread ? "Unread" : "")
+        .nativeContextMenu {
+            Button { Task { await model.setPinned(session, pinned: !session.pinned) } } label: {
+                Label(session.pinned ? "Unpin session" : "Pin session", systemImage: session.pinned ? "pin.slash" : "pin")
+            }
+            Button { NativeClipboard.copy(session.title) } label: { Label("Copy title", systemImage: "doc.on.doc") }
+            if let request = session.pullRequest {
+                Button { model.route = .pullRequest(request) } label: { Label("Pull request", systemImage: "arrow.triangle.branch") }
+            }
+            Divider()
+            Button {
+                Task {
+                    if session.archived { await model.unarchive(session) }
+                    else { await model.archive(session) }
+                }
+            } label: { Label(session.archived ? "Unarchive session" : "Archive session", systemImage: "archivebox") }
+        }
+        .accessibilityValue([session.working ? "Agent working" : nil, session.unread ? "Unread" : nil,
+                             session.pinned ? "Pinned" : nil, session.archived ? "Archived" : nil].compactMap { $0 }.joined(separator: ", "))
+    }
+}
+
+private struct SessionSection: Identifiable {
+    var id: String
+    var title: String
+    var symbol: String
+    var sessions: [Session]
+}
+private enum SessionSort: String, CaseIterable, Identifiable {
+    case recent = "Recently updated", created = "Recently created", title = "Title"
+    var id: String { rawValue }
+}
+private enum SessionGrouping: String, CaseIterable, Identifiable {
+    case project = "Project", host = "Host", status = "Status", none = "None"
+    var id: String { rawValue }
+}
+private enum SessionStatusFilter: String, CaseIterable, Identifiable {
+    case all = "All statuses", working = "Working", idle = "Idle"
+    var id: String { rawValue }
+    func includes(_ session: Session) -> Bool { self == .all || (self == .working ? session.working : !session.working) }
+}
+private enum SessionArchiveFilter: String, CaseIterable, Identifiable {
+    case active = "Active", archived = "Archived", all = "All sessions"
+    var id: String { rawValue }
+    func includes(_ session: Session) -> Bool { self == .all || (self == .archived ? session.archived : !session.archived) }
+}
+private enum SessionPRFilter: String, CaseIterable, Identifiable {
+    case all = "Any", withPR = "With pull request", withoutPR = "Without pull request"
+    case open = "Open", merged = "Merged", closed = "Closed"
+    var id: String { rawValue }
+    func includes(_ session: Session) -> Bool {
+        switch self {
+        case .all: return true
+        case .withPR: return session.pullRequest != nil
+        case .withoutPR: return session.pullRequest == nil
+        case .open, .merged, .closed: return session.pullRequest?.state.lowercased() == rawValue.lowercased()
+        }
+    }
+}
+private enum SessionDateFilter: String, CaseIterable, Identifiable {
+    case any = "Any time", today = "Today", week = "Last 7 days", month = "Last 30 days"
+    var id: String { rawValue }
+    func includes(_ date: Date) -> Bool {
+        guard self != .any else { return true }
+        let days = self == .today ? 0 : self == .week ? 6 : 29
+        let start = Calendar.current.startOfDay(for: Date())
+        let lower = Calendar.current.date(byAdding: .day, value: -days, to: start) ?? start
+        return date >= lower
     }
 }

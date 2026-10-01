@@ -11,6 +11,13 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:icon="@drawable/app_icon">
+        <provider
+            android:name=".AttachmentFileProvider"
+            android:authorities="${applicationId}.attachments"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/attachment_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -10,6 +10,7 @@ public enum SecondaryRoute: Identifiable {
     case models, projects, settings
     case changes(CapturedTurnChanges)
     case diff(DiffDocument)
+    case pullRequest(PullRequest)
     public var id: String {
         switch self {
         case .models: return "models"
@@ -17,6 +18,7 @@ public enum SecondaryRoute: Identifiable {
         case .settings: return "settings"
         case .changes(let turn): return "changes-" + turn.turnID
         case .diff(let document): return "diff-" + document.id
+        case .pullRequest(let request): return "pull-request-" + request.id
         }
     }
 }
@@ -41,6 +43,8 @@ public enum SecondaryRoute: Identifiable {
     public var fetchingModels = false
     public var answering = false
     public var changesAfterMessage: [String: CapturedTurnChanges] = [:]
+    public var pullRequestsAfterMessage: [String: [PullRequest]] = [:]
+    private var attachmentDrafts: [String: [LocalAttachment]] = [:]
 
     @ObservationIgnored private var client: any ClientService
     @ObservationIgnored private let makeLiveClient: @MainActor () -> any ClientService
@@ -77,12 +81,20 @@ public enum SecondaryRoute: Identifiable {
     public var modelName: String { selectedModel?.name ?? selection.modelID ?? "Choose model" }
     public var working: Bool { state?.working ?? false }
     public var changes: [CapturedTurnChanges] { preferences.changes.filter { $0.sessionID == selectedSessionID } }
+    public var attachments: [LocalAttachment] { attachmentDrafts[selectedSessionID ?? "new"] ?? [] }
+    public var attachmentContext: String { "\(generation):\(selectedSessionID ?? "new"):\(session?.hostID ?? selectedHostID):\(session?.projectID ?? selectedProjectID ?? "")" }
+    public var transcriptText: String { (state?.messages ?? []).map { "\($0.role.capitalized):\n\($0.text)" }.joined(separator: "\n\n") }
+    public var sessionPullRequests: [PullRequest] { preferences.pullRequests.filter { $0.sessionID == selectedSessionID }.map(\.request) }
+    public var unanchoredPullRequests: [PullRequest] {
+        let visible = Set(state?.messages.map(\.id) ?? [])
+        return preferences.pullRequests.filter { $0.sessionID == selectedSessionID && ($0.afterMessageID == nil || !visible.contains($0.afterMessageID!)) }.map(\.request)
+    }
     public var draft: String {
         get { preferences.drafts[selectedSessionID ?? "new"] ?? "" }
         set { setDraft(newValue, for: selectedSessionID ?? "new"); scheduleSave() }
     }
     public var canSend: Bool {
-        signedIn && !busy && !working && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        signedIn && !busy && !working && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
             && !(session?.hostID ?? selectedHostID).isEmpty
             && (selectedSessionID != nil || newSelection.modelID != nil)
     }
@@ -125,6 +137,7 @@ public enum SecondaryRoute: Identifiable {
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
         preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; changesAfterMessage = [:]
+        attachmentDrafts = [:]; pullRequestsAfterMessage = [:]
         newSelection = ModelSelection()
         sessionsVisible = false; isDemo = false; busy = false; answering = false; fetchingModels = false
     }
@@ -141,6 +154,7 @@ public enum SecondaryRoute: Identifiable {
                 resetAccountState()
             }
             workspace = next
+            observePullRequests()
             if selectedHostID.isEmpty { selectedHostID = next.hosts.first(where: { $0.online })?.id ?? next.hosts.first?.id ?? "" }
             if catalog.isEmpty && !fetchingModels { loadModels() }
             restorePreferencesIfNeeded()
@@ -149,6 +163,7 @@ public enum SecondaryRoute: Identifiable {
             sessions[next.id] = next
             if selectedSessionID == next.id {
                 state = next
+                observePullRequests()
                 if previous?.messages.count != next.messages.count || previous?.working != next.working { placeChangeCards() }
             }
             // A turn can finish while its session is closed or the app is suspended.
@@ -166,7 +181,7 @@ public enum SecondaryRoute: Identifiable {
     public func newSession() {
         selectionGeneration += 1
         if let id = selectedSessionID { client.closeSession(id) }
-        selectedSessionID = nil; state = nil; changesAfterMessage = [:]
+        selectedSessionID = nil; state = nil; changesAfterMessage = [:]; pullRequestsAfterMessage = [:]
         if !usesSessionPanel { sessionsVisible = false }
         loadModels()
     }
@@ -179,6 +194,7 @@ public enum SecondaryRoute: Identifiable {
         selectedSessionID = id; state = sessions[id]
         if !usesSessionPanel { sessionsVisible = false }
         placeChangeCards()
+        placePullRequestCards()
         do {
             try await client.openSession(id)
             guard epoch == generation, selectionEpoch == selectionGeneration else { return }
@@ -196,6 +212,7 @@ public enum SecondaryRoute: Identifiable {
         let source = client
         defer { if epoch == generation { busy = false } }
         let text = draft
+        let submittedAttachments = attachments
         let oldDraftKey = selectedSessionID ?? "new"
         do {
             let id: String
@@ -208,23 +225,75 @@ public enum SecondaryRoute: Identifiable {
                 if selectionEpoch == selectionGeneration {
                     setDraft(preferences.drafts[oldDraftKey] ?? text, for: id)
                     setDraft(nil, for: oldDraftKey)
+                    attachmentDrafts[id] = attachmentDrafts.removeValue(forKey: oldDraftKey)
                     selectedSessionID = id
                     state = sessions[id]
                     placeChangeCards()
                 } else {
                     setDraft(text, for: id)
+                    attachmentDrafts[id] = submittedAttachments
+                    removeSubmittedAttachments(submittedAttachments, from: oldDraftKey)
                     if preferences.drafts[oldDraftKey] == text { setDraft(nil, for: oldDraftKey) }
                 }
                 scheduleSave()
                 try await source.openSession(id)
             }
             guard epoch == generation else { return }
-            try await source.send(sessionID: id, text: text)
+            try await source.send(sessionID: id, text: text, attachments: submittedAttachments)
             guard epoch == generation else { return }
             // Clear only the exact draft submitted; a later edit must survive.
             if preferences.drafts[id] == text { setDraft(nil, for: id) }
+            removeSubmittedAttachments(submittedAttachments, from: id)
             scheduleSave()
         } catch { if epoch == generation { self.error = "Message wasn't sent. Your draft is still saved." } }
+    }
+
+    public func addAttachment(_ attachment: LocalAttachment, context: String? = nil) throws {
+        guard context == nil || context == attachmentContext else { throw ClientFailure("The composer changed while the picker was open. Add the attachment again.") }
+        try attachment.validate()
+        guard attachments.reduce(attachment.data.count, { $0 + $1.data.count }) <= LocalAttachment.maximumDraftBytes else { throw ClientFailure("Keep the attachments in one message under 48 MB.") }
+        let pendingBytes = attachmentDrafts.values.reduce(attachment.data.count) { $0 + $1.reduce(0) { $0 + $1.data.count } }
+        guard pendingBytes <= LocalAttachment.maximumPendingBytes else { throw ClientFailure("Send or remove pending attachments in another session before adding more.") }
+        attachmentDrafts[selectedSessionID ?? "new", default: []].append(attachment)
+    }
+    public func removeAttachment(_ id: String) { attachmentDrafts[selectedSessionID ?? "new"]?.removeAll { $0.id == id } }
+    private func removeSubmittedAttachments(_ submitted: [LocalAttachment], from key: String) {
+        let ids = Set(submitted.map(\.id))
+        attachmentDrafts[key]?.removeAll { ids.contains($0.id) }
+    }
+    public func attachmentData(sessionID: String, attachment: RemoteAttachment) async throws -> Data {
+        let epoch = generation
+        let data = try await client.readAttachment(sessionID: sessionID, attachment: attachment)
+        guard epoch == generation else { throw CancellationError() }
+        return data
+    }
+    public func complete(kind: ComposerTokenKind, query: String) async -> [ComposerCompletion] {
+        let epoch = generation, selected = selectionGeneration
+        let host = session?.hostID ?? selectedHostID
+        let provider = selection.providerID
+        let project = session?.projectID ?? selectedProjectID
+        guard !host.isEmpty else { return [] }
+        do {
+            let result = try await client.complete(kind: kind, query: query, hostID: host,
+                sessionID: selectedSessionID, projectID: project, providerID: provider)
+            guard !Task.isCancelled, epoch == generation, selected == selectionGeneration,
+                  host == (session?.hostID ?? selectedHostID), provider == selection.providerID,
+                  project == (session?.projectID ?? selectedProjectID) else { return [] }
+            return result
+        } catch { return [] }
+    }
+    public func setPinned(_ session: Session, pinned: Bool) async {
+        let epoch = generation
+        do { try await client.setPinned(sessionID: session.id, pinned: pinned) }
+        catch { if epoch == generation { self.error = "Couldn't update the pinned session." } }
+    }
+    public func togglePin(_ session: Session) async { await setPinned(session, pinned: !session.pinned) }
+    public func archive(_ session: Session) async { await setArchived(session, archived: true) }
+    public func unarchive(_ session: Session) async { await setArchived(session, archived: false) }
+    private func setArchived(_ session: Session, archived: Bool) async {
+        let epoch = generation
+        do { try await client.setArchived(sessionID: session.id, archived: archived) }
+        catch { if epoch == generation { self.error = "Couldn't update this session's archive status." } }
     }
 
     public func stop() async {
@@ -377,6 +446,31 @@ public enum SecondaryRoute: Identifiable {
         }
     }
 
+    private func observePullRequests() {
+        var changed = false
+        for session in workspace.sessions {
+            guard let request = session.pullRequest else { continue }
+            let anchor = session.id == selectedSessionID ? state?.messages.last?.id : nil
+            if let index = preferences.pullRequests.firstIndex(where: { $0.sessionID == session.id && $0.request.id == request.id }) {
+                if preferences.pullRequests[index].request != request { preferences.pullRequests[index].request = request; changed = true }
+                if preferences.pullRequests[index].afterMessageID == nil, let anchor {
+                    preferences.pullRequests[index].afterMessageID = anchor; changed = true
+                }
+            } else {
+                preferences.pullRequests.append(ObservedPullRequest(sessionID: session.id, afterMessageID: anchor, request: request)); changed = true
+            }
+        }
+        if preferences.pullRequests.count > 256 { preferences.pullRequests.removeFirst(preferences.pullRequests.count - 256) }
+        placePullRequestCards()
+        if changed { scheduleSave() }
+    }
+    private func placePullRequestCards() {
+        pullRequestsAfterMessage = [:]
+        for value in preferences.pullRequests where value.sessionID == selectedSessionID {
+            if let anchor = value.afterMessageID { pullRequestsAfterMessage[anchor, default: []].append(value.request) }
+        }
+    }
+
     private func trimSessionCache() {
         // Reopening asks the peer for a fresh projection. Keep the current view
         // and pending diff captures, without retaining every transcript visited.
@@ -421,11 +515,19 @@ public enum SecondaryRoute: Identifiable {
                 for turn in self.preferences.changes where !merged.changes.contains(where: { $0.sessionID == turn.sessionID && $0.turnID == turn.turnID }) {
                     merged.changes.append(turn)
                 }
+                for observed in self.preferences.pullRequests {
+                    if let index = merged.pullRequests.firstIndex(where: { $0.sessionID == observed.sessionID && $0.request.id == observed.request.id }) {
+                        merged.pullRequests[index].request = observed.request
+                        if merged.pullRequests[index].afterMessageID == nil { merged.pullRequests[index].afterMessageID = observed.afterMessageID }
+                    } else { merged.pullRequests.append(observed) }
+                }
+                if !self.preferences.pullRequests.isEmpty { self.saveAfterRestore = true }
                 self.preferences = merged
                 self.changeSizes.merge(sizes) { current, _ in current }
                 self.loadingPreferences = false
                 self.trimChanges()
                 self.placeChangeCards()
+                self.placePullRequestCards()
                 if self.saveAfterRestore { self.saveAfterRestore = false; self.scheduleSave() }
             } catch {
                 if let self, self.generation == currentGeneration, self.restoredAccount == key {

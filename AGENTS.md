@@ -7,7 +7,12 @@ Swift/Skip. The attributed `native/core` subset is a mobile peer, not an engine.
 
 - Composer is the main view; Sessions is the only phone side drawer.
 - Tablets use a Sessions side panel and centered modals, never drawers.
-- Secondary phone views are bottom drawers. Keep Settings minimal.
+- Secondary phone views are bottom drawers, except full-page Settings.
+  Tablets retain centered modals. Keep Settings minimal.
+- Model modes and effort controls stay inside the model picker.
+- Use native search/account/filter/session menus and native long-press feedback.
+- Local files/photos/camera attachments stay in composer/chat; never send local
+  URIs to the host. Autocomplete uses host commands, skills and project file data.
 - Remote folder browsing exists only in project creation. No terminal,
   general file manager, history browser, or administrative menus.
 - At turn completion show six changed files, then Show all…, and native diffs.

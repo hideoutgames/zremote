@@ -48,6 +48,41 @@ Local extensions use existing host methods:
   truncation flag, and never substitutes the working-tree or branch diff.
 - `transcript_update`: revision-based presentation projection; unchanged message
   bodies remain in the platform cache.
+- `composer_completions`: existing `ListCommands` / `ListSkills` RPCs with the
+  selected provider, session and project. Returned skills keep their canonical
+  `zeron-invoke:` identity, including provider-specific command metadata. File
+  completions use the existing `SearchFiles` and canonical `zeron-file:` links.
+  Unavailable host catalogs show no fabricated live suggestions.
+
+Attachments use the official durable `SendRequest` byte escort and chunked
+upload path (680,000 base64 characters per chunk), with a 24 MB per-file limit.
+The editable client bounds each draft to 48 MB and all pending drafts to 96 MB;
+it rejects additions beyond those limits instead of discarding earlier picks.
+Picker results carry an account/session/project context guard. Binary draft
+data stays in memory until sent and is cleared on sign-out. Device-local URIs
+never cross the service boundary. The Rust projection strips transport trailers
+from visible user text and exposes typed attachment references. Retrieval uses
+the core's attachment cache and only accepts refs present in the open transcript.
+
+Subagent cards come from each tool part's actual `subagent_ref`, lifecycle and
+display tail. A resolved spawn tool does not imply its child has finished.
+Reasoning and raw tool arguments remain excluded from the projection.
+Pin/archive/restore actions use the official peer's replicated session methods;
+created/updated dates and archive/pin flags come from its workspace rows.
+
+The pinned edge authentication response supplies identity/name but no profile
+photo URL. Existing accounts fall back to initials; an optional future photo
+field is accepted only as a real secure URL from that response. No avatar lookup
+service or host modification is introduced.
+
+The host currently supplies one latest PR summary per checkout/branch, with
+provider, number, title, URL, state and base/head refs. It has no PR registration
+event or historical list. The client therefore retains up to 256 distinct
+host-observed summaries per account, updates matching PR states, and anchors a
+new summary to the first transcript position where this client observes it.
+These are local observations, not reconstructed historical registration events.
+All PR metadata remains host-sourced; no GitHub API or transcript URL discovery
+is used.
 
 The current host diff response does not include its turn identifier. The local
 before/after guard detects changes visible to the replica; it cannot prove a
@@ -72,8 +107,10 @@ bundling app resources. Missing license texts fail the resource generation.
 The targeted projection regression is:
 
 ```
-cargo test -p zeron-mobile --lib client_ffi::session::projection_regression_tests::reasoning_does_not_leak_into_visible_answer -- --exact
+cargo test -p zeron-mobile --lib client_ffi::session::projection_regression_tests
 ```
 
 Run it through the repository resource admission runner, with one compiler job.
+The three cases protect reasoning exclusion, attachment trailer projection, and
+subagent lifecycle independence from spawn-tool completion.
 Native application, renderer and device verification remain separate checks.

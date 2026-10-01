@@ -131,8 +131,8 @@ checks the actual adapter against the generated C module and pinned SkipKeychain
 source. It checks types, not linking or platform secure-storage behavior; upstream
 SkipKeychain deliberately throws on this unsupported host platform.
 
-CI runs the two named Swift regression classes and the single Rust transcript
-projection regression. The iOS Compile Check remains a separate manual unsigned
+CI runs the three named Swift regression classes and the three Rust transcript
+projection regressions. The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
 
 The iOS build and archive commands pass `-skipPackagePluginValidation` and

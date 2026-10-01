@@ -19,6 +19,12 @@ are recorded separately from the completed domain checks below.
 - Completed-turn file cards, six-file preview, saved per-file native diffs, and
   PR metadata with browser links supplied by Zeron.
 - Optional blank-Composer background, Settings/Acknowledgements, offline demo.
+- Native expanding session search, profile/account menu, nested sorting/filtering,
+  haptic session/message menus, and full-page phone Settings.
+- Native file/photo/camera import, removable composer attachments and inline chat
+  previews; host-backed command/skill/file suggestions with highlighted references.
+- Left-aligned user messages, selectable agent text and copyable code blocks;
+  inline sub-agent status and observed PR cards with a PR information drawer.
 - Native iOS/Android entry points, pinned Rust subset, license inventory tools,
   a shared local build runner, and adapted manual TestFlight workflow.
 
@@ -34,19 +40,20 @@ device validation. No full suite or coverage sweep was run.
 
 | Check | Result and scope |
 | --- | --- |
-| `CoreBehaviorTests` | Final targeted rerun: all 8 passed with stable inputs after the SkipFuse and bounded transcript-cache changes. Covers presentation rules, model options, auth callback, account storage, demo lifecycle, failed-send draft, and expired-account restore. |
+| `CoreBehaviorTests` | 11 passed with stable inputs. Includes the prior 8 behaviors plus attachment-only send/stale picker handling, pin/archive state, and observed PR anchors/state updates with old-preference migration. |
+| `ChatTextBehaviorTests` | 3 passed with stable inputs: UTF-16 caret replacement, token boundaries/quoted filenames, and byte-preserving code fences including CRLF and unfinished streams. |
 | `UnifiedDiffParserTests` | Final targeted rerun: all 6 passed after correcting Swift exclusivity and CRLF handling. Includes immutable per-file capture and bounded/binary/partial diffs. |
-| Rust projection regression | Exact `reasoning_does_not_leak_into_visible_answer`: 1 passed, 22 filtered; stable inputs. The initial Windows linker startup failure was resolved with LLVM lld. |
+| Rust projection regressions | The 3 named cases in `client_ffi::session::projection_regression_tests` passed, 22 filtered, stable inputs. Covers reasoning exclusion, attachment trailer/metadata separation, and actual running sub-agent status after spawn resolves. |
 | Native Swift adapter | Swift 6 semantic check passed for the real core module, pinned SkipKeychain source, regenerated UniFFI Swift, and C header/module map. Windows uses SkipKeychain's unsupported-platform branch; this does not verify mobile secure storage. |
-| UI/native entry files | 14 handwritten Swift files passed syntax parsing; the changed root/sign-in views and modal back handler were checked again after integration. This does not validate SwiftUI/Skip platform types or runtime behavior. |
+| Changed presentation files | 15 explicitly selected Swift UI files passed syntax parsing after the interaction changes; editor/chat fixes were parsed again after review. This does not validate SwiftUI/Skip platform types or runtime behavior. |
 | Notices | Source and 339-entry Cargo inventory audits passed. Complete Swift and Gradle inventories require platform resolution. |
 | Build/configuration | Bash scripts, workflow/Skip YAML, plist/XML, asset JSON, and owned-source whitespace checks passed. Upstream license text is preserved verbatim. |
 
 The shared runner records local evidence under the machine's ZRemote cache.
-The core-test result is `5732e7cb-2096-4519-a1fb-805576191d07`; parser rerun is
+The Core/ChatText test result is `c409888b-accd-4f35-b17d-0bc1d69f0e8d`; parser rerun is
 `a3607b6b-0376-467b-8c32-006918426a31`; native adapter typecheck is
-`bfe5c12b-31ad-422e-b45b-f7d2d92a3cff`; Rust regression is
-`f3d202b3-c2c3-4f01-a3f6-7aab9007b94e`. The generated ABI was rebuilt from the
+`3984fe39-a0de-4af9-8539-27c9033a2db7`; Rust regression is
+`ab1f5f59-70bf-4e69-92ab-ed1faad6a9a4`. The generated ABI was rebuilt from the
 extended native core, rather than hand-written to match the adapter.
 
 - No iOS or Android application build, emulator/device run, live login, host

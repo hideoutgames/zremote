@@ -13,8 +13,13 @@ revision. An expired or missing artifact fails before emulator startup.
 
 The bounded `scripts/capture-android-demo.py` helper clears only this app's data
 on the isolated emulator and selects **Try test mode**. It captures Composer,
-model picker, Sessions, Settings, a sample conversation, completed-turn file
-summary, all changed files, and a native file diff. Each tap is located using
+model picker, slash-command suggestions, the attachment source menu, Sessions,
+session organization/filter menus, Settings, session actions, PR details, a sample
+conversation, completed-turn file summary, all changed files, and a native file
+diff: fourteen surfaces per layout. It opens menus without changing session
+filters or archive state, and does not launch the camera or select personal files.
+The current helper requires the matching native Composer/session feature build;
+the earlier baseline APK does not contain these controls. Each tap is located using
 the current Android accessibility tree. Screenshots are direct ADB PNGs, with
 their observed accessibility trees beside them; no pixels are generated or
 edited. Missing controls fail the affected layout and the workflow reports that

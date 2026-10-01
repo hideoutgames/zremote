@@ -902,6 +902,11 @@ public protocol CoreClientProtocol: AnyObject, Sendable {
      */
     func closeSession(chatId: String)
 
+    /**
+     * Host-advertised commands/skills with canonical invocation references.
+     */
+    func composerCompletionsJson(deviceId: String, chatId: String?, spaceId: String?, harness: String, kind: String, query: String) async throws  -> String
+
     func connectivity()  -> Connectivity
 
     /**
@@ -1235,6 +1240,25 @@ open func closeSession(chatId: String)  {try! rustCall() {
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
 }
+}
+
+    /**
+     * Host-advertised commands/skills with canonical invocation references.
+     */
+open func composerCompletionsJson(deviceId: String, chatId: String?, spaceId: String?, harness: String, kind: String, query: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_zeron_mobile_fn_method_coreclient_composer_completions_json(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterOptionString.lower(chatId),FfiConverterOptionString.lower(spaceId),FfiConverterString.lower(harness),FfiConverterString.lower(kind),FfiConverterString.lower(query)
+                )
+            },
+            pollFunc: ffi_zeron_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_zeron_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_zeron_mobile_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeCoreError_lift
+        )
 }
 
 open func connectivity() -> Connectivity  {
@@ -4044,14 +4068,16 @@ public struct AuthUser: Equatable, Hashable {
     public var email: String?
     public var firstName: String?
     public var lastName: String?
+    public var profilePictureUrl: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, email: String?, firstName: String?, lastName: String?) {
+    public init(id: String, email: String?, firstName: String?, lastName: String?, profilePictureUrl: String?) {
         self.id = id
         self.email = email
         self.firstName = firstName
         self.lastName = lastName
+        self.profilePictureUrl = profilePictureUrl
     }
 
 
@@ -4073,7 +4099,8 @@ public struct FfiConverterTypeAuthUser: FfiConverterRustBuffer {
                 id: FfiConverterString.read(from: &buf),
                 email: FfiConverterOptionString.read(from: &buf),
                 firstName: FfiConverterOptionString.read(from: &buf),
-                lastName: FfiConverterOptionString.read(from: &buf)
+                lastName: FfiConverterOptionString.read(from: &buf),
+                profilePictureUrl: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -4082,6 +4109,7 @@ public struct FfiConverterTypeAuthUser: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.email, into: &buf)
         FfiConverterOptionString.write(value.firstName, into: &buf)
         FfiConverterOptionString.write(value.lastName, into: &buf)
+        FfiConverterOptionString.write(value.profilePictureUrl, into: &buf)
     }
 }
 
@@ -7653,6 +7681,64 @@ public func FfiConverterTypeStyleDesc_lower(_ value: StyleDesc) -> RustBuffer {
 }
 
 
+public struct SubagentView: Equatable, Hashable {
+    public var id: String
+    public var status: String
+    public var tail: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, status: String, tail: String) {
+        self.id = id
+        self.status = status
+        self.tail = tail
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SubagentView: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSubagentView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SubagentView {
+        return
+            try SubagentView(
+                id: FfiConverterString.read(from: &buf),
+                status: FfiConverterString.read(from: &buf),
+                tail: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SubagentView, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.status, into: &buf)
+        FfiConverterString.write(value.tail, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSubagentView_lift(_ buf: RustBuffer) throws -> SubagentView {
+    return try FfiConverterTypeSubagentView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSubagentView_lower(_ value: SubagentView) -> RustBuffer {
+    return FfiConverterTypeSubagentView.lower(value)
+}
+
+
 /**
  * One positioned piece of text: `text[start..start+len]` (UTF-16) drawn with
  * `style` so its origin sits at (`x`, `baseline`).
@@ -7763,6 +7849,64 @@ public func FfiConverterTypeTextRun_lower(_ value: TextRun) -> RustBuffer {
 }
 
 
+public struct TranscriptAttachmentView: Equatable, Hashable {
+    public var path: String
+    public var name: String
+    public var mimeType: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(path: String, name: String, mimeType: String?) {
+        self.path = path
+        self.name = name
+        self.mimeType = mimeType
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension TranscriptAttachmentView: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscriptAttachmentView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscriptAttachmentView {
+        return
+            try TranscriptAttachmentView(
+                path: FfiConverterString.read(from: &buf),
+                name: FfiConverterString.read(from: &buf),
+                mimeType: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TranscriptAttachmentView, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterOptionString.write(value.mimeType, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscriptAttachmentView_lift(_ buf: RustBuffer) throws -> TranscriptAttachmentView {
+    return try FfiConverterTypeTranscriptAttachmentView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscriptAttachmentView_lower(_ value: TranscriptAttachmentView) -> RustBuffer {
+    return FfiConverterTypeTranscriptAttachmentView.lower(value)
+}
+
+
 /**
  * Portable UI projection. Only changed entry bodies cross FFI; private
  * reasoning and raw tool arguments never enter this presentation surface.
@@ -7773,15 +7917,19 @@ public struct TranscriptMessageView: Equatable, Hashable {
     public var role: String
     public var text: String
     public var streaming: Bool
+    public var attachments: [TranscriptAttachmentView]
+    public var subagents: [SubagentView]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, revision: UInt64, role: String, text: String, streaming: Bool) {
+    public init(id: String, revision: UInt64, role: String, text: String, streaming: Bool, attachments: [TranscriptAttachmentView], subagents: [SubagentView]) {
         self.id = id
         self.revision = revision
         self.role = role
         self.text = text
         self.streaming = streaming
+        self.attachments = attachments
+        self.subagents = subagents
     }
 
 
@@ -7804,7 +7952,9 @@ public struct FfiConverterTypeTranscriptMessageView: FfiConverterRustBuffer {
                 revision: FfiConverterUInt64.read(from: &buf),
                 role: FfiConverterString.read(from: &buf),
                 text: FfiConverterString.read(from: &buf),
-                streaming: FfiConverterBool.read(from: &buf)
+                streaming: FfiConverterBool.read(from: &buf),
+                attachments: FfiConverterSequenceTypeTranscriptAttachmentView.read(from: &buf),
+                subagents: FfiConverterSequenceTypeSubagentView.read(from: &buf)
         )
     }
 
@@ -7814,6 +7964,8 @@ public struct FfiConverterTypeTranscriptMessageView: FfiConverterRustBuffer {
         FfiConverterString.write(value.role, into: &buf)
         FfiConverterString.write(value.text, into: &buf)
         FfiConverterBool.write(value.streaming, into: &buf)
+        FfiConverterSequenceTypeTranscriptAttachmentView.write(value.attachments, into: &buf)
+        FfiConverterSequenceTypeSubagentView.write(value.subagents, into: &buf)
     }
 }
 
@@ -12734,6 +12886,31 @@ fileprivate struct FfiConverterSequenceTypeStyleDesc: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeSubagentView: FfiConverterRustBuffer {
+    typealias SwiftType = [SubagentView]
+
+    public static func write(_ value: [SubagentView], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSubagentView.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SubagentView] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SubagentView]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSubagentView.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeTextRun: FfiConverterRustBuffer {
     typealias SwiftType = [TextRun]
 
@@ -12751,6 +12928,31 @@ fileprivate struct FfiConverterSequenceTypeTextRun: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeTextRun.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTranscriptAttachmentView: FfiConverterRustBuffer {
+    typealias SwiftType = [TranscriptAttachmentView]
+
+    public static func write(_ value: [TranscriptAttachmentView], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTranscriptAttachmentView.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TranscriptAttachmentView] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TranscriptAttachmentView]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTranscriptAttachmentView.read(from: &buf))
         }
         return seq
     }
@@ -13375,6 +13577,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_zeron_mobile_checksum_method_coreclient_close_session() != 11270) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_zeron_mobile_checksum_method_coreclient_composer_completions_json() != 3081) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_zeron_mobile_checksum_method_coreclient_connectivity() != 51284) {
