@@ -25,7 +25,7 @@ ZRemote module's verified `build/jni-libs` folder. SkipBridge's
 requesting native recompilation. A temporary Gradle init script additionally
 disables only the two native Swift build tasks; Kotlin, resource, dex and APK
 tasks stay enabled. Our custom task action does not remove SkipBridge's separate
-dependency guard. See the [pinned upstream implementation](https://github.com/skiptools/skip-bridge/blob/0.17.3/Sources/SkipBridge/Skip/skip.yml#L40).
+dependency guard. See the [resolved SkipBridge 0.18.0 implementation](https://github.com/skiptools/skip-bridge/blob/0.18.0/Sources/SkipBridge/Skip/skip.yml#L40).
 
 The actual build is admitted through `scripts/run-local.py`, uses the shared
 Gradle cache, one worker, a 1536 MB JVM heap, 384 MB metaspace, and the in-process

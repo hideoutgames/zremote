@@ -1,10 +1,11 @@
 # Implementation and verification status
 
-Implementation and verification are tracked in
-[PR #175](https://github.com/hideoutgames/zremote/pull/175) against
-`hideoutgames/zremote:main`. The replacement incorporates main's TestFlight
-safeguards. App compilation and device results are recorded separately from
-the completed domain checks below.
+The replacement was merged into `hideoutgames/zremote:main` in
+[PR #175](https://github.com/hideoutgames/zremote/pull/175). Follow-up platform
+build fixes and Android visual validation are tracked in
+[PR #176](https://github.com/hideoutgames/zremote/pull/176). The replacement
+incorporates main's TestFlight safeguards. App compilation and device results
+are recorded separately from the completed domain checks below.
 
 ## Implemented source
 
