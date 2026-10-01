@@ -4,6 +4,13 @@ Settings → Acknowledgements displays library name, resolved version, source UR
 and full bundled license/notice text. It reads `Acknowledgements.json` for copied
 source and direct package notices, plus the generated `SwiftAcknowledgements.json`,
 `CargoAcknowledgements.json`, and `GradleAcknowledgements.json` inventories.
+The initial Settings list now features the direct runtime/source projects.
+Build-tool entries, transitive dependencies and separate source adaptations
+are available under **Additional open-source licenses**; searching includes the
+complete inventory. This reduces visual clutter without dropping bundled legal
+notices or changing the dependency audit. Original provider-mark provenance is
+recorded in [Provider marks](PROVIDER_MARKS.md).
+
 All inventories use this record shape:
 
 ```json

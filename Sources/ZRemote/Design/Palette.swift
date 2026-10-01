@@ -73,17 +73,17 @@ struct ActivityGlyph: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var illuminated = false
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2.5) {
             ForEach(0..<3) { index in
-                Capsule().frame(width: 3, height: illuminated ? CGFloat(7 + index * 4) : CGFloat(15 - index * 4))
+                Capsule().frame(width: 2, height: 11)
+                    .scaleEffect(x: 1, y: reduceMotion ? CGFloat(0.55 + Double(index) * 0.18) : illuminated ? 1 : 0.4)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.8)
+                        .repeatForever(autoreverses: true).delay(Double(index) * 0.14), value: illuminated)
             }
         }
         .foregroundStyle(Palette.secondary)
-        .frame(width: 20, height: 20)
-        .task {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) { illuminated = true }
-        }
+        .frame(width: 14, height: 16)
+        .task(id: reduceMotion) { illuminated = !reduceMotion }
         .accessibilityLabel("Agent working")
     }
 }

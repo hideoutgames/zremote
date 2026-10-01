@@ -14,7 +14,8 @@ struct SessionListView: View {
     @State private var created: SessionDateFilter = .any
     @State private var updated: SessionDateFilter = .any
     @State private var unreadOnly = false
-    @State private var compact = false
+    @State private var compact = true
+    @State private var now = Date()
     @State private var signingOut = false
     @FocusState private var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,7 +24,11 @@ struct SessionListView: View {
     #endif
 
     private var filtered: [Session] {
-        model.workspace.sessions.filter { session in
+        model.workspace.sessions.map { value in
+            var session = value
+            session.pullRequest = SessionPresentationRules.pullRequest(for: session, observed: model.preferences.pullRequests)
+            return session
+        }.filter { session in
             (search.isEmpty || session.title.localizedCaseInsensitiveContains(search))
                 && status.includes(session) && pullRequest.includes(session) && archived.includes(session)
                 && (!unreadOnly || session.unread)
@@ -62,8 +67,9 @@ struct SessionListView: View {
             sections.append(SessionSection(id: "other-hosts", title: "Other hosts", symbol: "desktopcomputer", sessions: rows.filter { !known.contains($0.hostID) }))
             return sections.filter { !$0.sessions.isEmpty }
         case .status:
-            return [SessionSection(id: "working", title: "Working", symbol: "circle.dotted", sessions: rows.filter(\.working)),
-                    SessionSection(id: "idle", title: "Idle", symbol: "circle", sessions: rows.filter { !$0.working })]
+            return SessionStatusFilter.allCases.filter { $0 != .all }.map { state in
+                SessionSection(id: state.id, title: state.rawValue, symbol: state.symbol, sessions: rows.filter { state.includes($0) })
+            }
                 .filter { !$0.sessions.isEmpty }
         }
     }
@@ -75,7 +81,7 @@ struct SessionListView: View {
         VStack(alignment: .leading, spacing: 16) {
             header.padding(.top, 12)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: compact ? 2 : 6) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(groups) { section in
                         Label(section.title, systemImage: section.symbol)
                             .font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
@@ -101,6 +107,14 @@ struct SessionListView: View {
         }
         .padding(.horizontal, 16).foregroundStyle(Palette.text).background(Palette.background)
         .accessibilityIdentifier("sessions-list")
+        .task(id: compact) {
+            guard !compact else { return }
+            while !Task.isCancelled {
+                now = Date()
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) }
+                catch { return }
+            }
+        }
         #if os(iOS)
         .accessibilityAction(.escape) {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { model.sessionsVisible = false }
@@ -161,19 +175,30 @@ struct SessionListView: View {
         if !value { searchFocused = false; search = "" }
         withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)) { searching = value }
     }
-    private var accountMenu: some View {
+    @ViewBuilder private var accountMenu: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            accountMenuControl.buttonStyle(.glass).buttonBorderShape(.circle)
+                .controlSize(.large)
+        } else { accountMenuControl.nativeGlassControl() }
+        #else
+        accountMenuControl.nativeGlassControl()
+        #endif
+    }
+    private var accountMenuControl: some View {
         Menu {
             Button { model.route = .settings } label: { Label("Settings", systemImage: "gearshape") }
-            Button {
+            Button(role: .destructive) {
                 guard !signingOut else { return }
                 signingOut = true
                 Task { await model.disconnect(); signingOut = false }
             } label: {
-                Label(model.isDemo ? "Exit test mode" : "Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                Text("Sign out")
             }.disabled(signingOut)
         } label: {
-            avatar.frame(width: 46, height: 46).clipShape(Circle()).nativeGlassControl()
+            avatar.frame(width: 30, height: 30).clipShape(Circle())
         }
+        .frame(width: 46, height: 46)
         .accessibilityLabel(model.isDemo ? "Test mode account" : "Account")
         .accessibilityValue(model.workspace.profile?.displayName ?? "")
     }
@@ -236,22 +261,28 @@ struct SessionListView: View {
     }
     private func sessionRow(_ session: Session) -> some View {
         Button { Task { await model.open(session.id) } } label: {
-            HStack(spacing: 10) {
-                Group {
-                    if session.working { ActivityGlyph() }
-                    else { Circle().fill(session.unread ? Palette.text : Palette.secondary.opacity(0.4)).frame(width: 5, height: 5) }
-                }
-                .frame(width: 20, height: 20).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(session.title).font(.body).lineLimit(compact ? 1 : 2)
-                    if !compact, !session.preview.isEmpty {
-                        Text(session.preview).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+            HStack(alignment: .top, spacing: 8) {
+                sessionIndicator(session).frame(width: 16, height: 22).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(Palette.secondary).accessibilityHidden(true)
+                        Text(session.title).font(.body.weight(session.unread ? .medium : .regular)).lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if session.pinned {
+                            Image(systemName: "pin.fill").font(.system(size: 10))
+                                .foregroundStyle(Palette.secondary).accessibilityHidden(true)
+                        }
+                        if let request = session.pullRequest { PullRequestBadge(request: request, compact: true) }
+                    }
+                    if !compact, let detail = SessionPresentationRules.detail(for: session, now: now) {
+                        Text(detail).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                            .padding(.leading, 22)
                     }
                 }.multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
-                if session.pinned { Image(systemName: "pin.fill").font(.caption).foregroundStyle(Palette.secondary).accessibilityHidden(true) }
             }
-            .padding(.horizontal, 12).padding(.vertical, compact ? 10 : 13)
+            .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(model.selectedSessionID == session.id ? Palette.surface : .clear, in: RoundedRectangle(cornerRadius: 16))
             .contentShape(Rectangle())
@@ -273,8 +304,25 @@ struct SessionListView: View {
                 }
             } label: { Label(session.archived ? "Unarchive session" : "Archive session", systemImage: "archivebox") }
         }
-        .accessibilityValue([session.working ? "Agent working" : nil, session.unread ? "Unread" : nil,
+        .accessibilityValue([SessionPresentationRules.indicator(for: session).accessibilityLabel,
                              session.pinned ? "Pinned" : nil, session.archived ? "Archived" : nil].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    @ViewBuilder private func sessionIndicator(_ session: Session) -> some View {
+        let indicator = SessionPresentationRules.indicator(for: session)
+        if indicator == .working { ActivityGlyph() }
+        else {
+            Circle().fill(indicatorColor(indicator)).frame(width: 6, height: 6)
+        }
+    }
+
+    private func indicatorColor(_ indicator: SessionIndicator) -> Color {
+        switch indicator {
+        case .awaitingInput: return .orange
+        case .failed: return Palette.deletion
+        case .unread: return .blue
+        case .idle, .working: return Palette.secondary.opacity(0.5)
+        }
     }
 }
 
@@ -293,9 +341,28 @@ private enum SessionGrouping: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 private enum SessionStatusFilter: String, CaseIterable, Identifiable {
-    case all = "All statuses", working = "Working", idle = "Idle"
+    case all = "All statuses", working = "Working", awaitingInput = "Waiting for response"
+    case unread = "Finished, unread", failed = "Error", idle = "Read, not running"
     var id: String { rawValue }
-    func includes(_ session: Session) -> Bool { self == .all || (self == .working ? session.working : !session.working) }
+    var symbol: String {
+        switch self {
+        case .all, .idle: return "circle"
+        case .working: return "circle.dotted"
+        case .awaitingInput: return "questionmark.bubble"
+        case .unread: return "circle.fill"
+        case .failed: return "exclamationmark.circle"
+        }
+    }
+    func includes(_ session: Session) -> Bool {
+        guard self != .all else { return true }
+        switch SessionPresentationRules.indicator(for: session) {
+        case .working: return self == .working
+        case .awaitingInput: return self == .awaitingInput
+        case .unread: return self == .unread
+        case .failed: return self == .failed
+        case .idle: return self == .idle
+        }
+    }
 }
 private enum SessionArchiveFilter: String, CaseIterable, Identifiable {
     case active = "Active", archived = "Archived", all = "All sessions"
@@ -304,14 +371,15 @@ private enum SessionArchiveFilter: String, CaseIterable, Identifiable {
 }
 private enum SessionPRFilter: String, CaseIterable, Identifiable {
     case all = "Any", withPR = "With pull request", withoutPR = "Without pull request"
-    case open = "Open", merged = "Merged", closed = "Closed"
+    case draft = "Draft", open = "Open", merged = "Merged", closed = "Closed"
     var id: String { rawValue }
     func includes(_ session: Session) -> Bool {
         switch self {
         case .all: return true
         case .withPR: return session.pullRequest != nil
         case .withoutPR: return session.pullRequest == nil
-        case .open, .merged, .closed: return session.pullRequest?.state.lowercased() == rawValue.lowercased()
+        case .draft, .open, .merged, .closed:
+            return session.pullRequest.map { PullRequestPresentationState($0).rawValue == rawValue.lowercased() } ?? false
         }
     }
 }

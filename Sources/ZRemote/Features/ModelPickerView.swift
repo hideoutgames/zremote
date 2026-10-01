@@ -1,63 +1,78 @@
-// Provider tabs, favorites, scoped search and retained-sheet selection adapted
-// from hideoutgames/zeron ModelPicker.swift (d316f79c), copyright 2026 Wing.
-// MIT license is included in Resources/Licenses/Zeron-MIT.txt.
+// Adapted from hideoutgames/zeron's native ModelPicker and ModelCatalog,
+// copyright 2026 Wing. MIT license: Resources/Licenses/Zeron-MIT.txt.
 import SwiftUI
 import ZRemoteCore
 
 struct ModelPickerView: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var provider = ""
     @State private var query = ""
     @State private var applying = false
+    @State private var configurationModel: AgentModel?
+    @FocusState private var searchFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var rowHeight = 44.0
 
     private let favoritesTab = "__favorites__"
     private var lockedProvider: String? {
         model.selectedSessionID == nil ? nil : (model.state?.selection.providerID ?? "")
     }
+    private var selectedModel: AgentModel? {
+        ModelPresentation.resolvedModel(in: model.catalog, selection: model.selection)
+    }
     private var providers: [AgentModel] {
         var seen: Set<String> = []
-        return model.catalog.filter {
+        var values = model.catalog.filter {
             (lockedProvider == nil || lockedProvider == $0.providerID) && seen.insert($0.providerID).inserted
         }
+        let selection = model.selection
+        if !selection.providerID.isEmpty && !seen.contains(selection.providerID), selection.modelID != nil {
+            values.insert(AgentModel(providerID: selection.providerID, providerName: selection.providerID,
+                                     modelID: selection.modelID ?? "", name: selection.modelID ?? ""), at: 0)
+        }
+        return values
     }
-    private var visibleModels: [AgentModel] {
-        ModelCatalogRules.filtered(model.catalog, provider: provider == favoritesTab ? nil : provider,
-                                   query: query, favorites: model.preferences.favorites,
-                                   favoritesOnly: provider == favoritesTab, lockedProvider: lockedProvider)
+    private var visibleModels: [ModelPresentation.Row] {
+        ModelPresentation.rows(model.catalog, provider: provider == favoritesTab ? nil : provider,
+                               query: query, favorites: model.preferences.favorites,
+                               favoritesOnly: provider == favoritesTab, selection: model.selection,
+                               lockedProvider: lockedProvider)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabs
-            search
-            if model.fetchingModels && model.catalog.isEmpty {
-                ProgressView("Loading models…").frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if visibleModels.isEmpty {
-                EmptyState(symbol: provider == favoritesTab ? "star" : "magnifyingglass",
-                           title: provider == favoritesTab && query.isEmpty ? "No favorites yet" : "No models found",
-                           detail: provider == favoritesTab && query.isEmpty
-                               ? "Star a model to keep it close." : "Try another search or check that your host is online.")
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(visibleModels) { choice in modelRow(choice) }
-                        if let choice = model.selectedModel, !choice.efforts.isEmpty || !choice.options.isEmpty {
-                            configuration(choice).padding(.top, 18)
-                        }
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                tabs
+                rule
+                search
+                rule
+                modelList
+                if let choice = selectedModel, !ModelPresentation.configuredInPlace(choice),
+                   !choice.efforts.isEmpty || !choice.options.isEmpty {
+                    rule
+                    ScrollView {
+                        configuration(choice)
+                            .padding(.vertical, 6)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 20)
+                    .frame(height: min(trayHeight(choice), max(rowHeight, geometry.size.height * 0.4)))
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
         }
         .foregroundStyle(Palette.text)
         .background(Palette.background)
         .navigationTitle("Model")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(model.usesSessionPanel ? .visible : .hidden, for: .navigationBar)
+        #endif
         .task {
             if provider.isEmpty {
                 let preferred = lockedProvider ?? model.selection.providerID
-                provider = providers.contains(where: { $0.providerID == preferred }) ? preferred : (providers.first?.providerID ?? preferred)
+                if lockedProvider == nil, !model.preferences.favorites.isEmpty {
+                    provider = favoritesTab
+                } else {
+                    provider = providers.contains(where: { $0.providerID == preferred }) ? preferred : (providers.first?.providerID ?? preferred)
+                }
             }
             if model.catalog.isEmpty && !model.fetchingModels { model.loadModels() }
         }
@@ -65,160 +80,301 @@ struct ModelPickerView: View {
             if provider != favoritesTab && !providers.contains(where: { $0.providerID == provider }) {
                 provider = providers.first?.providerID ?? ""
             }
+            if let current = configurationModel {
+                configurationModel = model.catalog.first { $0.id == current.id }
+            }
         }
+        .onChange(of: model.selection.providerID) { _, value in
+            if lockedProvider != nil { provider = value }
+            if configurationModel?.providerID != value { configurationModel = nil }
+        }
+        .onChange(of: model.selection.modelID) { _, value in
+            if configurationModel?.modelID != value { configurationModel = nil }
+        }
+        #if os(Android)
+        .accessibilityHidden(configurationModel != nil)
+        .overlay {
+            if let choice = configurationModel {
+                ZStack {
+                    Color.black.opacity(0.5).ignoresSafeArea()
+                        .onTapGesture { configurationModel = nil }
+                    configurationCard(choice)
+                        .frame(maxWidth: 340)
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22))
+                        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Palette.line))
+                        .padding(16)
+                        .accessibilityAddTraits(.isModal)
+                    ModalBackHandler { configurationModel = nil }
+                }
+            }
+        }
+        #else
+        .popover(item: $configurationModel) { choice in
+            configurationCard(choice).frame(idealWidth: 320)
+                .presentationCompactAdaptation(.popover)
+        }
+        #endif
     }
+
+    private func configurationCard(_ choice: AgentModel) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 9) {
+                ProviderIcon(providerID: choice.providerID)
+                Text(ModelPresentation.displayName(choice.name)).font(.headline)
+                Spacer(minLength: 8)
+                Button { configurationModel = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close model options")
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+            rule
+            configuration(choice).padding(.vertical, 6)
+        }
+        .foregroundStyle(Palette.text)
+    }
+
+    private var rule: some View { Rectangle().fill(Palette.line).frame(height: 0.5) }
 
     private var tabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                tab("Favorites", id: favoritesTab, symbol: "star")
+            HStack(spacing: 0) {
+                tab("Favorites", id: favoritesTab)
                 ForEach(providers, id: \.providerID) { choice in
                     tab(choice.providerName, id: choice.providerID)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 6)
         }
     }
 
-    private func tab(_ title: String, id: String, symbol: String? = nil) -> some View {
-        Button { provider = id } label: {
-            HStack(spacing: 6) {
-                if let symbol { Image(systemName: symbol) }
-                Text(title)
+    private func tab(_ title: String, id: String) -> some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { provider = id }
+        } label: {
+            VStack(spacing: 0) {
+                Group {
+                    if id == favoritesTab {
+                        Image(systemName: "star.fill").font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(provider == id ? Palette.text : Palette.secondary)
+                    } else {
+                        ProviderIcon(providerID: id, muted: provider != id)
+                    }
+                }
+                .frame(width: 44, height: 42)
+                Capsule().fill(provider == id ? Palette.text : .clear).frame(width: 22, height: 2)
             }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .foregroundStyle(provider == id ? Palette.text : Palette.secondary)
-            .background(provider == id ? Palette.raised : Palette.surface, in: Capsule())
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
         .accessibilityAddTraits(provider == id ? .isSelected : [])
+        .accessibilityIdentifier("model-tab-" + (id == favoritesTab ? "favorites" : id))
     }
 
     private var search: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary).accessibilityHidden(true)
-            TextField("Search models", text: $query)
+            Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Palette.secondary).accessibilityHidden(true)
+            TextField("Search models…", text: $query)
                 .font(.subheadline)
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .submitLabel(.done)
+                .focused($searchFocused)
+                .onSubmit { searchFocused = false }
                 .accessibilityLabel("Search models in selected tab")
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.secondary)
+                        .frame(width: 32, height: 44)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Clear model search")
             }
         }
-        .padding(13)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 18)
+        .frame(minHeight: 44)
     }
 
-    private func modelRow(_ choice: AgentModel) -> some View {
-        let selected = model.selection.providerID == choice.providerID && model.selection.modelID == choice.modelID
-        let favorite = model.preferences.favorites.contains(choice.id)
-        return HStack(spacing: 8) {
-            Button {
-                apply(ModelCatalogRules.selecting(choice, previous: model.selection))
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? Palette.text : Palette.secondary.opacity(0.5))
-                        .font(.system(size: 19))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(choice.name).font(.body.weight(.medium)).foregroundStyle(Palette.text)
-                        if !choice.detail.isEmpty {
-                            Text(choice.detail).font(.caption).foregroundStyle(Palette.secondary)
-                                .lineLimit(2)
+    private var modelList: some View {
+        Group {
+            if model.fetchingModels && model.catalog.isEmpty {
+                ProgressView("Loading models…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if visibleModels.isEmpty {
+                Text(provider == favoritesTab && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                     ? "No starred models yet — tap a row’s star" : "No models found")
+                    .font(.subheadline).foregroundStyle(Palette.secondary)
+                    .multilineTextAlignment(.center).padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollViewReader { scroll in
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(visibleModels) { row in modelRow(row).id(row.id) }
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: provider) { _, _ in
+                        if let selected = selectedModel, visibleModels.contains(where: { $0.id == selected.id }) {
+                            scroll.scrollTo(selected.id, anchor: .center)
+                        } else if let first = visibleModels.first {
+                            scroll.scrollTo(first.id, anchor: .top)
                         }
                     }
-                    Spacer(minLength: 4)
+                    .onChange(of: query) { _, _ in
+                        if let first = visibleModels.first { scroll.scrollTo(first.id, anchor: .top) }
+                    }
                 }
-                .frame(minHeight: 58)
+            }
+        }
+    }
+
+    private func modelRow(_ row: ModelPresentation.Row) -> some View {
+        let choice = row.model
+        let selected = model.selection.providerID == choice.providerID &&
+            (model.selection.modelID == choice.modelID || selectedModel?.id == choice.id)
+        let favorite = model.preferences.favorites.contains(choice.id)
+        let configurable = ModelPresentation.configuredInPlace(choice)
+        return HStack(spacing: 0) {
+            Button {
+                apply(ModelCatalogRules.selecting(choice, previous: model.selection), configure: configurable ? choice : nil)
+            } label: {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(ModelPresentation.displayName(choice.name))
+                            .font(.subheadline.weight(.medium)).lineLimit(1)
+                        if provider == favoritesTab {
+                            HStack(spacing: 5) {
+                                ProviderIcon(providerID: choice.providerID, size: 12, muted: true)
+                                Text(choice.providerName).font(.caption)
+                            }
+                            .foregroundStyle(Palette.secondary)
+                        } else if row.unavailable {
+                            Text("Current model · unavailable on host").font(.caption).foregroundStyle(Palette.secondary)
+                        }
+                    }
+                    Spacer(minLength: 2)
+                    if configurable {
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Palette.secondary)
+                    }
+                }
+                .frame(minHeight: provider == favoritesTab || row.unavailable ? rowHeight + 10 : rowHeight)
+                .padding(.leading, 12)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(applying)
+            .disabled(applying || row.unavailable)
             .accessibilityAddTraits(selected ? .isSelected : [])
-            Button { model.toggleFavorite(choice.id) } label: {
-                Image(systemName: favorite ? "star.fill" : "star")
-                    .foregroundStyle(favorite ? Palette.text : Palette.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+            .accessibilityHint(configurable ? "Shows model settings" : "")
+            if !row.unavailable {
+                Button { model.toggleFavorite(choice.id) } label: {
+                    Image(systemName: favorite ? "star.fill" : "star")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(favorite ? Color.orange : Palette.secondary.opacity(0.8))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(favorite ? "Remove" : "Add") \(choice.name) \(favorite ? "from" : "to") favorites")
+            } else {
+                Image(systemName: "checkmark").font(.caption.weight(.semibold)).frame(width: 44)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(favorite ? "Remove" : "Add") \(choice.name) \(favorite ? "from" : "to") favorites")
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 5)
-        .padding(.vertical, 6)
-        .background(selected ? Palette.surface : Color.clear, in: RoundedRectangle(cornerRadius: 16))
+        .background(selected ? Palette.surface : .clear, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Palette.line : .clear, lineWidth: 1))
+    }
+
+    private func trayHeight(_ choice: AgentModel) -> CGFloat {
+        CGFloat((choice.efforts.isEmpty ? 0 : 1) + choice.options.filter { !$0.choices.isEmpty }.count) * rowHeight + 12
     }
 
     private func configuration(_ choice: AgentModel) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(choice.name).font(.subheadline.weight(.semibold))
-                Text("Model options").font(.caption).foregroundStyle(Palette.secondary)
-            }
+        VStack(spacing: 0) {
+            if let lead = choice.options.first(where: { $0.id == "lead" }) { option(lead, model: choice) }
             if !choice.efforts.isEmpty {
-                optionRow("Reasoning", choices: [ModelChoice(id: "", label: "Default")] + choice.efforts.map {
-                    ModelChoice(id: $0, label: $0.capitalized)
-                }, selected: model.selection.effort ?? "") { value in
-                    var selection = model.selection
+                choiceMenu("Effort", choices: [ModelChoice(id: "", label: "Default")] + choice.efforts.map {
+                    ModelChoice(id: $0, label: ModelPresentation.effortLabel($0))
+                }, selected: model.selection.effort ?? "",
+                value: ModelPresentation.effectiveEffort(model: choice, selection: model.selection).map(ModelPresentation.effortLabel) ?? "Default") { value in
+                    var selection = ModelCatalogRules.selecting(choice, previous: model.selection)
                     selection.effort = value.isEmpty ? nil : value
                     apply(selection)
                 }
             }
-            ForEach(choice.options) { option in
-                if !option.choices.isEmpty {
-                    optionRow(option.label, choices: option.choices,
-                              selected: model.selection.options[option.id] ?? option.defaultChoice ?? "") { value in
-                        var selection = model.selection
-                        selection.options[option.id] = value
-                        apply(selection)
-                    }
-                }
+            ForEach(choice.options.filter { $0.id != "lead" && !$0.choices.isEmpty }) { option in
+                self.option(option, model: choice)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
         .disabled(applying)
     }
 
-    private func optionRow(_ title: String, choices: [ModelChoice], selected: String,
-                           action: @escaping (String) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(choices) { choice in
-                        Button { action(choice.id) } label: {
-                            Text(choice.label).font(.subheadline)
-                                .padding(.horizontal, 12).padding(.vertical, 9)
-                                .foregroundStyle(selected == choice.id ? Palette.background : Palette.text)
-                                .background(selected == choice.id ? Palette.text : Palette.raised, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(title), \(choice.label)")
-                        .accessibilityAddTraits(selected == choice.id ? .isSelected : [])
-                    }
-                }
+    @ViewBuilder
+    private func option(_ option: ModelOption, model choice: AgentModel) -> some View {
+        let selected = option.choices.first(where: { $0.id == model.selection.options[option.id] })?.id ?? option.defaultChoice ?? ""
+        if ModelPresentation.configuredInPlace(choice), option.id != "lead", option.id != "sidekick",
+           option.choices.count == 2, let defaultChoice = option.defaultChoice,
+           option.choices.contains(where: { $0.id == defaultChoice }) {
+            Toggle(option.label, isOn: Binding(get: { selected != defaultChoice }, set: { enabled in
+                let value = enabled ? option.choices.first(where: { $0.id != defaultChoice })?.id : nil
+                var selection = ModelCatalogRules.selecting(choice, previous: model.selection)
+                selection.options[option.id] = value
+                apply(selection)
+            }))
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 18)
+            .frame(minHeight: rowHeight)
+            .tint(Palette.addition)
+        } else {
+            choiceMenu(option.label, choices: option.choices, selected: selected,
+                       value: option.choices.first(where: { $0.id == selected })?.label ?? "Default") { value in
+                var selection = ModelCatalogRules.selecting(choice, previous: model.selection)
+                selection.options[option.id] = value == option.defaultChoice ? nil : value
+                apply(selection)
             }
         }
     }
 
-    private func apply(_ selection: ModelSelection) {
+    private func choiceMenu(_ title: String, choices: [ModelChoice], selected: String, value: String,
+                            action: @escaping (String) -> Void) -> some View {
+        Menu {
+            ForEach(choices) { choice in
+                Button { action(choice.id) } label: {
+                    if selected == choice.id { Label(choice.label, systemImage: "checkmark") }
+                    else { Text(choice.label) }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(title).fontWeight(.medium)
+                Spacer(minLength: 12)
+                Text(value).foregroundStyle(Palette.secondary).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Palette.secondary)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 18)
+            .frame(minHeight: rowHeight)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+    }
+
+    private func apply(_ selection: ModelSelection, configure choice: AgentModel? = nil) {
         guard !applying else { return }
         applying = true
         Task {
             await model.chooseModel(selection)
             applying = false
+            if let choice, model.selection.providerID == choice.providerID,
+               model.selection.modelID == choice.modelID { configurationModel = choice }
         }
     }
 }

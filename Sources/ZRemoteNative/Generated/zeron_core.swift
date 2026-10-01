@@ -883,6 +883,11 @@ public func FfiConverterTypeClientListener_lower(_ value: ClientListener) -> UIn
  */
 public protocol CoreClientProtocol: AnyObject, Sendable {
 
+    /**
+     * Read-only account/plan quotas, using the existing host account RPC.
+     */
+    func agentAccountsJson(deviceId: String) async throws  -> String
+
     func archiveSession(chatId: String) throws
 
     func archivedSessions()  -> [SessionRow]
@@ -1059,6 +1064,11 @@ public protocol CoreClientProtocol: AnyObject, Sendable {
     func sessionRow(chatId: String)  -> SessionRow?
 
     /**
+     * Host-written completion identity and error state, without transcript data.
+     */
+    func sessionSignalsJson() throws  -> String
+
+    /**
      * OS network path: `false` only for a definitive "unsatisfied".
      */
     func setNetworkOnline(online: Bool)
@@ -1185,6 +1195,25 @@ public convenience init(config: CoreConfig, credentials: Credentials, listener: 
 
 
 
+
+    /**
+     * Read-only account/plan quotas, using the existing host account RPC.
+     */
+open func agentAccountsJson(deviceId: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_zeron_mobile_fn_method_coreclient_agent_accounts_json(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId)
+                )
+            },
+            pollFunc: ffi_zeron_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_zeron_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_zeron_mobile_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeCoreError_lift
+        )
+}
 
 open func archiveSession(chatId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -1785,6 +1814,18 @@ open func sessionRow(chatId: String) -> SessionRow?  {
     uniffi_zeron_mobile_fn_method_coreclient_session_row(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
+    )
+})
+}
+
+    /**
+     * Host-written completion identity and error state, without transcript data.
+     */
+open func sessionSignalsJson()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffiCallStatus in
+    uniffi_zeron_mobile_fn_method_coreclient_session_signals_json(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -13564,6 +13605,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_zeron_mobile_checksum_method_clientlistener_on_event() != 55106) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_zeron_mobile_checksum_method_coreclient_agent_accounts_json() != 64434) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_zeron_mobile_checksum_method_coreclient_archive_session() != 22530) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13703,6 +13747,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_zeron_mobile_checksum_method_coreclient_session_row() != 10938) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_zeron_mobile_checksum_method_coreclient_session_signals_json() != 18204) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_zeron_mobile_checksum_method_coreclient_set_network_online() != 33835) {

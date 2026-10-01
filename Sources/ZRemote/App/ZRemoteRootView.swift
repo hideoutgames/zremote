@@ -10,7 +10,11 @@ import UIKit
 
 /* SKIP @bridge */
 public struct ZRemoteRootView: View {
+    #if os(iOS)
+    @State private var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() }, notifications: AppleSessionNotifications.shared)
+    #else
     @State private var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() })
+    #endif
     @Environment(\.scenePhase) private var scenePhase
     public init() {}
 

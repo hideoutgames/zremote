@@ -1,5 +1,59 @@
 # Implementation and verification status
 
+## Model, session and settings refinement
+
+The current branch adapts the native Hideout Games model picker, including
+provider marks, favorites, effort/Fast settings and offline Fusion options.
+Session rows use state indicators, an inline Composer icon and latest observed
+PR badge. Compact View removes only the activity/known completion-age line.
+PR cards and the information drawer share the same state colors and branch
+presentation. The iOS profile menu styles the native control with Liquid Glass.
+
+Background uploads are downsampled, account-local and rendered with the pinned
+core's Dither/ASCII/Halftone/Scanlines effects and contrast guard. Settings exposes
+connected devices, read-only provider accounts and plan usage. The quota banner
+uses the most restrictive valid window of the matching active account; stale,
+errored and ambiguous quota data never drives the warning.
+
+Notifications are intentionally a **temporary mobile-only implementation**, as
+requested. They use device-local alerts for peer-observed questions, successful
+turns and one quota-threshold crossing per session. They do not depend on Zeron's
+APNs service. Reliable delivery while the app is suspended/terminated remains
+out of scope until an independent service exists. Demo never schedules alerts.
+
+iOS chat chrome uses a masked material above the transcript and a black fade
+behind the Composer. The pinned Android UI layer does not implement unclipped
+scrolling, safe-area insets or Gaussian material blur, so Android retains its
+native keyboard layout with a translucent lower fade. The iOS Fusion popover
+uses an in-picker card on Android, where popovers are unsupported.
+
+The host's current PR metadata has no draft flag. Draft presentation is supported
+when supplied, but the app never guesses draft status or queries GitHub itself.
+Historical completion time is shown only when verified completion data exists;
+general message/update timestamps are not relabeled as completion times.
+
+No iOS/Android app build or device validation is being run for this refinement,
+per request. The targeted checks for this branch are recorded separately below;
+the older replacement checks do not validate these changes.
+
+### Refinement verification (2026-10-01)
+
+| Check | Result and scope |
+| --- | --- |
+| Domain behavior | 32 distinct tests passed: `CoreBehaviorTests` (11), `ModelPresentationTests` (5), `SessionPresentationTests` (5), and `UsageNotificationTests` (11). After notification review, only the 11 notification cases were rerun; the final question-identity fix reran its one affected case. All runs recorded stable inputs. |
+| Bundled Rust peer | Two targeted, single-worker core builds and actual UniFFI generation passed with stable inputs. The final generated Swift/C ABI includes account usage and successful-turn signals. No host or relay source changes are required. |
+| Native Swift adapter | Windows semantic check passed with stable inputs against the core module, generated Swift/C bindings, pinned SkipKeychain and `NativeClient`. iOS-only notification delivery is excluded from this check. |
+| Presentation and notifications | Explicitly changed Swift files passed syntax parsing. This does not verify SwiftUI/Skip platform types, iOS notification APIs, visual behavior or device delivery. |
+| Assets and notices | Nine provider assets and their JSON validated; provider images visually inspected. The checked-in-source notices audit, changed documentation links and whitespace checks passed. No dependency inventory changed. |
+
+The shared runner's local result IDs are `06d0eee5-459a-4a9e-9e97-4393e69b140d`
+(initial domain run), `de55571e-8bdc-4542-94a2-7250bc2a3159` (notification rerun),
+`76184c9b-6594-4983-9ed8-fd54a8019821` (final identity regression), and
+`f5622476-3371-4cf3-b449-0a9c4b9a393c` (native adapter). Final Rust build/codegen:
+`d01262b2-4bd8-42d4-83a6-9ec158380dcc`.
+
+### Earlier replacement baseline
+
 The replacement was merged into `hideoutgames/zremote:main` in
 [PR #175](https://github.com/hideoutgames/zremote/pull/175). Follow-up platform
 build fixes and Android visual validation are tracked in

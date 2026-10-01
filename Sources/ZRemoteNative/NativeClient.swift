@@ -21,6 +21,11 @@ import ZRemoteCore
     private var refreshTask: Task<Void, Never>?
     private var dirtySessions: Set<String> = []
     private var workspaceDirty = false
+    private var lastFinished: [String: Date] = [:]
+    private var lastCompleted: [String: String] = [:]
+    private var observedSessionIDs: Set<String> = []
+    private var observedRunningSessionIDs: Set<String> = []
+    private var inputIdentities: [String: InputNotificationIdentity] = [:]
 
     private static let credentialKey = "games.hideout.zremote.native.account.v1"
     private static let deviceKey = "games.hideout.zremote.native.device.v1"
@@ -137,10 +142,21 @@ import ZRemoteCore
                     options: model.options.map { option in
                         ZRemoteCore.ModelOption(id: option.id, label: option.label,
                             choices: option.choices.map { ModelChoice(id: $0.id, label: $0.label) }, defaultChoice: option.defaultChoice)
-                    })
+                    }, defaultEffort: model.defaultReasoning)
             }
         }
         return result
+    }
+
+    public func agentAccounts(hostID: String) async throws -> AgentAccountsSnapshot {
+        let operation = generation
+        let core = try requireClient()
+        guard core.executionDevices().contains(where: { $0.id == hostID }) else { throw NativeClientError.noHost }
+        let json = try await core.agentAccountsJson(deviceId: hostID)
+        try ensureCurrent(operation)
+        guard json.utf8.count <= 1_000_000 else { throw ClientFailure("The host account response is too large.") }
+        let decoded = try JSONDecoder().decode(AccountsEnvelope.self, from: Data(json.utf8))
+        return AgentAccountsSnapshot(accounts: decoded.accounts, warnings: decoded.warnings)
     }
 
     public func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String {
@@ -336,6 +352,7 @@ import ZRemoteCore
         listener = nil
         handles.removeAll()
         projections.removeAll()
+        lastFinished.removeAll(); lastCompleted.removeAll(); observedSessionIDs.removeAll(); observedRunningSessionIDs.removeAll(); inputIdentities.removeAll()
     }
 
     private func receive(_ event: ClientEvent) {
@@ -351,8 +368,11 @@ import ZRemoteCore
             onUpdate?(.authenticationExpired)
         case .workspaceChanged, .connectivityChanged:
             workspaceDirty = true
-        case .sessionChanged(let id, _), .composerChanged(let id, _):
+        case .sessionChanged(let id, _):
             dirtySessions.insert(id)
+        case .composerChanged(let id, _):
+            dirtySessions.insert(id)
+            workspaceDirty = true
         }
         guard refreshTask == nil else { return }
         refreshTask = Task { [weak self] in
@@ -370,9 +390,29 @@ import ZRemoteCore
 
     private func publishWorkspace(_ core: CoreClient) {
         let snapshot = core.workspace()
+        let signalJSON = try? core.sessionSignalsJson()
+        let signalRows = signalJSON.flatMap { try? JSONDecoder().decode([SessionSignal].self, from: Data($0.utf8)) } ?? []
+        let signals = Dictionary(uniqueKeysWithValues: signalRows.map { ($0.sessionID, $0) })
         let ordered = snapshot.front.pinned + snapshot.front.sections.flatMap(\.sessions) + snapshot.front.recent + snapshot.archived
         var seen: Set<String> = []
         let sessions = ordered.filter { seen.insert($0.id).inserted }.map { row in
+            let signal = signals[row.id]
+            if row.hostIndicator == .working || row.hostIndicator == .awaitingInput { observedRunningSessionIDs.insert(row.id) }
+            if let signal {
+                if let turn = signal.completedTurnID, !signal.failed, observedSessionIDs.contains(row.id), lastCompleted[row.id] != turn,
+                   lastCompleted[row.id] != nil || observedRunningSessionIDs.contains(row.id) {
+                    // Only a host-written successful completion advances this.
+                    lastFinished[row.id] = Date(timeIntervalSince1970: Double(signal.updatedAtMs) / 1000)
+                    if row.hostIndicator != .working && row.hostIndicator != .awaitingInput { observedRunningSessionIDs.remove(row.id) }
+                }
+                if signal.failed { observedRunningSessionIDs.remove(row.id) }
+                lastCompleted[row.id] = signal.completedTurnID
+                observedSessionIDs.insert(row.id)
+            }
+            var inputIdentity = inputIdentities[row.id] ?? InputNotificationIdentity()
+            let inputID = inputIdentity.resolve(awaitingInput: row.indicator == .awaitingInput,
+                requestID: core.session(chatId: row.id)?.composer().openInput?.requestId, updatedAtMs: signal?.updatedAtMs)
+            inputIdentities[row.id] = inputIdentity
             let request = row.pullRequest.map { pr in
                 ZRemoteCore.PullRequest(number: pr.number, title: pr.title, url: pr.url,
                     state: pr.state == .open ? "open" : pr.state == .merged ? "merged" : "closed",
@@ -381,7 +421,11 @@ import ZRemoteCore
             return Session(id: row.id, title: row.title, projectID: row.project?.id, hostID: row.deviceId,
                 path: row.cwd ?? "", preview: row.preview ?? "", working: row.indicator == .working,
                 unread: row.unseen, pullRequest: request, pinned: row.pinned, archived: row.archived,
-                createdAt: Date(timeIntervalSince1970: Double(row.createdAtMs) / 1000), updatedAt: Date(timeIntervalSince1970: Double(row.lastActivityMs) / 1000))
+                createdAt: Date(timeIntervalSince1970: Double(row.createdAtMs) / 1000), updatedAt: Date(timeIntervalSince1970: Double(row.lastActivityMs) / 1000),
+                awaitingInput: row.indicator == .awaitingInput, failed: signal?.failed == true || row.indicator == .errored || row.sendState == .failed,
+                activity: row.indicator == .awaitingInput ? "Waiting for response" : row.indicator == .working ? "Working" : "",
+                lastFinishedAt: lastFinished[row.id], completedTurnID: signal?.completedTurnID ?? lastCompleted[row.id],
+                inputRequestID: inputID, providerID: row.harness ?? "", modelID: row.model)
         }
         let connection: ClientConnection
         switch core.connectivity().state {
@@ -392,7 +436,9 @@ import ZRemoteCore
         onUpdate?(.workspace(WorkspaceState(connection: connection,
             hosts: snapshot.devices.filter(\.isExecutionHost).map { Host(id: $0.id, name: $0.name, online: $0.online) },
             projects: snapshot.projects.map { Project(id: $0.id, name: $0.name, path: $0.path, hostID: $0.deviceId) }, sessions: sessions,
-            profile: account?.profile ?? account.map { UserProfile(id: $0.userID, displayName: "Your account") })))
+            profile: account?.profile ?? account.map { UserProfile(id: $0.userID, displayName: "Your account") },
+            devices: snapshot.devices.map { ConnectedDevice(id: $0.id, name: $0.name, platform: $0.platform,
+                online: $0.online, isExecutionHost: $0.isExecutionHost, isCurrent: $0.isSelf) })))
     }
 
     private func publishSession(_ id: String) {
@@ -507,4 +553,16 @@ public enum NativeClientError: LocalizedError {
         case .lockedProvider: "An existing session must keep its agent provider."
         }
     }
+}
+
+private struct AccountsEnvelope: Decodable {
+    var accounts: [AgentAccount]
+    var warnings: [AgentAccountWarning]
+}
+
+private struct SessionSignal: Decodable {
+    var sessionID: String
+    var completedTurnID: String?
+    var updatedAtMs: Int64
+    var failed: Bool
 }

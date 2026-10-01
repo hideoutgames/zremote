@@ -41,6 +41,16 @@ Markdown when a streaming tail changes.
 
 Local extensions use existing host methods:
 
+- `agent_accounts_json`: read-only `ListAgentAccounts { forceUsage: false }` on
+  a verified execution host, decoded as the existing typed account snapshot.
+  Credentials stay on the host; only account labels and quota metadata cross
+  the mobile boundary. Swift checks response size, account generation and host
+  selection before applying it. Polling is bounded while work is active.
+- `session_signals_json`: exposes the already synchronized host completion marker
+  and error state to the presentation adapter. Successful completions must not
+  be inferred from a stale working indicator becoming idle. This modifies only
+  the bundled peer; it adds no host or edge protocol requirement.
+
 - `create_repository`: `CreateRepo { name }`, then project registration. Existing
   folders continue to use `create_project` and `ListFolders`.
 - `latest_turn_diff`: `GetCheckoutDiff { cwd, chatId, mode: "turn" }`. It rejects
