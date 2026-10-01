@@ -44,6 +44,14 @@ the editor and sent messages. User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
 
+Agent questions temporarily replace the Composer with a matching answer card.
+Each question has full-width choices, an optional multiline custom answer, and
+Back/Next navigation that preserves answers. The final Send answer action stays
+disabled until every question is answered. The Composer draft and attachments
+return when the request clears. A locally queued answer shows a compact receipt
+until the peer resolves it; repeated taps and reopening the session cannot send
+it twice. Failed queue attempts keep the answers available to retry.
+
 ## Development
 
 Full app builds require macOS 15+, Xcode 26+, Skip, Android SDK/NDK, Swift 6.1+,

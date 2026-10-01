@@ -1,5 +1,35 @@
 # Implementation and verification status
 
+## Agent question flow
+
+Pending agent input now takes the Composer's place in a rounded, theme-aware
+card with its provider icon. Questions appear one at a time with wrapped,
+full-width choice rows, radio/check indicators, Back/Next, and optional custom
+text. Multiline answers retain their keyboard newline. Answer drafts survive
+question navigation and failed queue attempts; the separate Composer draft and
+attachments are retained. Bounded scrolling keeps long questions usable, with a
+whole-card scroll fallback when the keyboard or large text leaves little room.
+Opening Sessions or another view dismisses question editing.
+
+The final action requires an answer to each question. Single-choice custom text
+replaces the choice; multiple-choice custom text is additive. Blank/duplicate
+choices and malformed question IDs cannot produce invalid answer dictionaries.
+Submission captures the session and complete request schema, rejects duplicate
+sends, and isolates late results after session, schema or account changes.
+An accepted local queue call shows `Answer queued` until the peer changes or
+clears the input. This is not a host-execution acknowledgement; the current peer
+does not expose delivery acknowledgements for this command. No host change is
+required.
+
+Targeted domain checks on 2026-10-01: all six `QuestionAnswerDraftTests` and
+four `QuestionAnswerSubmissionTests` passed, including retry, duplicate sends,
+synchronous question resolution and stale-session/account replies. Shared
+runner result `490c2e7f-927d-4768-96f8-8c3966631879` had stable inputs.
+The three changed/new presentation files passed Swift syntax parsing. This
+does not typecheck SwiftUI/Skip or validate keyboard behavior, scrolling,
+accessibility and appearance on devices. No application build, workflow dispatch
+or distribution was run for this change.
+
 ## Full-window phone drawer and swipe intent
 
 The phone drawer now moves the main page's full-window surface, including its

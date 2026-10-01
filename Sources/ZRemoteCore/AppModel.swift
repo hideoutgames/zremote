@@ -47,10 +47,16 @@ public enum SecondaryRoute: Identifiable {
     public var notificationAuthorization = NotificationAuthorization.notDetermined
     public var notificationError: String?
     public var fetchingModels = false
-    public var answering = false
     public var changesAfterMessage: [String: CapturedTurnChanges] = [:]
     public var pullRequestsAfterMessage: [String: [PullRequest]] = [:]
     private var attachmentDrafts: [String: [LocalAttachment]] = [:]
+    private var answerSubmissions: [String: AnswerSubmission] = [:]
+
+    private struct AnswerSubmission {
+        let input: InputRequest
+        let token: UUID
+        var submitted = false
+    }
 
     @ObservationIgnored private let notifications: any NotificationService
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
@@ -111,6 +117,13 @@ public enum SecondaryRoute: Identifiable {
     public var selectedModel: AgentModel? { catalog.first { $0.providerID == selection.providerID && $0.modelID == selection.modelID } }
     public var modelName: String { selectedModel?.name ?? selection.modelID ?? "Choose model" }
     public var working: Bool { state?.working ?? false }
+    public var answering: Bool { currentAnswerSubmission?.submitted == false }
+    public var answerSubmitted: Bool { currentAnswerSubmission?.submitted == true }
+    private var currentAnswerSubmission: AnswerSubmission? {
+        guard let id = selectedSessionID, state?.id == id,
+              let submission = answerSubmissions[id], state?.input == submission.input else { return nil }
+        return submission
+    }
     public var notificationsSupported: Bool { notifications.supported && !isDemo }
     public var usageWarning: UsageWarning? {
         preferences.usageWarnings.first {
@@ -206,9 +219,9 @@ public enum SecondaryRoute: Identifiable {
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
         preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; changesAfterMessage = [:]
-        attachmentDrafts = [:]; pullRequestsAfterMessage = [:]
+        attachmentDrafts = [:]; pullRequestsAfterMessage = [:]; answerSubmissions = [:]
         newSelection = ModelSelection()
-        sessionsVisible = false; isDemo = false; busy = false; answering = false; fetchingModels = false
+        sessionsVisible = false; isDemo = false; busy = false; fetchingModels = false
     }
 
     private func bindClient() {
@@ -224,6 +237,8 @@ public enum SecondaryRoute: Identifiable {
             }
             let previousWorkspace = workspace
             workspace = next
+            let sessionIDs = Set(next.sessions.map(\.id))
+            answerSubmissions = answerSubmissions.filter { sessionIDs.contains($0.key) }
             var finishedChanged = false
             for index in workspace.sessions.indices {
                 let row = workspace.sessions[index]
@@ -244,6 +259,9 @@ public enum SecondaryRoute: Identifiable {
         case .session(let next):
             let previous = sessions[next.id]
             sessions[next.id] = next
+            if let submission = answerSubmissions[next.id], next.input != submission.input {
+                answerSubmissions[next.id] = nil
+            }
             if selectedSessionID == next.id {
                 state = next
                 observePullRequests()
@@ -649,13 +667,30 @@ public enum SecondaryRoute: Identifiable {
         do { try await client.selectOrganization(id); if epoch == generation { organizations = [] } }
         catch { if epoch == generation { self.error = "Couldn't open this organization." } }
     }
-    public func answer(requestID: String, answers: [String: [String]]) async {
-        guard let id = selectedSessionID, state?.input?.id == requestID, !answering else { return }
-        let epoch = generation
-        answering = true
-        defer { if epoch == generation { answering = false } }
-        do { try await client.respondInput(sessionID: id, requestID: requestID, answers: answers) }
-        catch { if epoch == generation { self.error = "Couldn't send your answer. Please try again." } }
+    @discardableResult
+    public func answer(sessionID: String, input: InputRequest, answers: [String: [String]]) async -> Bool {
+        guard signedIn, !Task.isCancelled, selectedSessionID == sessionID, state?.id == sessionID,
+              state?.input == input, QuestionAnswerDraft.validAnswers(answers, for: input),
+              answerSubmissions[sessionID]?.input != input else { return false }
+        let epoch = generation, selected = selectionGeneration, source = client
+        let token = UUID()
+        answerSubmissions[sessionID] = AnswerSubmission(input: input, token: token)
+        do {
+            try await source.respondInput(sessionID: sessionID, requestID: input.id, answers: answers)
+            guard epoch == generation else { return false }
+            // The peer queues this command before the host resolves its question.
+            // Keep one record per live session until its input changes or clears.
+            if answerSubmissions[sessionID]?.token == token { answerSubmissions[sessionID]?.submitted = true }
+            return true
+        } catch {
+            guard epoch == generation, answerSubmissions[sessionID]?.token == token else { return false }
+            answerSubmissions[sessionID] = nil
+            if selected == selectionGeneration, selectedSessionID == sessionID, state?.id == sessionID,
+               state?.input == input, !Task.isCancelled, !(error is CancellationError) {
+                self.error = "Couldn't send your answer. Please try again."
+            }
+            return false
+        }
     }
     public func setForeground(_ foreground: Bool) {
         self.foreground = foreground
