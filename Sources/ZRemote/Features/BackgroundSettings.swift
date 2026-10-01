@@ -14,7 +14,7 @@ struct BackgroundSettings: View {
     var body: some View {
         Section {
             Toggle("New Composer background", isOn: Binding(
-                get: { model.preferences.backgroundEnabled }, set: model.setBackground
+                get: { model.preferences.backgroundEnabled }, set: { model.setBackground($0) }
             )).tint(Palette.addition)
             if model.preferences.backgroundEnabled {
                 Menu {
@@ -29,7 +29,7 @@ struct BackgroundSettings: View {
                 }.disabled(importing)
                 if model.preferences.backgroundImageData != nil {
                     Picker("Mode", selection: Binding(
-                        get: { model.preferences.backgroundEffect }, set: model.setBackgroundEffect
+                        get: { model.preferences.backgroundEffect }, set: { model.setBackgroundEffect($0) }
                     )) {
                         ForEach(BackgroundMode.allCases) { mode in Text(mode.label).tag(mode.rawValue) }
                     }

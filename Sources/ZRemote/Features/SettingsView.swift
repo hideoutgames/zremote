@@ -15,12 +15,12 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section {
-                Picker("Theme", selection: Binding(get: { model.preferences.theme }, set: model.setTheme)) {
+                Picker("Theme", selection: Binding(get: { model.preferences.theme }, set: { model.setTheme($0) })) {
                     Text("System").tag(AppTheme.system)
                     Text("Light").tag(AppTheme.light)
                     Text("Dark").tag(AppTheme.dark)
                 }
-                Toggle("Haptics", isOn: Binding(get: { model.preferences.hapticsEnabled }, set: model.setHapticsEnabled))
+                Toggle("Haptics", isOn: Binding(get: { model.preferences.hapticsEnabled }, set: { model.setHapticsEnabled($0) }))
             }.listRowBackground(Palette.surface)
             BackgroundSettings(model: model)
             ConnectionSettings(model: model)
