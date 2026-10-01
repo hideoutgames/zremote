@@ -17,9 +17,11 @@ keeping the targeted domain tests independent of platform packages. See Skip's
 Complete app builds need macOS 15+, Xcode 26, Skip 1.9.12, Swift 6.1+, Rust 1.98.1,
 Python 3, Java 21, Gradle 9.2.1, the Android SDK, and the Swift Android SDK.
 Install the Rust iOS/Android targets and `cargo-ndk`; set `ANDROID_NDK_HOME` to
-the NDK used by the Swift Android SDK. Dependencies are pinned in `Package.swift`
-and the Rust lockfile. Preserve generated Swift package resolution when updating
-dependencies; regenerate acknowledgements with the resolved versions.
+the NDK used by the Swift Android SDK. Direct Swift dependencies are pinned in
+`Package.swift`; `Project.xcworkspace/xcshareddata/swiftpm/Package.resolved` also
+locks their transitive dependencies. Rust uses its committed lockfile. Preserve
+generated Swift package resolution when updating dependencies; regenerate
+acknowledgements with the resolved versions.
 
 Skip's conventional Android build invokes a SwiftUI/Xcode prebuild. Installing
 an Android SDK on Windows does not make the full app build supported there.
@@ -175,6 +177,11 @@ visual transformation and offset mapping remain on the Kotlin side, while its
 `ContentModifier` exposes the supported boundary to native Swift. Otherwise
 bridge generation rejects Compose-only types such as `TransformedText`, even
 when the app target is iOS. See [Skip's bridge directives](https://skip.dev/docs/platformcustomization/#skip-comments).
+
+Native notification delegate completion handlers retain the SDK's `@Sendable`
+annotation so the tap handler can finish after routing on the main actor under
+Swift 6 concurrency checking. Keep that annotation when changing these callbacks;
+see [Apple's delegate signature](https://developer.apple.com/documentation/usernotifications/unusernotificationcenterdelegate/usernotificationcenter(_:didreceive:withcompletionhandler:)).
 
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated
