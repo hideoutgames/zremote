@@ -1,0 +1,3053 @@
+[
+  {
+    "id": "cargo:ahash@0.8.12:a24f399b29",
+    "name": "ahash",
+    "version": "0.8.12",
+    "source": "https://github.com/tkaitchuck/ahash",
+    "licenseFiles": [
+      "Cargo-ahash-0.8.12-a24f399b29.txt"
+    ]
+  },
+  {
+    "id": "cargo:aho-corasick@1.1.5:60be9f94af",
+    "name": "aho-corasick",
+    "version": "1.1.5",
+    "source": "https://github.com/BurntSushi/aho-corasick",
+    "licenseFiles": [
+      "Cargo-aho-corasick-1.1.5-60be9f94af.txt"
+    ]
+  },
+  {
+    "id": "cargo:android_system_properties@0.1.6:eb4e2cfcf6",
+    "name": "android_system_properties",
+    "version": "0.1.6",
+    "source": "https://github.com/nical/android_system_properties",
+    "licenseFiles": [
+      "Cargo-android_system_properties-0.1.6-eb4e2cfcf6.txt"
+    ]
+  },
+  {
+    "id": "cargo:anyhow@1.0.104:e212a206ea",
+    "name": "anyhow",
+    "version": "1.0.104",
+    "source": "https://github.com/dtolnay/anyhow",
+    "licenseFiles": [
+      "Cargo-anyhow-1.0.104-e212a206ea.txt"
+    ]
+  },
+  {
+    "id": "cargo:append-only-bytes@0.1.12:09440a2472",
+    "name": "append-only-bytes",
+    "version": "0.1.12",
+    "source": "https://github.com/zxch3n/append-only-bytes",
+    "licenseFiles": [
+      "Cargo-append-only-bytes-0.1.12-09440a2472.txt"
+    ]
+  },
+  {
+    "id": "cargo:arbitrary@1.4.2:78177a3f49",
+    "name": "arbitrary",
+    "version": "1.4.2",
+    "source": "https://github.com/rust-fuzz/arbitrary/",
+    "licenseFiles": [
+      "Cargo-arbitrary-1.4.2-78177a3f49.txt"
+    ]
+  },
+  {
+    "id": "cargo:arrayvec@0.7.8:50eb1756be",
+    "name": "arrayvec",
+    "version": "0.7.8",
+    "source": "https://github.com/bluss/arrayvec",
+    "licenseFiles": [
+      "Cargo-arrayvec-0.7.8-50eb1756be.txt"
+    ]
+  },
+  {
+    "id": "cargo:arref@0.1.0:175a8d89cf",
+    "name": "arref",
+    "version": "0.1.0",
+    "source": "https://github.com/zxch3n/arref",
+    "licenseFiles": [
+      "Cargo-arref-0.1.0-175a8d89cf.txt"
+    ]
+  },
+  {
+    "id": "cargo:askama@0.16.1:3c7741d276",
+    "name": "askama",
+    "version": "0.16.1",
+    "source": "https://github.com/askama-rs/askama",
+    "licenseFiles": [
+      "Cargo-askama-0.16.1-3c7741d276.txt"
+    ]
+  },
+  {
+    "id": "cargo:askama_derive@0.16.1:c48fa60217",
+    "name": "askama_derive",
+    "version": "0.16.1",
+    "source": "https://github.com/askama-rs/askama",
+    "licenseFiles": [
+      "Cargo-askama_derive-0.16.1-c48fa60217.txt"
+    ]
+  },
+  {
+    "id": "cargo:askama_macros@0.16.1:6fbf95cf49",
+    "name": "askama_macros",
+    "version": "0.16.1",
+    "source": "https://github.com/askama-rs/askama",
+    "licenseFiles": [
+      "Cargo-askama_macros-0.16.1-6fbf95cf49.txt"
+    ]
+  },
+  {
+    "id": "cargo:askama_parser@0.16.1:0a216d55bb",
+    "name": "askama_parser",
+    "version": "0.16.1",
+    "source": "https://github.com/askama-rs/askama",
+    "licenseFiles": [
+      "Cargo-askama_parser-0.16.1-0a216d55bb.txt"
+    ]
+  },
+  {
+    "id": "cargo:async-trait@0.1.92:8f6b90482a",
+    "name": "async-trait",
+    "version": "0.1.92",
+    "source": "https://github.com/dtolnay/async-trait",
+    "licenseFiles": [
+      "Cargo-async-trait-0.1.92-8f6b90482a.txt"
+    ]
+  },
+  {
+    "id": "cargo:atomic-waker@1.1.2:d5a92443c3",
+    "name": "atomic-waker",
+    "version": "1.1.2",
+    "source": "https://github.com/smol-rs/atomic-waker",
+    "licenseFiles": [
+      "Cargo-atomic-waker-1.1.2-d5a92443c3.txt"
+    ]
+  },
+  {
+    "id": "cargo:autocfg@1.5.1:677f2a265e",
+    "name": "autocfg",
+    "version": "1.5.1",
+    "source": "https://github.com/cuviper/autocfg",
+    "licenseFiles": [
+      "Cargo-autocfg-1.5.1-677f2a265e.txt"
+    ]
+  },
+  {
+    "id": "cargo:base64@0.22.1:b537913882",
+    "name": "base64",
+    "version": "0.22.1",
+    "source": "https://github.com/marshallpierce/rust-base64",
+    "licenseFiles": [
+      "Cargo-base64-0.22.1-b537913882.txt"
+    ]
+  },
+  {
+    "id": "cargo:basic-toml@0.1.10:9c4a9bbf68",
+    "name": "basic-toml",
+    "version": "0.1.10",
+    "source": "https://github.com/dtolnay/basic-toml",
+    "licenseFiles": [
+      "Cargo-basic-toml-0.1.10-9c4a9bbf68.txt"
+    ]
+  },
+  {
+    "id": "cargo:bitflags@2.13.1:19c25aad9c",
+    "name": "bitflags",
+    "version": "2.13.1",
+    "source": "https://github.com/bitflags/bitflags",
+    "licenseFiles": [
+      "Cargo-bitflags-2.13.1-19c25aad9c.txt"
+    ]
+  },
+  {
+    "id": "cargo:bitmaps@2.1.0:fb3873733c",
+    "name": "bitmaps",
+    "version": "2.1.0",
+    "source": "https://github.com/bodil/bitmaps",
+    "licenseFiles": [
+      "Cargo-bitmaps-2.1.0-fb3873733c.txt"
+    ]
+  },
+  {
+    "id": "cargo:block-buffer@0.10.4:3e86b1e293",
+    "name": "block-buffer",
+    "version": "0.10.4",
+    "source": "https://github.com/RustCrypto/utils",
+    "licenseFiles": [
+      "Cargo-block-buffer-0.10.4-3e86b1e293.txt"
+    ]
+  },
+  {
+    "id": "cargo:bytemuck@1.25.2:cc867d0f13",
+    "name": "bytemuck",
+    "version": "1.25.2",
+    "source": "https://github.com/Lokathor/bytemuck",
+    "licenseFiles": [
+      "Cargo-bytemuck-1.25.2-cc867d0f13.txt"
+    ]
+  },
+  {
+    "id": "cargo:byteorder@1.5.0:a9fe903af9",
+    "name": "byteorder",
+    "version": "1.5.0",
+    "source": "https://github.com/BurntSushi/byteorder",
+    "licenseFiles": [
+      "Cargo-byteorder-1.5.0-a9fe903af9.txt"
+    ]
+  },
+  {
+    "id": "cargo:bytes@1.12.1:b201281971",
+    "name": "bytes",
+    "version": "1.12.1",
+    "source": "https://github.com/tokio-rs/bytes",
+    "licenseFiles": [
+      "Cargo-bytes-1.12.1-b201281971.txt"
+    ]
+  },
+  {
+    "id": "cargo:camino@1.2.6:641e298967",
+    "name": "camino",
+    "version": "1.2.6",
+    "source": "https://github.com/camino-rs/camino",
+    "licenseFiles": [
+      "Cargo-camino-1.2.6-641e298967.txt"
+    ]
+  },
+  {
+    "id": "cargo:cargo-platform@0.3.3:9b72561d2b",
+    "name": "cargo-platform",
+    "version": "0.3.3",
+    "source": "https://github.com/rust-lang/cargo",
+    "licenseFiles": [
+      "Cargo-cargo-platform-0.3.3-9b72561d2b.txt"
+    ]
+  },
+  {
+    "id": "cargo:cargo_metadata@0.23.1:77222828c3",
+    "name": "cargo_metadata",
+    "version": "0.23.1",
+    "source": "https://github.com/oli-obk/cargo_metadata",
+    "licenseFiles": [
+      "Cargo-cargo_metadata-0.23.1-77222828c3.txt"
+    ]
+  },
+  {
+    "id": "cargo:cc@1.2.67:6457ec7f0f",
+    "name": "cc",
+    "version": "1.2.67",
+    "source": "https://github.com/rust-lang/cc-rs",
+    "licenseFiles": [
+      "Cargo-cc-1.2.67-6457ec7f0f.txt"
+    ]
+  },
+  {
+    "id": "cargo:cfg-if@1.0.4:78f3b31ffa",
+    "name": "cfg-if",
+    "version": "1.0.4",
+    "source": "https://github.com/rust-lang/cfg-if",
+    "licenseFiles": [
+      "Cargo-cfg-if-1.0.4-78f3b31ffa.txt"
+    ]
+  },
+  {
+    "id": "cargo:cfg_aliases@0.2.2:4ff9ad7bce",
+    "name": "cfg_aliases",
+    "version": "0.2.2",
+    "source": "https://github.com/katharostech/cfg_aliases",
+    "licenseFiles": [
+      "Cargo-cfg_aliases-0.2.2-4ff9ad7bce.txt"
+    ]
+  },
+  {
+    "id": "cargo:chacha20@0.10.1:2a6943c6c4",
+    "name": "chacha20",
+    "version": "0.10.1",
+    "source": "https://github.com/RustCrypto/stream-ciphers",
+    "licenseFiles": [
+      "Cargo-chacha20-0.10.1-2a6943c6c4.txt"
+    ]
+  },
+  {
+    "id": "cargo:chrono@0.4.45:ca66dbc510",
+    "name": "chrono",
+    "version": "0.4.45",
+    "source": "https://github.com/chronotope/chrono",
+    "licenseFiles": [
+      "Cargo-chrono-0.4.45-ca66dbc510.txt"
+    ]
+  },
+  {
+    "id": "cargo:cobs@0.3.0:98d57248c6",
+    "name": "cobs",
+    "version": "0.3.0",
+    "source": "https://github.com/jamesmunns/cobs.rs",
+    "licenseFiles": [
+      "Cargo-cobs-0.3.0-98d57248c6.txt"
+    ]
+  },
+  {
+    "id": "cargo:core-foundation-sys@0.8.7:4e386e57d3",
+    "name": "core-foundation-sys",
+    "version": "0.8.7",
+    "source": "https://github.com/servo/core-foundation-rs",
+    "licenseFiles": [
+      "Cargo-core-foundation-sys-0.8.7-4e386e57d3.txt"
+    ]
+  },
+  {
+    "id": "cargo:core_maths@0.1.1:7cfe9cb11b",
+    "name": "core_maths",
+    "version": "0.1.1",
+    "source": "https://github.com/robertbastian/core_maths",
+    "licenseFiles": [
+      "Cargo-core_maths-0.1.1-7cfe9cb11b.txt"
+    ]
+  },
+  {
+    "id": "cargo:cpufeatures@0.2.17:eaea14e9c6",
+    "name": "cpufeatures",
+    "version": "0.2.17",
+    "source": "https://github.com/RustCrypto/utils",
+    "licenseFiles": [
+      "Cargo-cpufeatures-0.2.17-eaea14e9c6.txt"
+    ]
+  },
+  {
+    "id": "cargo:cpufeatures@0.3.0:a21618a99a",
+    "name": "cpufeatures",
+    "version": "0.3.0",
+    "source": "https://github.com/RustCrypto/utils",
+    "licenseFiles": [
+      "Cargo-cpufeatures-0.3.0-a21618a99a.txt"
+    ]
+  },
+  {
+    "id": "cargo:crypto-common@0.1.7:3c42b6a2bf",
+    "name": "crypto-common",
+    "version": "0.1.7",
+    "source": "https://github.com/RustCrypto/traits",
+    "licenseFiles": [
+      "Cargo-crypto-common-0.1.7-3c42b6a2bf.txt"
+    ]
+  },
+  {
+    "id": "cargo:darling@0.20.11:b410fa30e6",
+    "name": "darling",
+    "version": "0.20.11",
+    "source": "https://github.com/TedDriggs/darling",
+    "licenseFiles": [
+      "Cargo-darling-0.20.11-b410fa30e6.txt"
+    ]
+  },
+  {
+    "id": "cargo:darling_core@0.20.11:0af0a73b6a",
+    "name": "darling_core",
+    "version": "0.20.11",
+    "source": "https://github.com/TedDriggs/darling",
+    "licenseFiles": [
+      "Cargo-darling_core-0.20.11-0af0a73b6a.txt"
+    ]
+  },
+  {
+    "id": "cargo:darling_macro@0.20.11:ce7ae1cc07",
+    "name": "darling_macro",
+    "version": "0.20.11",
+    "source": "https://github.com/TedDriggs/darling",
+    "licenseFiles": [
+      "Cargo-darling_macro-0.20.11-ce7ae1cc07.txt"
+    ]
+  },
+  {
+    "id": "cargo:data-encoding@2.11.1:081fa05c6f",
+    "name": "data-encoding",
+    "version": "2.11.1",
+    "source": "https://github.com/ia0/data-encoding",
+    "licenseFiles": [
+      "Cargo-data-encoding-2.11.1-081fa05c6f.txt"
+    ]
+  },
+  {
+    "id": "cargo:derive_arbitrary@1.4.2:d1158d38d7",
+    "name": "derive_arbitrary",
+    "version": "1.4.2",
+    "source": "https://github.com/rust-fuzz/arbitrary",
+    "licenseFiles": [
+      "Cargo-derive_arbitrary-1.4.2-d1158d38d7.txt"
+    ]
+  },
+  {
+    "id": "cargo:diff@0.1.13:f9a6f9945e",
+    "name": "diff",
+    "version": "0.1.13",
+    "source": "https://github.com/utkarshkukreti/diff.rs",
+    "licenseFiles": [
+      "Cargo-diff-0.1.13-f9a6f9945e.txt"
+    ]
+  },
+  {
+    "id": "cargo:digest@0.10.7:6fa0205ba3",
+    "name": "digest",
+    "version": "0.10.7",
+    "source": "https://github.com/RustCrypto/traits",
+    "licenseFiles": [
+      "Cargo-digest-0.10.7-6fa0205ba3.txt"
+    ]
+  },
+  {
+    "id": "cargo:displaydoc@0.2.7:7b973e5b0d",
+    "name": "displaydoc",
+    "version": "0.2.7",
+    "source": "https://github.com/yaahc/displaydoc",
+    "licenseFiles": [
+      "Cargo-displaydoc-0.2.7-7b973e5b0d.txt"
+    ]
+  },
+  {
+    "id": "cargo:either@1.17.0:ca323ca208",
+    "name": "either",
+    "version": "1.17.0",
+    "source": "https://github.com/rayon-rs/either",
+    "licenseFiles": [
+      "Cargo-either-1.17.0-ca323ca208.txt"
+    ]
+  },
+  {
+    "id": "cargo:embedded-io@0.4.0:646b917e8d",
+    "name": "embedded-io",
+    "version": "0.4.0",
+    "source": "https://github.com/embassy-rs/embedded-io",
+    "licenseFiles": [
+      "Cargo-embedded-io-0.4.0-646b917e8d.txt"
+    ]
+  },
+  {
+    "id": "cargo:embedded-io@0.6.1:9fb95ec378",
+    "name": "embedded-io",
+    "version": "0.6.1",
+    "source": "https://github.com/rust-embedded/embedded-hal",
+    "licenseFiles": [
+      "Cargo-embedded-io-0.6.1-9fb95ec378.txt"
+    ]
+  },
+  {
+    "id": "cargo:ensure-cov@0.1.0:5dacc7bf09",
+    "name": "ensure-cov",
+    "version": "0.1.0",
+    "source": "https://github.com/zxch3n/ensure-cov",
+    "licenseFiles": [
+      "Cargo-ensure-cov-0.1.0-5dacc7bf09.txt"
+    ]
+  },
+  {
+    "id": "cargo:enum-as-inner@0.5.1:a68fbdd76a",
+    "name": "enum-as-inner",
+    "version": "0.5.1",
+    "source": "https://github.com/bluejekyll/enum-as-inner",
+    "licenseFiles": [
+      "Cargo-enum-as-inner-0.5.1-a68fbdd76a.txt"
+    ]
+  },
+  {
+    "id": "cargo:enum-as-inner@0.6.1:0a865762e5",
+    "name": "enum-as-inner",
+    "version": "0.6.1",
+    "source": "https://github.com/bluejekyll/enum-as-inner",
+    "licenseFiles": [
+      "Cargo-enum-as-inner-0.6.1-0a865762e5.txt"
+    ]
+  },
+  {
+    "id": "cargo:enum_dispatch@0.3.13:c2c0788aa2",
+    "name": "enum_dispatch",
+    "version": "0.3.13",
+    "source": "https://gitlab.com/antonok/enum_dispatch",
+    "licenseFiles": [
+      "Cargo-enum_dispatch-0.3.13-c2c0788aa2.txt"
+    ]
+  },
+  {
+    "id": "cargo:equivalent@1.0.2:cda3abcc85",
+    "name": "equivalent",
+    "version": "1.0.2",
+    "source": "https://github.com/indexmap-rs/equivalent",
+    "licenseFiles": [
+      "Cargo-equivalent-1.0.2-cda3abcc85.txt"
+    ]
+  },
+  {
+    "id": "cargo:errno@0.3.14:9be03e167e",
+    "name": "errno",
+    "version": "0.3.14",
+    "source": "https://github.com/lambda-fairy/rust-errno",
+    "licenseFiles": [
+      "Cargo-errno-0.3.14-9be03e167e.txt"
+    ]
+  },
+  {
+    "id": "cargo:fallible-iterator@0.3.0:03565d9d71",
+    "name": "fallible-iterator",
+    "version": "0.3.0",
+    "source": "https://github.com/sfackler/rust-fallible-iterator",
+    "licenseFiles": [
+      "Cargo-fallible-iterator-0.3.0-03565d9d71.txt"
+    ]
+  },
+  {
+    "id": "cargo:fallible-streaming-iterator@0.1.9:f2fb114b22",
+    "name": "fallible-streaming-iterator",
+    "version": "0.1.9",
+    "source": "https://github.com/sfackler/fallible-streaming-iterator",
+    "licenseFiles": [
+      "Cargo-fallible-streaming-iterator-0.1.9-f2fb114b22.txt"
+    ]
+  },
+  {
+    "id": "cargo:fastrand@2.5.0:079ac70dc9",
+    "name": "fastrand",
+    "version": "2.5.0",
+    "source": "https://github.com/smol-rs/fastrand",
+    "licenseFiles": [
+      "Cargo-fastrand-2.5.0-079ac70dc9.txt"
+    ]
+  },
+  {
+    "id": "cargo:find-msvc-tools@0.1.11:56cca37a59",
+    "name": "find-msvc-tools",
+    "version": "0.1.11",
+    "source": "https://github.com/rust-lang/cc-rs",
+    "licenseFiles": [
+      "Cargo-find-msvc-tools-0.1.11-56cca37a59.txt"
+    ]
+  },
+  {
+    "id": "cargo:fnv@1.0.7:45a2100be5",
+    "name": "fnv",
+    "version": "1.0.7",
+    "source": "https://github.com/servo/rust-fnv",
+    "licenseFiles": [
+      "Cargo-fnv-1.0.7-45a2100be5.txt"
+    ]
+  },
+  {
+    "id": "cargo:form_urlencoded@1.2.2:b068a60837",
+    "name": "form_urlencoded",
+    "version": "1.2.2",
+    "source": "https://github.com/servo/rust-url",
+    "licenseFiles": [
+      "Cargo-form_urlencoded-1.2.2-b068a60837.txt"
+    ]
+  },
+  {
+    "id": "cargo:fs-err@3.3.1:c498d415c5",
+    "name": "fs-err",
+    "version": "3.3.1",
+    "source": "https://github.com/andrewhickman/fs-err",
+    "licenseFiles": [
+      "Cargo-fs-err-3.3.1-c498d415c5.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures@0.3.34:1a89f65f38",
+    "name": "futures",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-0.3.34-1a89f65f38.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-channel@0.3.34:9726b9eed1",
+    "name": "futures-channel",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-channel-0.3.34-9726b9eed1.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-core@0.3.34:a39d559bde",
+    "name": "futures-core",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-core-0.3.34-a39d559bde.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-executor@0.3.34:0edb4e665c",
+    "name": "futures-executor",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-executor-0.3.34-0edb4e665c.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-io@0.3.34:e4fd1efb86",
+    "name": "futures-io",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-io-0.3.34-e4fd1efb86.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-macro@0.3.34:4f336fd956",
+    "name": "futures-macro",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-macro-0.3.34-4f336fd956.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-sink@0.3.34:4ca61977a5",
+    "name": "futures-sink",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-sink-0.3.34-4ca61977a5.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-task@0.3.34:38194b512a",
+    "name": "futures-task",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-task-0.3.34-38194b512a.txt"
+    ]
+  },
+  {
+    "id": "cargo:futures-util@0.3.34:67ee1f9c0a",
+    "name": "futures-util",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/futures-rs",
+    "licenseFiles": [
+      "Cargo-futures-util-0.3.34-67ee1f9c0a.txt"
+    ]
+  },
+  {
+    "id": "cargo:generic-array@0.14.7:2d033e8ab0",
+    "name": "generic-array",
+    "version": "0.14.7",
+    "source": "https://github.com/fizyk20/generic-array.git",
+    "licenseFiles": [
+      "Cargo-generic-array-0.14.7-2d033e8ab0.txt"
+    ]
+  },
+  {
+    "id": "cargo:generic-btree@0.10.7:8759c1c87e",
+    "name": "generic-btree",
+    "version": "0.10.7",
+    "source": "https://github.com/loro-dev/generic-btree",
+    "licenseFiles": [
+      "Cargo-generic-btree-0.10.7-8759c1c87e.txt"
+    ]
+  },
+  {
+    "id": "cargo:getopts@0.2.24:85a651b835",
+    "name": "getopts",
+    "version": "0.2.24",
+    "source": "https://github.com/rust-lang/getopts",
+    "licenseFiles": [
+      "Cargo-getopts-0.2.24-85a651b835.txt"
+    ]
+  },
+  {
+    "id": "cargo:getrandom@0.2.17:89c64cc55a",
+    "name": "getrandom",
+    "version": "0.2.17",
+    "source": "https://github.com/rust-random/getrandom",
+    "licenseFiles": [
+      "Cargo-getrandom-0.2.17-89c64cc55a.txt"
+    ]
+  },
+  {
+    "id": "cargo:getrandom@0.3.4:6a057a03ce",
+    "name": "getrandom",
+    "version": "0.3.4",
+    "source": "https://github.com/rust-random/getrandom",
+    "licenseFiles": [
+      "Cargo-getrandom-0.3.4-6a057a03ce.txt"
+    ]
+  },
+  {
+    "id": "cargo:getrandom@0.4.3:23de426a46",
+    "name": "getrandom",
+    "version": "0.4.3",
+    "source": "https://github.com/rust-random/getrandom",
+    "licenseFiles": [
+      "Cargo-getrandom-0.4.3-23de426a46.txt"
+    ]
+  },
+  {
+    "id": "cargo:glob@0.3.4:553921aeb4",
+    "name": "glob",
+    "version": "0.3.4",
+    "source": "https://github.com/rust-lang/glob",
+    "licenseFiles": [
+      "Cargo-glob-0.3.4-553921aeb4.txt"
+    ]
+  },
+  {
+    "id": "cargo:goblin@0.8.2:74ea38b3c8",
+    "name": "goblin",
+    "version": "0.8.2",
+    "source": "https://github.com/m4b/goblin",
+    "licenseFiles": [
+      "Cargo-goblin-0.8.2-74ea38b3c8.txt"
+    ]
+  },
+  {
+    "id": "cargo:hash32@0.2.1:032d164998",
+    "name": "hash32",
+    "version": "0.2.1",
+    "source": "https://github.com/japaric/hash32",
+    "licenseFiles": [
+      "Cargo-hash32-0.2.1-032d164998.txt"
+    ]
+  },
+  {
+    "id": "cargo:hash32@0.3.1:11d5d46d6b",
+    "name": "hash32",
+    "version": "0.3.1",
+    "source": "https://github.com/japaric/hash32",
+    "licenseFiles": [
+      "Cargo-hash32-0.3.1-11d5d46d6b.txt"
+    ]
+  },
+  {
+    "id": "cargo:hashbrown@0.14.5:f1deb08f34",
+    "name": "hashbrown",
+    "version": "0.14.5",
+    "source": "https://github.com/rust-lang/hashbrown",
+    "licenseFiles": [
+      "Cargo-hashbrown-0.14.5-f1deb08f34.txt"
+    ]
+  },
+  {
+    "id": "cargo:hashbrown@0.15.5:f82a48df7e",
+    "name": "hashbrown",
+    "version": "0.15.5",
+    "source": "https://github.com/rust-lang/hashbrown",
+    "licenseFiles": [
+      "Cargo-hashbrown-0.15.5-f82a48df7e.txt"
+    ]
+  },
+  {
+    "id": "cargo:hashbrown@0.16.1:6e0e0fd0f1",
+    "name": "hashbrown",
+    "version": "0.16.1",
+    "source": "https://github.com/rust-lang/hashbrown",
+    "licenseFiles": [
+      "Cargo-hashbrown-0.16.1-6e0e0fd0f1.txt"
+    ]
+  },
+  {
+    "id": "cargo:hashbrown@0.17.1:cef5219650",
+    "name": "hashbrown",
+    "version": "0.17.1",
+    "source": "https://github.com/rust-lang/hashbrown",
+    "licenseFiles": [
+      "Cargo-hashbrown-0.17.1-cef5219650.txt"
+    ]
+  },
+  {
+    "id": "cargo:hashlink@0.9.1:a5c3da9a89",
+    "name": "hashlink",
+    "version": "0.9.1",
+    "source": "https://github.com/kyren/hashlink",
+    "licenseFiles": [
+      "Cargo-hashlink-0.9.1-a5c3da9a89.txt"
+    ]
+  },
+  {
+    "id": "cargo:heapless@0.7.17:fd3b4a9dff",
+    "name": "heapless",
+    "version": "0.7.17",
+    "source": "https://github.com/japaric/heapless",
+    "licenseFiles": [
+      "Cargo-heapless-0.7.17-fd3b4a9dff.txt"
+    ]
+  },
+  {
+    "id": "cargo:heapless@0.8.0:ce8e18c4c2",
+    "name": "heapless",
+    "version": "0.8.0",
+    "source": "https://github.com/rust-embedded/heapless",
+    "licenseFiles": [
+      "Cargo-heapless-0.8.0-ce8e18c4c2.txt"
+    ]
+  },
+  {
+    "id": "cargo:heapless@0.9.3:2056a8053e",
+    "name": "heapless",
+    "version": "0.9.3",
+    "source": "https://github.com/rust-embedded/heapless",
+    "licenseFiles": [
+      "Cargo-heapless-0.9.3-2056a8053e.txt"
+    ]
+  },
+  {
+    "id": "cargo:heck@0.4.1:e93a579c7a",
+    "name": "heck",
+    "version": "0.4.1",
+    "source": "https://github.com/withoutboats/heck",
+    "licenseFiles": [
+      "Cargo-heck-0.4.1-e93a579c7a.txt"
+    ]
+  },
+  {
+    "id": "cargo:heck@0.5.0:293823aac7",
+    "name": "heck",
+    "version": "0.5.0",
+    "source": "https://github.com/withoutboats/heck",
+    "licenseFiles": [
+      "Cargo-heck-0.5.0-293823aac7.txt"
+    ]
+  },
+  {
+    "id": "cargo:http@1.5.0:a4774e2b6b",
+    "name": "http",
+    "version": "1.5.0",
+    "source": "https://github.com/hyperium/http",
+    "licenseFiles": [
+      "Cargo-http-1.5.0-a4774e2b6b.txt"
+    ]
+  },
+  {
+    "id": "cargo:http-body@1.1.0:a2366dee08",
+    "name": "http-body",
+    "version": "1.1.0",
+    "source": "https://github.com/hyperium/http-body",
+    "licenseFiles": [
+      "Cargo-http-body-1.1.0-a2366dee08.txt"
+    ]
+  },
+  {
+    "id": "cargo:http-body-util@0.1.5:a98a14b06d",
+    "name": "http-body-util",
+    "version": "0.1.5",
+    "source": "https://github.com/hyperium/http-body",
+    "licenseFiles": [
+      "Cargo-http-body-util-0.1.5-a98a14b06d.txt"
+    ]
+  },
+  {
+    "id": "cargo:httparse@1.10.1:460dbbeacf",
+    "name": "httparse",
+    "version": "1.10.1",
+    "source": "https://github.com/seanmonstar/httparse",
+    "licenseFiles": [
+      "Cargo-httparse-1.10.1-460dbbeacf.txt"
+    ]
+  },
+  {
+    "id": "cargo:hyper@1.11.0:e91db68317",
+    "name": "hyper",
+    "version": "1.11.0",
+    "source": "https://github.com/hyperium/hyper",
+    "licenseFiles": [
+      "Cargo-hyper-1.11.0-e91db68317.txt"
+    ]
+  },
+  {
+    "id": "cargo:hyper-rustls@0.27.9:d84d851721",
+    "name": "hyper-rustls",
+    "version": "0.27.9",
+    "source": "https://github.com/rustls/hyper-rustls",
+    "licenseFiles": [
+      "Cargo-hyper-rustls-0.27.9-d84d851721.txt"
+    ]
+  },
+  {
+    "id": "cargo:hyper-util@0.1.20:34bea897f5",
+    "name": "hyper-util",
+    "version": "0.1.20",
+    "source": "https://github.com/hyperium/hyper-util",
+    "licenseFiles": [
+      "Cargo-hyper-util-0.1.20-34bea897f5.txt"
+    ]
+  },
+  {
+    "id": "cargo:iana-time-zone@0.1.65:ae8376ae43",
+    "name": "iana-time-zone",
+    "version": "0.1.65",
+    "source": "https://github.com/strawlab/iana-time-zone",
+    "licenseFiles": [
+      "Cargo-iana-time-zone-0.1.65-ae8376ae43.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_collections@2.3.0:a0560b2591",
+    "name": "icu_collections",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_collections-2.3.0-a0560b2591.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_locale_core@2.3.0:27c996a1d2",
+    "name": "icu_locale_core",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_locale_core-2.3.0-27c996a1d2.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_locale_fallback@2.3.0:c2cf8dec44",
+    "name": "icu_locale_fallback",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_locale_fallback-2.3.0-c2cf8dec44.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_locale_fallback_data@2.3.0:4098462fbd",
+    "name": "icu_locale_fallback_data",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_locale_fallback_data-2.3.0-4098462fbd.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_normalizer@2.3.0:d0c7696330",
+    "name": "icu_normalizer",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_normalizer-2.3.0-d0c7696330.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_normalizer_data@2.3.0:c9f3e4dd8b",
+    "name": "icu_normalizer_data",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_normalizer_data-2.3.0-c9f3e4dd8b.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_properties@2.3.0:66920206de",
+    "name": "icu_properties",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_properties-2.3.0-66920206de.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_properties_data@2.3.0:9ec2312295",
+    "name": "icu_properties_data",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_properties_data-2.3.0-9ec2312295.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_provider@2.3.0:346493f90c",
+    "name": "icu_provider",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_provider-2.3.0-346493f90c.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_segmenter@2.3.0:fd0338e6e6",
+    "name": "icu_segmenter",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_segmenter-2.3.0-fd0338e6e6.txt"
+    ]
+  },
+  {
+    "id": "cargo:icu_segmenter_data@2.3.0:f90c4ba8a0",
+    "name": "icu_segmenter_data",
+    "version": "2.3.0",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-icu_segmenter_data-2.3.0-f90c4ba8a0.txt"
+    ]
+  },
+  {
+    "id": "cargo:ident_case@1.0.1:0ea60894cb",
+    "name": "ident_case",
+    "version": "1.0.1",
+    "source": "https://github.com/TedDriggs/ident_case",
+    "licenseFiles": [
+      "Cargo-ident_case-1.0.1-0ea60894cb.txt"
+    ]
+  },
+  {
+    "id": "cargo:idna@1.1.0:defb26a93e",
+    "name": "idna",
+    "version": "1.1.0",
+    "source": "https://github.com/servo/rust-url/",
+    "licenseFiles": [
+      "Cargo-idna-1.1.0-defb26a93e.txt"
+    ]
+  },
+  {
+    "id": "cargo:idna_adapter@1.2.2:7de0cf52b1",
+    "name": "idna_adapter",
+    "version": "1.2.2",
+    "source": "https://github.com/hsivonen/idna_adapter",
+    "licenseFiles": [
+      "Cargo-idna_adapter-1.2.2-7de0cf52b1.txt"
+    ]
+  },
+  {
+    "id": "cargo:im@15.1.0:56f18ba686",
+    "name": "im",
+    "version": "15.1.0",
+    "source": "https://github.com/bodil/im-rs",
+    "licenseFiles": [
+      "Cargo-im-15.1.0-56f18ba686.txt"
+    ]
+  },
+  {
+    "id": "cargo:indexmap@2.14.0:268a1517a1",
+    "name": "indexmap",
+    "version": "2.14.0",
+    "source": "https://github.com/indexmap-rs/indexmap",
+    "licenseFiles": [
+      "Cargo-indexmap-2.14.0-268a1517a1.txt"
+    ]
+  },
+  {
+    "id": "cargo:ipnet@2.12.1:0d7961d42e",
+    "name": "ipnet",
+    "version": "2.12.1",
+    "source": "https://github.com/krisprice/ipnet",
+    "licenseFiles": [
+      "Cargo-ipnet-2.12.1-0d7961d42e.txt"
+    ]
+  },
+  {
+    "id": "cargo:itertools@0.11.0:2fc2c45c81",
+    "name": "itertools",
+    "version": "0.11.0",
+    "source": "https://github.com/rust-itertools/itertools",
+    "licenseFiles": [
+      "Cargo-itertools-0.11.0-2fc2c45c81.txt"
+    ]
+  },
+  {
+    "id": "cargo:itertools@0.12.1:86c50d9e72",
+    "name": "itertools",
+    "version": "0.12.1",
+    "source": "https://github.com/rust-itertools/itertools",
+    "licenseFiles": [
+      "Cargo-itertools-0.12.1-86c50d9e72.txt"
+    ]
+  },
+  {
+    "id": "cargo:itoa@1.0.18:a7efce8395",
+    "name": "itoa",
+    "version": "1.0.18",
+    "source": "https://github.com/dtolnay/itoa",
+    "licenseFiles": [
+      "Cargo-itoa-1.0.18-a7efce8395.txt"
+    ]
+  },
+  {
+    "id": "cargo:leb128@0.2.7:80dd5fe945",
+    "name": "leb128",
+    "version": "0.2.7",
+    "source": "https://github.com/gimli-rs/leb128",
+    "licenseFiles": [
+      "Cargo-leb128-0.2.7-80dd5fe945.txt"
+    ]
+  },
+  {
+    "id": "cargo:libc@0.2.189:05f7383c08",
+    "name": "libc",
+    "version": "0.2.189",
+    "source": "https://github.com/rust-lang/libc",
+    "licenseFiles": [
+      "Cargo-libc-0.2.189-05f7383c08.txt"
+    ]
+  },
+  {
+    "id": "cargo:libm@0.2.16:213be5dc0f",
+    "name": "libm",
+    "version": "0.2.16",
+    "source": "https://github.com/rust-lang/compiler-builtins",
+    "licenseFiles": [
+      "Cargo-libm-0.2.16-213be5dc0f.txt"
+    ]
+  },
+  {
+    "id": "cargo:libsqlite3-sys@0.30.1:d04e0e9ba8",
+    "name": "libsqlite3-sys",
+    "version": "0.30.1",
+    "source": "https://github.com/rusqlite/rusqlite",
+    "licenseFiles": [
+      "Cargo-libsqlite3-sys-0.30.1-d04e0e9ba8.txt"
+    ]
+  },
+  {
+    "id": "cargo:linux-raw-sys@0.12.1:dcc140bfbb",
+    "name": "linux-raw-sys",
+    "version": "0.12.1",
+    "source": "https://github.com/sunfishcode/linux-raw-sys",
+    "licenseFiles": [
+      "Cargo-linux-raw-sys-0.12.1-dcc140bfbb.txt"
+    ]
+  },
+  {
+    "id": "cargo:litemap@0.8.3:a784dd1239",
+    "name": "litemap",
+    "version": "0.8.3",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-litemap-0.8.3-a784dd1239.txt"
+    ]
+  },
+  {
+    "id": "cargo:lock_api@0.4.14:c7541e14b3",
+    "name": "lock_api",
+    "version": "0.4.14",
+    "source": "https://github.com/Amanieu/parking_lot",
+    "licenseFiles": [
+      "Cargo-lock_api-0.4.14-c7541e14b3.txt"
+    ]
+  },
+  {
+    "id": "cargo:log@0.4.33:22413d6761",
+    "name": "log",
+    "version": "0.4.33",
+    "source": "https://github.com/rust-lang/log",
+    "licenseFiles": [
+      "Cargo-log-0.4.33-22413d6761.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro@1.13.9:0428717d08",
+    "name": "loro",
+    "version": "1.13.9",
+    "source": "https://github.com/loro-dev/loro/",
+    "licenseFiles": [
+      "Cargo-loro-1.13.9-0428717d08.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-common@1.13.1:36d109e518",
+    "name": "loro-common",
+    "version": "1.13.1",
+    "source": "https://github.com/loro-dev/loro",
+    "licenseFiles": [
+      "Cargo-loro-common-1.13.1-36d109e518.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-delta@1.13.0:d3469ef555",
+    "name": "loro-delta",
+    "version": "1.13.0",
+    "source": "https://github.com/loro-dev/loro/",
+    "licenseFiles": [
+      "Cargo-loro-delta-1.13.0-d3469ef555.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-internal@1.13.9:648ded29d7",
+    "name": "loro-internal",
+    "version": "1.13.9",
+    "source": "https://github.com/loro-dev/loro/",
+    "licenseFiles": [
+      "Cargo-loro-internal-1.13.9-648ded29d7.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-kv-store@1.13.9:2bb07b1e85",
+    "name": "loro-kv-store",
+    "version": "1.13.9",
+    "source": "https://github.com/loro-dev/loro/",
+    "licenseFiles": [
+      "Cargo-loro-kv-store-1.13.9-2bb07b1e85.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-protocol@0.3.0:96e6886c0b",
+    "name": "loro-protocol",
+    "version": "0.3.0",
+    "source": "https://github.com/loro-dev/protocol",
+    "licenseFiles": [
+      "Cargo-loro-protocol-0.3.0-96e6886c0b.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-rle@1.6.0:417df52841",
+    "name": "loro-rle",
+    "version": "1.6.0",
+    "source": "https://github.com/loro-dev/loro/",
+    "licenseFiles": [
+      "Cargo-loro-rle-1.6.0-417df52841.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro-thunderdome@0.6.2:1c5de4812a",
+    "name": "loro-thunderdome",
+    "version": "0.6.2",
+    "source": "https://github.com/LPGhatguy/thunderdome",
+    "licenseFiles": [
+      "Cargo-loro-thunderdome-0.6.2-1c5de4812a.txt"
+    ]
+  },
+  {
+    "id": "cargo:loro_fractional_index@1.13.0:b20d676a4d",
+    "name": "loro_fractional_index",
+    "version": "1.13.0",
+    "source": "https://github.com/loro-dev/loro/",
+    "licenseFiles": [
+      "Cargo-loro_fractional_index-1.13.0-b20d676a4d.txt"
+    ]
+  },
+  {
+    "id": "cargo:lru-slab@0.1.2:7bf9095a3a",
+    "name": "lru-slab",
+    "version": "0.1.2",
+    "source": "https://github.com/Ralith/lru-slab",
+    "licenseFiles": [
+      "Cargo-lru-slab-0.1.2-7bf9095a3a.txt"
+    ]
+  },
+  {
+    "id": "cargo:lz4_flex@0.11.6:f82396ff8e",
+    "name": "lz4_flex",
+    "version": "0.11.6",
+    "source": "https://github.com/pseitz/lz4_flex",
+    "licenseFiles": [
+      "Cargo-lz4_flex-0.11.6-f82396ff8e.txt"
+    ]
+  },
+  {
+    "id": "cargo:md5@0.7.0:b937cb6eeb",
+    "name": "md5",
+    "version": "0.7.0",
+    "source": "https://github.com/stainless-steel/md5",
+    "licenseFiles": [
+      "Cargo-md5-0.7.0-b937cb6eeb.txt"
+    ]
+  },
+  {
+    "id": "cargo:memchr@2.8.3:b5a36d97d8",
+    "name": "memchr",
+    "version": "2.8.3",
+    "source": "https://github.com/BurntSushi/memchr",
+    "licenseFiles": [
+      "Cargo-memchr-2.8.3-b5a36d97d8.txt"
+    ]
+  },
+  {
+    "id": "cargo:minimal-lexical@0.2.1:b08a3ee1f2",
+    "name": "minimal-lexical",
+    "version": "0.2.1",
+    "source": "https://github.com/Alexhuszagh/minimal-lexical",
+    "licenseFiles": [
+      "Cargo-minimal-lexical-0.2.1-b08a3ee1f2.txt"
+    ]
+  },
+  {
+    "id": "cargo:mio@1.2.2:7c0ddc1d64",
+    "name": "mio",
+    "version": "1.2.2",
+    "source": "https://github.com/tokio-rs/mio",
+    "licenseFiles": [
+      "Cargo-mio-1.2.2-7c0ddc1d64.txt"
+    ]
+  },
+  {
+    "id": "cargo:nom@7.1.3:daf2e7c5b2",
+    "name": "nom",
+    "version": "7.1.3",
+    "source": "https://github.com/Geal/nom",
+    "licenseFiles": [
+      "Cargo-nom-7.1.3-daf2e7c5b2.txt"
+    ]
+  },
+  {
+    "id": "cargo:nonmax@0.5.5:ac84096f7a",
+    "name": "nonmax",
+    "version": "0.5.5",
+    "source": "https://github.com/LPGhatguy/nonmax",
+    "licenseFiles": [
+      "Cargo-nonmax-0.5.5-ac84096f7a.txt"
+    ]
+  },
+  {
+    "id": "cargo:num@0.4.3:5e8e7d3c44",
+    "name": "num",
+    "version": "0.4.3",
+    "source": "https://github.com/rust-num/num",
+    "licenseFiles": [
+      "Cargo-num-0.4.3-5e8e7d3c44.txt"
+    ]
+  },
+  {
+    "id": "cargo:num-bigint@0.4.8:01ea2ceb3a",
+    "name": "num-bigint",
+    "version": "0.4.8",
+    "source": "https://github.com/rust-num/num-bigint",
+    "licenseFiles": [
+      "Cargo-num-bigint-0.4.8-01ea2ceb3a.txt"
+    ]
+  },
+  {
+    "id": "cargo:num-complex@0.4.6:682f7b15bf",
+    "name": "num-complex",
+    "version": "0.4.6",
+    "source": "https://github.com/rust-num/num-complex",
+    "licenseFiles": [
+      "Cargo-num-complex-0.4.6-682f7b15bf.txt"
+    ]
+  },
+  {
+    "id": "cargo:num-integer@0.1.47:4790e783ec",
+    "name": "num-integer",
+    "version": "0.1.47",
+    "source": "https://github.com/rust-num/num-integer",
+    "licenseFiles": [
+      "Cargo-num-integer-0.1.47-4790e783ec.txt"
+    ]
+  },
+  {
+    "id": "cargo:num-iter@0.1.46:313e1fb5bf",
+    "name": "num-iter",
+    "version": "0.1.46",
+    "source": "https://github.com/rust-num/num-iter",
+    "licenseFiles": [
+      "Cargo-num-iter-0.1.46-313e1fb5bf.txt"
+    ]
+  },
+  {
+    "id": "cargo:num-rational@0.4.2:5c2ef7d77e",
+    "name": "num-rational",
+    "version": "0.4.2",
+    "source": "https://github.com/rust-num/num-rational",
+    "licenseFiles": [
+      "Cargo-num-rational-0.4.2-5c2ef7d77e.txt"
+    ]
+  },
+  {
+    "id": "cargo:num-traits@0.2.19:6725af5d29",
+    "name": "num-traits",
+    "version": "0.2.19",
+    "source": "https://github.com/rust-num/num-traits",
+    "licenseFiles": [
+      "Cargo-num-traits-0.2.19-6725af5d29.txt"
+    ]
+  },
+  {
+    "id": "cargo:once_cell@1.21.4:0911faa758",
+    "name": "once_cell",
+    "version": "1.21.4",
+    "source": "https://github.com/matklad/once_cell",
+    "licenseFiles": [
+      "Cargo-once_cell-1.21.4-0911faa758.txt"
+    ]
+  },
+  {
+    "id": "cargo:parking_lot@0.12.5:3bde0fd8c3",
+    "name": "parking_lot",
+    "version": "0.12.5",
+    "source": "https://github.com/Amanieu/parking_lot",
+    "licenseFiles": [
+      "Cargo-parking_lot-0.12.5-3bde0fd8c3.txt"
+    ]
+  },
+  {
+    "id": "cargo:parking_lot_core@0.9.12:23a0d40829",
+    "name": "parking_lot_core",
+    "version": "0.9.12",
+    "source": "https://github.com/Amanieu/parking_lot",
+    "licenseFiles": [
+      "Cargo-parking_lot_core-0.9.12-23a0d40829.txt"
+    ]
+  },
+  {
+    "id": "cargo:percent-encoding@2.3.2:eba3851d25",
+    "name": "percent-encoding",
+    "version": "2.3.2",
+    "source": "https://github.com/servo/rust-url/",
+    "licenseFiles": [
+      "Cargo-percent-encoding-2.3.2-eba3851d25.txt"
+    ]
+  },
+  {
+    "id": "cargo:pest@2.9.0:08d6e73e5c",
+    "name": "pest",
+    "version": "2.9.0",
+    "source": "https://github.com/pest-parser/pest",
+    "licenseFiles": [
+      "Cargo-pest-2.9.0-08d6e73e5c.txt"
+    ]
+  },
+  {
+    "id": "cargo:pest_derive@2.9.0:2c04080b2c",
+    "name": "pest_derive",
+    "version": "2.9.0",
+    "source": "https://github.com/pest-parser/pest",
+    "licenseFiles": [
+      "Cargo-pest_derive-2.9.0-2c04080b2c.txt"
+    ]
+  },
+  {
+    "id": "cargo:pest_generator@2.9.0:636a91686e",
+    "name": "pest_generator",
+    "version": "2.9.0",
+    "source": "https://github.com/pest-parser/pest",
+    "licenseFiles": [
+      "Cargo-pest_generator-2.9.0-636a91686e.txt"
+    ]
+  },
+  {
+    "id": "cargo:pest_meta@2.9.0:029ef0ccfa",
+    "name": "pest_meta",
+    "version": "2.9.0",
+    "source": "https://github.com/pest-parser/pest",
+    "licenseFiles": [
+      "Cargo-pest_meta-2.9.0-029ef0ccfa.txt"
+    ]
+  },
+  {
+    "id": "cargo:pin-project-lite@0.2.17:9b82b8b871",
+    "name": "pin-project-lite",
+    "version": "0.2.17",
+    "source": "https://github.com/taiki-e/pin-project-lite",
+    "licenseFiles": [
+      "Cargo-pin-project-lite-0.2.17-9b82b8b871.txt"
+    ]
+  },
+  {
+    "id": "cargo:pkg-config@0.3.34:9f6513d834",
+    "name": "pkg-config",
+    "version": "0.3.34",
+    "source": "https://github.com/rust-lang/pkg-config-rs",
+    "licenseFiles": [
+      "Cargo-pkg-config-0.3.34-9f6513d834.txt"
+    ]
+  },
+  {
+    "id": "cargo:plain@0.2.3:1f8197acc8",
+    "name": "plain",
+    "version": "0.2.3",
+    "source": "https://github.com/randomites/plain",
+    "licenseFiles": [
+      "Cargo-plain-0.2.3-1f8197acc8.txt"
+    ]
+  },
+  {
+    "id": "cargo:postcard@1.1.3:c2e2e288cc",
+    "name": "postcard",
+    "version": "1.1.3",
+    "source": "https://github.com/jamesmunns/postcard",
+    "licenseFiles": [
+      "Cargo-postcard-1.1.3-c2e2e288cc.txt"
+    ]
+  },
+  {
+    "id": "cargo:potential_utf@0.1.6:3aa25c9298",
+    "name": "potential_utf",
+    "version": "0.1.6",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-potential_utf-0.1.6-3aa25c9298.txt"
+    ]
+  },
+  {
+    "id": "cargo:ppv-lite86@0.2.21:113b51f426",
+    "name": "ppv-lite86",
+    "version": "0.2.21",
+    "source": "https://github.com/cryptocorrosion/cryptocorrosion",
+    "licenseFiles": [
+      "Cargo-ppv-lite86-0.2.21-113b51f426.txt"
+    ]
+  },
+  {
+    "id": "cargo:pretty_assertions@1.4.1:c42a7c74a4",
+    "name": "pretty_assertions",
+    "version": "1.4.1",
+    "source": "https://github.com/rust-pretty-assertions/rust-pretty-assertions",
+    "licenseFiles": [
+      "Cargo-pretty_assertions-1.4.1-c42a7c74a4.txt"
+    ]
+  },
+  {
+    "id": "cargo:proc-macro2@1.0.107:a1664f6e80",
+    "name": "proc-macro2",
+    "version": "1.0.107",
+    "source": "https://github.com/dtolnay/proc-macro2",
+    "licenseFiles": [
+      "Cargo-proc-macro2-1.0.107-a1664f6e80.txt"
+    ]
+  },
+  {
+    "id": "cargo:pulldown-cmark@0.12.2:06d3fc406b",
+    "name": "pulldown-cmark",
+    "version": "0.12.2",
+    "source": "https://github.com/raphlinus/pulldown-cmark",
+    "licenseFiles": [
+      "Cargo-pulldown-cmark-0.12.2-06d3fc406b.txt"
+    ]
+  },
+  {
+    "id": "cargo:pulldown-cmark-escape@0.11.0:b26fd48812",
+    "name": "pulldown-cmark-escape",
+    "version": "0.11.0",
+    "source": "https://github.com/raphlinus/pulldown-cmark",
+    "licenseFiles": [
+      "Cargo-pulldown-cmark-escape-0.11.0-b26fd48812.txt"
+    ]
+  },
+  {
+    "id": "cargo:quick_cache@0.6.24:a11036bae0",
+    "name": "quick_cache",
+    "version": "0.6.24",
+    "source": "https://github.com/arthurprs/quick-cache",
+    "licenseFiles": [
+      "Cargo-quick_cache-0.6.24-a11036bae0.txt"
+    ]
+  },
+  {
+    "id": "cargo:quinn@0.11.11:5896962d9c",
+    "name": "quinn",
+    "version": "0.11.11",
+    "source": "https://github.com/quinn-rs/quinn",
+    "licenseFiles": [
+      "Cargo-quinn-0.11.11-5896962d9c.txt"
+    ]
+  },
+  {
+    "id": "cargo:quinn-proto@0.11.16:6718dc3f42",
+    "name": "quinn-proto",
+    "version": "0.11.16",
+    "source": "https://github.com/quinn-rs/quinn",
+    "licenseFiles": [
+      "Cargo-quinn-proto-0.11.16-6718dc3f42.txt"
+    ]
+  },
+  {
+    "id": "cargo:quinn-udp@0.5.15:0c1f29d11a",
+    "name": "quinn-udp",
+    "version": "0.5.15",
+    "source": "https://github.com/quinn-rs/quinn",
+    "licenseFiles": [
+      "Cargo-quinn-udp-0.5.15-0c1f29d11a.txt"
+    ]
+  },
+  {
+    "id": "cargo:quote@1.0.47:760aa5b477",
+    "name": "quote",
+    "version": "1.0.47",
+    "source": "https://github.com/dtolnay/quote",
+    "licenseFiles": [
+      "Cargo-quote-1.0.47-760aa5b477.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand@0.10.2:858aa795a5",
+    "name": "rand",
+    "version": "0.10.2",
+    "source": "https://github.com/rust-random/rand",
+    "licenseFiles": [
+      "Cargo-rand-0.10.2-858aa795a5.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand@0.8.7:b64d37197c",
+    "name": "rand",
+    "version": "0.8.7",
+    "source": "https://github.com/rust-random/rand",
+    "licenseFiles": [
+      "Cargo-rand-0.8.7-b64d37197c.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand_chacha@0.3.1:f3fa0495a5",
+    "name": "rand_chacha",
+    "version": "0.3.1",
+    "source": "https://github.com/rust-random/rand",
+    "licenseFiles": [
+      "Cargo-rand_chacha-0.3.1-f3fa0495a5.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand_core@0.10.1:f7a3937e6b",
+    "name": "rand_core",
+    "version": "0.10.1",
+    "source": "https://github.com/rust-random/rand_core",
+    "licenseFiles": [
+      "Cargo-rand_core-0.10.1-f7a3937e6b.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand_core@0.6.4:f2e4ffea78",
+    "name": "rand_core",
+    "version": "0.6.4",
+    "source": "https://github.com/rust-random/rand",
+    "licenseFiles": [
+      "Cargo-rand_core-0.6.4-f2e4ffea78.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand_pcg@0.10.2:cd5763e025",
+    "name": "rand_pcg",
+    "version": "0.10.2",
+    "source": "https://github.com/rust-random/rngs",
+    "licenseFiles": [
+      "Cargo-rand_pcg-0.10.2-cd5763e025.txt"
+    ]
+  },
+  {
+    "id": "cargo:rand_xoshiro@0.6.0:324c2cd88c",
+    "name": "rand_xoshiro",
+    "version": "0.6.0",
+    "source": "https://github.com/rust-random/rngs",
+    "licenseFiles": [
+      "Cargo-rand_xoshiro-0.6.0-324c2cd88c.txt"
+    ]
+  },
+  {
+    "id": "cargo:regex@1.13.1:103ea1f7e7",
+    "name": "regex",
+    "version": "1.13.1",
+    "source": "https://github.com/rust-lang/regex",
+    "licenseFiles": [
+      "Cargo-regex-1.13.1-103ea1f7e7.txt"
+    ]
+  },
+  {
+    "id": "cargo:regex-automata@0.4.18:ceb69a6ad2",
+    "name": "regex-automata",
+    "version": "0.4.18",
+    "source": "https://github.com/rust-lang/regex",
+    "licenseFiles": [
+      "Cargo-regex-automata-0.4.18-ceb69a6ad2.txt"
+    ]
+  },
+  {
+    "id": "cargo:regex-syntax@0.8.11:a6a445265f",
+    "name": "regex-syntax",
+    "version": "0.8.11",
+    "source": "https://github.com/rust-lang/regex",
+    "licenseFiles": [
+      "Cargo-regex-syntax-0.8.11-a6a445265f.txt"
+    ]
+  },
+  {
+    "id": "cargo:reqwest@0.12.28:93085e4492",
+    "name": "reqwest",
+    "version": "0.12.28",
+    "source": "https://github.com/seanmonstar/reqwest",
+    "licenseFiles": [
+      "Cargo-reqwest-0.12.28-93085e4492.txt"
+    ]
+  },
+  {
+    "id": "cargo:ring@0.17.14:34426afd4b",
+    "name": "ring",
+    "version": "0.17.14",
+    "source": "https://github.com/briansmith/ring",
+    "licenseFiles": [
+      "Cargo-ring-0.17.14-34426afd4b.txt"
+    ]
+  },
+  {
+    "id": "cargo:rusqlite@0.32.1:e9e2bd29b8",
+    "name": "rusqlite",
+    "version": "0.32.1",
+    "source": "https://github.com/rusqlite/rusqlite",
+    "licenseFiles": [
+      "Cargo-rusqlite-0.32.1-e9e2bd29b8.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustc-hash@2.1.3:a3969fd42c",
+    "name": "rustc-hash",
+    "version": "2.1.3",
+    "source": "https://github.com/rust-lang/rustc-hash",
+    "licenseFiles": [
+      "Cargo-rustc-hash-2.1.3-a3969fd42c.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustc_version@0.4.1:1247d41bf8",
+    "name": "rustc_version",
+    "version": "0.4.1",
+    "source": "https://github.com/djc/rustc-version-rs",
+    "licenseFiles": [
+      "Cargo-rustc_version-0.4.1-1247d41bf8.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustix@1.1.4:47c3d3e93a",
+    "name": "rustix",
+    "version": "1.1.4",
+    "source": "https://github.com/bytecodealliance/rustix",
+    "licenseFiles": [
+      "Cargo-rustix-1.1.4-47c3d3e93a.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustls@0.23.45:485d5d448f",
+    "name": "rustls",
+    "version": "0.23.45",
+    "source": "https://github.com/rustls/rustls",
+    "licenseFiles": [
+      "Cargo-rustls-0.23.45-485d5d448f.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustls-pki-types@1.15.1:ff16c35225",
+    "name": "rustls-pki-types",
+    "version": "1.15.1",
+    "source": "https://github.com/rustls/pki-types",
+    "licenseFiles": [
+      "Cargo-rustls-pki-types-1.15.1-ff16c35225.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustls-webpki@0.103.14:7aa0b7d9d3",
+    "name": "rustls-webpki",
+    "version": "0.103.14",
+    "source": "https://github.com/rustls/webpki",
+    "licenseFiles": [
+      "Cargo-rustls-webpki-0.103.14-7aa0b7d9d3.txt"
+    ]
+  },
+  {
+    "id": "cargo:rustybuzz@0.20.1:b90663fea4",
+    "name": "rustybuzz",
+    "version": "0.20.1",
+    "source": "https://github.com/harfbuzz/rustybuzz",
+    "licenseFiles": [
+      "Cargo-rustybuzz-0.20.1-b90663fea4.txt"
+    ]
+  },
+  {
+    "id": "cargo:ryu@1.0.23:f3939106ca",
+    "name": "ryu",
+    "version": "1.0.23",
+    "source": "https://github.com/dtolnay/ryu",
+    "licenseFiles": [
+      "Cargo-ryu-1.0.23-f3939106ca.txt"
+    ]
+  },
+  {
+    "id": "cargo:scopeguard@1.2.0:71ff042622",
+    "name": "scopeguard",
+    "version": "1.2.0",
+    "source": "https://github.com/bluss/scopeguard",
+    "licenseFiles": [
+      "Cargo-scopeguard-1.2.0-71ff042622.txt"
+    ]
+  },
+  {
+    "id": "cargo:scroll@0.12.0:75166ff510",
+    "name": "scroll",
+    "version": "0.12.0",
+    "source": "https://github.com/m4b/scroll",
+    "licenseFiles": [
+      "Cargo-scroll-0.12.0-75166ff510.txt"
+    ]
+  },
+  {
+    "id": "cargo:scroll_derive@0.12.1:8351dd074a",
+    "name": "scroll_derive",
+    "version": "0.12.1",
+    "source": "https://github.com/m4b/scroll",
+    "licenseFiles": [
+      "Cargo-scroll_derive-0.12.1-8351dd074a.txt"
+    ]
+  },
+  {
+    "id": "cargo:semver@1.0.28:44ceb1bed6",
+    "name": "semver",
+    "version": "1.0.28",
+    "source": "https://github.com/dtolnay/semver",
+    "licenseFiles": [
+      "Cargo-semver-1.0.28-44ceb1bed6.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde@1.0.229:e79a28fe16",
+    "name": "serde",
+    "version": "1.0.229",
+    "source": "https://github.com/serde-rs/serde",
+    "licenseFiles": [
+      "Cargo-serde-1.0.229-e79a28fe16.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_columnar@0.3.14:4838f1ec63",
+    "name": "serde_columnar",
+    "version": "0.3.14",
+    "source": "https://github.com/loro-dev/columnar",
+    "licenseFiles": [
+      "Cargo-serde_columnar-0.3.14-4838f1ec63.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_columnar_derive@0.3.7:fcd035e4a9",
+    "name": "serde_columnar_derive",
+    "version": "0.3.7",
+    "source": "https://crates.io/crates/serde_columnar_derive/0.3.7",
+    "licenseFiles": [
+      "Cargo-serde_columnar_derive-0.3.7-fcd035e4a9.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_core@1.0.229:9cf24609f9",
+    "name": "serde_core",
+    "version": "1.0.229",
+    "source": "https://github.com/serde-rs/serde",
+    "licenseFiles": [
+      "Cargo-serde_core-1.0.229-9cf24609f9.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_derive@1.0.229:2994e1b167",
+    "name": "serde_derive",
+    "version": "1.0.229",
+    "source": "https://github.com/serde-rs/serde",
+    "licenseFiles": [
+      "Cargo-serde_derive-1.0.229-2994e1b167.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_json@1.0.151:75de382eee",
+    "name": "serde_json",
+    "version": "1.0.151",
+    "source": "https://github.com/serde-rs/json",
+    "licenseFiles": [
+      "Cargo-serde_json-1.0.151-75de382eee.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_spanned@1.1.1:137ee9266f",
+    "name": "serde_spanned",
+    "version": "1.1.1",
+    "source": "https://github.com/toml-rs/toml",
+    "licenseFiles": [
+      "Cargo-serde_spanned-1.1.1-137ee9266f.txt"
+    ]
+  },
+  {
+    "id": "cargo:serde_urlencoded@0.7.1:54bccddebf",
+    "name": "serde_urlencoded",
+    "version": "0.7.1",
+    "source": "https://github.com/nox/serde_urlencoded",
+    "licenseFiles": [
+      "Cargo-serde_urlencoded-0.7.1-54bccddebf.txt"
+    ]
+  },
+  {
+    "id": "cargo:sha1@0.10.7:9f18928aaa",
+    "name": "sha1",
+    "version": "0.10.7",
+    "source": "https://github.com/RustCrypto/hashes",
+    "licenseFiles": [
+      "Cargo-sha1-0.10.7-9f18928aaa.txt"
+    ]
+  },
+  {
+    "id": "cargo:shlex@2.0.1:d9cb709bb6",
+    "name": "shlex",
+    "version": "2.0.1",
+    "source": "https://github.com/comex/rust-shlex",
+    "licenseFiles": [
+      "Cargo-shlex-2.0.1-d9cb709bb6.txt"
+    ]
+  },
+  {
+    "id": "cargo:signal-hook-registry@1.4.8:53748dcb61",
+    "name": "signal-hook-registry",
+    "version": "1.4.8",
+    "source": "https://github.com/vorner/signal-hook",
+    "licenseFiles": [
+      "Cargo-signal-hook-registry-1.4.8-53748dcb61.txt"
+    ]
+  },
+  {
+    "id": "cargo:similar@2.7.0:a4d7fc2379",
+    "name": "similar",
+    "version": "2.7.0",
+    "source": "https://github.com/mitsuhiko/similar",
+    "licenseFiles": [
+      "Cargo-similar-2.7.0-a4d7fc2379.txt"
+    ]
+  },
+  {
+    "id": "cargo:siphasher@1.0.3:55896a5b01",
+    "name": "siphasher",
+    "version": "1.0.3",
+    "source": "https://github.com/jedisct1/rust-siphash",
+    "licenseFiles": [
+      "Cargo-siphasher-1.0.3-55896a5b01.txt"
+    ]
+  },
+  {
+    "id": "cargo:sized-chunks@0.6.5:684400a0e7",
+    "name": "sized-chunks",
+    "version": "0.6.5",
+    "source": "https://github.com/bodil/sized-chunks",
+    "licenseFiles": [
+      "Cargo-sized-chunks-0.6.5-684400a0e7.txt"
+    ]
+  },
+  {
+    "id": "cargo:slab@0.4.12:9fe5eb5878",
+    "name": "slab",
+    "version": "0.4.12",
+    "source": "https://github.com/tokio-rs/slab",
+    "licenseFiles": [
+      "Cargo-slab-0.4.12-9fe5eb5878.txt"
+    ]
+  },
+  {
+    "id": "cargo:smallvec@1.15.2:ca9ef9c569",
+    "name": "smallvec",
+    "version": "1.15.2",
+    "source": "https://github.com/servo/rust-smallvec",
+    "licenseFiles": [
+      "Cargo-smallvec-1.15.2-ca9ef9c569.txt"
+    ]
+  },
+  {
+    "id": "cargo:smawk@0.3.3:1acc4a4df1",
+    "name": "smawk",
+    "version": "0.3.3",
+    "source": "https://github.com/mgeisler/smawk",
+    "licenseFiles": [
+      "Cargo-smawk-0.3.3-1acc4a4df1.txt"
+    ]
+  },
+  {
+    "id": "cargo:socket2@0.6.5:64da6afec2",
+    "name": "socket2",
+    "version": "0.6.5",
+    "source": "https://github.com/rust-lang/socket2",
+    "licenseFiles": [
+      "Cargo-socket2-0.6.5-64da6afec2.txt"
+    ]
+  },
+  {
+    "id": "cargo:spin@0.9.9:88250ba266",
+    "name": "spin",
+    "version": "0.9.9",
+    "source": "https://github.com/mvdnes/spin-rs.git",
+    "licenseFiles": [
+      "Cargo-spin-0.9.9-88250ba266.txt"
+    ]
+  },
+  {
+    "id": "cargo:stable_deref_trait@1.2.1:625f33dc82",
+    "name": "stable_deref_trait",
+    "version": "1.2.1",
+    "source": "https://github.com/storyyeller/stable_deref_trait",
+    "licenseFiles": [
+      "Cargo-stable_deref_trait-1.2.1-625f33dc82.txt"
+    ]
+  },
+  {
+    "id": "cargo:static_assertions@1.1.0:002c6dd96c",
+    "name": "static_assertions",
+    "version": "1.1.0",
+    "source": "https://github.com/nvzqz/static-assertions-rs",
+    "licenseFiles": [
+      "Cargo-static_assertions-1.1.0-002c6dd96c.txt"
+    ]
+  },
+  {
+    "id": "cargo:streaming-iterator@0.1.9:2a35caf115",
+    "name": "streaming-iterator",
+    "version": "0.1.9",
+    "source": "https://github.com/sfackler/streaming-iterator",
+    "licenseFiles": [
+      "Cargo-streaming-iterator-0.1.9-2a35caf115.txt"
+    ]
+  },
+  {
+    "id": "cargo:strsim@0.11.1:c93dcbe841",
+    "name": "strsim",
+    "version": "0.11.1",
+    "source": "https://github.com/rapidfuzz/strsim-rs",
+    "licenseFiles": [
+      "Cargo-strsim-0.11.1-c93dcbe841.txt"
+    ]
+  },
+  {
+    "id": "cargo:subtle@2.6.1:13de4de6bd",
+    "name": "subtle",
+    "version": "2.6.1",
+    "source": "https://github.com/dalek-cryptography/subtle",
+    "licenseFiles": [
+      "Cargo-subtle-2.6.1-13de4de6bd.txt"
+    ]
+  },
+  {
+    "id": "cargo:syn@1.0.109:1725b7938b",
+    "name": "syn",
+    "version": "1.0.109",
+    "source": "https://github.com/dtolnay/syn",
+    "licenseFiles": [
+      "Cargo-syn-1.0.109-1725b7938b.txt"
+    ]
+  },
+  {
+    "id": "cargo:syn@2.0.119:05bf1b8c4c",
+    "name": "syn",
+    "version": "2.0.119",
+    "source": "https://github.com/dtolnay/syn",
+    "licenseFiles": [
+      "Cargo-syn-2.0.119-05bf1b8c4c.txt"
+    ]
+  },
+  {
+    "id": "cargo:syn@3.0.3:25f7e53361",
+    "name": "syn",
+    "version": "3.0.3",
+    "source": "https://github.com/dtolnay/syn",
+    "licenseFiles": [
+      "Cargo-syn-3.0.3-25f7e53361.txt"
+    ]
+  },
+  {
+    "id": "cargo:sync_wrapper@1.0.2:9e6ce7429c",
+    "name": "sync_wrapper",
+    "version": "1.0.2",
+    "source": "https://github.com/Actyx/sync_wrapper",
+    "licenseFiles": [
+      "Cargo-sync_wrapper-1.0.2-9e6ce7429c.txt"
+    ]
+  },
+  {
+    "id": "cargo:synstructure@0.13.2:0c3a42b6b3",
+    "name": "synstructure",
+    "version": "0.13.2",
+    "source": "https://github.com/mystor/synstructure",
+    "licenseFiles": [
+      "Cargo-synstructure-0.13.2-0c3a42b6b3.txt"
+    ]
+  },
+  {
+    "id": "cargo:tempfile@3.27.0:d97e8911b5",
+    "name": "tempfile",
+    "version": "3.27.0",
+    "source": "https://github.com/Stebalien/tempfile",
+    "licenseFiles": [
+      "Cargo-tempfile-3.27.0-d97e8911b5.txt"
+    ]
+  },
+  {
+    "id": "cargo:textwrap@0.16.4:1174f47654",
+    "name": "textwrap",
+    "version": "0.16.4",
+    "source": "https://github.com/mgeisler/textwrap",
+    "licenseFiles": [
+      "Cargo-textwrap-0.16.4-1174f47654.txt"
+    ]
+  },
+  {
+    "id": "cargo:thiserror@1.0.69:6e331bc589",
+    "name": "thiserror",
+    "version": "1.0.69",
+    "source": "https://github.com/dtolnay/thiserror",
+    "licenseFiles": [
+      "Cargo-thiserror-1.0.69-6e331bc589.txt"
+    ]
+  },
+  {
+    "id": "cargo:thiserror@2.0.20:bea1a642ef",
+    "name": "thiserror",
+    "version": "2.0.20",
+    "source": "https://github.com/dtolnay/thiserror",
+    "licenseFiles": [
+      "Cargo-thiserror-2.0.20-bea1a642ef.txt"
+    ]
+  },
+  {
+    "id": "cargo:thiserror-impl@1.0.69:f3d25fb571",
+    "name": "thiserror-impl",
+    "version": "1.0.69",
+    "source": "https://github.com/dtolnay/thiserror",
+    "licenseFiles": [
+      "Cargo-thiserror-impl-1.0.69-f3d25fb571.txt"
+    ]
+  },
+  {
+    "id": "cargo:thiserror-impl@2.0.20:2da702a801",
+    "name": "thiserror-impl",
+    "version": "2.0.20",
+    "source": "https://github.com/dtolnay/thiserror",
+    "licenseFiles": [
+      "Cargo-thiserror-impl-2.0.20-2da702a801.txt"
+    ]
+  },
+  {
+    "id": "cargo:thread_local@1.1.10:99f928c4f7",
+    "name": "thread_local",
+    "version": "1.1.10",
+    "source": "https://github.com/Amanieu/thread_local-rs",
+    "licenseFiles": [
+      "Cargo-thread_local-1.1.10-99f928c4f7.txt"
+    ]
+  },
+  {
+    "id": "cargo:tinystr@0.8.4:3bdcb31f08",
+    "name": "tinystr",
+    "version": "0.8.4",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-tinystr-0.8.4-3bdcb31f08.txt"
+    ]
+  },
+  {
+    "id": "cargo:tinyvec@1.12.0:c239bac29e",
+    "name": "tinyvec",
+    "version": "1.12.0",
+    "source": "https://github.com/Lokathor/tinyvec",
+    "licenseFiles": [
+      "Cargo-tinyvec-1.12.0-c239bac29e.txt"
+    ]
+  },
+  {
+    "id": "cargo:tinyvec_macros@0.1.1:843b851547",
+    "name": "tinyvec_macros",
+    "version": "0.1.1",
+    "source": "https://github.com/Soveu/tinyvec_macros",
+    "licenseFiles": [
+      "Cargo-tinyvec_macros-0.1.1-843b851547.txt"
+    ]
+  },
+  {
+    "id": "cargo:tokio@1.53.1:86d6f30f7a",
+    "name": "tokio",
+    "version": "1.53.1",
+    "source": "https://github.com/tokio-rs/tokio",
+    "licenseFiles": [
+      "Cargo-tokio-1.53.1-86d6f30f7a.txt"
+    ]
+  },
+  {
+    "id": "cargo:tokio-macros@2.7.2:97eed2e47c",
+    "name": "tokio-macros",
+    "version": "2.7.2",
+    "source": "https://github.com/tokio-rs/tokio",
+    "licenseFiles": [
+      "Cargo-tokio-macros-2.7.2-97eed2e47c.txt"
+    ]
+  },
+  {
+    "id": "cargo:tokio-rustls@0.26.4:44c8d76f34",
+    "name": "tokio-rustls",
+    "version": "0.26.4",
+    "source": "https://github.com/rustls/tokio-rustls",
+    "licenseFiles": [
+      "Cargo-tokio-rustls-0.26.4-44c8d76f34.txt"
+    ]
+  },
+  {
+    "id": "cargo:tokio-tungstenite@0.24.0:06dfb48016",
+    "name": "tokio-tungstenite",
+    "version": "0.24.0",
+    "source": "https://github.com/snapview/tokio-tungstenite",
+    "licenseFiles": [
+      "Cargo-tokio-tungstenite-0.24.0-06dfb48016.txt"
+    ]
+  },
+  {
+    "id": "cargo:tokio-util@0.7.19:471c1d008a",
+    "name": "tokio-util",
+    "version": "0.7.19",
+    "source": "https://github.com/tokio-rs/tokio",
+    "licenseFiles": [
+      "Cargo-tokio-util-0.7.19-471c1d008a.txt"
+    ]
+  },
+  {
+    "id": "cargo:toml@1.1.4+spec-1.1.0:11e0f4c03f",
+    "name": "toml",
+    "version": "1.1.4+spec-1.1.0",
+    "source": "https://github.com/toml-rs/toml",
+    "licenseFiles": [
+      "Cargo-toml-1.1.4+spec-1.1.0-11e0f4c03f.txt"
+    ]
+  },
+  {
+    "id": "cargo:toml_datetime@1.1.1+spec-1.1.0:47d887b5d1",
+    "name": "toml_datetime",
+    "version": "1.1.1+spec-1.1.0",
+    "source": "https://github.com/toml-rs/toml",
+    "licenseFiles": [
+      "Cargo-toml_datetime-1.1.1+spec-1.1.0-47d887b5d1.txt"
+    ]
+  },
+  {
+    "id": "cargo:toml_parser@1.1.3+spec-1.1.0:a2398d6196",
+    "name": "toml_parser",
+    "version": "1.1.3+spec-1.1.0",
+    "source": "https://github.com/toml-rs/toml",
+    "licenseFiles": [
+      "Cargo-toml_parser-1.1.3+spec-1.1.0-a2398d6196.txt"
+    ]
+  },
+  {
+    "id": "cargo:toml_writer@1.1.2+spec-1.1.0:4997ec24b0",
+    "name": "toml_writer",
+    "version": "1.1.2+spec-1.1.0",
+    "source": "https://github.com/toml-rs/toml",
+    "licenseFiles": [
+      "Cargo-toml_writer-1.1.2+spec-1.1.0-4997ec24b0.txt"
+    ]
+  },
+  {
+    "id": "cargo:tower@0.5.3:37a82aa1ea",
+    "name": "tower",
+    "version": "0.5.3",
+    "source": "https://github.com/tower-rs/tower",
+    "licenseFiles": [
+      "Cargo-tower-0.5.3-37a82aa1ea.txt"
+    ]
+  },
+  {
+    "id": "cargo:tower-http@0.6.11:ee581b8f64",
+    "name": "tower-http",
+    "version": "0.6.11",
+    "source": "https://github.com/tower-rs/tower-http",
+    "licenseFiles": [
+      "Cargo-tower-http-0.6.11-ee581b8f64.txt"
+    ]
+  },
+  {
+    "id": "cargo:tower-layer@0.3.3:ee0668c8d5",
+    "name": "tower-layer",
+    "version": "0.3.3",
+    "source": "https://github.com/tower-rs/tower",
+    "licenseFiles": [
+      "Cargo-tower-layer-0.3.3-ee0668c8d5.txt"
+    ]
+  },
+  {
+    "id": "cargo:tower-service@0.3.3:a6908272bb",
+    "name": "tower-service",
+    "version": "0.3.3",
+    "source": "https://github.com/tower-rs/tower",
+    "licenseFiles": [
+      "Cargo-tower-service-0.3.3-a6908272bb.txt"
+    ]
+  },
+  {
+    "id": "cargo:tracing@0.1.44:b2794bfde5",
+    "name": "tracing",
+    "version": "0.1.44",
+    "source": "https://github.com/tokio-rs/tracing",
+    "licenseFiles": [
+      "Cargo-tracing-0.1.44-b2794bfde5.txt"
+    ]
+  },
+  {
+    "id": "cargo:tracing-attributes@0.1.31:4ba159d7e9",
+    "name": "tracing-attributes",
+    "version": "0.1.31",
+    "source": "https://github.com/tokio-rs/tracing",
+    "licenseFiles": [
+      "Cargo-tracing-attributes-0.1.31-4ba159d7e9.txt"
+    ]
+  },
+  {
+    "id": "cargo:tracing-core@0.1.36:ec65268392",
+    "name": "tracing-core",
+    "version": "0.1.36",
+    "source": "https://github.com/tokio-rs/tracing",
+    "licenseFiles": [
+      "Cargo-tracing-core-0.1.36-ec65268392.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter@0.26.11:c0ec1a1386",
+    "name": "tree-sitter",
+    "version": "0.26.11",
+    "source": "https://github.com/tree-sitter/tree-sitter",
+    "licenseFiles": [
+      "Cargo-tree-sitter-0.26.11-c0ec1a1386.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-bash@0.25.1:1ebac81cf1",
+    "name": "tree-sitter-bash",
+    "version": "0.25.1",
+    "source": "https://github.com/tree-sitter/tree-sitter-bash",
+    "licenseFiles": [
+      "Cargo-tree-sitter-bash-0.25.1-1ebac81cf1.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-c@0.24.2:b73b9ff0bd",
+    "name": "tree-sitter-c",
+    "version": "0.24.2",
+    "source": "https://github.com/tree-sitter/tree-sitter-c",
+    "licenseFiles": [
+      "Cargo-tree-sitter-c-0.24.2-b73b9ff0bd.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-c-sharp@0.23.5:597ddce884",
+    "name": "tree-sitter-c-sharp",
+    "version": "0.23.5",
+    "source": "https://github.com/tree-sitter/tree-sitter-c-sharp",
+    "licenseFiles": [
+      "Cargo-tree-sitter-c-sharp-0.23.5-597ddce884.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-containerfile@0.9.2:2495470b3c",
+    "name": "tree-sitter-containerfile",
+    "version": "0.9.2",
+    "source": "https://github.com/wharflab/tree-sitter-containerfile",
+    "licenseFiles": [
+      "Cargo-tree-sitter-containerfile-0.9.2-2495470b3c.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-cpp@0.23.4:bef5614f15",
+    "name": "tree-sitter-cpp",
+    "version": "0.23.4",
+    "source": "https://github.com/tree-sitter/tree-sitter-cpp",
+    "licenseFiles": [
+      "Cargo-tree-sitter-cpp-0.23.4-bef5614f15.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-css@0.25.0:ae4eac3343",
+    "name": "tree-sitter-css",
+    "version": "0.25.0",
+    "source": "https://github.com/tree-sitter/tree-sitter-css",
+    "licenseFiles": [
+      "Cargo-tree-sitter-css-0.25.0-ae4eac3343.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-go@0.25.0:5fd0525b7a",
+    "name": "tree-sitter-go",
+    "version": "0.25.0",
+    "source": "https://github.com/tree-sitter/tree-sitter-go",
+    "licenseFiles": [
+      "Cargo-tree-sitter-go-0.25.0-5fd0525b7a.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-highlight@0.26.11:f67b8e5904",
+    "name": "tree-sitter-highlight",
+    "version": "0.26.11",
+    "source": "https://github.com/tree-sitter/tree-sitter",
+    "licenseFiles": [
+      "Cargo-tree-sitter-highlight-0.26.11-f67b8e5904.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-html@0.23.2:da1289dc25",
+    "name": "tree-sitter-html",
+    "version": "0.23.2",
+    "source": "https://github.com/tree-sitter/tree-sitter-html",
+    "licenseFiles": [
+      "Cargo-tree-sitter-html-0.23.2-da1289dc25.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-java@0.23.5:fb6bb6ef21",
+    "name": "tree-sitter-java",
+    "version": "0.23.5",
+    "source": "https://github.com/tree-sitter/tree-sitter-java",
+    "licenseFiles": [
+      "Cargo-tree-sitter-java-0.23.5-fb6bb6ef21.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-javascript@0.25.0:eb6a53a186",
+    "name": "tree-sitter-javascript",
+    "version": "0.25.0",
+    "source": "https://github.com/tree-sitter/tree-sitter-javascript",
+    "licenseFiles": [
+      "Cargo-tree-sitter-javascript-0.25.0-eb6a53a186.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-json@0.24.8:9ac868eeae",
+    "name": "tree-sitter-json",
+    "version": "0.24.8",
+    "source": "https://github.com/tree-sitter/tree-sitter-json",
+    "licenseFiles": [
+      "Cargo-tree-sitter-json-0.24.8-9ac868eeae.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-kotlin-ng@1.1.0:19be4ee8c0",
+    "name": "tree-sitter-kotlin-ng",
+    "version": "1.1.0",
+    "source": "https://github.com/tree-sitter-grammars/tree-sitter-kotlin",
+    "licenseFiles": [
+      "Cargo-tree-sitter-kotlin-ng-1.1.0-19be4ee8c0.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-language@0.1.7:e01277e77c",
+    "name": "tree-sitter-language",
+    "version": "0.1.7",
+    "source": "https://github.com/tree-sitter/tree-sitter",
+    "licenseFiles": [
+      "Cargo-tree-sitter-language-0.1.7-e01277e77c.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-lua@0.5.0:31ea8a8763",
+    "name": "tree-sitter-lua",
+    "version": "0.5.0",
+    "source": "https://github.com/tree-sitter-grammars/tree-sitter-lua",
+    "licenseFiles": [
+      "Cargo-tree-sitter-lua-0.5.0-31ea8a8763.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-make@1.1.1:c87960ef1a",
+    "name": "tree-sitter-make",
+    "version": "1.1.1",
+    "source": "https://github.com/tree-sitter-grammars/tree-sitter-make",
+    "licenseFiles": [
+      "Cargo-tree-sitter-make-1.1.1-c87960ef1a.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-md@0.5.3:5dee4b1124",
+    "name": "tree-sitter-md",
+    "version": "0.5.3",
+    "source": "https://github.com/tree-sitter-grammars/tree-sitter-markdown",
+    "licenseFiles": [
+      "Cargo-tree-sitter-md-0.5.3-5dee4b1124.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-nix@0.3.0:4e7e679b9b",
+    "name": "tree-sitter-nix",
+    "version": "0.3.0",
+    "source": "https://github.com/nix-community/tree-sitter-nix",
+    "licenseFiles": [
+      "Cargo-tree-sitter-nix-0.3.0-4e7e679b9b.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-php@0.24.2:1b9d15b20e",
+    "name": "tree-sitter-php",
+    "version": "0.24.2",
+    "source": "https://github.com/tree-sitter/tree-sitter-php",
+    "licenseFiles": [
+      "Cargo-tree-sitter-php-0.24.2-1b9d15b20e.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-python@0.25.0:e2197e4e01",
+    "name": "tree-sitter-python",
+    "version": "0.25.0",
+    "source": "https://github.com/tree-sitter/tree-sitter-python",
+    "licenseFiles": [
+      "Cargo-tree-sitter-python-0.25.0-e2197e4e01.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-ruby@0.23.1:beb1b983a4",
+    "name": "tree-sitter-ruby",
+    "version": "0.23.1",
+    "source": "https://github.com/tree-sitter/tree-sitter-ruby",
+    "licenseFiles": [
+      "Cargo-tree-sitter-ruby-0.23.1-beb1b983a4.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-rust@0.24.2:9d111dd5ea",
+    "name": "tree-sitter-rust",
+    "version": "0.24.2",
+    "source": "https://github.com/tree-sitter/tree-sitter-rust",
+    "licenseFiles": [
+      "Cargo-tree-sitter-rust-0.24.2-9d111dd5ea.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-sequel@0.3.11:ec4a0a826c",
+    "name": "tree-sitter-sequel",
+    "version": "0.3.11",
+    "source": "https://github.com/derekstride/tree-sitter-sql.git",
+    "licenseFiles": [
+      "Cargo-tree-sitter-sequel-0.3.11-ec4a0a826c.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-swift@0.7.3:fbf8958f46",
+    "name": "tree-sitter-swift",
+    "version": "0.7.3",
+    "source": "https://github.com/alex-pinkus/tree-sitter-swift",
+    "licenseFiles": [
+      "Cargo-tree-sitter-swift-0.7.3-fbf8958f46.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-toml-ng@0.7.0:f6bce1c924",
+    "name": "tree-sitter-toml-ng",
+    "version": "0.7.0",
+    "source": "https://github.com/tree-sitter-grammars/tree-sitter-toml",
+    "licenseFiles": [
+      "Cargo-tree-sitter-toml-ng-0.7.0-f6bce1c924.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-typescript@0.23.2:94dc2a8394",
+    "name": "tree-sitter-typescript",
+    "version": "0.23.2",
+    "source": "https://github.com/tree-sitter/tree-sitter-typescript",
+    "licenseFiles": [
+      "Cargo-tree-sitter-typescript-0.23.2-94dc2a8394.txt"
+    ]
+  },
+  {
+    "id": "cargo:tree-sitter-yaml@0.7.2:4e26b570d1",
+    "name": "tree-sitter-yaml",
+    "version": "0.7.2",
+    "source": "https://github.com/tree-sitter-grammars/tree-sitter-yaml",
+    "licenseFiles": [
+      "Cargo-tree-sitter-yaml-0.7.2-4e26b570d1.txt"
+    ]
+  },
+  {
+    "id": "cargo:try-lock@0.2.5:9fd4392adc",
+    "name": "try-lock",
+    "version": "0.2.5",
+    "source": "https://github.com/seanmonstar/try-lock",
+    "licenseFiles": [
+      "Cargo-try-lock-0.2.5-9fd4392adc.txt"
+    ]
+  },
+  {
+    "id": "cargo:ttf-parser@0.25.1:871853ebc2",
+    "name": "ttf-parser",
+    "version": "0.25.1",
+    "source": "https://github.com/harfbuzz/ttf-parser",
+    "licenseFiles": [
+      "Cargo-ttf-parser-0.25.1-871853ebc2.txt"
+    ]
+  },
+  {
+    "id": "cargo:tungstenite@0.24.0:8341eed35a",
+    "name": "tungstenite",
+    "version": "0.24.0",
+    "source": "https://github.com/snapview/tungstenite-rs",
+    "licenseFiles": [
+      "Cargo-tungstenite-0.24.0-8341eed35a.txt"
+    ]
+  },
+  {
+    "id": "cargo:twox-hash@2.1.3:772e9277f1",
+    "name": "twox-hash",
+    "version": "2.1.3",
+    "source": "https://github.com/shepmaster/twox-hash",
+    "licenseFiles": [
+      "Cargo-twox-hash-2.1.3-772e9277f1.txt"
+    ]
+  },
+  {
+    "id": "cargo:typenum@1.20.1:46c1890432",
+    "name": "typenum",
+    "version": "1.20.1",
+    "source": "https://github.com/paholg/typenum",
+    "licenseFiles": [
+      "Cargo-typenum-1.20.1-46c1890432.txt"
+    ]
+  },
+  {
+    "id": "cargo:ucd-trie@0.1.7:27c484e468",
+    "name": "ucd-trie",
+    "version": "0.1.7",
+    "source": "https://github.com/BurntSushi/ucd-generate",
+    "licenseFiles": [
+      "Cargo-ucd-trie-0.1.7-27c484e468.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicase@2.9.0:0de8a31713",
+    "name": "unicase",
+    "version": "2.9.0",
+    "source": "https://github.com/seanmonstar/unicase",
+    "licenseFiles": [
+      "Cargo-unicase-2.9.0-0de8a31713.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-bidi@0.3.18:d9606973a9",
+    "name": "unicode-bidi",
+    "version": "0.3.18",
+    "source": "https://github.com/servo/unicode-bidi",
+    "licenseFiles": [
+      "Cargo-unicode-bidi-0.3.18-d9606973a9.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-bidi-mirroring@0.4.0:774e5fdbca",
+    "name": "unicode-bidi-mirroring",
+    "version": "0.4.0",
+    "source": "https://github.com/RazrFalcon/unicode-bidi-mirroring",
+    "licenseFiles": [
+      "Cargo-unicode-bidi-mirroring-0.4.0-774e5fdbca.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-ccc@0.4.0:69ad6316aa",
+    "name": "unicode-ccc",
+    "version": "0.4.0",
+    "source": "https://github.com/RazrFalcon/unicode-ccc",
+    "licenseFiles": [
+      "Cargo-unicode-ccc-0.4.0-69ad6316aa.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-ident@1.0.24:9fc6e4b011",
+    "name": "unicode-ident",
+    "version": "1.0.24",
+    "source": "https://github.com/dtolnay/unicode-ident",
+    "licenseFiles": [
+      "Cargo-unicode-ident-1.0.24-9fc6e4b011.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-properties@0.1.4:b5d9c64a4b",
+    "name": "unicode-properties",
+    "version": "0.1.4",
+    "source": "https://github.com/unicode-rs/unicode-properties",
+    "licenseFiles": [
+      "Cargo-unicode-properties-0.1.4-b5d9c64a4b.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-script@0.5.8:92bee68a2f",
+    "name": "unicode-script",
+    "version": "0.5.8",
+    "source": "https://github.com/unicode-rs/unicode-script",
+    "licenseFiles": [
+      "Cargo-unicode-script-0.5.8-92bee68a2f.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-segmentation@1.13.3:96f700a1fc",
+    "name": "unicode-segmentation",
+    "version": "1.13.3",
+    "source": "https://github.com/unicode-rs/unicode-segmentation",
+    "licenseFiles": [
+      "Cargo-unicode-segmentation-1.13.3-96f700a1fc.txt"
+    ]
+  },
+  {
+    "id": "cargo:unicode-width@0.2.2:a5445ab54a",
+    "name": "unicode-width",
+    "version": "0.2.2",
+    "source": "https://github.com/unicode-rs/unicode-width",
+    "licenseFiles": [
+      "Cargo-unicode-width-0.2.2-a5445ab54a.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi@0.32.2:a5830152d4",
+    "name": "uniffi",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi-0.32.2-a5830152d4.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_bindgen@0.32.2:701d8a9376",
+    "name": "uniffi_bindgen",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_bindgen-0.32.2-701d8a9376.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_core@0.32.2:032711e4a3",
+    "name": "uniffi_core",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_core-0.32.2-032711e4a3.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_internal_macros@0.32.2:51040ba491",
+    "name": "uniffi_internal_macros",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_internal_macros-0.32.2-51040ba491.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_macros@0.32.2:210506bdec",
+    "name": "uniffi_macros",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_macros-0.32.2-210506bdec.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_meta@0.32.2:ff971c97ff",
+    "name": "uniffi_meta",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_meta-0.32.2-ff971c97ff.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_pipeline@0.32.2:7ced0e7ef7",
+    "name": "uniffi_pipeline",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_pipeline-0.32.2-7ced0e7ef7.txt"
+    ]
+  },
+  {
+    "id": "cargo:uniffi_udl@0.32.2:b29cd7b498",
+    "name": "uniffi_udl",
+    "version": "0.32.2",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-uniffi_udl-0.32.2-b29cd7b498.txt"
+    ]
+  },
+  {
+    "id": "cargo:untrusted@0.9.0:c095fc023c",
+    "name": "untrusted",
+    "version": "0.9.0",
+    "source": "https://github.com/briansmith/untrusted",
+    "licenseFiles": [
+      "Cargo-untrusted-0.9.0-c095fc023c.txt"
+    ]
+  },
+  {
+    "id": "cargo:url@2.5.8:8191d1c436",
+    "name": "url",
+    "version": "2.5.8",
+    "source": "https://github.com/servo/rust-url",
+    "licenseFiles": [
+      "Cargo-url-2.5.8-8191d1c436.txt"
+    ]
+  },
+  {
+    "id": "cargo:utf-8@0.7.6:b37ebbc0d1",
+    "name": "utf-8",
+    "version": "0.7.6",
+    "source": "https://github.com/SimonSapin/rust-utf8",
+    "licenseFiles": [
+      "Cargo-utf-8-0.7.6-b37ebbc0d1.txt"
+    ]
+  },
+  {
+    "id": "cargo:utf8_iter@1.0.4:b3ea810b1c",
+    "name": "utf8_iter",
+    "version": "1.0.4",
+    "source": "https://github.com/hsivonen/utf8_iter",
+    "licenseFiles": [
+      "Cargo-utf8_iter-1.0.4-b3ea810b1c.txt"
+    ]
+  },
+  {
+    "id": "cargo:uuid@1.24.0:53c15feb60",
+    "name": "uuid",
+    "version": "1.24.0",
+    "source": "https://github.com/uuid-rs/uuid",
+    "licenseFiles": [
+      "Cargo-uuid-1.24.0-53c15feb60.txt"
+    ]
+  },
+  {
+    "id": "cargo:vcpkg@0.2.15:2204dbe31d",
+    "name": "vcpkg",
+    "version": "0.2.15",
+    "source": "https://github.com/mcgoo/vcpkg-rs",
+    "licenseFiles": [
+      "Cargo-vcpkg-0.2.15-2204dbe31d.txt"
+    ]
+  },
+  {
+    "id": "cargo:version_check@0.9.5:52b7005aa1",
+    "name": "version_check",
+    "version": "0.9.5",
+    "source": "https://github.com/SergioBenitez/version_check",
+    "licenseFiles": [
+      "Cargo-version_check-0.9.5-52b7005aa1.txt"
+    ]
+  },
+  {
+    "id": "cargo:want@0.3.1:12de5054b9",
+    "name": "want",
+    "version": "0.3.1",
+    "source": "https://github.com/seanmonstar/want",
+    "licenseFiles": [
+      "Cargo-want-0.3.1-12de5054b9.txt"
+    ]
+  },
+  {
+    "id": "cargo:webpki-roots@0.26.11:80701b5273",
+    "name": "webpki-roots",
+    "version": "0.26.11",
+    "source": "https://github.com/rustls/webpki-roots",
+    "licenseFiles": [
+      "Cargo-webpki-roots-0.26.11-80701b5273.txt"
+    ]
+  },
+  {
+    "id": "cargo:webpki-roots@1.0.9:41c6e60ba9",
+    "name": "webpki-roots",
+    "version": "1.0.9",
+    "source": "https://github.com/rustls/webpki-roots",
+    "licenseFiles": [
+      "Cargo-webpki-roots-1.0.9-41c6e60ba9.txt"
+    ]
+  },
+  {
+    "id": "cargo:weedle2@5.0.0:da760ba31a",
+    "name": "weedle2",
+    "version": "5.0.0",
+    "source": "https://github.com/mozilla/uniffi-rs",
+    "licenseFiles": [
+      "Cargo-weedle2-5.0.0-da760ba31a.txt"
+    ]
+  },
+  {
+    "id": "cargo:winnow@1.0.4:8781a3659a",
+    "name": "winnow",
+    "version": "1.0.4",
+    "source": "https://github.com/winnow-rs/winnow",
+    "licenseFiles": [
+      "Cargo-winnow-1.0.4-8781a3659a.txt"
+    ]
+  },
+  {
+    "id": "cargo:writeable@0.6.4:f996de8b97",
+    "name": "writeable",
+    "version": "0.6.4",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-writeable-0.6.4-f996de8b97.txt"
+    ]
+  },
+  {
+    "id": "cargo:xxhash-rust@0.8.18:08f08fc472",
+    "name": "xxhash-rust",
+    "version": "0.8.18",
+    "source": "https://github.com/DoumanAsh/xxhash-rust",
+    "licenseFiles": [
+      "Cargo-xxhash-rust-0.8.18-08f08fc472.txt"
+    ]
+  },
+  {
+    "id": "cargo:yansi@1.0.1:0ae90c51b3",
+    "name": "yansi",
+    "version": "1.0.1",
+    "source": "https://github.com/SergioBenitez/yansi",
+    "licenseFiles": [
+      "Cargo-yansi-1.0.1-0ae90c51b3.txt"
+    ]
+  },
+  {
+    "id": "cargo:yoke@0.8.3:50ed305654",
+    "name": "yoke",
+    "version": "0.8.3",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-yoke-0.8.3-50ed305654.txt"
+    ]
+  },
+  {
+    "id": "cargo:yoke-derive@0.8.2:462a58c102",
+    "name": "yoke-derive",
+    "version": "0.8.2",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-yoke-derive-0.8.2-462a58c102.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerocopy@0.8.56:6f4537e631",
+    "name": "zerocopy",
+    "version": "0.8.56",
+    "source": "https://github.com/google/zerocopy",
+    "licenseFiles": [
+      "Cargo-zerocopy-0.8.56-6f4537e631.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerocopy-derive@0.8.56:d0606f9586",
+    "name": "zerocopy-derive",
+    "version": "0.8.56",
+    "source": "https://github.com/google/zerocopy",
+    "licenseFiles": [
+      "Cargo-zerocopy-derive-0.8.56-d0606f9586.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerofrom@0.1.8:c5badd9c43",
+    "name": "zerofrom",
+    "version": "0.1.8",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-zerofrom-0.1.8-c5badd9c43.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerofrom-derive@0.1.7:5f2dec570c",
+    "name": "zerofrom-derive",
+    "version": "0.1.7",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-zerofrom-derive-0.1.7-5f2dec570c.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeroize@1.9.0:68a63ba1fa",
+    "name": "zeroize",
+    "version": "1.9.0",
+    "source": "https://github.com/RustCrypto/utils",
+    "licenseFiles": [
+      "Cargo-zeroize-1.9.0-68a63ba1fa.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-client@0.2.101:c38aabe074",
+    "name": "zeron-client",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-client-0.2.101-c38aabe074.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-doc@0.2.101:6ce7a0c9a7",
+    "name": "zeron-doc",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-doc-0.2.101-6ce7a0c9a7.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-markdown@0.2.101:95ba4b8cf6",
+    "name": "zeron-markdown",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-markdown-0.2.101-95ba4b8cf6.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-mobile@0.2.101:297d57473a",
+    "name": "zeron-mobile",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-mobile-0.2.101-297d57473a.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-proto@0.2.101:c45e5a5725",
+    "name": "zeron-proto",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-proto-0.2.101-c45e5a5725.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-rpc@0.2.101:40828d9267",
+    "name": "zeron-rpc",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-rpc-0.2.101-40828d9267.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-sync@0.2.101:f453289208",
+    "name": "zeron-sync",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-sync-0.2.101-f453289208.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-syntax@0.2.101:d8e789873d",
+    "name": "zeron-syntax",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-syntax-0.2.101-d8e789873d.txt"
+    ]
+  },
+  {
+    "id": "cargo:zeron-text@0.2.101:a589071b48",
+    "name": "zeron-text",
+    "version": "0.2.101",
+    "source": "https://github.com/zeronsh/zeron",
+    "licenseFiles": [
+      "Cargo-zeron-text-0.2.101-a589071b48.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerotrie@0.2.5:9070a39fc6",
+    "name": "zerotrie",
+    "version": "0.2.5",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-zerotrie-0.2.5-9070a39fc6.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerovec@0.11.7:fa17eb2b2e",
+    "name": "zerovec",
+    "version": "0.11.7",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-zerovec-0.11.7-fa17eb2b2e.txt"
+    ]
+  },
+  {
+    "id": "cargo:zerovec-derive@0.11.4:784a1fdeea",
+    "name": "zerovec-derive",
+    "version": "0.11.4",
+    "source": "https://github.com/unicode-org/icu4x",
+    "licenseFiles": [
+      "Cargo-zerovec-derive-0.11.4-784a1fdeea.txt"
+    ]
+  },
+  {
+    "id": "cargo:zmij@1.0.23:02a877fc28",
+    "name": "zmij",
+    "version": "1.0.23",
+    "source": "https://github.com/dtolnay/zmij",
+    "licenseFiles": [
+      "Cargo-zmij-1.0.23-02a877fc28.txt"
+    ]
+  }
+]

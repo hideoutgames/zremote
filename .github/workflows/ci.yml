@@ -1,0 +1,68 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ci.yml"
+      - "Package.swift"
+      - "Sources/**"
+      - "Tests/**"
+      - "native/**"
+      - "scripts/**"
+      - "Darwin/**"
+      - "Android/**"
+  pull_request:
+    paths:
+      - ".github/workflows/ci.yml"
+      - "Package.swift"
+      - "Sources/**"
+      - "Tests/**"
+      - "native/**"
+      - "scripts/**"
+      - "Darwin/**"
+      - "Android/**"
+
+jobs:
+  domain:
+    name: Swift domain regressions
+    runs-on: macos-26
+    env:
+      ZREMOTE_CORE_ONLY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run the two production regression classes
+        run: |
+          python3 scripts/run-local.py --phase swift -- \
+            swift test --jobs 1 --filter 'CoreBehaviorTests|UnifiedDiffParserTests'
+
+  native-projection:
+    name: Native transcript projection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Rust
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+      - name: Protect the visible answer from reasoning content
+        run: |
+          python3 scripts/run-local.py --phase rust -- \
+            cargo test --manifest-path native/core/Cargo.toml --locked -p zeron-mobile \
+              --lib client_ffi::session::projection_regression_tests::reasoning_does_not_leak_into_visible_answer -- --exact
+
+  sources:
+    name: Native source syntax
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check presentation syntax and build scripts
+        run: |
+          find Sources/ZRemote Darwin/Sources -name '*.swift' -print0 | \
+            while IFS= read -r -d '' file; do swiftc -frontend -parse "$file"; done
+          for script in scripts/*.sh; do bash -n "$script"; done
+          python3 -m py_compile scripts/run-local.py scripts/generate-cargo-notices.py \
+            scripts/generate-swift-notices.py scripts/generate-gradle-notices.py scripts/verify-notices.py

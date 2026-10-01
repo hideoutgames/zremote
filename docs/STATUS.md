@@ -1,0 +1,78 @@
+# Implementation and verification status
+
+This replacement is being validated on `zeron/premium-zeron-client-plan` before
+merging into `hideoutgames/zremote:main`. It incorporates the current main branch's
+TestFlight safeguards. App compilation and device results are recorded separately
+from the completed local domain checks below.
+
+## Implemented source
+
+- Swift/Skip app shell, charcoal palette, Composer, Sessions, phone side drawer,
+  tablet side panel, phone bottom sheets, and centered tablet secondary views.
+- Host-backed native peer, system-browser sign-in, secure credentials, account
+  isolation, durable delivery retry, streaming projections, and local drafts.
+- Host-authoritative model picker, favorites, provider locking, reasoning/options.
+- Project selection and creation using existing host commands; remote browsing
+  only for choosing a project's folder.
+- Completed-turn file cards, six-file preview, saved per-file native diffs, and
+  PR metadata with browser links supplied by Zeron.
+- Optional blank-Composer background, Settings/Acknowledgements, offline demo.
+- Native iOS/Android entry points, pinned Rust subset, license inventory tools,
+  a shared local build runner, and adapted manual TestFlight workflow.
+
+The previous tracked React Native app and its source, assets, patches, and docs
+have been removed. The app icon and TestFlight identity/configuration are retained.
+The local `upstream` remote is removed. GitHub's fork relationship remains; server
+detachment can discard repository metadata and has not been performed.
+
+## Verification
+
+Local checks completed on 2026-10-01. These are separate from an app build and
+device validation. No full suite or coverage sweep was run.
+
+| Check | Result and scope |
+| --- | --- |
+| `CoreBehaviorTests` | Final targeted rerun: all 8 passed with stable inputs after the SkipFuse and bounded transcript-cache changes. Covers presentation rules, model options, auth callback, account storage, demo lifecycle, failed-send draft, and expired-account restore. |
+| `UnifiedDiffParserTests` | Final targeted rerun: all 6 passed after correcting Swift exclusivity and CRLF handling. Includes immutable per-file capture and bounded/binary/partial diffs. |
+| Rust projection regression | Exact `reasoning_does_not_leak_into_visible_answer`: 1 passed, 22 filtered; stable inputs. The initial Windows linker startup failure was resolved with LLVM lld. |
+| Native Swift adapter | Swift 6 semantic check passed for the real core module, pinned SkipKeychain source, regenerated UniFFI Swift, and C header/module map. Windows uses SkipKeychain's unsupported-platform branch; this does not verify mobile secure storage. |
+| UI/native entry files | 14 handwritten Swift files passed syntax parsing; the changed root/sign-in views and modal back handler were checked again after integration. This does not validate SwiftUI/Skip platform types or runtime behavior. |
+| Notices | Source and 339-entry Cargo inventory audits passed. Complete Swift and Gradle inventories require platform resolution. |
+| Build/configuration | Bash scripts, workflow/Skip YAML, plist/XML, asset JSON, and owned-source whitespace checks passed. Upstream license text is preserved verbatim. |
+
+The shared runner records local evidence under the machine's ZRemote cache.
+The core-test result is `5732e7cb-2096-4519-a1fb-805576191d07`; parser rerun is
+`a3607b6b-0376-467b-8c32-006918426a31`; native adapter typecheck is
+`bfe5c12b-31ad-422e-b45b-f7d2d92a3cff`; Rust regression is
+`f3d202b3-c2c3-4f01-a3f6-7aab9007b94e`. The generated ABI was rebuilt from the
+extended native core, rather than hand-written to match the adapter.
+
+- No iOS or Android application build, emulator/device run, live login, host
+  roundtrip, or TestFlight upload has been verified for this replacement.
+
+## Platform boundary and remaining checks
+
+JDK 21, Android SDK 36, platform/build tools, and Gradle 9.2.1 are installed locally.
+The complete Skip Fuse build requires macOS/Xcode for its SwiftUI prebuild; the
+Windows SDK installation alone cannot produce a validated app. No Android device
+is connected and no emulator is configured.
+
+Before merging, compile both native app targets on a supported Mac and exercise
+demo mode on iPhone/iPad and Android phone/tablet sizes. Validate live sign-in,
+streaming/stop/reconnect/retry, project creation, captured diffs, background-only
+decoration, accessibility, keyboard behavior, and scrolling during long turns.
+Generate and audit the resolved Swift/Gradle notices before any distribution.
+
+The transcript uses stable, incremental native-core projections and a shared
+SwiftUI/Skip renderer. It does not yet use the official iOS app's analytic CoreText
+renderer; equivalent long-session performance has not been established.
+
+Android uses one large native sheet detent, a supported gesture overload, a lazy
+scroll target, and custom Compose text-selection/back-handler components to cover gaps in
+the pinned Skip API. iOS retains native sheet detents and text selection. These
+adaptations have been checked against dependency source; device behavior remains
+part of the outstanding platform validation.
+
+Host turn snapshots can expire, and simultaneous checkout edits may be included.
+The client cannot create an arbitrary Desktop folder with the existing API.
+PR review opens the host-provided web link; there is no direct GitHub integration.

@@ -1,0 +1,80 @@
+{
+  "append-only-bytes@0.1.12": [
+    "native/licenses/append-only-bytes-0.1.12/LICENSE"
+  ],
+  "arref@0.1.0": [
+    "native/licenses/arref-0.1.0/LICENSE"
+  ],
+  "loro-internal@1.13.9": [
+    "native/licenses/loro-internal-1.13.9/LICENSE"
+  ],
+  "serde_columnar@0.3.14": [
+    "native/licenses/serde_columnar-0.3.14/LICENSE"
+  ],
+  "serde_columnar_derive@0.3.7": [
+    "native/licenses/serde_columnar_derive-0.3.7/LICENSE"
+  ],
+  "tree-sitter-cpp@0.23.4": [
+    "native/licenses/tree-sitter-cpp-0.23.4/LICENSE"
+  ],
+  "tree-sitter-html@0.23.2": [
+    "native/licenses/tree-sitter-html-0.23.2/LICENSE"
+  ],
+  "tree-sitter-java@0.23.5": [
+    "native/licenses/tree-sitter-java-0.23.5/LICENSE"
+  ],
+  "tree-sitter-json@0.24.8": [
+    "native/licenses/tree-sitter-json-0.24.8/LICENSE"
+  ],
+  "tree-sitter-kotlin-ng@1.1.0": [
+    "native/licenses/tree-sitter-kotlin-ng-1.1.0/LICENSE"
+  ],
+  "tree-sitter-lua@0.5.0": [
+    "native/licenses/tree-sitter-lua-0.5.0/LICENSE"
+  ],
+  "tree-sitter-make@1.1.1": [
+    "native/licenses/tree-sitter-make-1.1.1/LICENSE"
+  ],
+  "tree-sitter-md@0.5.3": [
+    "native/licenses/tree-sitter-md-0.5.3/LICENSE"
+  ],
+  "tree-sitter-ruby@0.23.1": [
+    "native/licenses/tree-sitter-ruby-0.23.1/LICENSE"
+  ],
+  "tree-sitter-sequel@0.3.11": [
+    "native/licenses/tree-sitter-sequel-0.3.11/LICENSE"
+  ],
+  "tree-sitter-toml-ng@0.7.0": [
+    "native/licenses/tree-sitter-toml-ng-0.7.0/LICENSE"
+  ],
+  "tree-sitter-typescript@0.23.2": [
+    "native/licenses/tree-sitter-typescript-0.23.2/LICENSE"
+  ],
+  "uniffi@0.32.2": [
+    "native/licenses/uniffi-0.32.2/LICENSE"
+  ],
+  "uniffi_bindgen@0.32.2": [
+    "native/licenses/uniffi_bindgen-0.32.2/LICENSE"
+  ],
+  "uniffi_core@0.32.2": [
+    "native/licenses/uniffi_core-0.32.2/LICENSE"
+  ],
+  "uniffi_internal_macros@0.32.2": [
+    "native/licenses/uniffi_internal_macros-0.32.2/LICENSE"
+  ],
+  "uniffi_macros@0.32.2": [
+    "native/licenses/uniffi_macros-0.32.2/LICENSE"
+  ],
+  "uniffi_meta@0.32.2": [
+    "native/licenses/uniffi_meta-0.32.2/LICENSE"
+  ],
+  "uniffi_pipeline@0.32.2": [
+    "native/licenses/uniffi_pipeline-0.32.2/LICENSE"
+  ],
+  "uniffi_udl@0.32.2": [
+    "native/licenses/uniffi_udl-0.32.2/LICENSE"
+  ],
+  "generic-btree@0.10.7": [
+    "native/licenses/generic-btree-0.10.7/LICENSE"
+  ]
+}

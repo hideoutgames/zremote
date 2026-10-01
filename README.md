@@ -1,53 +1,62 @@
 # ZRemote
 
-ZRemote is a clone of of [Zeron](https://github.com/zeronsh/zeron), purely for testing.
+A focused native Zeron peer for iPhone, iPad, and Android, built with Swift,
+SwiftUI, Skip Fuse, and Zeron's Rust mobile core. Agents and project operations
+execute on your remote computer. The mobile app never runs an agent or shell.
 
-## Attribution
+The Composer is the main view. Phones slide it aside to reveal Sessions;
+tablets use a side panel. Model selection, project creation, Settings, and
+changed-file details open in phone bottom sheets or centered tablet modals.
+PR cards contain only metadata supplied by Zeron and an optional HTTPS link.
 
-The iOS app (`apps/ios`) and the Rust mobile core it links are from the [Zeron](https://zeron.sh) project by Wing — [zeronsh/zeron](https://github.com/zeronsh/zeron). This repository vendors that code at [`433aa148`](https://github.com/zeronsh/zeron/commit/433aa148d55e3316dab9d69afc402e0bb8f55583), plus the iOS model picker from [zeronsh/zeron#583](https://github.com/zeronsh/zeron/pull/583) ([`a63c25b`](https://github.com/zeronsh/zeron/commit/a63c25b44c4c5ca6e544457c45351e89b6a1d5f1)). Zeron is [MIT licensed](LICENSE); copyright (c) 2026 Wing. Other bundled components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Development
 
-ZRemote changes the App Store identity only: bundle id `no.hideout.zremote`, the ZRemote display name, and the logos in [`logos/`](logos/).
+Full app builds require macOS 15+, Xcode 26+, Skip, Android SDK/NDK, Swift 6.1+,
+and Rust. See [native builds](docs/BUILD.md).
 
-- **Bundle id:** `no.hideout.zremote` (override in CI with the `IOS_BUNDLE_ID` variable)
-- **Display name:** ZRemote
-- **Icon and sign-in mark:** [`logos/`](logos/) (`AppIcon.png`, black/white `ZRemoteLogo`)
-- **TestFlight:** [iOS TestFlight](.github/workflows/ios-testflight.yml) — see [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)
+Use `ZREMOTE_CORE_ONLY=1 swift test --filter UnifiedDiffParserTests` for the
+focused parser/capture regressions without resolving UI dependencies.
+Use the shared resource runner in `scripts/` for heavy local builds.
 
-No agent runs on the phone. Rust decides what to paint; Swift paints, scrolls,
-and handles gestures. The crates in this repo are only the ones `zeron-mobile`
-links (`mobile`, `client`, `doc`, `proto`, `markdown`, `text`, `syntax`,
-`sync`, `rpc`), plus `crates/ui/src/file-icons.json` which the mobile layout
-embeds at compile time.
+The manual [TestFlight workflow](.github/workflows/ios-testflight.yml) is
+adapted to the native app. Implementation does not trigger an upload.
 
-## Build
+Choose **Try test mode** before signing in to exercise the same application
+interfaces without credentials or network access. Its sessions, drafts, model
+favorites, streaming replies, project folders, and sample changes stay in memory.
 
-Xcode 26 or newer, and a Rust toolchain. `rust-toolchain.toml` installs the
-device target (`aarch64-apple-ios`). Simulator builds also need
-`rustup target add aarch64-apple-ios-sim` (TestFlight does not install that):
+## Structure
 
-```sh
-cd apps/ios
-xcodebuild -project Zeron.xcodeproj -scheme Zeron \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-```
+| Path | Purpose |
+| --- | --- |
+| `Sources/ZRemote` | Native presentation and adaptive navigation |
+| `Sources/ZRemoteCore` | Models, demo peer, diff parser, persistence |
+| `Sources/ZRemoteNative` | Swift adapter to the native peer core |
+| `native/core` | Pinned, attributed mobile-only Rust subset |
+| `Darwin`, `Android` | Platform application entry points |
+| `Tests/ZRemoteCoreTests` | Focused production regression tests |
 
-The Zeron target's **Rust core** build phase runs `scripts/ios/build-core.sh`,
-which builds `crates/mobile` for the active platform and refreshes
-`apps/ios/Zeron/Core/Generated/zeron_core.swift`. `ZERON_SKIP_CORE=1` reuses
-the last built library when iterating on Swift only.
+## Compatibility boundaries
 
-A device archive for TestFlight is unsigned in CI and cloud-signed on export.
-Locally, the project uses automatic signing. The checked-in team id is the
-upstream default; the TestFlight workflow overrides `DEVELOPMENT_TEAM` with
-the `APPLE_TEAM_ID` secret and the bundle id with `no.hideout.zremote`.
+New projects can be created in the host's managed projects directory, or an
+existing remote folder can be selected. The current host protocol cannot make
+an arbitrary new Desktop folder. No host or edge patch is required.
 
-## Layout
+Turn diff snapshots are best-effort and can expire on the host. The client
+captures available patches when a turn completes and retains immutable,
+account-scoped revisions. Concurrent checkout edits may also appear in the
+host's turn diff; it is not an audit log of agent-only filesystem activity.
+Unavailable data is never substituted with a later checkout diff.
 
-```
-apps/ios/          Xcode project (scheme Zeron)
-scripts/ios/       build-core.sh — invoked by the Rust core build phase
-crates/            Rust crates linked into libzeron_mobile.a
-logos/             ZRemote app icon and wordmark
-```
+The optional background belongs only to a blank new Composer. It is removed
+while Sessions or a secondary view is visible. There is no terminal, general
+file browser, repository administration, or direct GitHub integration.
 
-App sources and tests are described in [apps/ios/README.md](apps/ios/README.md).
+## Notices and verification
+
+[Acknowledgements](docs/ACKNOWLEDGEMENTS.md) describes the bundled inventory.
+Settings exposes full notices offline.
+
+See [verification status](docs/STATUS.md) for exact checks and remaining
+platform validation. Source implementation is not evidence of a successful
+iOS/Android build or device validation.

@@ -1,0 +1,25 @@
+# Shared Swift implementation, bridged to native Compose on Android.
+skip:
+  mode: 'native'
+gradleProperties:
+  org.gradle.workers.max: '1'
+  org.gradle.parallel: 'false'
+  org.gradle.jvmargs: '-Xmx1536m -XX:MaxMetaspaceSize=384m'
+build:
+  contents:
+    # The shared UniFFI Swift binding links the Rust library for each target ABI.
+    - block: 'afterEvaluate'
+      contents:
+        - block: 'listOf("Debug", "Release").forEach'
+          contents:
+            - 'val variant = it'
+            - block: 'tasks.named("buildAndroidSwiftPackage$variant")'
+              contents:
+                - 'actions.clear()'
+                - block: 'doLast'
+                  contents:
+                    - block: 'project.objects.newInstance<SkipBridgeExecOps>().execOps.exec'
+                      contents:
+                        - 'commandLine("bash", "${swiftSourceFolder()}/scripts/build-skip-android.sh", swiftSourceFolder(), swiftBuildFolder(), variant.lowercase(), project.name)'
+                        - 'environment("SKIP_BRIDGE", "1")'
+                        - 'environment("TARGET_OS_ANDROID", "1")'

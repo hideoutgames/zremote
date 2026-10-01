@@ -1,8 +1,22 @@
-/target
-**/*.rs.bk
 .DS_Store
-.env
-.env.local
+.build/
+.swiftpm/
+build/
+DerivedData/
 xcuserdata/
 *.xcuserstate
-DerivedData/
+*.ipa
+*.apk
+*.aab
+.gradle/
+.kotlin/
+.idea/
+local.properties
+*.keystore
+native/artifacts/
+native/core/target/
+.verification/
+__pycache__/
+*.pyc
+# Ignored local caches from the retired app are not part of the replacement.
+/app/

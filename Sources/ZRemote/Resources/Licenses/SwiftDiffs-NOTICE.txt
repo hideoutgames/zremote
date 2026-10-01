@@ -1,0 +1,20 @@
+Swift-Diffs / @pierre/diffs
+
+The unified patch parser in ZRemote is adapted from PatchParser.swift and
+Models.swift in Swift-Diffs by Fayaz Ahmed and contributors.
+
+Source: https://github.com/fayazara/Swift-Diffs
+Revision: 7005d406fa362f1bbcc5c76551a9bf222c9a8eb6
+License: Apache License, Version 2.0 (SwiftDiffs-Apache-2.0.txt)
+
+SwiftDiffs is a native adaptation of @pierre/diffs 1.4.2.
+Copyright 2025 Pierre Computer Company and contributors.
+Upstream source: https://github.com/pierrecomputer/pierre/tree/main/packages/diffs
+
+ZRemote modifications: bounded parsing; native mobile row models; binary and
+incomplete patch states; quoted Git path decoding; removal of AppKit/editor,
+syntax highlighting and diff-generation dependencies. ZRemote renders host
+patches in a read-only SwiftUI/Skip native component.
+
+No Shiki engine, grammar, theme, jsdiff frontier, or QuickJS component from
+Swift-Diffs is incorporated in this adaptation.

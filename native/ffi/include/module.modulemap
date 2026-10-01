@@ -1,0 +1,6 @@
+module zeron_coreFFI {
+    header "zeron_coreFFI.h"
+    export *
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}
