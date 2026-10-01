@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   compile:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26-intel
     timeout-minutes: 180
     env:
@@ -79,16 +80,9 @@ jobs:
           swiftly init --skip-install --assume-yes --quiet-shell-followup
       - name: Install matching Swift Android SDK and NDK
         run: |
-          # Skip 1.9.12 installs the matching host Swift via swiftly, verifies
-          # the SDK checksum, and links its sysroot to the requested NDK.
-          # Swiftly 1.1.3 normalizes 6.4.0 to an unpublished 6.4 download URL.
-          # Use the published matching 6.3.3 pair until that installer is fixed.
-          skip android sdk install --version 6.3.3 --ndk-version r27d
-          ndk="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle/swift-android/android-ndk-r27d"
-          test -f "$ndk/source.properties"
-          echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"
-          skip android toolchain version --swift-version 6.3.3
+          # Keep the published 6.3.3 pair and verified r27d sysroot; retry only
+          # transient download timeouts before continuing to compilation.
+          bash scripts/install-android-toolchain.sh
       - name: Install pinned Rust Android tooling
         run: |
           rustup toolchain install 1.98.1 --profile minimal

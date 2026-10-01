@@ -10,12 +10,13 @@ import UIKit
 
 /* SKIP @bridge */
 public struct ZRemoteRootView: View {
+    // Skip's generated bridge accesses this view's state and environment storage.
     #if os(iOS)
-    @State private var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() }, notifications: AppleSessionNotifications.shared)
+    @State var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() }, notifications: AppleSessionNotifications.shared)
     #else
-    @State private var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() })
+    @State var model = AppModel(client: NativeClient(), makeLiveClient: { NativeClient() })
     #endif
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase) var scenePhase
     public init() {}
 
     public var body: some View {

@@ -37,7 +37,9 @@ permissions:
 
 jobs:
   compile:
-    if: inputs.platform != 'android'
+    # Reusable workflows inherit the original caller's event. Refuse app builds
+    # from automatic callers as well as keeping this entry point manual-only.
+    if: github.event_name == 'workflow_dispatch' && inputs.platform != 'android'
     runs-on: macos-26-intel
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +103,7 @@ jobs:
           if-no-files-found: ignore
 
   android:
-    if: inputs.platform == 'android' || inputs.platform == 'both'
+    if: github.event_name == 'workflow_dispatch' && (inputs.platform == 'android' || inputs.platform == 'both')
     uses: ./.github/workflows/android-compile.yml
     with:
       save_debug_apk: ${{ inputs.save_debug_apk }}

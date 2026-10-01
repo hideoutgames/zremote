@@ -61,20 +61,20 @@ concurrency:
 
 jobs:
   screenshots:
-    if: inputs.operation == 'screenshots'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'screenshots'
     uses: ./.github/workflows/android-screenshots.yml
     with:
       build_run_id: ${{ inputs.source_run_id }}
 
   compile:
-    if: inputs.operation == 'compile'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'compile'
     uses: ./.github/workflows/ios-compile.yml
     with:
       platform: ${{ inputs.platform }}
       save_debug_apk: ${{ inputs.save_debug_apk }}
 
   testflight:
-    if: inputs.operation == 'testflight'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'testflight'
     runs-on: macos-26-intel
     environment: testflight
     timeout-minutes: 120

@@ -3,11 +3,17 @@
 The retained `.github/workflows/ios-testflight.yml` is manual dispatch only and
 uses standard 14 GB `macos-26-intel` runners. Its `operation` defaults to `testflight` to
 preserve the existing distribution workflow. Merging a branch does not upload.
+App compile and TestFlight jobs additionally require a `workflow_dispatch`
+origin, including calls through reusable workflows. Automatic regression CI
+does not call either app compilation or distribution.
 
 For unsigned compile validation, explicitly select `operation=compile` and
 `platform=ios`, `android`, or `both`. Compile mode calls the reusable
 `ios-compile.yml` workflow; the entire TestFlight job is skipped, so it does not
 enter the signing environment, read App Store Connect secrets, or upload to Apple.
+The workflow name alone does not identify a TestFlight attempt: a compile-mode
+failure leaves the TestFlight job intentionally skipped. Check the operation
+and failed job before treating it as an archive, signing or upload problem.
 Before the new compile workflows reach main, use this existing registered entry:
 
 ```sh
