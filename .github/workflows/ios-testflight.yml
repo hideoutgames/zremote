@@ -274,6 +274,7 @@ jobs:
           # The core preparation step uses the mobile-dist Cargo profile.
           python3 scripts/run-local.py --phase ios -- \
             xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+            -skipPackagePluginValidation -skipMacroValidation \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
             -configuration Release \
             -destination 'generic/platform=iOS' \

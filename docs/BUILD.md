@@ -129,6 +129,12 @@ CI runs the two named Swift regression classes and the single Rust transcript
 projection regression. The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
 
+The iOS build and archive commands pass `-skipPackagePluginValidation` and
+`-skipMacroValidation` for the trusted, pinned Skip dependencies on fresh CI
+runners. These command-scoped flags match
+[Skip 1.9.12's app build](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AppCommand.swift#L115-L125)
+and [archive implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/InitCommand.swift#L299-L311).
+
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated
 Swift acknowledgements, and full Swift dependency license texts when available.

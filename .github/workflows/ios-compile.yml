@@ -74,6 +74,7 @@ jobs:
           set -o pipefail
           python3 scripts/run-local.py --phase ios -- \
             xcodebuild -workspace Project.xcworkspace -scheme "ZRemote App" \
+              -skipPackagePluginValidation -skipMacroValidation \
               -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
               CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
