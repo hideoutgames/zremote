@@ -72,3 +72,4 @@ jobs:
         run: |
           python3 Tests/Scripts/test_run_local.py
           python3 Tests/Scripts/test_build_native_core.py
+          python3 Tests/Scripts/test_testflight_cleanup.py

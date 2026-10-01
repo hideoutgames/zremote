@@ -423,7 +423,13 @@ jobs:
           # they do, delete them so the artifact upload below has nothing
           # to leak, then fail the job loudly.
           logs=(native-core.log package-resolve.log acknowledgements.log build.log export.log)
-          if grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" "${logs[@]}" 2>/dev/null; then
+          existing_logs=()
+          for log in "${logs[@]}"; do
+            if [ -f "$log" ]; then existing_logs+=("$log"); fi
+          done
+          # Missing later-stage logs must not turn a positive grep match into
+          # an I/O error and bypass removal after an earlier build failure.
+          if [ "${#existing_logs[@]}" -gt 0 ] && grep -lE "BEGIN (EC |RSA )?PRIVATE KEY" "${existing_logs[@]}"; then
             echo "Log file contains key material — deleting logs and failing."
             rm -f "${logs[@]}"
             exit 1

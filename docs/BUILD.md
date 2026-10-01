@@ -146,10 +146,12 @@ CI runs the three named Swift regression classes and the three Rust transcript
 projection regressions. Five isolated installer cases use stub commands to
 check retries and failure propagation without downloading an SDK or compiling.
 Run those cases with `bash Tests/Scripts/install-android-toolchain-tests.sh`.
-Four additional scoped cases check quiet-child liveness, exit status propagation,
-the combined host build, and all required iOS framework slices using stub tools:
+Six additional scoped cases check quiet-child liveness, exit status propagation,
+the combined host build, all required iOS framework slices using stub tools, and
+TestFlight cleanup with incomplete logs:
 `python3 Tests/Scripts/test_run_local.py` and
-`python3 Tests/Scripts/test_build_native_core.py`. They do not compile an app.
+`python3 Tests/Scripts/test_build_native_core.py`, plus
+`python3 Tests/Scripts/test_testflight_cleanup.py`. They do not compile an app.
 The iOS Compile Check remains a separate manual unsigned
 app build; TestFlight remains a separate manual distribution workflow.
 
