@@ -23,6 +23,11 @@ interface, including queue order, held edits and steering within one live turn.
 Move up/down uses the peer's relative movement API, so another device changing
 the order while a menu is open cannot turn a one-row move into a jump.
 
+The queue view's state and focus storage use internal visibility for Skip's
+generated bridge, matching the shared-view rules added by PR #184. The follow-up
+passed syntax parsing of `MessageQueueView.swift` and a diff check; these do not
+validate bridge generation or a SwiftUI/Skip application build.
+
 Targeted local verification on 2026-10-01 passed 18 distinct Swift cases:
 all eight `AppModelMessageQueueTests`, all five `MessageQueueTests`, and the
 existing first-send failure, attachment-only send, demo interruption, demo exit,

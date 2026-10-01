@@ -4,13 +4,13 @@ import ZRemoteCore
 struct MessageQueueView: View {
     @Bindable var model: AppModel
     let sessionID: String
-    @State private var edit: QueuedMessageEdit?
-    @State private var editText = ""
-    @State private var saving = false
-    @State private var openingEdit = false
-    @State private var leaseValid = true
-    @State private var visible = false
-    @FocusState private var editorFocused: Bool
+    @State var edit: QueuedMessageEdit?
+    @State var editText = ""
+    @State var saving = false
+    @State var openingEdit = false
+    @State var leaseValid = true
+    @State var visible = false
+    @FocusState var editorFocused: Bool
 
     private var rows: [QueuedMessage] { model.queuedMessages(sessionID: sessionID) }
     private var capabilities: MessageQueueCapabilities { model.queueCapabilities(sessionID: sessionID) }
