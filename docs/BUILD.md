@@ -169,6 +169,12 @@ used in that storage must also be visible. Ordinary implementation helpers and
 iOS-only UIKit representables can remain private. This applies beyond the
 explicitly bridged root view; see [Skip's SwiftUI visibility rules](https://skip.dev/docs/app-development/#swiftui).
 Swift syntax parsing alone does not detect a private-state bridge failure.
+Kotlin-only implementation helpers whose API uses Compose types must also opt
+out of native bridging with `/* SKIP @nobridge */`. For example, the composer's
+visual transformation and offset mapping remain on the Kotlin side, while its
+`ContentModifier` exposes the supported boundary to native Swift. Otherwise
+bridge generation rejects Compose-only types such as `TransformedText`, even
+when the app target is iOS. See [Skip's bridge directives](https://skip.dev/docs/platformcustomization/#skip-comments).
 
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated

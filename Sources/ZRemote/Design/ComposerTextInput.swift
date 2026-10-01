@@ -271,6 +271,9 @@ struct ComposerTokenModifier: ContentModifier {
     }
 }
 
+// These helpers stay entirely in Compose; their Android text types have no
+// native Swift bridge. Only ComposerTokenModifier crosses that boundary.
+/* SKIP @nobridge */
 final class ComposerTokenTransformation: VisualTransformation {
     let ranges: [Int]
     let labels: [String]
@@ -299,6 +302,7 @@ final class ComposerTokenTransformation: VisualTransformation {
     }
 }
 
+/* SKIP @nobridge */
 final class ComposerReferenceOffsets: OffsetMapping {
     let ranges: [Int]
     let labels: [String]
