@@ -40,7 +40,9 @@ This does not establish full SwiftUI/Skip compilation, native appearance,
 VoiceOver/TalkBack behavior, or live Codex host execution. No application build,
 workflow dispatch or distribution was performed. The existing Sessions refresh
 implementation from merged PR #180 also passed its four focused
-`SessionsRefreshTests` during review; no refresh source change was needed.
+`SessionsRefreshTests` during review; those model checks did not validate the
+iOS gesture or recessed layer. The reported Simulator failure is addressed by
+the refresh correction below and still requires native verification.
 
 ## Session controls, checkout selection and Details
 
@@ -159,6 +161,41 @@ All six `DrawerGestureRulesTests` passed with stable inputs on 2026-10-01
 passed Swift syntax parsing. These checks do not establish native gesture
 arbitration, keyboard layout, animation feel or device appearance. No application
 compilation, workflow dispatch or distribution was performed for this change.
+
+## Refresh gesture and reveal correction
+
+The iOS refresh attachment now sits in stable scroll content outside the lazy
+rows. Filtering or recycling rows cannot remove it. Vertical bounce is declared
+on the SwiftUI scroll view as well as maintained by its UIKit attachment, so
+short and empty lists remain pullable after view updates.
+
+The native control and recessed layer now share the same `UIScrollView` offset.
+The resting inset is retained while UIKit expands and collapses its refresh
+inset; subtracting that expanded inset would otherwise hide the recess during
+refresh. Safe-area changes adjust that baseline without retaining a false strip
+after rotation. Offset callbacks are coalesced outside layout, and obsolete callbacks,
+observers and refresh tasks are removed on detach. The Composer wallpaper's
+full-window alignment, filter, shadows and unmodified activity glyph remain the
+recess's visual treatment.
+
+Real and demo resync requests can return immediately, before visible refresh
+feedback. The model now holds its refresh state for a minimum of 500 ms, shared
+by concurrent requests. Slower refreshes add no second delay, and account changes
+cancel the old hold. This interval does not imply a host acknowledgement.
+
+Targeted checks on 2026-10-01 passed all seven `SessionsRefreshTests` and four
+`SessionRefreshGeometryTests` through the shared runner with stable inputs
+(`7eb8adf9-d41f-4233-ac94-c71dfdbe0f3f`). The two changed presentation files
+passed Swift syntax parsing, which does not typecheck UIKit/SwiftUI. An initial
+run reused another worktree's stale Swift build graph and is excluded; the
+reported run uses a separate scratch directory for this worktree.
+
+iOS Simulator validation remains outstanding: pull from the top with short,
+empty/filtered and long lists; cancel below the threshold; refresh repeatedly;
+and rotate during refresh. Check the filtered wallpaper against the Composer,
+the plain-background fallback, and the normal activity glyph. The reported
+failure was no refresh in the Sessions sidebar; the project chooser is unchanged.
+No application build, workflow dispatch or distribution was performed.
 
 ## Sessions refresh and haptics
 

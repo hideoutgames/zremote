@@ -126,8 +126,6 @@ struct SessionListView: View {
         }
         #else
         sessionScroll
-            .coordinateSpace(name: "session-refresh")
-            .onPreferenceChange(SessionPullPosition.self) { refreshReveal = max(0, $0) }
             .overlay(alignment: .top) {
                 SessionRefreshRecess(model: model)
                     .frame(height: refreshReveal)
@@ -138,33 +136,43 @@ struct SessionListView: View {
 
     private var sessionScroll: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                ForEach(groups) { section in
-                    if section.showsHeader { sectionHeader(section) }
-                    if !section.collapsible || !collapsedProjects.contains(section.id) {
-                        ForEach(section.sessions) { session in sessionRow(session).transition(.opacity) }
-                    }
-                }
-                if filtered.isEmpty {
-                    Text(search.isEmpty && !hasFilters ? "Your sessions will appear here." : "No matching sessions.")
-                        .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
-                }
-            }
-            .padding(.horizontal, 16)
             #if os(iOS)
-            .background(NativeSessionRefresh(hapticsEnabled: model.preferences.hapticsEnabled) { await model.refreshSessions() })
-            .background {
-                GeometryReader { geometry in
-                    Color.clear.preference(key: SessionPullPosition.self,
-                                           value: geometry.frame(in: .named("session-refresh")).minY)
-                }
+            // Keep the UIKit attachment outside lazy content so filtering and
+            // offscreen row recycling cannot remove the refresh owner.
+            VStack(spacing: 0) {
+                NativeSessionRefresh(hapticsEnabled: model.preferences.hapticsEnabled,
+                                     onRevealChange: { refreshReveal = $0 }) {
+                    await model.refreshSessions()
+                }.frame(height: 0)
+                sessionRows
             }
+            #else
+            sessionRows
             #endif
         }
+        #if os(iOS)
+        .scrollBounceBehavior(.always, axes: .vertical)
+        #endif
         .scrollDismissesKeyboard(.interactively)
         .accessibilityAction(named: Text("Refresh sessions")) {
             Task { await model.refreshSessions() }
         }
+    }
+
+    private var sessionRows: some View {
+        LazyVStack(alignment: .leading, spacing: 4) {
+            ForEach(groups) { section in
+                if section.showsHeader { sectionHeader(section) }
+                if !section.collapsible || !collapsedProjects.contains(section.id) {
+                    ForEach(section.sessions) { session in sessionRow(session).transition(.opacity) }
+                }
+            }
+            if filtered.isEmpty {
+                Text(search.isEmpty && !hasFilters ? "Your sessions will appear here." : "No matching sessions.")
+                    .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     private var header: some View {
@@ -439,11 +447,6 @@ struct SessionListView: View {
         case .idle, .working: return Palette.secondary.opacity(0.5)
         }
     }
-}
-
-private struct SessionPullPosition: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 private struct SessionSection: Identifiable {

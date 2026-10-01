@@ -208,6 +208,9 @@ public enum SecondaryRoute: Identifiable {
         if let task = sessionsRefreshTask { await task.value; return }
         let epoch = generation, source = client
         refreshingSessions = true
+        // Resync can return before the next frame. Keep native refresh feedback
+        // visible briefly without delaying a slower peer a second time.
+        let feedbackDeadline = ContinuousClock.now.advanced(by: .milliseconds(500))
         let task = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -221,6 +224,9 @@ public enum SecondaryRoute: Identifiable {
                 guard epoch == self.generation, !Task.isCancelled, !(error is CancellationError) else { return }
                 self.error = "Couldn't refresh sessions. Try again when your connection is restored."
             }
+            guard epoch == self.generation, !Task.isCancelled else { return }
+            // This is presentation time, not confirmation of a remote update.
+            try? await Task.sleep(until: feedbackDeadline, clock: .continuous)
         }
         sessionsRefreshTask = task
         await task.value
