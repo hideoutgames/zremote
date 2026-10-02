@@ -59,6 +59,7 @@ final class UsageNotificationTests: XCTestCase {
         XCTAssertTrue(preferences.backgroundEnabled)
         XCTAssertNil(preferences.backgroundImageData)
         XCTAssertEqual(preferences.backgroundEffect, "none")
+        XCTAssertFalse(preferences.backgroundFullHeight)
         XCTAssertEqual(preferences.theme, .system)
         let futureTheme = try JSONDecoder().decode(LocalPreferences.self, from: Data("{\"theme\":\"future-theme\"}".utf8))
         XCTAssertEqual(futureTheme.theme, .system)
@@ -73,7 +74,8 @@ final class UsageNotificationTests: XCTestCase {
         let a = LocalStateStore(accountKey: "a", root: root), b = LocalStateStore(accountKey: "b", root: root)
         var preferences = LocalPreferences()
         preferences.backgroundImageData = Data([1, 2, 3]); preferences.backgroundImageName = "Personal image"
-        preferences.backgroundEffect = "dither"; preferences.notifications.enabled = true
+        preferences.backgroundEffect = "dither"; preferences.backgroundFullHeight = true
+        preferences.notifications.enabled = true
         preferences.theme = .light
         preferences.usageWarnings = [UsageWarning(remainingFraction: 0.05,
             source: UsageWarningSource(sessionID: "unresolved", hostID: "host", providerID: "codex", accountID: "provider-account", observedAt: Date(timeIntervalSince1970: 40)))]
@@ -82,12 +84,14 @@ final class UsageNotificationTests: XCTestCase {
         try await a.save(preferences)
         let restored = try await a.load(), other = try await b.load()
         XCTAssertEqual(restored.backgroundImageData, preferences.backgroundImageData)
+        XCTAssertTrue(restored.backgroundFullHeight)
         XCTAssertEqual(restored.sessionFinishedAt["session"], Date(timeIntervalSince1970: 42))
         XCTAssertTrue(restored.notifications.enabled)
         XCTAssertEqual(restored.theme, .light)
         XCTAssertEqual(restored.usageWarnings.first?.source?.accountID, "provider-account")
         XCTAssertTrue(restored.dismissedUsageSessions.contains("session"))
         XCTAssertNil(other.backgroundImageData)
+        XCTAssertFalse(other.backgroundFullHeight)
         XCTAssertFalse(other.notifications.enabled)
         XCTAssertEqual(other.theme, .system)
         XCTAssertTrue(other.usageWarnings.isEmpty)

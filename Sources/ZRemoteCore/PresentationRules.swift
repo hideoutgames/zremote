@@ -2,8 +2,13 @@ import Foundation
 
 /// Keeps decoration out of every navigation surface, including tablet panels.
 public enum PresentationRules {
-    public static func showsBackground(enabled: Bool, hasSession: Bool, sessionsVisible: Bool, secondaryVisible: Bool) -> Bool {
-        enabled && !hasSession && !sessionsVisible && !secondaryVisible
+    public static func usesSessionPanel(deviceSupportsPanel: Bool, availableWidth: Double) -> Bool {
+        deviceSupportsPanel && availableWidth.isFinite && availableWidth >= 700
+    }
+
+    public static func showsBackground(enabled: Bool, hasSession: Bool, sessionsVisible: Bool,
+                                       secondaryVisible: Bool, usesSessionPanel: Bool = false) -> Bool {
+        enabled && !hasSession && (!sessionsVisible || usesSessionPanel) && !secondaryVisible
     }
 
     public static func visibleFileCount(_ count: Int) -> Int { min(max(0, count), 6) }

@@ -50,6 +50,7 @@ public enum SecondaryRoute: Identifiable {
     public private(set) var refreshingSessions = false
     public var error: String?
     public var organizations: [Organization] = []
+    public var zeronAccounts: [ZeronAccount] = []
     public var isDemo = false
     public var preferences = LocalPreferences()
     public var agentAccounts = AgentAccountsSnapshot(available: false)
@@ -252,6 +253,22 @@ public enum SecondaryRoute: Identifiable {
         if let oldStore { try? await oldStore.clear() }
         client = makeLiveClient()
         bindClient()
+        do { try await client.restore(); zeronAccounts = client.zeronAccounts }
+        catch { self.error = "Couldn't restore another signed-in account." }
+    }
+
+    public func switchAccount(_ id: String) async {
+        guard !isDemo, id != client.accountKey else { return }
+        generation += 1
+        restoring = true
+        defer { restoring = false }
+        if let store { try? await store.save(preferences) }
+        resetAccountState()
+        bindClient()
+        do {
+            try await client.switchAccount(id)
+            zeronAccounts = client.zeronAccounts
+        } catch { self.error = "Couldn't switch accounts. Try again." }
     }
 
     private func resetAccountState() {
@@ -270,7 +287,7 @@ public enum SecondaryRoute: Identifiable {
         changeSizes = [:]
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
-        preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; changesAfterMessage = [:]
+        preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; zeronAccounts = []; changesAfterMessage = [:]
         attachmentDrafts = [:]; pullRequestsAfterMessage = [:]; answerSubmissions = [:]
         newSelection = ModelSelection()
         sessionsVisible = false; isDemo = false; busy = false; fetchingModels = false
@@ -290,6 +307,7 @@ public enum SecondaryRoute: Identifiable {
             }
             let previousWorkspace = workspace
             workspace = next
+            zeronAccounts = client.zeronAccounts
             let priorProject = previousWorkspace.projects.first { $0.id == selectedProjectID }
             let nextProject = next.projects.first { $0.id == selectedProjectID }
             if priorProject?.path != nextProject?.path || priorProject?.hostID != nextProject?.hostID || priorProject?.isRepository != nextProject?.isRepository {
@@ -641,6 +659,9 @@ public enum SecondaryRoute: Identifiable {
         guard ["none", "dither", "ascii", "halftone", "scanlines"].contains(effect) else { return }
         editedBackground = true; preferences.backgroundEffect = effect; scheduleSave()
     }
+    public func setBackgroundFullHeight(_ enabled: Bool) {
+        editedBackground = true; preferences.backgroundFullHeight = enabled; scheduleSave()
+    }
     public func dismissUsageWarning() {
         guard let id = usageWarning?.source?.sessionID else { return }
         preferences.dismissedUsageSessions.insert(id)
@@ -882,7 +903,10 @@ public enum SecondaryRoute: Identifiable {
     }
     public func chooseOrganization(_ id: String) async {
         let epoch = generation
-        do { try await client.selectOrganization(id); if epoch == generation { organizations = [] } }
+        do {
+            try await client.selectOrganization(id)
+            if epoch == generation { organizations = []; zeronAccounts = client.zeronAccounts }
+        }
         catch { if epoch == generation { self.error = "Couldn't open this organization." } }
     }
     @discardableResult
@@ -1077,6 +1101,7 @@ public enum SecondaryRoute: Identifiable {
                     merged.backgroundImageData = self.preferences.backgroundImageData
                     merged.backgroundImageName = self.preferences.backgroundImageName
                     merged.backgroundEffect = self.preferences.backgroundEffect
+                    merged.backgroundFullHeight = self.preferences.backgroundFullHeight
                 }
                 if self.editedNotifications { merged.notifications = self.preferences.notifications }
                 merged.dismissedUsageSessions.formUnion(self.preferences.dismissedUsageSessions)

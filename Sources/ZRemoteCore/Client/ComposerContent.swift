@@ -42,9 +42,10 @@ public struct ComposerCompletion: Identifiable, Equatable, Sendable, Codable {
 public struct UserProfile: Equatable, Sendable, Codable {
     public var id: String
     public var displayName: String
+    public var email: String?
     public var avatarURL: String?
-    public init(id: String, displayName: String, avatarURL: String? = nil) {
-        self.id = id; self.displayName = displayName; self.avatarURL = avatarURL
+    public init(id: String, displayName: String, email: String? = nil, avatarURL: String? = nil) {
+        self.id = id; self.displayName = displayName; self.email = email; self.avatarURL = avatarURL
     }
 }
 

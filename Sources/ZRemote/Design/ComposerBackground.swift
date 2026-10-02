@@ -10,7 +10,7 @@ import ImageIO
 enum BackgroundMode: String, CaseIterable, Identifiable, Sendable {
     case none, dither, ascii, halftone, scanlines
     var id: String { rawValue }
-    var label: String { self == .none ? "Original" : self == .ascii ? "ASCII" : rawValue.capitalized }
+    var label: String { self == .ascii ? "ASCII" : rawValue.capitalized }
     var native: WallpaperEffect {
         switch self {
         case .none: .none
@@ -22,13 +22,13 @@ enum BackgroundMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-private struct BackgroundRequest: Hashable {
+struct BackgroundRequest: Hashable {
     let data: Data?
     let effect: String
     let light: Bool
 }
 
-private struct ComposerSceneFrameKey: EnvironmentKey {
+struct ComposerSceneFrameKey: EnvironmentKey {
     static let defaultValue: CGRect? = nil
 }
 
@@ -44,6 +44,8 @@ extension EnvironmentValues {
 struct ComposerBackground: View {
     let data: Data?
     let effect: String
+    let fullHeight: Bool
+    let fadeEndY: CGFloat?
     @State var image: Image?
     @State var opacity = 0.0
     @Environment(\.colorScheme) var colorScheme
@@ -53,6 +55,8 @@ struct ComposerBackground: View {
         GeometryReader { geometry in
             let local = geometry.frame(in: .global)
             let scene = sceneFrame ?? local
+            let endY = fadeEndY ?? (scene.minY + scene.height * 0.42)
+            let end = min(1, max(0, (endY - scene.minY) / max(1, scene.height)))
             Group {
                 if let image {
                     image.resizable().scaledToFill()
@@ -66,7 +70,9 @@ struct ComposerBackground: View {
             .frame(width: scene.width, height: scene.height)
             .mask(LinearGradient(stops: [.init(color: .black, location: 0),
                                         .init(color: .black.opacity(0.8), location: 0.35),
-                                        .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+                                        .init(color: .clear, location: 1)],
+                                 startPoint: .top,
+                                 endPoint: UnitPoint(x: 0.5, y: fullHeight ? 1 : end)))
             .position(x: scene.midX - local.minX, y: scene.midY - local.minY)
         }
         .clipped()

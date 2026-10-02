@@ -76,7 +76,7 @@ struct NativeDrawerPan: UIViewRepresentable {
                 recognizer.maximumNumberOfTouches = 1
                 recognizer.delaysTouchesBegan = false
                 recognizer.delaysTouchesEnded = false
-                recognizer.cancelsTouchesInView = false
+                recognizer.cancelsTouchesInView = true
                 recognizer.delegate = self
                 recognizer.didReset = { [weak self] in self?.resetAttempt() }
                 pan = recognizer
@@ -120,6 +120,16 @@ struct NativeDrawerPan: UIViewRepresentable {
             accepted = parent.onBegin(Double(startX), Double(delta.x), Double(delta.y))
             if accepted { attempt &+= 1 }
             return accepted
+        }
+
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            guard recognizer === pan, parent.enabled, let target = touchView,
+                  !excluded(target), let view = other.view,
+                  target === view || target.isDescendant(of: view),
+                  !(other is UILongPressGestureRecognizer) else { return false }
+            if let scroll = view as? UIScrollView, other === scroll.panGestureRecognizer { return false }
+            return true
         }
 
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,

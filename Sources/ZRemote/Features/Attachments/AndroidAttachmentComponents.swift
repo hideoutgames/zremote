@@ -96,13 +96,13 @@ struct AttachmentLauncher: ContentComposer {
     }
 }
 
-private struct PickedAttachment {
+struct PickedAttachment {
     let path: String
     let name: String
     let mime: String
 }
 
-private struct AttachmentReadError: Error { let message: String }
+struct AttachmentReadError: Error { let message: String }
 
 private func copyAttachment(uri: android.net.Uri, context: android.content.Context, camera: Bool) async throws -> PickedAttachment {
     let maximum = 24 * 1024 * 1024

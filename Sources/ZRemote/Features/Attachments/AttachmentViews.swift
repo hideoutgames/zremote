@@ -168,7 +168,7 @@ struct AttachmentPreviewFile: Identifiable {
     var id: String { url.path }
 }
 
-private enum AttachmentImage {
+enum AttachmentImage {
     @MainActor static func thumbnail(_ data: Data) async -> Image? {
         #if os(Android)
         guard let small = await androidAttachmentThumbnail(data), let image = UIImage(data: small) else { return nil }
@@ -192,7 +192,7 @@ private enum AttachmentImage {
 }
 
 #if os(iOS)
-private struct AttachmentQuickLook: UIViewControllerRepresentable {
+struct AttachmentQuickLook: UIViewControllerRepresentable {
     let url: URL
     func makeCoordinator() -> Coordinator { Coordinator(url: url) }
     func makeUIViewController(context: Context) -> QLPreviewController {

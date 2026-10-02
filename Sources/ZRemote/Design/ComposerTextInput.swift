@@ -12,11 +12,13 @@ struct ComposerTextInput: View {
     @Binding var isFocused: Bool
     @Binding var isComposing: Bool
     let selectionRequest: Int
+    var maximumHeight: CGFloat? = nil
     @FocusState var androidFocused: Bool
 
     var body: some View {
         #if os(iOS)
-        NativeComposerEditor(text: $text, cursor: $cursor, isFocused: $isFocused, isComposing: $isComposing, selectionRequest: selectionRequest)
+        NativeComposerEditor(text: $text, cursor: $cursor, isFocused: $isFocused, isComposing: $isComposing,
+                             selectionRequest: selectionRequest, maximumHeight: maximumHeight)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text("Message your agent").font(.body).foregroundStyle(Palette.secondary)
@@ -62,12 +64,13 @@ struct ComposerTextInput: View {
 }
 
 #if os(iOS)
-private struct NativeComposerEditor: UIViewRepresentable {
+struct NativeComposerEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var cursor: Int
     @Binding var isFocused: Bool
     @Binding var isComposing: Bool
     let selectionRequest: Int
+    let maximumHeight: CGFloat?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -93,6 +96,9 @@ private struct NativeComposerEditor: UIViewRepresentable {
         context.coordinator.parent = self
         context.coordinator.updating = true
         defer { context.coordinator.updating = false }
+        let enabled = context.environment.isEnabled
+        view.isEditable = enabled
+        view.isSelectable = enabled
         // An intentional external reset (for example Send) must discard the
         // old preedit. Ordinary editor updates already match the binding and
         // leave marked text untouched, preserving CJK input and dictation.
@@ -110,15 +116,15 @@ private struct NativeComposerEditor: UIViewRepresentable {
             }
             context.coordinator.previousSelection = view.selectedRange
         }
-        if isFocused && !view.isFirstResponder { view.becomeFirstResponder() }
-        if !isFocused && view.isFirstResponder { view.resignFirstResponder() }
+        if enabled && isFocused && !view.isFirstResponder { view.becomeFirstResponder() }
+        if (!enabled || !isFocused) && view.isFirstResponder { view.resignFirstResponder() }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width > 0 else { return nil }
         let line = UIFont.preferredFont(forTextStyle: .body).lineHeight
         let desired = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        let maximum = line * 8 + 8
+        let maximum = min(line * 8 + 8, max(line + 8, maximumHeight ?? .greatestFiniteMagnitude))
         uiView.isScrollEnabled = desired > maximum
         return CGSize(width: width, height: min(max(line + 8, desired), maximum))
     }
@@ -265,68 +271,9 @@ struct ComposerTokenModifier: ContentModifier {
                 options.onValueChange(next)
                 onSelection(end)
                 onComposition(next.composition != nil)
-            }, visualTransformation: ComposerTokenTransformation(ranges: ranges, labels: labels, kinds: kinds,
-                                                                  colors: colors.map { $0.asComposeColor() }), maxLines: options.maxLines)
+            }, visualTransformation: VisualTransformation.None, maxLines: options.maxLines)
         }
     }
 }
 
-// These helpers stay entirely in Compose; their Android text types have no
-// native Swift bridge. Only ComposerTokenModifier crosses that boundary.
-/* SKIP @nobridge */
-final class ComposerTokenTransformation: VisualTransformation {
-    let ranges: [Int]
-    let labels: [String]
-    let kinds: [Int]
-    let colors: [androidx.compose.ui.graphics.Color]
-    init(ranges: [Int], labels: [String], kinds: [Int], colors: [androidx.compose.ui.graphics.Color]) {
-        self.ranges = ranges; self.labels = labels; self.kinds = kinds; self.colors = colors
-    }
-
-    override func filter(_ text: AnnotatedString) -> TransformedText {
-        let builder = AnnotatedString.Builder()
-        var source = 0, display = 0
-        for index in 0..<labels.count {
-            let start = ranges[index * 2], end = ranges[index * 2 + 1]
-            guard start >= source, end <= text.length else { return TransformedText(text, OffsetMapping.Identity) }
-            builder.append(text.text.substring(source, start))
-            display += start - source
-            builder.append(labels[index])
-            let color = colors[kinds[index]]
-            builder.addStyle(SpanStyle(color: color, background: color.copy(alpha: Float(0.10)), fontWeight: FontWeight.Medium),
-                             start: display, end: display + labels[index].length)
-            display += labels[index].length; source = end
-        }
-        builder.append(text.text.substring(source))
-        return TransformedText(builder.toAnnotatedString(), ComposerReferenceOffsets(ranges: ranges, labels: labels))
-    }
-}
-
-/* SKIP @nobridge */
-final class ComposerReferenceOffsets: OffsetMapping {
-    let ranges: [Int]
-    let labels: [String]
-    init(ranges: [Int], labels: [String]) { self.ranges = ranges; self.labels = labels }
-    override func originalToTransformed(_ offset: Int) -> Int {
-        var delta = 0
-        for index in 0..<labels.count {
-            let start = ranges[index * 2], end = ranges[index * 2 + 1], length = labels[index].length
-            if offset <= start { break }
-            if offset < end { return start - delta + (offset - start < (end - start) / 2 ? 0 : length) }
-            delta += end - start - length
-        }
-        return offset - delta
-    }
-    override func transformedToOriginal(_ offset: Int) -> Int {
-        var delta = 0
-        for index in 0..<labels.count {
-            let start = ranges[index * 2], end = ranges[index * 2 + 1], length = labels[index].length
-            let display = start - delta
-            if offset <= display { break }
-            if offset < display + length { return offset - display < length / 2 ? start : end }
-            delta += end - start - length
-        }
-        return offset + delta
-    }
-}
 #endif

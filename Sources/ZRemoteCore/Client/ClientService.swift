@@ -127,6 +127,16 @@ public struct WorkspaceState: Equatable, Sendable {
     public init(connection: ClientConnection = .signedOut, hosts: [Host] = [], projects: [Project] = [], sessions: [Session] = [], profile: UserProfile? = nil, devices: [ConnectedDevice] = []) { self.devices = devices; self.connection = connection; self.hosts = hosts; self.projects = projects; self.sessions = sessions; self.profile = profile }
 }
 
+public struct ZeronAccount: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var profile: UserProfile
+    public var organizationID: String
+    public var active: Bool
+    public init(id: String, profile: UserProfile, organizationID: String, active: Bool) {
+        self.id = id; self.profile = profile; self.organizationID = organizationID; self.active = active
+    }
+}
+
 public struct ModelChoice: Identifiable, Hashable, Sendable, Codable {
     public var id: String
     public var label: String
@@ -244,11 +254,13 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
     var onUpdate: (@MainActor (ClientUpdate) -> Void)? { get set }
     var isDemo: Bool { get }
     var accountKey: String? { get }
+    var zeronAccounts: [ZeronAccount] { get }
     func restore() async throws
     func authorizationURL(state: String) throws -> URL
     func exchangeCode(_ code: String) async throws -> [Organization]
     func selectOrganization(_ id: String) async throws
     func signOut() async throws
+    func switchAccount(_ id: String) async throws
     func refresh() async throws
     func openSession(_ id: String) async throws
     func closeSession(_ id: String)
@@ -286,6 +298,8 @@ public enum ClientUpdate: Sendable { case workspace(WorkspaceState), session(Ses
 // Existing test peers can stay focused on the behavior they exercise. Live and
 // demo clients implement every supported operation explicitly.
 public extension ClientService {
+    var zeronAccounts: [ZeronAccount] { [] }
+    func switchAccount(_ id: String) async throws { throw ClientFailure("Account switching is unavailable from this client.") }
     func send(sessionID: String, text: String, attachments: [LocalAttachment], busy: MessageSendMode) async throws {
         guard busy == .queue else { throw ClientFailure("Steering is unavailable from this client.") }
         try await send(sessionID: sessionID, text: text, attachments: attachments)

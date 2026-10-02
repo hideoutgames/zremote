@@ -12,7 +12,9 @@ struct ComposerSuggestions: View {
     private var title: String {
         switch kind { case .command: return "Commands"; case .skill: return "Skills"; case .file: return "Files" }
     }
-    var body: some View {
+    private var heightLimit: CGFloat { min(168, max(32, maximumHeight)) }
+
+    private var content: some View {
         Group {
             if items.isEmpty {
                 HStack(spacing: 8) {
@@ -20,7 +22,11 @@ struct ComposerSuggestions: View {
                     Text(unavailableMessage ?? (loading ? "Finding \(title.lowercased())…" : "No matching \(title.lowercased())."))
                         .font(.caption).foregroundStyle(Palette.secondary).lineLimit(2)
                     Spacer(minLength: 0)
-                }.padding(.horizontal, 10).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(.top, 8)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxHeight: heightLimit, alignment: .topLeading)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -46,12 +52,32 @@ struct ComposerSuggestions: View {
                         }
                     }
                 }
+                .frame(height: min(CGFloat(items.count) * 32, heightLimit))
             }
         }
-        .frame(height: min(168, max(32, maximumHeight)))
-        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.line))
-        .accessibilityLabel("\(title) suggestions")
+    }
+
+    var body: some View {
+        surface
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel("\(title) suggestions")
+            .accessibilityIdentifier("composer-suggestions")
+    }
+
+    @ViewBuilder private var surface: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        } else {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.line))
+        }
+        #else
+        content
+            .background(Palette.raised, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.line))
+        #endif
     }
 }

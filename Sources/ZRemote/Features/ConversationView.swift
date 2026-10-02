@@ -18,9 +18,14 @@ struct ConversationView: View {
     @State var headerHeight: CGFloat = 72
     @State var statusHeight: CGFloat = 0
     @State var dismissQuestionFocus = 0
+    @State var backgroundFadeEndY: CGFloat?
+    @State var projectContextHeight: CGFloat = 48
+    @State var composerChromeHeight: CGFloat = 110
 
     private var wallpaper: Bool {
-        PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil, sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil)
+        PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil,
+                                          sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil,
+                                          usesSessionPanel: model.usesSessionPanel)
     }
     private var modelLabel: String {
         ModelPresentation.composerLabel(model: ModelPresentation.resolvedModel(in: model.catalog, selection: model.selection), selection: model.selection)
@@ -41,6 +46,11 @@ struct ConversationView: View {
         }
         return nil
     }
+    private var editorMaximumHeight: CGFloat? {
+        guard model.usesSessionPanel else { return nil }
+        let contextHeight = model.selectedSessionID == nil ? 40 + projectContextHeight : 0
+        return max(0, viewportHeight - headerHeight - statusHeight - contextHeight - composerChromeHeight)
+    }
     var body: some View {
         GeometryReader { geometry in
             layout(questionHeight: min(420, max(0, geometry.size.height - headerHeight - 20)))
@@ -52,7 +62,9 @@ struct ConversationView: View {
                 Palette.background
                 if wallpaper {
                     ComposerBackground(data: model.preferences.backgroundImageData,
-                                       effect: model.preferences.backgroundEffect)
+                                       effect: model.preferences.backgroundEffect,
+                                       fullHeight: model.preferences.backgroundFullHeight,
+                                       fadeEndY: backgroundFadeEndY)
                 }
             }.ignoresSafeArea()
         }
@@ -85,11 +97,9 @@ struct ConversationView: View {
         #elseif os(iOS)
         if #available(iOS 26.0, *) {
             content
-                // Register the custom bar with the scroll view's real backdrop
-                // effect. A material painted on top adds an unwanted color wash.
                 .safeAreaBar(edge: .top, spacing: 0) { header }
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome(questionHeight: questionHeight) }
-                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(true, for: .top)
                 .scrollEdgeEffectHidden(true, for: .bottom)
         } else {
             insetLayout(questionHeight: questionHeight)
@@ -102,11 +112,7 @@ struct ConversationView: View {
     #if !os(Android)
     private func insetLayout(questionHeight: CGFloat) -> some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                header.background {
-                    ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
-                }
-            }
+            .safeAreaInset(edge: .top, spacing: 0) { header }
             .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome(questionHeight: questionHeight) }
     }
     #endif
@@ -114,15 +120,13 @@ struct ConversationView: View {
     private var content: some View {
         VStack(spacing: 0) {
             if model.selectedSessionID == nil {
-                Spacer(minLength: 20)
-                VStack(spacing: 18) {
-                    ProviderIcon(providerID: model.selection.providerID, size: 48)
-                    Text("What are we building?")
-                        .font(.system(.largeTitle, design: .default, weight: .medium))
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.horizontal, 32)
-                Spacer(minLength: 20)
+                Spacer(minLength: model.usesSessionPanel ? 0 : 20)
+                ProviderIcon(providerID: model.selection.providerID, size: 40, tint: Palette.raised)
+                    .padding(.horizontal, 32)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).minY }) {
+                        backgroundFadeEndY = $0 - 16
+                    }
+                Spacer(minLength: model.usesSessionPanel ? 0 : 20)
                 projectContext
             } else {
                 transcript
@@ -169,15 +173,17 @@ struct ConversationView: View {
         HStack(spacing: 14) {
             CircleControl(symbol: "line.3.horizontal", label: model.sessionsVisible ? "Hide sessions" : "Show sessions") {
                 inputFocused = false
-                withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) { model.sessionsVisible.toggle() }
+                model.sessionsVisible.toggle()
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.session?.title ?? "New session").font(.headline).lineLimit(1)
-                HStack(spacing: 6) {
-                    if model.working { ActivityGlyph() }
-                    Text(model.project?.name ?? (model.isDemo ? "Test mode" : "Zeron"))
-                    if model.workspace.connection == .offline { Text("· Offline") }
-                }.font(.caption).foregroundStyle(Palette.secondary)
+            if let session = model.session {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.title).font(.headline).lineLimit(1)
+                    HStack(spacing: 6) {
+                        if model.working { ActivityGlyph(mini: true) }
+                        Text(model.project?.name ?? (model.isDemo ? "Test mode" : "Zeron"))
+                        if model.workspace.connection == .offline { Text("· Offline") }
+                    }.font(.caption).foregroundStyle(Palette.secondary)
+                }
             }
             Spacer(minLength: 0)
             if let session = model.session {
@@ -205,6 +211,11 @@ struct ConversationView: View {
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
+        .background {
+            if model.selectedSessionID != nil {
+                ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+            }
+        }
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { headerHeight = $0 }
     }
 
@@ -216,7 +227,7 @@ struct ConversationView: View {
     }
 
     private var projectContext: some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 0) {
             Button { model.route = .projects } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "folder")
@@ -236,6 +247,10 @@ struct ConversationView: View {
                 }.buttonStyle(.plain).accessibilityLabel("Checkout: \(model.checkoutLabel)")
             }
         }
+        .frame(maxWidth: 700, alignment: .leading)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { projectContextHeight = $0 }
     }
 
     private var transcript: some View {
@@ -366,6 +381,9 @@ struct ConversationView: View {
 
     private var composer: some View {
         VStack(spacing: 0) {
+            #if os(Android)
+            completionPanel.padding(.bottom, 8)
+            #endif
             if let sessionID = model.selectedSessionID, !model.queuedMessages(sessionID: sessionID).isEmpty {
                 HStack {
                     Button { inputFocused = false; model.route = .queue(sessionID) } label: {
@@ -377,18 +395,18 @@ struct ConversationView: View {
                 }.frame(maxWidth: 700).padding(.horizontal, 16)
             }
             VStack(alignment: .leading, spacing: 13) {
-                if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
-                    ComposerSuggestions(kind: token.kind, items: ComposerCompletionPresentation.filter(suggestions, kind: token.kind, query: token.query),
-                                        loading: loadingSuggestions, maximumHeight: viewportHeight * 0.3,
-                                        unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
-                }
                 if !model.attachments.isEmpty {
                     ComposerAttachments(attachments: model.attachments, remove: model.removeAttachment)
                 }
                 ComposerTextInput(text: $model.draft, cursor: $cursor, isFocused: $inputFocused,
-                                  isComposing: $inputComposing, selectionRequest: selectionRequest)
+                                  isComposing: $inputComposing, selectionRequest: selectionRequest,
+                                  maximumHeight: editorMaximumHeight)
                     .id(model.selectedSessionID ?? "new")
+                    .disabled((model.sessionsVisible && !model.usesSessionPanel) || model.route != nil)
                     .padding(.horizontal, 6)
+                    #if os(iOS)
+                    .anchorPreference(key: ComposerEditorBounds.self, value: .bounds) { $0 }
+                    #endif
                 HStack(spacing: 10) {
                     AttachmentPicker(model: model)
                     if model.working, model.canQueueDraft || model.canSteerDraft {
@@ -431,6 +449,32 @@ struct ConversationView: View {
             .frame(maxWidth: 700)
             .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 8)
             .frame(maxWidth: .infinity)
+        }
+        #if os(iOS)
+        .backgroundPreferenceValue(ComposerEditorBounds.self) { editor in
+            GeometryReader { _ in
+                Color.clear
+                    .onGeometryChange(for: CGFloat.self, of: { geometry in
+                        editor.map { max(0, geometry.size.height - geometry[$0].height) } ?? 0
+                    }) { composerChromeHeight = $0 }
+            }
+        }
+        #endif
+        #if !os(Android)
+        .overlay(alignment: .top) {
+            completionPanel.alignmentGuide(.top) { $0[.bottom] + 8 }
+        }
+        #endif
+    }
+
+    @ViewBuilder private var completionPanel: some View {
+        if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
+            ComposerSuggestions(kind: token.kind, items: ComposerCompletionPresentation.filter(suggestions, kind: token.kind, query: token.query),
+                                loading: loadingSuggestions, maximumHeight: viewportHeight * 0.3,
+                                unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
+                .frame(maxWidth: 700)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -486,10 +530,17 @@ struct UsageLimitBanner: View {
     }
 }
 
-private struct TranscriptTailPosition: PreferenceKey {
+struct TranscriptTailPosition: PreferenceKey {
     static let defaultValue: CGFloat? = nil
     static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }
+
+#if os(iOS)
+struct ComposerEditorBounds: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = nextValue() ?? value }
+}
+#endif
 
 struct TranscriptRow: View, Equatable {
     let message: TranscriptMessage

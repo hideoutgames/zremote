@@ -20,6 +20,15 @@ enum Palette {
     static let usageTrack = Color("PaletteUsageTrack", bundle: .module)
 }
 
+extension View {
+    func appSwitch() -> some View {
+        self.tint(Palette.secondary)
+            #if os(iOS)
+            .toggleStyle(.switch)
+            #endif
+    }
+}
+
 struct CircleControl: View {
     let symbol: String
     let label: String
@@ -90,9 +99,16 @@ struct EmptyState: View {
 }
 
 struct ActivityGlyph: View {
+    var mini = false
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State var illuminated = false
+
     var body: some View {
+        #if os(iOS)
+        NativeActivityGlyph(mini: mini, reduceMotion: reduceMotion)
+            .frame(width: mini ? 12 : 14, height: mini ? 12 : 14)
+            .accessibilityLabel("Agent working")
+        #else
         HStack(spacing: 2.5) {
             ForEach(0..<3) { index in
                 Capsule().frame(width: 2, height: 11)
@@ -105,5 +121,6 @@ struct ActivityGlyph: View {
         .frame(width: 14, height: 16)
         .task(id: reduceMotion) { illuminated = !reduceMotion }
         .accessibilityLabel("Agent working")
+        #endif
     }
 }

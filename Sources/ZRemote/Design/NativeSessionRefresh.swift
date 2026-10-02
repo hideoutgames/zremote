@@ -59,6 +59,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
         private var control: RefreshControl?
         private var originalAlwaysBounceVertical = false
         private var refreshTask: Task<Void, Never>?
+        private var feedbackDeadline: ContinuousClock.Instant?
         private var offsetObservation: NSKeyValueObservation?
         private var insetObservation: NSKeyValueObservation?
         private var revealTask: Task<Void, Never>?
@@ -109,6 +110,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
             refresh.addTarget(self, action: #selector(Coordinator.refresh(_:)), for: .valueChanged)
             scrollView = scroll
             control = refresh
+            scroll.panGestureRecognizer.addTarget(self, action: #selector(Coordinator.dragChanged(_:)))
             originalAlwaysBounceVertical = scroll.alwaysBounceVertical
             geometry = SessionRefreshGeometry(restingTopInset: Double(scroll.adjustedContentInset.top),
                                               systemTopInset: Double(scroll.adjustedContentInset.top - scroll.contentInset.top))
@@ -138,6 +140,8 @@ struct NativeSessionRefresh: UIViewRepresentable {
             insetObservation?.invalidate(); insetObservation = nil
             refreshTask?.cancel()
             refreshTask = nil
+            feedbackDeadline = nil
+            scrollView?.panGestureRecognizer.removeTarget(self, action: #selector(Coordinator.dragChanged(_:)))
             if let control {
                 control.removeTarget(self, action: #selector(Coordinator.refresh(_:)), for: .valueChanged)
                 control.endRefreshing()
@@ -153,11 +157,12 @@ struct NativeSessionRefresh: UIViewRepresentable {
 
         private func sampleReveal() {
             guard let scrollView, let control, scrollView.refreshControl === control else { return }
-            let height = geometry.reveal(contentOffsetY: Double(scrollView.contentOffset.y),
+            let dragging = scrollView.isDragging || scrollView.isTracking
+            var height = geometry.reveal(contentOffsetY: Double(scrollView.contentOffset.y),
                                          adjustedTopInset: Double(scrollView.adjustedContentInset.top),
                                          systemTopInset: Double(scrollView.adjustedContentInset.top - scrollView.contentInset.top),
-                                         dragging: scrollView.isDragging || scrollView.isTracking,
-                                         refreshing: control.isRefreshing || refreshTask != nil)
+                                         dragging: dragging, refreshing: control.isRefreshing || refreshTask != nil)
+            if refreshTask != nil, !dragging { height = max(height, 60) }
             publishReveal(CGFloat(height))
         }
 
@@ -183,15 +188,43 @@ struct NativeSessionRefresh: UIViewRepresentable {
             AppHaptics.refreshTriggered(enabled: hapticsEnabled, in: sender)
             let epoch = generation
             let perform = action
+            let gestureState = scrollView?.panGestureRecognizer.state
+            feedbackDeadline = gestureState == .began || gestureState == .changed
+                ? nil : ContinuousClock.now.advanced(by: .milliseconds(900))
             sender.accessibilityValue = "Refreshing"
             refreshTask = Task { @MainActor [weak self, weak sender] in
                 guard !Task.isCancelled else { return }
                 await perform()
-                guard let self, let sender, self.generation == epoch, self.control === sender else { return }
+                do {
+                    while !Task.isCancelled {
+                        guard let self, self.generation == epoch else { return }
+                        if let deadline = self.feedbackDeadline {
+                            if ContinuousClock.now >= deadline { break }
+                            try await Task.sleep(until: deadline, clock: .continuous)
+                        } else {
+                            try await Task.sleep(for: .milliseconds(16))
+                        }
+                    }
+                }
+                catch { return }
+                guard !Task.isCancelled, let self, let sender,
+                      self.generation == epoch, self.control === sender else { return }
                 self.refreshTask = nil
+                self.feedbackDeadline = nil
                 sender.accessibilityValue = nil
                 if self.scrollView?.refreshControl === sender { sender.endRefreshing() }
                 self.sampleReveal()
+            }
+            sampleReveal()
+        }
+
+        @objc private func dragChanged(_ gesture: UIPanGestureRecognizer) {
+            guard refreshTask != nil else { return }
+            switch gesture.state {
+            case .began, .changed: feedbackDeadline = nil
+            case .ended, .cancelled, .failed:
+                feedbackDeadline = ContinuousClock.now.advanced(by: .milliseconds(900))
+            default: break
             }
             sampleReveal()
         }

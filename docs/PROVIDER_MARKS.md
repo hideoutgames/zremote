@@ -7,6 +7,8 @@ a pinned settings tray, and an independent configuration popover for models
 with a `lead` option (the Devin Fusion test fixture). Android presents the same
 controls in a centered card within the picker because Skip does not support
 native popovers.
+On iOS the configuration popover opens above its model row. Setting labels stay
+fixed while only the right-aligned current value opens its native choice menu.
 
 Live models, reasoning defaults and option choices come only from the connected
 host. An unavailable current model remains visible but cannot be selected.
@@ -27,6 +29,15 @@ The shared PR glyph in `Design/PullRequestIcon.swift` adapts the node/arrow path
 from [`PRIcon` in `Design/StatusGlyph.swift`](https://github.com/hideoutgames/zeron/blob/d316f79c2f9ad471d1291c785548be79d893b98b/apps/ios/Zeron/Design/StatusGlyph.swift).
 The same path renders the native menu's original-color images using the
 current appearance and host-reported PR state.
+
+The iOS working indicators adapt the spinner/trailer subset of
+[`StatusGlyph` in the official Zeron client at `9782693b`](https://github.com/zeronsh/zeron/blob/9782693b8561ff2764c8e38c16644d65a1b5bb31/apps/ios/Zeron/Design/StatusGlyph.swift).
+Sessions and the chat header use the 2×3 adaptive violet grid; the transcript
+and refresh recess use the 3×3 pastel grid. Both retain the original dot
+geometry, phase offsets and 750 ms Core Animation opacity keyframes.
+Reduce Motion holds the dots at their original static phases. SwiftUI supplies
+appearance and Reduce Motion changes; removing the native view stops its
+animations. Other platforms retain the existing bar indicator.
 
 The source project is copyright 2026 Wing, MIT licensed. Its notice is retained
 in `Sources/ZRemote/Resources/Licenses/Zeron-MIT.txt`. Provider names and marks

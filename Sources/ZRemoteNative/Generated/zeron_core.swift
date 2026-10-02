@@ -1064,7 +1064,9 @@ public protocol CoreClientProtocol: AnyObject, Sendable {
     func sessionRow(chatId: String)  -> SessionRow?
 
     /**
-     * Host-written completion identity and error state, without transcript data.
+     * Host-written run signals and metadata-only deltas for already-open mobile
+     * handles. Every consumer must retain these deltas, including workspace
+     * pulls. No message bodies, reasoning, arguments, or attachment data cross.
      */
     func sessionSignalsJson() throws  -> String
 
@@ -1819,7 +1821,9 @@ open func sessionRow(chatId: String) -> SessionRow?  {
 }
 
     /**
-     * Host-written completion identity and error state, without transcript data.
+     * Host-written run signals and metadata-only deltas for already-open mobile
+     * handles. Every consumer must retain these deltas, including workspace
+     * pulls. No message bodies, reasoning, arguments, or attachment data cross.
      */
 open func sessionSignalsJson()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
@@ -13749,7 +13753,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_zeron_mobile_checksum_method_coreclient_session_row() != 10938) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_zeron_mobile_checksum_method_coreclient_session_signals_json() != 18204) {
+    if (uniffi_zeron_mobile_checksum_method_coreclient_session_signals_json() != 63116) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_zeron_mobile_checksum_method_coreclient_set_network_online() != 33835) {
@@ -13809,7 +13813,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_zeron_mobile_checksum_method_sessionhandle_composer() != 12678) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_zeron_mobile_checksum_method_sessionhandle_deliver_queued_now() != 65003) {
+    if (uniffi_zeron_mobile_checksum_method_sessionhandle_deliver_queued_now() != 27086) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_zeron_mobile_checksum_method_sessionhandle_enqueue() != 37832) {

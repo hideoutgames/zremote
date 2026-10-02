@@ -18,12 +18,16 @@ public struct ZRemoteRootView: View {
     #endif
     @Environment(\.scenePhase) var scenePhase
     @Environment(\.layoutDirection) var layoutDirection
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     public init() {}
 
     public var body: some View {
         GeometryReader { geometry in
             layout(in: geometry)
         }
+        #if os(iOS)
+        .background { NativeKeyboardDismiss() }
+        #endif
         .preferredColorScheme(preferredColorScheme)
         #if os(Android)
         .composeModifier { AndroidHapticsModifier(enabled: model.preferences.hapticsEnabled) }
@@ -57,17 +61,8 @@ public struct ZRemoteRootView: View {
             if !tablet, model.sessionsVisible, model.route == nil {
                 ModalBackHandler { model.sessionsVisible = false }
             }
-            if tablet, let route = model.route {
-                ModalBackHandler { model.route = nil }
-                Color.black.opacity(0.55).ignoresSafeArea()
-                    .onTapGesture { model.route = nil }
-                secondary(route)
-                    .frame(width: min(760, max(280, geometry.size.width - 48)), height: max(300, geometry.size.height * 0.84))
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.line))
-                    .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
-                    .accessibilityAddTraits(.isModal)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            if tablet {
+                tabletModal(size: geometry.size)
             }
         }
         .sheet(item: phoneSheetRoute(tablet: tablet)) { route in
@@ -86,6 +81,28 @@ public struct ZRemoteRootView: View {
         }
         .onAppear { model.usesSessionPanel = tablet }
         .onChange(of: tablet) { _, value in model.usesSessionPanel = value; model.sessionsVisible = value }
+    }
+
+    private func tabletModal(size: CGSize) -> some View {
+        ZStack {
+            if let route = model.route {
+                ModalBackHandler { model.route = nil }
+                Color.black.opacity(0.55).ignoresSafeArea()
+                    .onTapGesture { model.route = nil }
+                    .transition(.opacity)
+                secondary(route)
+                    .frame(width: min(760, max(280, size.width - 48)), height: max(300, size.height * 0.84))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.line))
+                    .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
+                    .accessibilityAddTraits(.isModal)
+                    .transition(reduceMotion ? .opacity : .offset(y: size.height).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(reduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.42, dampingFraction: 0.92),
+                   value: model.route != nil)
     }
 
     // Give the presentation overloads concrete types before composing the view.
@@ -112,13 +129,16 @@ public struct ZRemoteRootView: View {
     }
 
     private func isTablet(width: CGFloat) -> Bool {
+        let capable: Bool
         #if os(iOS)
-        UIDevice.current.userInterfaceIdiom == .pad
+        capable = UIDevice.current.userInterfaceIdiom == .pad
         #elseif os(Android)
-        androidIsTablet()
+        capable = androidIsTablet()
         #else
-        true
+        capable = true
         #endif
+        return PresentationRules.usesSessionPanel(deviceSupportsPanel: capable,
+                                                   availableWidth: Double(width))
     }
 
     private var preferredColorScheme: ColorScheme? {
@@ -154,7 +174,14 @@ public struct ZRemoteRootView: View {
     }
 
     private func secondary(_ route: SecondaryRoute) -> some View {
-        NavigationStack {
+        let navigationBackground: Color
+        #if os(iOS)
+        if case .settings = route { navigationBackground = .clear }
+        else { navigationBackground = Palette.background }
+        #else
+        navigationBackground = Palette.background
+        #endif
+        return NavigationStack {
             Group {
                 switch route {
                 case .models: ModelPickerView(model: model)
@@ -178,7 +205,7 @@ public struct ZRemoteRootView: View {
                         #endif
                 }
             }
-            .toolbarBackground(Palette.background, for: .navigationBar)
+            .toolbarBackground(navigationBackground, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .preferredColorScheme(preferredColorScheme)

@@ -14,6 +14,7 @@ struct ModelPickerView: View {
     @ScaledMetric(relativeTo: .body) var rowHeight = 44.0
 
     private let favoritesTab = "__favorites__"
+    private var edgePadding: CGFloat { model.usesSessionPanel ? 0 : 20 }
     private var lockedProvider: String? {
         model.selectedSessionID == nil ? nil : (model.state?.selection.providerID ?? "")
     }
@@ -44,7 +45,7 @@ struct ModelPickerView: View {
             VStack(spacing: 0) {
                 tabs
                     #if os(iOS)
-                    .padding(.top, model.usesSessionPanel ? 0 : 20)
+                    .padding(.top, edgePadding)
                     #endif
                 rule
                 search
@@ -57,10 +58,19 @@ struct ModelPickerView: View {
                         configuration(choice)
                             .padding(.vertical, 6)
                     }
+                    #if os(iOS)
+                    .contentMargins(.vertical, 0, for: .scrollContent)
+                    #endif
                     .frame(height: min(trayHeight(choice), max(rowHeight, geometry.size.height * 0.4)))
                 }
             }
+            #if os(iOS)
+            .padding(.bottom, edgePadding)
+            #endif
         }
+        #if os(iOS)
+        .ignoresSafeArea(.container, edges: .bottom)
+        #endif
         .foregroundStyle(Palette.text)
         .background(Palette.background)
         .navigationTitle("Model")
@@ -111,12 +121,17 @@ struct ModelPickerView: View {
                 }
             }
         }
-        #else
-        .popover(item: $configurationModel) { choice in
-            configurationCard(choice).frame(idealWidth: 320)
-                .presentationCompactAdaptation(.popover)
-        }
         #endif
+    }
+
+    private func configurationPresented(_ choice: AgentModel) -> Binding<Bool> {
+        Binding(get: {
+            configurationModel?.id == choice.id
+        }, set: { visible in
+            if !visible, configurationModel?.id == choice.id {
+                configurationModel = nil
+            }
+        })
     }
 
     private func configurationCard(_ choice: AgentModel) -> some View {
@@ -276,6 +291,12 @@ struct ModelPickerView: View {
             .disabled(applying || row.unavailable)
             .accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityHint(configurable ? "Shows model settings" : "")
+            #if !os(Android)
+            .popover(isPresented: configurationPresented(choice), attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+                configurationCard(choice).frame(idealWidth: 320)
+                    .presentationCompactAdaptation(.popover)
+            }
+            #endif
             if !row.unavailable {
                 Button { model.toggleFavorite(choice.id) } label: {
                     Image(systemName: favorite ? "star.fill" : "star")
@@ -333,7 +354,7 @@ struct ModelPickerView: View {
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 18)
             .frame(minHeight: rowHeight)
-            .tint(Palette.addition)
+            .appSwitch()
         } else {
             choiceMenu(option.label, choices: option.choices, selected: selected,
                        value: option.choices.first(where: { $0.id == selected })?.label ?? "Default") { value in
@@ -346,28 +367,33 @@ struct ModelPickerView: View {
 
     private func choiceMenu(_ title: String, choices: [ModelChoice], selected: String, value: String,
                             action: @escaping (String) -> Void) -> some View {
-        Menu {
-            ForEach(choices) { choice in
-                Button { action(choice.id) } label: {
-                    if selected == choice.id { Label(choice.label, systemImage: "checkmark") }
-                    else { Text(choice.label) }
+        HStack(spacing: 8) {
+            Text(title)
+                .fontWeight(.medium)
+                .accessibilityHidden(true)
+            Spacer(minLength: 12)
+            Menu {
+                ForEach(choices) { choice in
+                    Button { action(choice.id) } label: {
+                        if selected == choice.id { Label(choice.label, systemImage: "checkmark") }
+                        else { Text(choice.label) }
+                    }
                 }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(value).foregroundStyle(Palette.secondary).lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Palette.secondary)
+                }
+                .frame(minHeight: rowHeight)
+                .contentShape(Rectangle())
             }
-        } label: {
-            HStack(spacing: 8) {
-                Text(title).fontWeight(.medium)
-                Spacer(minLength: 12)
-                Text(value).foregroundStyle(Palette.secondary).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Palette.secondary)
-            }
-            .font(.subheadline)
-            .padding(.horizontal, 18)
-            .frame(minHeight: rowHeight)
-            .contentShape(Rectangle())
+            .accessibilityLabel(title)
+            .accessibilityValue(value)
         }
-        .accessibilityLabel(title)
-        .accessibilityValue(value)
+        .font(.subheadline)
+        .padding(.horizontal, 18)
+        .frame(minHeight: rowHeight)
     }
 
     private func apply(_ selection: ModelSelection, configure choice: AgentModel? = nil) {

@@ -24,7 +24,7 @@ struct AgentSelectableText: View {
 }
 
 #if os(iOS)
-private struct AgentTextView: UIViewRepresentable {
+struct AgentTextView: UIViewRepresentable {
     let value: String
     let markdown: Bool
     let code: Bool

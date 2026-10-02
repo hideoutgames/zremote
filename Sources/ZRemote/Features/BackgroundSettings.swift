@@ -13,9 +13,9 @@ struct BackgroundSettings: View {
 
     var body: some View {
         Section {
-            Toggle("New Composer background", isOn: Binding(
-                get: { model.preferences.backgroundEnabled }, set: model.setBackground
-            )).tint(Palette.addition)
+            Toggle("Use Background Image", isOn: Binding(
+                get: { model.preferences.backgroundEnabled }, set: { model.setBackground($0) }
+            )).appSwitch()
             if model.preferences.backgroundEnabled {
                 Menu {
                     Button { select(.photos) } label: { Label("Photo Library", systemImage: "photo.on.rectangle") }
@@ -27,13 +27,32 @@ struct BackgroundSettings: View {
                         if importing { ProgressView() }
                     }
                 }.disabled(importing)
-                if model.preferences.backgroundImageData != nil {
-                    Picker("Mode", selection: Binding(
-                        get: { model.preferences.backgroundEffect }, set: model.setBackgroundEffect
-                    )) {
-                        ForEach(BackgroundMode.allCases) { mode in Text(mode.label).tag(mode.rawValue) }
+                #if os(iOS)
+                .sheet(item: $source, onDismiss: { if !preparing { importing = false } }) { selection in
+                    let context = importContext
+                    let ticket = request
+                    IOSAttachmentPicker(source: selection) { result in
+                        source = nil
+                        accept(result, context: context, ticket: ticket)
                     }
-                    ComposerBackground(data: model.preferences.backgroundImageData, effect: model.preferences.backgroundEffect)
+                }
+                #endif
+                .alert("Background Image", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                    Button("OK", role: .cancel) { failure = nil }
+                } message: { Text(failure ?? "") }
+                Picker("Effect", selection: Binding(
+                    get: { model.preferences.backgroundEffect }, set: { model.setBackgroundEffect($0) }
+                )) {
+                    ForEach(BackgroundMode.allCases) { mode in Text(mode.label).tag(mode.rawValue) }
+                }
+                .pickerStyle(.menu)
+                Toggle("Full height background", isOn: Binding(
+                    get: { model.preferences.backgroundFullHeight }, set: model.setBackgroundFullHeight
+                )).appSwitch()
+                if model.preferences.backgroundImageData != nil {
+                    ComposerBackground(data: model.preferences.backgroundImageData,
+                                       effect: model.preferences.backgroundEffect,
+                                       fullHeight: model.preferences.backgroundFullHeight, fadeEndY: nil)
                         .frame(height: 130).clipShape(RoundedRectangle(cornerRadius: 14))
                         .listRowBackground(Palette.background)
                     Button("Remove Background Image", role: .destructive) { model.setBackgroundImage(data: nil, name: nil) }
@@ -41,16 +60,7 @@ struct BackgroundSettings: View {
             }
         }
         .listRowBackground(Palette.surface)
-        #if os(iOS)
-        .sheet(item: $source, onDismiss: { if !preparing { importing = false } }) { selection in
-            let context = importContext
-            let ticket = request
-            IOSAttachmentPicker(source: selection) { result in
-                source = nil
-                accept(result, context: context, ticket: ticket)
-            }
-        }
-        #elseif os(Android)
+        #if os(Android)
         .background {
             let context = importContext
             let ticket = request
@@ -74,9 +84,6 @@ struct BackgroundSettings: View {
             }.frame(width: 0, height: 0)
         }
         #endif
-        .alert("Background Image", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-            Button("OK", role: .cancel) { failure = nil }
-        } message: { Text(failure ?? "") }
     }
 
     private func select(_ selection: AttachmentSource) {

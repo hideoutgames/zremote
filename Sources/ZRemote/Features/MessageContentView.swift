@@ -145,8 +145,7 @@ struct HighlightedPromptModifier: ContentModifier {
     let colors: [Color]
     func modify(view: any View) -> any View {
         view.material3Text { options in
-            let annotated = ComposerTokenTransformation(ranges: ranges, labels: labels, kinds: kinds, colors: colors.map { $0.asComposeColor() })
-                .filter(AnnotatedString(text)).text
+            let annotated = AnnotatedString(text)
             return options.copy(text: nil, annotatedText: annotated)
         }
     }

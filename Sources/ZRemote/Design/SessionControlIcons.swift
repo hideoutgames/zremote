@@ -28,7 +28,7 @@ struct CheckoutBranchIcon: View {
 }
 
 #if os(Android)
-private struct SessionSliderGlyph: Shape {
+struct SessionSliderGlyph: Shape {
     func path(in rect: CGRect) -> Path {
         let scale = min(rect.width, rect.height) / 24
         let origin = CGPoint(x: rect.midX - 12 * scale, y: rect.midY - 12 * scale)
@@ -47,7 +47,7 @@ private struct SessionSliderGlyph: Shape {
     }
 }
 
-private struct CheckoutBranchGlyph: Shape {
+struct CheckoutBranchGlyph: Shape {
     func path(in rect: CGRect) -> Path {
         let scale = min(rect.width, rect.height) / 24
         let origin = CGPoint(x: rect.midX - 12 * scale, y: rect.midY - 12 * scale)
