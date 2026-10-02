@@ -101,8 +101,9 @@ a small type icon and `filename ≈ TYPE file`. Long rows truncate with an ellip
 User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
-The chat's top blur covers the title and subtitle header, fading out beneath it
-as transcript content scrolls underneath.
+On iOS 26 and later, the chat header uses a native Liquid Glass surface behind
+the Sessions button, title, PR menu, and session actions while the transcript
+scrolls underneath. Earlier iOS versions and other platforms retain the top blur.
 Tapping noninteractive areas dismisses the iOS keyboard and clears editor focus.
 Buttons, links, and native text selection retain their own gestures.
 Sub-agent cards show only a title and state; Working uses a quiet shimmer that
@@ -194,6 +195,9 @@ Turn diff snapshots are best-effort and can expire on the host. The client
 captures available patches when a turn completes and retains immutable,
 account-scoped revisions. Concurrent checkout edits may also appear in the
 host's turn diff; it is not an audit log of agent-only filesystem activity.
+Individual file review keeps the path above a top-aligned, vertically scrolling
+diff. Long code lines wrap within the page alongside their original line numbers
+and addition/deletion markers.
 Unavailable data is never substituted with a later checkout diff. Zeron exposes
 the current PR for a branch, so the client retains distinct PRs as it observes
 them in each session. These are first-observed positions, not historical creation

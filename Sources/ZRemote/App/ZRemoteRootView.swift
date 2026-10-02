@@ -193,7 +193,7 @@ public struct ZRemoteRootView: View {
                 case .pullRequest(let request):
                     PullRequestDetailView(request: model.sessionPullRequests.first(where: { $0.id == request.id }) ?? request)
                 case .changes(let turn): ChangedFilesList(turn: turn)
-                case .diff(let document): NativeDiffView(document: document).navigationTitle("Changes")
+                case .diff(let document): NativeDiffView(document: document)
                 }
             }
             .background(Palette.background)

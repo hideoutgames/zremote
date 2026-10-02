@@ -38,14 +38,16 @@ struct DemoFixtures {
                  preview: String, age: TimeInterval, pinned: Bool = false, unread: Bool = false,
                  archived: Bool = false, pr: PullRequest? = nil, messages: [TranscriptMessage]? = nil) {
             let finished = now.addingTimeInterval(-age)
+            let transcript = messages ?? [
+                TranscriptMessage(id: id + "-prompt", role: "user", text: title, timestamp: finished.addingTimeInterval(-90)),
+                TranscriptMessage(id: id + "-reply", role: "assistant", text: preview + "\n\nThis is an offline sample. Try the session menus, model options, or send a follow-up to see streaming and queued messages.", timestamp: finished, workedDuration: 90)
+            ]
+            let turnID = transcript.last(where: { $0.role == "user" })?.id ?? transcript.first?.id
             rows.append(Session(id: id, title: title, projectID: project.id, hostID: project.hostID, path: project.path,
                 preview: preview, unread: unread, pullRequest: pr, pinned: pinned, archived: archived,
                 createdAt: finished.addingTimeInterval(-3600), updatedAt: finished,
-                lastFinishedAt: finished, completedTurnID: id + "-turn", providerID: selection.providerID, modelID: selection.modelID, branch: project.isRepository ? "main" : nil))
-            states[id] = SessionState(id: id, messages: messages ?? [
-                TranscriptMessage(id: id + "-prompt", role: "user", text: title, timestamp: finished.addingTimeInterval(-90)),
-                TranscriptMessage(id: id + "-reply", role: "assistant", text: preview + "\n\nThis is an offline sample. Try the session menus, model options, or send a follow-up to see streaming and queued messages.", timestamp: finished, workedDuration: 90)
-            ], selection: selection, turnID: id + "-turn")
+                lastFinishedAt: finished, completedTurnID: turnID, providerID: selection.providerID, modelID: selection.modelID, branch: project.isRepository ? "main" : nil))
+            states[id] = SessionState(id: id, messages: transcript, selection: selection, turnID: turnID)
         }
 
         let fusion = ModelSelection(providerID: "devin", modelID: "fusion", effort: "high",
@@ -73,7 +75,7 @@ struct DemoFixtures {
 
         add("demo-welcome", "A quieter workspace", project: personal, preview: "Seven changed files ready to review", age: 720, pinned: true,
             pr: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), messages: [
-                TranscriptMessage(id: "demo-message-1", role: "user", text: "Make this workspace feel calmer.", timestamp: now.addingTimeInterval(-780)),
+                TranscriptMessage(id: "demo-history-turn", role: "user", text: "Make this workspace feel calmer.", timestamp: now.addingTimeInterval(-780)),
                 TranscriptMessage(id: "demo-message-tool", role: "tool", text: "Sample review: 7 files, 14 additions, 7 deletions. No files were changed.", timestamp: now.addingTimeInterval(-750)),
                 TranscriptMessage(id: "demo-message-2", role: "assistant", text: """
                     ## A calmer workspace
@@ -91,8 +93,6 @@ struct DemoFixtures {
                     Send a follow-up to try streaming, steering and the message queue.
                     """, timestamp: now.addingTimeInterval(-720), workedDuration: 60)
             ])
-        states["demo-welcome"]?.turnID = "demo-history-turn"
-        rows[1].completedTurnID = "demo-history-turn"
         patches["demo-welcome"] = DemoClient.sampleDiff
 
         add("demo-question", "A quick design choice", project: personal, preview: "Choose several priorities or write your own answer", age: 1800)

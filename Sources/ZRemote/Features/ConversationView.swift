@@ -4,6 +4,7 @@ import ZRemoteCore
 struct ConversationView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
     @State var inputFocused = false
     @State var inputComposing = false
     @State var cursor = 0
@@ -213,10 +214,26 @@ struct ConversationView: View {
         .padding(.horizontal, 18).padding(.vertical, 12)
         .background {
             if model.selectedSessionID != nil {
-                ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+                headerBackground
             }
         }
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { headerHeight = $0 }
+    }
+
+    @ViewBuilder private var headerBackground: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            Rectangle().fill(.clear)
+                .glassEffect(.regular, in: Rectangle())
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+        }
+        #else
+        ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+        #endif
     }
 
     private func headerIcon(_ symbol: String) -> some View {
@@ -234,7 +251,7 @@ struct ConversationView: View {
                     Text(model.project?.name ?? "Choose a project").lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
                 }.font(.subheadline).foregroundStyle(Palette.secondary)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
             }.buttonStyle(.plain)
             if model.canChooseCheckout {
                 Button { model.route = .checkouts } label: {
@@ -243,7 +260,7 @@ struct ConversationView: View {
                         Text(model.checkoutLabel).lineLimit(1)
                         Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
                     }.font(.subheadline).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .padding(.leading, 8).padding(.trailing, 16).padding(.vertical, 12)
                 }.buttonStyle(.plain).accessibilityLabel("Checkout: \(model.checkoutLabel)")
             }
         }
@@ -292,6 +309,7 @@ struct ConversationView: View {
                         tailAnchor
                         #endif
                     }
+                    .id(dynamicTypeSize)
                     #if !os(Android)
                     // Outside the lazy stack: actual viewport geometry, not row mounting,
                     // determines when a reader has returned to the live edge.
