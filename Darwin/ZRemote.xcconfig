@@ -1,5 +1,8 @@
 #include "../Skip.env"
 
+ZREMOTE_APP_BUNDLE_IDENTIFIER = no.hideout.zremote
+PRODUCT_BUNDLE_IDENTIFIER = $(ZREMOTE_APP_BUNDLE_IDENTIFIER)
+
 // Set the action that will be executed as part of the Xcode Run Script phase
 // Setting to "launch" will build and run the app in the first open Android emulator or device
 // Setting to "build" will just run gradle build, but will not launch the app
