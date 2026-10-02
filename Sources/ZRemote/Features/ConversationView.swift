@@ -214,10 +214,26 @@ struct ConversationView: View {
         .padding(.horizontal, 18).padding(.vertical, 12)
         .background {
             if model.selectedSessionID != nil {
-                ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+                headerBackground
             }
         }
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { headerHeight = $0 }
+    }
+
+    @ViewBuilder private var headerBackground: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            Rectangle().fill(.clear)
+                .glassEffect(.regular, in: Rectangle())
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+        }
+        #else
+        ChromeFade(edge: .top).padding(.bottom, -24).ignoresSafeArea(edges: .top)
+        #endif
     }
 
     private func headerIcon(_ symbol: String) -> some View {
