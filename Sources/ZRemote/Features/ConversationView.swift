@@ -235,7 +235,7 @@ struct ConversationView: View {
                     Text(model.project?.name ?? "Choose a project").lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
                 }.font(.subheadline).foregroundStyle(Palette.secondary)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
             }.buttonStyle(.plain)
             if model.canChooseCheckout {
                 Button { model.route = .checkouts } label: {
@@ -244,7 +244,7 @@ struct ConversationView: View {
                         Text(model.checkoutLabel).lineLimit(1)
                         Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
                     }.font(.subheadline).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .padding(.leading, 8).padding(.trailing, 16).padding(.vertical, 12)
                 }.buttonStyle(.plain).accessibilityLabel("Checkout: \(model.checkoutLabel)")
             }
         }
