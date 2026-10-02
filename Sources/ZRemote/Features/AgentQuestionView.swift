@@ -46,14 +46,25 @@ struct AgentQuestionView: View {
                     // Keep this receipt until the peer resolves/replaces the request.
                     EmptyView()
                 } else if let question {
-                    ScrollView {
-                        questionContent(question)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { if $0 > 0 { contentHeight = $0 } }
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            questionContent(question)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { if $0 > 0 { contentHeight = $0 } }
+                        }
+                        .frame(height: min(contentHeight, max(96, maximumHeight - headerHeight - footerHeight - 64)))
+                        .scrollDismissesKeyboard(.interactively)
+                        .disabled(locked)
+                        .onChange(of: writingAnswer) { _, focused in
+                            if focused { proxy.scrollTo("custom-answer", anchor: .bottom) }
+                        }
+                        .onChange(of: contentHeight) { _, _ in
+                            if writingAnswer { proxy.scrollTo("custom-answer", anchor: .bottom) }
+                        }
+                        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { _ in
+                            if writingAnswer { proxy.scrollTo("custom-answer", anchor: .bottom) }
+                        }
                     }
-                    .frame(height: min(contentHeight, max(96, maximumHeight - headerHeight - footerHeight - 64)))
-                    .scrollDismissesKeyboard(.interactively)
-                    .disabled(locked)
                     footer
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { footerHeight = $0 }
                 } else {
@@ -128,6 +139,8 @@ struct AgentQuestionView: View {
                 .tint(Palette.text)
                 .accessibilityLabel("Your answer to \(question.title)")
                 .accessibilityIdentifier("agent-question-custom-answer")
+                .padding(.bottom, 8)
+                .id("custom-answer")
                 .task {
                     await Task.yield()
                     guard !Task.isCancelled, focusRequest == question.id else { return }

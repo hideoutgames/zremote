@@ -6,6 +6,7 @@ struct ProviderIcon: View {
     let providerID: String
     var size: CGFloat = 17
     var muted = false
+    var tint: Color? = nil
 
     private var asset: String? {
         switch providerID {
@@ -30,8 +31,8 @@ struct ProviderIcon: View {
             }
         }
         .frame(width: size, height: size)
-        .foregroundStyle(muted ? Palette.secondary : providerID == "claude-code" || providerID == "mock"
-            ? Color(red: 217 / 255, green: 119 / 255, blue: 87 / 255) : Palette.text)
+        .foregroundStyle(tint ?? (muted ? Palette.secondary : providerID == "claude-code" || providerID == "mock"
+            ? Color(red: 217 / 255, green: 119 / 255, blue: 87 / 255) : Palette.text))
         .accessibilityHidden(true)
     }
 }

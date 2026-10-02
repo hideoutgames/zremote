@@ -147,11 +147,11 @@ struct NotificationSettings: View {
 
     var body: some View {
         Section {
-            Toggle("Notifications", isOn: preference(\.enabled)).disabled(!model.notificationsSupported)
+            Toggle("Notifications", isOn: preference(\.enabled)).appSwitch().disabled(!model.notificationsSupported)
             if model.preferences.notifications.enabled {
-                Toggle("Agent asks a question", isOn: preference(\.questions))
-                Toggle("Agent finishes working", isOn: preference(\.finished))
-                Toggle("Usage limits approaching", isOn: preference(\.usageLimits))
+                Toggle("Agent asks a question", isOn: preference(\.questions)).appSwitch()
+                Toggle("Agent finishes working", isOn: preference(\.finished)).appSwitch()
+                Toggle("Usage limits approaching", isOn: preference(\.usageLimits)).appSwitch()
             }
             if model.notificationAuthorization == .denied {
                 #if os(iOS)
@@ -168,7 +168,7 @@ struct NotificationSettings: View {
         } header: {
             Text("Notifications")
         }
-        .tint(Palette.addition).listRowBackground(Palette.surface)
+        .listRowBackground(Palette.surface)
     }
 
     private func preference(_ key: WritableKeyPath<NotificationPreferences, Bool>) -> Binding<Bool> {

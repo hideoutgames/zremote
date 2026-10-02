@@ -24,50 +24,76 @@ public struct ClientFailure: LocalizedError, Sendable {
     private var pausedQueues: Set<String> = []
     private static let queueCapabilities = MessageQueueCapabilities(canQueue: true, canQueueAttachments: true, canSteer: true, canEdit: true, canAct: true)
     private let interval: UInt64
+    private let showcaseInterval: UInt64
     private var active = false
+    private var showcasing = false
     private var visibleSessionID: String?
 
-    public init(intervalNanoseconds: UInt64 = 45_000_000) { interval = intervalNanoseconds }
+    public init(intervalNanoseconds: UInt64 = 45_000_000, showcaseIntervalNanoseconds: UInt64 = 1_200_000_000) {
+        interval = intervalNanoseconds
+        showcaseInterval = max(1_000_000, showcaseIntervalNanoseconds)
+    }
 
     public func restore() async throws {
+        clear()
         active = true
-        let project = Project(id: "demo-project", name: "Personal project", path: "/Users/demo/Projects/personal", hostID: "demo-mac", isRepository: true)
-        projectCheckouts[project.id] = [
-            ProjectCheckout(branch: "main", path: project.path, isCurrent: true),
-            ProjectCheckout(branch: "demo/interface", path: "/Users/demo/Worktrees/personal/interface")
-        ]
-        let history = Session(id: "demo-welcome", title: "A quieter workspace", projectID: project.id, hostID: project.hostID, path: project.path, preview: "Ready when you are",
-                              pullRequest: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), createdAt: Date().addingTimeInterval(-3600), updatedAt: Date(), lastFinishedAt: Date().addingTimeInterval(-720), completedTurnID: "demo-history-turn", providerID: "codex", modelID: "gpt-6-astra", branch: "main")
-        let question = Session(id: "demo-question", title: "A quick design choice", projectID: project.id, hostID: project.hostID, path: project.path, createdAt: Date().addingTimeInterval(-7200), updatedAt: Date().addingTimeInterval(-1800), awaitingInput: true, activity: "Waiting for response", inputRequestID: "demo-input", providerID: "codex", modelID: "gpt-6-astra")
-        workspace = WorkspaceState(connection: .online, hosts: [Host(id: "demo-mac", name: "Demo Mac", online: true)], projects: [project], sessions: [history, question], profile: UserProfile(id: "test-mode", displayName: "Test mode"), devices: [
-            ConnectedDevice(id: "demo-mac", name: "Demo Mac", platform: "macos", online: true, isExecutionHost: true),
-            ConnectedDevice(id: "demo-phone", name: "This device", platform: "ios", online: true, isExecutionHost: false, isCurrent: true)
-        ])
-        sessions[history.id] = SessionState(id: history.id, messages: [
-            TranscriptMessage(id: "demo-message-1", role: "user", text: "Make this workspace feel a little calmer.", timestamp: Date().addingTimeInterval(-1032)),
-            TranscriptMessage(id: "demo-message-2", role: "assistant", text: "Ready when you are. Start a new session, choose a model, or send a message here to try streaming and changed files. Everything in test mode stays on this device.", timestamp: Date().addingTimeInterval(-720), workedDuration: 312)
-        ], selection: ModelSelection(providerID: "codex", modelID: "gpt-6-astra"), turnID: "demo-history-turn")
-        patches[history.id] = Self.sampleDiff
-        sessions[question.id] = SessionState(id: question.id, messages: [
-            TranscriptMessage(id: "demo-question-message", role: "assistant", text: "Before I continue, which details should I focus on? You can choose several or write your own answer.", timestamp: Date().addingTimeInterval(-1800))
-        ], selection: ModelSelection(providerID: "codex", modelID: "gpt-6-astra"), input: InputRequest(id: "demo-input", questions: [
-            InputQuestion(id: "details", title: "What matters most?", options: ["Spacing", "Typography", "Motion"], multiple: true)
-        ]))
+        showcasing = true
+        let fixtures = DemoFixtures.make()
+        workspace = fixtures.workspace
+        sessions = fixtures.sessions
+        projectCheckouts = fixtures.checkouts
+        attachmentBytes = fixtures.attachments
+        queuedAttachments = fixtures.queuedAttachments
+        patches = fixtures.patches
+        turnStarted[DemoFixtures.runningID] = Date()
         for id in sessions.keys { sessions[id]?.queueCapabilities = Self.queueCapabilities }
         onUpdate?(.workspace(workspace))
+        startShowcase()
+    }
+
+    private func startShowcase() {
+        let id = DemoFixtures.runningID
+        guard active, showcasing, sessions[id]?.working == true, running[id] == nil else { return }
+        let cadence = showcaseInterval
+        running[id] = Task { [weak self] in
+            var phase = 0
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: cadence) }
+                catch { return }
+                guard let self, self.active, self.showcasing, !Task.isCancelled,
+                      var state = self.sessions[id],
+                      state.working,
+                      let index = state.messages.firstIndex(where: { $0.id == DemoFixtures.progressID }) else { return }
+                phase = (phase + 1) % DemoFixtures.progress.count
+                state.messages[index].text = DemoFixtures.progress[phase]
+                state.messages[index].subagents = [
+                    SubagentStatus(id: "demo-layout-agent", title: "Layout review", status: "running", detail: DemoFixtures.activities[phase % DemoFixtures.activities.count]),
+                    SubagentStatus(id: "demo-a11y-agent", title: "Accessibility review", status: "done", detail: "Labels and touch targets checked in this offline sample.")
+                ]
+                self.sessions[id] = state
+                if let row = self.workspace.sessions.firstIndex(where: { $0.id == id }) {
+                    self.workspace.sessions[row].activity = DemoFixtures.activities[phase % DemoFixtures.activities.count]
+                    self.workspace.sessions[row].preview = state.messages[index].text
+                }
+                self.emit(id)
+            }
+        }
     }
 
     public func authorizationURL(state: String) throws -> URL { throw ClientFailure("Test mode does not sign in.") }
     public func exchangeCode(_ code: String) async throws -> [Organization] { throw ClientFailure("Test mode does not use credentials.") }
     public func selectOrganization(_ id: String) async throws { throw ClientFailure("Test mode does not use organizations.") }
     public func signOut() async throws {
-        active = false; visibleSessionID = nil
+        clear()
+        onUpdate?(.workspace(workspace))
+    }
+    private func clear() {
+        active = false; showcasing = false; visibleSessionID = nil
         for task in running.values { task.cancel() }
         running.removeAll(); sessions.removeAll(); patches.removeAll(); attachmentBytes.removeAll(); projectCheckouts.removeAll()
         turnStarted.removeAll()
         queuedAttachments.removeAll(); queueEdits.removeAll(); pausedQueues.removeAll()
         workspace = WorkspaceState()
-        onUpdate?(.workspace(workspace))
     }
     public func refresh() async throws { guard active else { return }; onUpdate?(.workspace(workspace)) }
     public func openSession(_ id: String) async throws {
@@ -178,6 +204,7 @@ public struct ClientFailure: LocalizedError, Sendable {
 
     private func startTurn(_ sessionID: String, text clean: String, attachments remote: [RemoteAttachment], messageID: String = UUID().uuidString) {
         guard var state = sessions[sessionID] else { return }
+        if sessionID == DemoFixtures.runningID { showcasing = false }
         state.input = nil
         // A stopped new turn must never borrow the previous turn's file changes.
         patches[sessionID] = nil
@@ -191,6 +218,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         state.working = true
         state.turnID = userID
         state.delivery = ""
+        state.deliveryFailed = false
         sessions[sessionID] = state
         if let index = workspace.sessions.firstIndex(where: { $0.id == sessionID }) {
             if workspace.sessions[index].title == "New session" {
@@ -198,6 +226,7 @@ public struct ClientFailure: LocalizedError, Sendable {
             }
             workspace.sessions[index].working = true
             workspace.sessions[index].awaitingInput = false
+            workspace.sessions[index].failed = false
             workspace.sessions[index].activity = "Working"
             workspace.sessions[index].updatedAt = Date()
         }
@@ -256,13 +285,18 @@ public struct ClientFailure: LocalizedError, Sendable {
     }
 
     public func interrupt(sessionID: String) async throws {
+        if sessionID == DemoFixtures.runningID { showcasing = false }
         pausedQueues.insert(sessionID)
         running[sessionID]?.cancel()
         finish(sessionID, interrupted: true)
     }
 
     public func retryDelivery(sessionID: String) async throws {
-        guard active, sessions[sessionID] != nil else { throw ClientFailure("Open a session first.") }
+        guard active, var state = sessions[sessionID] else { throw ClientFailure("Open a session first.") }
+        guard state.deliveryFailed, !state.working, let index = state.messages.lastIndex(where: { $0.role == "user" }) else { return }
+        let message = state.messages.remove(at: index)
+        sessions[sessionID] = state
+        startTurn(sessionID, text: message.text, attachments: message.attachments, messageID: message.id)
     }
 
     public func respondInput(sessionID: String, requestID: String, answers: [String: [String]]) async throws {
@@ -273,7 +307,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         }
         state.messages.append(TranscriptMessage(id: UUID().uuidString, role: "assistant", text: "Your choices are saved for this demo. Send a message to try a streaming reply.", timestamp: Date()))
         sessions[sessionID] = state
-        onUpdate?(.session(state))
+        emit(sessionID)
         drainQueue(sessionID)
     }
 
@@ -427,7 +461,14 @@ public struct ClientFailure: LocalizedError, Sendable {
         guard let diff = patches[sessionID] else { throw ClientFailure("No file changes are available for this turn.") }
         return diff
     }
-    public func setForeground(_ foreground: Bool) {}
+    public func setForeground(_ foreground: Bool) {
+        guard showcasing else { return }
+        if foreground { startShowcase() }
+        else {
+            running[DemoFixtures.runningID]?.cancel()
+            running[DemoFixtures.runningID] = nil
+        }
+    }
 
     public static var sampleDiff: TurnDiff {
         let paths = ["Sources/Composer.swift", "Sources/SessionList.swift", "Sources/Palette.swift", "Sources/ModelPicker.swift", "Sources/ProjectPicker.swift", "Sources/Changes.swift", "README.md"]

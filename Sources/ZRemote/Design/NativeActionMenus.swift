@@ -55,9 +55,13 @@ struct NativeProfileMenu: View {
     let name: String
     let accessibilityLabel: String
     let signingOut: Bool
+    let canAddAccount: Bool
+    let accounts: [ZeronAccount]
     let settings: @MainActor () -> Void
+    let addAccount: @MainActor () -> Void
+    let switchAccount: @MainActor (String) -> Void
     let signOut: @MainActor () -> Void
-    @Environment(\.displayScale) private var displayScale
+    @Environment(\.displayScale) var displayScale
 
     var body: some View {
         AsyncImage(url: avatarURL) { phase in
@@ -84,14 +88,29 @@ struct NativeProfileMenu: View {
     }
 
     private var menu: UIMenu {
-        let showSettings = settings, disconnect = signOut
+        let showSettings = settings, beginSignIn = addAccount, select = switchAccount, disconnect = signOut
+        let accountActions = accounts.map { account in
+            UIAction(title: account.profile.displayName, image: UIImage(systemName: "person.crop.circle"),
+                     state: account.active ? .on : .off) { _ in
+                Task { @MainActor in select(account.id) }
+            }
+        }
+        let accountSection = UIMenu(title: "Accounts", options: .displayInline, children: accountActions)
+        let manageSection = UIMenu(title: "Manage", options: .displayInline, children: [
+            UIAction(title: "Add account", image: UIImage(systemName: "person.badge.plus"),
+                     attributes: canAddAccount ? [] : [.disabled]) { _ in
+                Task { @MainActor in beginSignIn() }
+            },
+            UIAction(title: "Sign out", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"),
+                     attributes: signingOut ? [.destructive, .disabled] : [.destructive]) { _ in
+                Task { @MainActor in disconnect() }
+            },
+        ])
         return UIMenu(children: [
             UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { _ in
                 Task { @MainActor in showSettings() }
             },
-            UIAction(title: "Sign out", attributes: signingOut ? [.destructive, .disabled] : [.destructive]) { _ in
-                Task { @MainActor in disconnect() }
-            },
+            UIMenu(title: "Accounts", image: UIImage(systemName: "person.2"), children: [accountSection, manageSection]),
         ])
     }
 }

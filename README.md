@@ -5,18 +5,40 @@ SwiftUI, Skip Fuse, and Zeron's Rust mobile core. Agents and project operations
 execute on your remote computer. The mobile app never runs an agent or shell.
 
 The Composer is the main view. Phones slide it aside to reveal Sessions;
-tablets use a side panel. Model selection, project creation, PR information,
+tablets use a side panel while the window is at least 700 points wide. Narrow
+tablet windows switch to the phone drawer and presentation style. Model
+selection, project creation, PR information,
 and changed-file details open in phone bottom sheets or centered tablet modals.
-Settings is a full-page phone modal. Native account, filtering and session menus
+Tablet modals slide up from below the window and slide down on dismissal;
+Reduce Motion uses a brief fade.
+Settings is a full-page phone modal. On iOS, its Settings title stays inline with
+Done. Its profile card uses the available
+account photo, name and email. Native account, filtering and
+session menus
 keep the sidebar compact. Model modes and effort controls remain in the picker.
 
 The phone drawer moves the entire Composer/chat page, including its safe-area
-backgrounds, over a full-window Sessions layer. It reveals 80% of the screen
-with large continuous corners and a spring settle. Swipe right from the broad
+backgrounds, over a full-window Sessions layer. It reveals 90% of the screen
+with large continuous corners and a spring settle, leaving a 10% strip of the
+main page visible for tap dismissal. Swipe right from the broad
 leading edge to open, or left across Sessions/the exposed page to close
 (directions mirror in right-to-left layouts). Short flicks and predominantly
 vertical drags do not toggle it; scrolling, refresh and text-selection gestures
-keep their own interaction. Tablets retain their Sessions side panel.
+keep their own interaction. Held horizontal swipes track the finger directly,
+then spring into place on release. Passive transcript drag tracking can coexist
+with the drawer; the native vertical scroll still waits for its direction decision.
+The page surface and its Composer/chat content move as one, including newly
+selected chats and the blank Composer. Content replacement has no separate
+layout or insertion animation during drawer movement. Sessions controls
+pause briefly on opening so the hamburger touch cannot
+reach them. Opening Sessions clears Composer focus; closing it keeps the keyboard
+dismissed until the editor is tapped again. Sessions search accepts focus only
+while expanded in the open drawer. The Sessions header places the profile
+button on the leading side and Search on the trailing side; Search expands
+across the header.
+The inactive main phone page has a 2.5% black tint that fades with the drawer's
+swipe and settling animation; the open page returns to its normal appearance.
+Tablets retain their Sessions side panel.
 
 The picker follows Zeron's compact provider tabs, favorites and scoped search,
 using original provider marks in the picker and Composer. The Composer includes
@@ -25,7 +47,12 @@ Codex and the configurable Devin Fusion fixture.
 
 Session rows show state (orange awaiting a response, blue finished/unread,
 gray read/idle, red error), a smaller working animation, and the latest observed
-PR's state badge. Compact View hides only the activity/completion-age line.
+PR's state badge. The state indicator and provider icon share the title line's
+vertical center. Compact View hides only the activity/completion-age line.
+On iOS, working indicators use Zeron's native animated dots: the 2×3 violet
+grid in Sessions and the chat header, and the 3×3 pastel grid in the transcript
+and refresh recess. The 750 ms Core Animation cycle becomes static with Reduce
+Motion enabled. Source and license details are in [Provider marks](docs/PROVIDER_MARKS.md).
 The Show menu can restrict the list to one project without category headers;
 in Show all, project headers expand and collapse their sessions, with the animated
 chevron immediately after the project name, separated by an 8-point gap. Sidebar PR
@@ -33,14 +60,25 @@ badges contain the state-colored icon and number. Native iOS PR menus retain
 those icon colors, and the account menu uses the same control size as its peers.
 On iOS 26, the project-list button uses a native Liquid Glass button. Account
 initials/photos and PR symbols are native button content so they follow the
-button as it opens its menu.
-The display-options button keeps its slider icon when filters are active, with
-purple applied only to the icon. Rare purple accents share the [official Zeron iOS palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
-(`#5B43E8` light / `#8B7CF6` dark), including existing-project folders and merged PRs.
+button as it opens its menu. The account control leaves its native glass shadow
+unclipped, including while search expands. Its Accounts submenu lists saved
+Zeron accounts, marks the active account and keeps Add account and Sign out in
+a separate Manage section. Switching accounts preserves isolated local data and
+secure credentials for every saved account.
+Near the bottom of Settings, Archived opens a pushed page with a search bar
+above all synced archived chats, ordered by recent activity. Search matches chat
+titles independently of the Sessions drawer filters. Selecting a chat opens it
+without changing its archive status.
+The display-options button keeps its neutral slider icon when filters are active.
+Project folders and switches also use adaptive grayscale colors. Merged PRs use
+the [official Zeron iOS purple palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
+(`#5B43E8` light / `#8B7CF6` dark).
 Session rows use their provider's icon, including in test mode. Search expands
 as one continuous control before focusing its editor.
 
 Pull down at the top of Sessions to refresh, including short or empty lists.
+On phones and tablets, the recessed strip tracks native scrolling directly
+without an additional SwiftUI animation.
 The gesture reveals a recessed strip with the agent's working throbber and
 inset edge shadows. A selected Composer image keeps its filter, full-window
 scale and position, with a darker overlay; otherwise the strip uses a slightly
@@ -53,20 +91,34 @@ The composer supports native file/photo/camera attachments and host-backed
 the editor and sent messages as short, color-coded labels; caret movement,
 backspace and selection treat each selected reference as one unit. Drafts and
 sends retain the original host reference. Suggestions filter against the current
-caret query, with 32-point single-line rows in a fixed scrolling panel (up to
-168 points, capped to 30% of the keyboard-adjusted viewport). Commands and skills
+caret query, with 32-point single-line rows in a floating panel above the Composer.
+The panel fits its content and scrolls only beyond its existing maximum height
+of 168 points, capped to 30% of the keyboard-adjusted viewport. Empty and loading
+messages also fit their content. On iOS 26 it uses native Liquid Glass, with a
+material fallback on earlier iOS versions. Commands and skills
 show `name ≈ description` with their `/` or `$` prefix and no icons; files show
 a small type icon and `filename ≈ TYPE file`. Long rows truncate with an ellipsis.
 User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
+The chat's top blur covers the title and subtitle header, fading out beneath it
+as transcript content scrolls underneath.
+Tapping noninteractive areas dismisses the iOS keyboard and clears editor focus.
+Buttons, links, and native text selection retain their own gestures.
 Sub-agent cards show only a title and state; Working uses a quiet shimmer that
 stops with Reduce Motion. User-message context menus include the recorded send
 time, and completed turns show their recorded work duration beneath changed
 files when timing is available. No receive-time estimate replaces missing data.
 
-The blank Composer shows the selected provider's icon above “What are we
-building?” and offers both project and checkout selection. Choose the current
+The blank Composer shows a compact provider icon with a subtle tint, lighter
+than the background in dark mode and darker in light mode, and offers both
+project and checkout selection in a single leading-aligned row above the editor.
+Its header retains the Sessions button without
+a session title or subtitle.
+Tablet editor height adapts to the visible viewport, reserving space for the
+complete Composer card and its attachment, model, and send controls above the
+keyboard. Longer drafts scroll inside the editor in short windows or landscape.
+Choose the current
 checkout, another existing checkout, or
 New worktree. Worktree creation travels with the first message to the host;
 selecting it alone creates nothing. Session actions → Details shows the thread
@@ -74,7 +126,9 @@ title (editable), project, checkout, model, host, and creation/update times.
 
 Agent questions temporarily replace the Composer with a matching answer card.
 Each question has full-width choices, an optional multiline custom answer, and
-Back/Next navigation that preserves answers. The final Send answer action stays
+Back/Next navigation that preserves answers. Selecting the custom answer keeps
+the full editor and its bottom spacing visible as the keyboard opens or the
+answer grows. The final Send answer action stays
 disabled until every question is answered. The Composer draft and attachments
 return when the request clears. A locally queued answer shows a compact receipt
 until the peer resolves it; repeated taps and reopening the session cannot send
@@ -103,6 +157,18 @@ adapted to the native app. Implementation does not trigger an upload.
 Choose **Try test mode** before signing in to exercise the same application
 interfaces without credentials or network access. Its sessions, drafts, model
 favorites, streaming replies, project folders, and sample changes stay in memory.
+The playground includes sixteen chats across five projects and three hosts:
+Codex, Claude Code and Fusion, pinned/unread/failed states, archived chats,
+multi-question answers, long Markdown/code transcripts, a previewable text
+attachment, seven-file diffs, and open/draft/merged/closed PR samples without
+external links. The offline host offers a cached sample transcript.
+**Live agent playground** stays working, cycles bounded simulated progress and
+subagent details, and starts with three editable/reorderable queued messages
+(including an attachment). Queue and steering use the normal demo interfaces;
+Stop pauses the sample and leaves queued messages intact. Leaving Try cancels
+its tasks, and entering Try again restores the samples. Backgrounding suspends
+the showcase timer. Real sign-in, account credentials and notification delivery
+still require the live client.
 
 ## Structure
 
@@ -121,7 +187,7 @@ New projects can be created in the host's managed projects directory, or an
 existing remote folder can be selected. The current host protocol cannot make
 an arbitrary new Desktop folder. No host or edge patch is required.
 Choose existing folder pushes a browser inside the project drawer. Select a
-folder to enable Create project; a registered project uses a purple folder/cog
+folder to enable Create project; a registered project uses a neutral folder/cog
 icon and Choose project, which selects it without creating a duplicate.
 
 Turn diff snapshots are best-effort and can expire on the host. The client
@@ -135,17 +201,29 @@ events. PR review opens the supplied HTTPS link. A missing profile photo uses
 initials; the client does not look up an avatar from another service.
 
 The optional background decorates a blank new Composer and the transient
-Sessions refresh recess. It stays hidden on other surfaces. There is no terminal, general
-file browser, repository administration, or direct GitHub integration.
-Settings can import a device-local image and apply Zeron's Original, Dither,
-ASCII, Halftone or Scanlines treatment with its native contrast guard. Images
-are downsampled before account-local storage and never uploaded to the host.
+Sessions refresh recess. It stays hidden on other surfaces. The blank tablet
+Composer retains its image and accepts input beside the expanded Sessions panel;
+opening a secondary modal hides the Composer image.
+There is no terminal, general file browser, repository administration, or direct
+GitHub integration.
+Settings → Use Background Image exposes an Effect picker with Zeron's None,
+Dither, ASCII, Halftone and Scanlines treatments and native contrast guard. Images
+are downsampled before account-local storage and never uploaded to the host. By
+default the image fades out just above the blank Composer's provider icon; Full
+height background restores the extended treatment and is off by default.
 
 Settings lists connected devices and host-reported agent accounts/plan usage.
 Theme offers System, Light and Dark with adaptive surfaces and grayscale usage
 bars. Background effects and their text contrast guard follow the chosen theme.
 Haptics enables app-triggered feedback, including one light response when a
 refresh is committed. It defaults on and persists with account preferences.
+All switches share the native switch style and an adaptive grayscale tint.
+On iOS, refresh stays active for at least 900 ms after release, including held
+pulls, so the native
+loading inset settles briefly before collapsing; the recess has a subtle tint
+and soft top/bottom shadows. The model picker uses equal top and bottom padding,
+including above the home indicator.
+
 System-owned feedback, such as iOS Haptic Touch or the system keyboard, remains
 controlled by the operating system.
 Agent sign-in remains on the host. A quota warning above the Composer appears

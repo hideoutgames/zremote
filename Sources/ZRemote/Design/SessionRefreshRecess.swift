@@ -14,19 +14,20 @@ struct SessionRefreshRecess: View {
                 Palette.background
                 if model.sessionsVisible, model.preferences.backgroundEnabled,
                    let data = model.preferences.backgroundImageData {
-                    ComposerBackground(data: data, effect: model.preferences.backgroundEffect)
-                    Color.black.opacity(colorScheme == .dark ? 0.18 : 0.10)
+                    ComposerBackground(data: data, effect: model.preferences.backgroundEffect,
+                                       fullHeight: model.preferences.backgroundFullHeight, fadeEndY: nil)
+                    Color.black.opacity(colorScheme == .dark ? 0.12 : 0.07)
                 } else {
-                    Color.black.opacity(colorScheme == .dark ? 0.16 : 0.045)
+                    Color.black.opacity(colorScheme == .dark ? 0.10 : 0.03)
                 }
 
                 // Shadows live inside the reveal, not on top of the list or
                 // throbber. The two edges make the surface feel recessed.
                 VStack(spacing: 0) {
-                    LinearGradient(colors: [.black.opacity(0.18), .clear], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [.black.opacity(0.09), .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: min(10, geometry.size.height / 2))
                     Spacer(minLength: 0)
-                    LinearGradient(colors: [.clear, .black.opacity(0.14)], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [.clear, .black.opacity(0.07)], startPoint: .top, endPoint: .bottom)
                         .frame(height: min(8, geometry.size.height / 2))
                 }
                 if geometry.size.height > 16 {

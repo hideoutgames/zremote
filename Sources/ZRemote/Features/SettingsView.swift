@@ -14,6 +14,23 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            if let profile = model.workspace.profile {
+                Section {
+                    HStack(spacing: 16) {
+                        profileImage(profile)
+                            .frame(width: 64, height: 64)
+                            .clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(profile.displayName).font(.title3.weight(.semibold))
+                            if let email = profile.email, !email.isEmpty {
+                                Text(email).font(.subheadline).foregroundStyle(Palette.secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+                .listRowBackground(Palette.surface)
+            }
             Section {
                 Picker("Theme", selection: Binding(get: { model.preferences.theme }, set: { model.setTheme($0) })) {
                     Text("System").tag(AppTheme.system)
@@ -21,12 +38,19 @@ struct SettingsView: View {
                     Text("Dark").tag(AppTheme.dark)
                 }
                 Toggle("Haptics", isOn: Binding(get: { model.preferences.hapticsEnabled }, set: { model.setHapticsEnabled($0) }))
+                    .appSwitch()
             }.listRowBackground(Palette.surface)
             BackgroundSettings(model: model)
             ConnectionSettings(model: model)
             NotificationSettings(model: model)
 
             Section {
+                NavigationLink {
+                    ArchivedSessionsView(model: model)
+                } label: {
+                    Label("Archived", systemImage: "archivebox")
+                }
+                .accessibilityIdentifier("settings-archived")
                 NavigationLink {
                     AcknowledgementsView()
                 } label: {
@@ -47,7 +71,7 @@ struct SettingsView: View {
                     Task { await model.disconnect(); signingOut = false }
                 } label: {
                     HStack {
-                        Text("Sign out")
+                        Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                         Spacer()
                         if signingOut { ProgressView() }
                     }
@@ -61,6 +85,30 @@ struct SettingsView: View {
         .background(Palette.background)
         .foregroundStyle(Palette.text)
         .navigationTitle("Settings")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+
+    @ViewBuilder private func profileImage(_ profile: UserProfile) -> some View {
+        if !model.isDemo, let value = profile.avatarURL, let url = URL(string: value), url.scheme == "https",
+           url.user == nil, url.password == nil {
+            AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: {
+                profileInitials(profile)
+            }
+        } else {
+            profileInitials(profile)
+        }
+    }
+
+    private func profileInitials(_ profile: UserProfile) -> some View {
+        let letters = profile.displayName.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return ZStack {
+            Circle().fill(Palette.raised)
+            if letters.isEmpty { Image(systemName: "person.fill").font(.title2) }
+            else { Text(letters.uppercased()).font(.title2.weight(.semibold)) }
+        }
+        .foregroundStyle(Palette.text)
     }
 }
 

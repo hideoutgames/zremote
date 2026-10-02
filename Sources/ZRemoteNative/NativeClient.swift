@@ -8,10 +8,17 @@ import ZRemoteCore
     public var onUpdate: (@MainActor (ClientUpdate) -> Void)?
     public let isDemo = false
     public var accountKey: String? { account.map { $0.userID + "/" + $0.organizationID } }
+    public var zeronAccounts: [ZeronAccount] {
+        accounts.map { stored in
+            ZeronAccount(id: stored.id, profile: stored.profile ?? UserProfile(id: stored.userID, displayName: "Your account"),
+                         organizationID: stored.organizationID, active: stored.id == account?.id)
+        }
+    }
 
     private let edgeURL: String
     private var client: CoreClient?
     private var account: StoredAccount?
+    private var accounts: [StoredAccount] = []
     private var pendingAuth: AuthExchange?
     private var pendingOrganizations: [AuthOrg] = []
     private var generation = UUID()
@@ -46,7 +53,20 @@ import ZRemoteCore
             onUpdate?(.workspace(.init()))
             return
         }
-        let stored = try JSONDecoder().decode(StoredAccount.self, from: Data(value.utf8))
+        let data = Data(value.utf8)
+        let stored: StoredAccount
+        if let envelope = try? JSONDecoder().decode(StoredAccounts.self, from: data) {
+            accounts = envelope.accounts
+            guard let selected = accounts.first(where: { $0.id == envelope.activeID }) ?? accounts.first else {
+                onUpdate?(.workspace(.init()))
+                return
+            }
+            stored = selected
+        } else {
+            stored = try JSONDecoder().decode(StoredAccount.self, from: data)
+            accounts = [stored]
+            try persist(activeID: stored.id)
+        }
         try await start(stored)
     }
 
@@ -85,12 +105,20 @@ import ZRemoteCore
             return value
         }
         let stored = StoredAccount(userID: user.id, organizationID: id, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken,
-            profile: UserProfile(id: user.id, displayName: name.isEmpty ? (user.email ?? "Your account") : name, avatarURL: photo))
-        // Persist the rotated pair before starting rooms: the old pair is spent.
+            profile: UserProfile(id: user.id, displayName: name.isEmpty ? (user.email ?? "Your account") : name,
+                                 email: user.email, avatarURL: photo))
+        let previous = account
         try save(stored)
         self.pendingAuth = nil
         pendingOrganizations = []
-        try await start(stored)
+        do { try await start(stored) }
+        catch {
+            if let previous {
+                try? persist(activeID: previous.id)
+                try? await start(previous)
+            }
+            throw error
+        }
     }
 
     public func signOut() async throws {
@@ -104,7 +132,9 @@ import ZRemoteCore
         }
         try ensureCurrent(operation)
         shutdown()
-        try Keychain.shared.removeValue(forKey: Self.credentialKey)
+        if let previous { accounts.removeAll { $0.id == previous.id } }
+        if let next = accounts.first { try persist(activeID: next.id) }
+        else { try Keychain.shared.removeValue(forKey: Self.credentialKey) }
         account = nil
         pendingAuth = nil
         pendingOrganizations = []
@@ -115,6 +145,18 @@ import ZRemoteCore
             }
         }
         onUpdate?(.workspace(.init()))
+    }
+
+    public func switchAccount(_ id: String) async throws {
+        guard let stored = accounts.first(where: { $0.id == id }) else { throw NativeClientError.invalidAuthentication }
+        guard let previous = account, stored.id != previous.id else { return }
+        try persist(activeID: stored.id)
+        do { try await start(stored) }
+        catch {
+            try? persist(activeID: previous.id)
+            try? await start(previous)
+            throw error
+        }
     }
 
     public func refresh() async throws {
@@ -752,7 +794,13 @@ import ZRemoteCore
     }
 
     private func save(_ stored: StoredAccount) throws {
-        let data = try JSONEncoder().encode(stored)
+        if let index = accounts.firstIndex(where: { $0.id == stored.id }) { accounts[index] = stored }
+        else { accounts.append(stored) }
+        try persist(activeID: stored.id)
+    }
+
+    private func persist(activeID: String) throws {
+        let data = try JSONEncoder().encode(StoredAccounts(activeID: activeID, accounts: accounts))
         guard let value = String(data: data, encoding: .utf8) else { throw NativeClientError.invalidAuthentication }
         try Keychain.shared.set(value, forKey: Self.credentialKey, access: .unlockedThisDeviceOnly)
     }
@@ -764,6 +812,12 @@ private struct StoredAccount: Codable {
     var accessToken: String
     var refreshToken: String
     var profile: UserProfile?
+    var id: String { userID + "/" + organizationID }
+}
+
+private struct StoredAccounts: Codable {
+    var activeID: String
+    var accounts: [StoredAccount]
 }
 
 private struct MessageCache {

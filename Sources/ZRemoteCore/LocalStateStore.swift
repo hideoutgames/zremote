@@ -16,6 +16,7 @@ public struct LocalPreferences: Codable, Sendable {
     public var backgroundImageData: Data?
     public var backgroundImageName: String?
     public var backgroundEffect = "none"
+    public var backgroundFullHeight = false
     public var notifications = NotificationPreferences()
     public var dismissedUsageSessions: Set<String> = []
     public var usageWarnings: [UsageWarning] = []
@@ -25,7 +26,7 @@ public struct LocalPreferences: Codable, Sendable {
     public var changes: [CapturedTurnChanges] = []
     public var pullRequests: [ObservedPullRequest] = []
     public init() {}
-    private enum CodingKeys: String, CodingKey { case drafts, favorites, theme, hapticsEnabled, backgroundEnabled, backgroundImageData, backgroundImageName, backgroundEffect, notifications, dismissedUsageSessions, usageWarnings, usageNotifiedSessions, notificationEvents, sessionFinishedAt, changes, pullRequests }
+    private enum CodingKeys: String, CodingKey { case drafts, favorites, theme, hapticsEnabled, backgroundEnabled, backgroundImageData, backgroundImageName, backgroundEffect, backgroundFullHeight, notifications, dismissedUsageSessions, usageWarnings, usageNotifiedSessions, notificationEvents, sessionFinishedAt, changes, pullRequests }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         drafts = try values.decodeIfPresent([String: String].self, forKey: .drafts) ?? [:]
@@ -37,6 +38,7 @@ public struct LocalPreferences: Codable, Sendable {
         backgroundImageData = image.flatMap { $0.count <= 2_000_000 ? $0 : nil }
         backgroundImageName = backgroundImageData == nil ? nil : try values.decodeIfPresent(String.self, forKey: .backgroundImageName)
         backgroundEffect = try values.decodeIfPresent(String.self, forKey: .backgroundEffect) ?? "none"
+        backgroundFullHeight = try values.decodeIfPresent(Bool.self, forKey: .backgroundFullHeight) ?? false
         notifications = try values.decodeIfPresent(NotificationPreferences.self, forKey: .notifications) ?? NotificationPreferences()
         dismissedUsageSessions = try values.decodeIfPresent(Set<String>.self, forKey: .dismissedUsageSessions) ?? []
         usageWarnings = UsageLimitRules.mergeWarnings(

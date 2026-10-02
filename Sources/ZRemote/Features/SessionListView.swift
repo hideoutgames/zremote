@@ -1,4 +1,5 @@
 import Foundation
+import SkipAuthenticationServices
 import SwiftUI
 import ZRemoteCore
 
@@ -19,10 +20,13 @@ struct SessionListView: View {
     @State var compact = true
     @State var now = Date()
     @State var signingOut = false
+    @State var authorizingAccount = false
+    @State var choosingOrganization = false
     @State var refreshReveal: CGFloat = 0
     @State var searchFocusDismissal = 0
     @FocusState var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.webAuthenticationSession) var authentication
 
     private var selectedProjectID: String? {
         shownProjectID.flatMap { selected in model.workspace.projects.contains(where: { $0.id == selected }) ? selected : nil }
@@ -111,9 +115,15 @@ struct SessionListView: View {
         }
         #if os(iOS)
         .accessibilityAction(.escape) {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { model.sessionsVisible = false }
+            model.sessionsVisible = false
         }
         #endif
+        .confirmationDialog("Choose your organization", isPresented: $choosingOrganization, titleVisibility: .visible) {
+            ForEach(model.organizations) { organization in
+                Button(organization.name) { Task { await model.chooseOrganization(organization.id) } }
+            }
+            Button("Cancel", role: .cancel) { model.organizations = [] }
+        }
     }
 
     @ViewBuilder private var refreshingList: some View {
@@ -141,7 +151,9 @@ struct SessionListView: View {
             // offscreen row recycling cannot remove the refresh owner.
             VStack(spacing: 0) {
                 NativeSessionRefresh(hapticsEnabled: model.preferences.hapticsEnabled,
-                                     onRevealChange: { refreshReveal = $0 }) {
+                                     onRevealChange: { height in
+                                         withTransaction(Transaction(animation: nil)) { refreshReveal = height }
+                                     }) {
                     await model.refreshSessions()
                 }.frame(height: 0)
                 sessionRows
@@ -178,14 +190,13 @@ struct SessionListView: View {
     private var header: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                searchControl(expandedWidth: max(46, geometry.size.width))
-                Spacer(minLength: 0)
                 accountMenu
                     .frame(width: searching ? 0 : 46, height: 46)
                     .opacity(searching ? 0 : 1)
-                    .clipped()
                     .allowsHitTesting(!searching)
                     .accessibilityHidden(searching)
+                Spacer(minLength: 0)
+                searchControl(expandedWidth: max(46, geometry.size.width))
             }
         }
         .frame(height: 46)
@@ -239,6 +250,7 @@ struct SessionListView: View {
             Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary).accessibilityHidden(true)
             TextField("Search sessions", text: $search)
                 .font(.subheadline).autocorrectionDisabled().focused($searchFocused).submitLabel(.search)
+                .disabled(!searching || !model.sessionsVisible || model.route != nil)
             Button { setSearching(false) } label: {
                 Image(systemName: "xmark").font(.system(size: 14, weight: .medium)).frame(width: 36, height: 44)
             }.buttonStyle(.plain).accessibilityLabel("Close search")
@@ -258,7 +270,9 @@ struct SessionListView: View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
             NativeProfileMenu(avatarURL: avatarURL, name: accountName, accessibilityLabel: model.isDemo ? "Test mode account" : "Account", signingOut: signingOut,
-                              settings: { model.route = .settings }, signOut: signOut)
+                              canAddAccount: !model.isDemo && !authorizingAccount, accounts: menuAccounts,
+                              settings: { model.route = .settings }, addAccount: beginAddAccount,
+                              switchAccount: { id in Task { await model.switchAccount(id) } }, signOut: signOut)
                 .frame(width: 46, height: 46)
         } else { accountMenuControl.nativeGlassControl() }
         #else
@@ -268,11 +282,23 @@ struct SessionListView: View {
     private var accountMenuControl: some View {
         Menu {
             Button { model.route = .settings } label: { Label("Settings", systemImage: "gearshape") }
-            Button(role: .destructive) {
-                signOut()
-            } label: {
-                Text("Sign out")
-            }.disabled(signingOut)
+            Menu("Accounts", systemImage: "person.2") {
+                Section("Accounts") {
+                    ForEach(menuAccounts) { account in
+                        Button { Task { await model.switchAccount(account.id) } } label: {
+                            if account.active { Label(account.profile.displayName, systemImage: "checkmark") }
+                            else { Text(account.profile.displayName) }
+                        }
+                    }
+                }
+                Section("Manage") {
+                    Button(action: beginAddAccount) { Label("Add account", systemImage: "person.badge.plus") }
+                        .disabled(model.isDemo || authorizingAccount)
+                    Button(role: .destructive, action: signOut) {
+                        Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                    }.disabled(signingOut)
+                }
+            }
         } label: {
             avatar.frame(width: 30, height: 30).clipShape(Circle())
         }
@@ -284,6 +310,30 @@ struct SessionListView: View {
         guard !signingOut else { return }
         signingOut = true
         Task { await model.disconnect(); signingOut = false }
+    }
+    private var menuAccounts: [ZeronAccount] {
+        if !model.zeronAccounts.isEmpty { return model.zeronAccounts }
+        guard let profile = model.workspace.profile else { return [] }
+        return [ZeronAccount(id: profile.id, profile: profile, organizationID: "", active: true)]
+    }
+    private func beginAddAccount() {
+        guard !authorizingAccount, !model.isDemo else { return }
+        authorizingAccount = true
+        Task {
+            defer { authorizingAccount = false }
+            let state = UUID().uuidString
+            do {
+                let url = try model.authorizeURL(state: state)
+                let callback = try await authentication.authenticate(using: url, callbackURLScheme: "zeron",
+                                                                      preferredBrowserSession: .shared)
+                let code = try AuthenticationCallback.code(from: callback, expectedState: state)
+                await model.signIn(code: code)
+                choosingOrganization = model.organizations.count > 1
+            } catch {
+                if let cancelled = error as? ASWebAuthenticationSessionError, cancelled.code == .canceledLogin { return }
+                model.error = "Sign-in didn't complete. Please try again."
+            }
+        }
     }
     private var accountName: String { model.workspace.profile?.displayName ?? (model.isDemo ? "Test mode" : "") }
     private var avatarURL: URL? {
@@ -345,7 +395,7 @@ struct SessionListView: View {
         } label: {
             SessionFilterIcon()
                 .font(.system(size: 19)).frame(width: 46, height: 46)
-                .foregroundStyle(hasFilters ? Palette.accent : Palette.text)
+                .foregroundStyle(Palette.text)
                 .nativeGlassControl()
         }.accessibilityLabel("Session display options").accessibilityValue(hasFilters ? "Filters active" : "")
     }
@@ -386,25 +436,23 @@ struct SessionListView: View {
     }
     private func sessionRow(_ session: Session) -> some View {
         Button { Task { await model.open(session.id) } } label: {
-            HStack(alignment: .top, spacing: 8) {
-                sessionIndicator(session).frame(width: 16, height: 22).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        ProviderIcon(providerID: session.providerID, size: 14)
-                        Text(session.title).font(.body.weight(session.unread ? .medium : .regular)).lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if session.pinned {
-                            Image(systemName: "pin.fill").font(.system(size: 10))
-                                .foregroundStyle(Palette.secondary).accessibilityHidden(true)
-                        }
-                        if let request = session.pullRequest { PullRequestBadge(request: request, compact: true) }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    sessionIndicator(session).frame(width: 16).accessibilityHidden(true)
+                    ProviderIcon(providerID: session.providerID, size: 14)
+                    Text(session.title).font(.body.weight(session.unread ? .medium : .regular)).lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if session.pinned {
+                        Image(systemName: "pin.fill").font(.system(size: 10))
+                            .foregroundStyle(Palette.secondary).accessibilityHidden(true)
                     }
-                    if !compact, let detail = SessionPresentationRules.detail(for: session, now: now) {
-                        Text(detail).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
-                            .padding(.leading, 22)
-                    }
-                }.multilineTextAlignment(.leading)
-            }
+                    if let request = session.pullRequest { PullRequestBadge(request: request, compact: true) }
+                }
+                if !compact, let detail = SessionPresentationRules.detail(for: session, now: now) {
+                    Text(detail).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                        .padding(.leading, 46)
+                }
+            }.multilineTextAlignment(.leading)
             .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(model.selectedSessionID == session.id ? Palette.surface : .clear, in: RoundedRectangle(cornerRadius: 16))
@@ -433,7 +481,7 @@ struct SessionListView: View {
 
     @ViewBuilder private func sessionIndicator(_ session: Session) -> some View {
         let indicator = SessionPresentationRules.indicator(for: session)
-        if indicator == .working { ActivityGlyph() }
+        if indicator == .working { ActivityGlyph(mini: true) }
         else {
             Circle().fill(indicatorColor(indicator)).frame(width: 6, height: 6)
         }
@@ -449,7 +497,7 @@ struct SessionListView: View {
     }
 }
 
-private struct SessionSection: Identifiable {
+struct SessionSection: Identifiable {
     var id: String
     var title: String
     var symbol: String
