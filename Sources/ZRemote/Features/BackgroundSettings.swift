@@ -47,7 +47,7 @@ struct BackgroundSettings: View {
                 }
                 .pickerStyle(.menu)
                 Toggle("Full height background", isOn: Binding(
-                    get: { model.preferences.backgroundFullHeight }, set: model.setBackgroundFullHeight
+                    get: { model.preferences.backgroundFullHeight }, set: { model.setBackgroundFullHeight($0) }
                 )).appSwitch()
                 if model.preferences.backgroundImageData != nil {
                     ComposerBackground(data: model.preferences.backgroundImageData,

@@ -185,6 +185,9 @@ see [Apple's delegate signature](https://developer.apple.com/documentation/usern
 Shared controls also retain `@MainActor` on actions passed to native UIKit controls.
 The root layout and its concretely typed presentation bindings are separate
 expressions to keep SwiftUI typechecking bounded as routes are added.
+Use an inline setter closure when a `Binding<Bool>` invokes a main-actor model
+method. Passing the method reference directly triggers an IRGen crash in the
+Swift 6.3.3 Release compiler; see [Swift issue 88027](https://github.com/swiftlang/swift/issues/88027).
 
 The iOS Compile Check retains `ios-dependency-evidence` for one day after its
 resolve/build attempt. It contains the workspace `Package.resolved`, generated
