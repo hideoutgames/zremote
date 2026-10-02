@@ -194,6 +194,9 @@ Turn diff snapshots are best-effort and can expire on the host. The client
 captures available patches when a turn completes and retains immutable,
 account-scoped revisions. Concurrent checkout edits may also appear in the
 host's turn diff; it is not an audit log of agent-only filesystem activity.
+Individual file review keeps the path above a top-aligned, vertically scrolling
+diff. Long code lines wrap within the page alongside their original line numbers
+and addition/deletion markers.
 Unavailable data is never substituted with a later checkout diff. Zeron exposes
 the current PR for a branch, so the client retains distinct PRs as it observes
 them in each session. These are first-observed positions, not historical creation

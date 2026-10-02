@@ -38,7 +38,10 @@ public struct NativeDiffView: View {
                 message(symbol: "doc.text", title: "No text changes", detail: "The change may be a rename or file metadata update.")
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Palette.background)
+        .navigationTitle("Changes")
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: document.id) {
             parsed = nil
             guard let patch = document.patch, !patch.isEmpty, !document.isBinary else { return }
@@ -65,30 +68,33 @@ public struct NativeDiffView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(Palette.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Palette.line).frame(height: 0.5)
+        }
     }
 
     private func fileBody(_ file: UnifiedDiffFile) -> some View {
-        GeometryReader { geometry in
-            ScrollView([.vertical, .horizontal]) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(file.hunks) { hunk in
-                        Text(hunk.header)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(Palette.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Palette.surface)
-                            .accessibilityLabel("Changed section, \(hunk.header)")
-                        ForEach(hunk.lines) { line in
-                            DiffCodeRow(line: line)
-                        }
+        ScrollView(.vertical) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(file.hunks) { hunk in
+                    Text(hunk.header)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(Palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.surface)
+                        .accessibilityLabel("Changed section, \(hunk.header)")
+                    ForEach(hunk.lines) { line in
+                        DiffCodeRow(line: line)
                     }
                 }
-                .frame(minWidth: geometry.size.width, alignment: .leading)
-                .padding(.bottom, 24)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 24)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func message(symbol: String, title: String, detail: String) -> some View {
@@ -149,11 +155,12 @@ struct DiffCodeRow: View {
             Text(sign).foregroundStyle(tint).frame(width: 28).accessibilityHidden(true)
             SelectableText(line.text.isEmpty ? " " : line.text)
                 .foregroundStyle(tint)
-                .fixedSize(horizontal: true, vertical: false)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.trailing, 16)
                 .accessibilityHidden(true)
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .font(.system(.caption, design: .monospaced))
         .padding(.vertical, 3)
         .background(line.kind == .addition || line.kind == .deletion ? tint.opacity(0.10) : Color.clear)
