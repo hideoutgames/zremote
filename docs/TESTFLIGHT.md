@@ -34,6 +34,13 @@ revision and APK hash; Windows APK assembly is a separate validation result.
 `APPLE_TEAM_ID`. The optional `IOS_BUNDLE_ID` defaults to `no.hideout.zremote`.
 This operation still requires an explicit distribution request.
 
+The iOS app target reads `ZREMOTE_APP_BUNDLE_IDENTIFIER` from its xcconfig.
+Both workflows override that setting rather than `PRODUCT_BUNDLE_IDENTIFIER`,
+which Xcode would apply to every dependency framework and resource bundle.
+TestFlight checks the archived app's expected identifier and all embedded bundle
+identifiers for collisions before export/upload. Run the fixture regressions with
+`python3 Tests/Scripts/test_ios_bundle_identifiers.py`; they do not build or upload.
+
 The native preparation builds the Rust peer and Skip Swift package, generates
 Swift/Cargo acknowledgements, and archives `Project.xcworkspace` with the
 `ZRemote App` scheme for generic iOS devices. The archive stays unsigned;

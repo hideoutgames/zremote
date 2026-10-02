@@ -98,7 +98,7 @@ jobs:
               -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/swift-packages" \
               CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-              SKIP_ACTION=none PRODUCT_BUNDLE_IDENTIFIER=dev.zremote.compilecheck \
+              SKIP_ACTION=none ZREMOTE_APP_BUNDLE_IDENTIFIER=dev.zremote.compilecheck \
               build -quiet 2>&1 | tee build.log
       - name: Save resolved dependency evidence
         if: always()
