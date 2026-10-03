@@ -114,7 +114,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
             scroll.panGestureRecognizer.addTarget(self, action: #selector(Coordinator.dragChanged(_:)))
             originalAlwaysBounceVertical = scroll.alwaysBounceVertical
             geometry = SessionRefreshGeometry(restingTopInset: Double(scroll.adjustedContentInset.top),
-                                              systemTopInset: Double(scroll.adjustedContentInset.top - scroll.contentInset.top))
+                                              systemTopInset: safeAreaTopInset(scroll))
             scroll.alwaysBounceVertical = true
             scroll.refreshControl = refresh
             let epoch = generation
@@ -156,13 +156,17 @@ struct NativeSessionRefresh: UIViewRepresentable {
             publishReveal(0)
         }
 
+        private func safeAreaTopInset(_ scroll: UIScrollView) -> Double {
+            scroll.contentInsetAdjustmentBehavior == .never ? 0 : Double(scroll.safeAreaInsets.top)
+        }
+
         private func sampleReveal() {
             guard let scrollView, let control, scrollView.refreshControl === control else { return }
             let pan = scrollView.panGestureRecognizer.state
             let dragging = pan == .began || pan == .changed
             var height = geometry.reveal(contentOffsetY: Double(scrollView.contentOffset.y),
                                          adjustedTopInset: Double(scrollView.adjustedContentInset.top),
-                                         systemTopInset: Double(scrollView.adjustedContentInset.top - scrollView.contentInset.top),
+                                         systemTopInset: safeAreaTopInset(scrollView),
                                          dragging: dragging, refreshing: control.isRefreshing || refreshTask != nil)
             if refreshTask != nil, !dragging { height = max(height, 60) }
             publishReveal(CGFloat(height))

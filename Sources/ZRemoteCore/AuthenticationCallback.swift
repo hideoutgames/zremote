@@ -5,7 +5,7 @@ public enum AuthenticationCallback {
     public static func code(from url: URL, expectedState: String) throws -> String {
         guard url.scheme?.lowercased() == "zeron", url.host == "callback",
               url.path.isEmpty || url.path == "/", url.user == nil, url.password == nil,
-              url.port == nil, url.fragment == nil,
+              url.port == nil,
               !expectedState.isEmpty,
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else {
             throw ClientFailure("Invalid sign-in callback.")

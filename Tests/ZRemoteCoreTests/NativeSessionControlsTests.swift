@@ -2,11 +2,11 @@ import XCTest
 import ZRemoteCore
 
 final class NativeSessionControlsTests: XCTestCase {
-    func testHeldPullExcludesTheNativeRefreshInsetUntilRelease() {
+    func testHeldPullIgnoresTheNativeRefreshInsetUntilRelease() {
         var geometry = SessionRefreshGeometry(restingTopInset: 20, systemTopInset: 20)
         XCTAssertEqual(geometry.reveal(contentOffsetY: -50, adjustedTopInset: 20, systemTopInset: 20, dragging: true, refreshing: false), 30)
-        XCTAssertEqual(geometry.reveal(contentOffsetY: -110, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 30)
-        XCTAssertEqual(geometry.reveal(contentOffsetY: -126, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 46)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -110, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 90)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -126, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 106)
         XCTAssertEqual(geometry.reveal(contentOffsetY: -80, adjustedTopInset: 80, systemTopInset: 20, dragging: false, refreshing: true), 60)
         XCTAssertEqual(geometry.reveal(contentOffsetY: -20, adjustedTopInset: 20, systemTopInset: 20, dragging: false, refreshing: false), 0)
         XCTAssertEqual(geometry.reveal(contentOffsetY: -38, adjustedTopInset: 20, systemTopInset: 20, dragging: true, refreshing: false), 18)
