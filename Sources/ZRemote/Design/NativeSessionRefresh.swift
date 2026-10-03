@@ -68,6 +68,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
         private var pendingReveal: CGFloat = 0
         private var lastReveal: CGFloat = -1
         private var generation = 0
+        private let feedback = UIImpactFeedbackGenerator(style: .light)
 
         init(hapticsEnabled: Bool, onRevealChange: @escaping @MainActor (CGFloat) -> Void,
              action: @escaping @MainActor () async -> Void) {
@@ -157,7 +158,8 @@ struct NativeSessionRefresh: UIViewRepresentable {
 
         private func sampleReveal() {
             guard let scrollView, let control, scrollView.refreshControl === control else { return }
-            let dragging = scrollView.isDragging || scrollView.isTracking
+            let pan = scrollView.panGestureRecognizer.state
+            let dragging = pan == .began || pan == .changed
             var height = geometry.reveal(contentOffsetY: Double(scrollView.contentOffset.y),
                                          adjustedTopInset: Double(scrollView.adjustedContentInset.top),
                                          systemTopInset: Double(scrollView.adjustedContentInset.top - scrollView.contentInset.top),
@@ -185,7 +187,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
 
         @objc private func refresh(_ sender: UIRefreshControl) {
             guard sender === control, scrollView?.refreshControl === sender, refreshTask == nil else { return }
-            AppHaptics.refreshTriggered(enabled: hapticsEnabled, in: sender)
+            AppHaptics.refreshTriggered(enabled: hapticsEnabled, feedback: feedback)
             let epoch = generation
             let perform = action
             let gestureState = scrollView?.panGestureRecognizer.state
@@ -219,6 +221,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
         }
 
         @objc private func dragChanged(_ gesture: UIPanGestureRecognizer) {
+            if gesture.state == .began, hapticsEnabled { feedback.prepare() }
             guard refreshTask != nil else { return }
             switch gesture.state {
             case .began, .changed: feedbackDeadline = nil

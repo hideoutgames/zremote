@@ -24,7 +24,8 @@ public struct SessionRefreshGeometry: Sendable {
             if dragging || refreshing { preservingInset = true }
             else { restingTopInset = adjustedTopInset }
         }
-        let height = max(0, -contentOffsetY - restingTopInset)
+        let baseline = dragging ? max(restingTopInset, adjustedTopInset) : restingTopInset
+        let height = max(0, -contentOffsetY - baseline)
         if preservingInset, !dragging, !refreshing, height < 0.5,
            abs(adjustedTopInset - restingTopInset) < 0.5 {
             preservingInset = false

@@ -1,5 +1,27 @@
 # Native development
 
+## Session controls
+
+The blank Composer keeps its wallpaper during Sessions and secondary presentations.
+The Composer always queues busy submissions; queued messages can still be steered
+from their queue drawer. Active sub-agents open a session-scoped status list.
+Offline hosts show a noninteractive Reconnecting indicator.
+Working and Reconnecting text use the official iOS client's 3.4-second triangular
+highlight sweep, drawn on a bounded 30 Hz timeline. Reduce Motion retains the
+static readable label.
+
+On iOS, the microphone control requests system permission and meters local input
+for the scrolling waveform. Cancel and Finish discard the recording; neither
+transcribes, attaches, nor sends audio. Leaving the Composer or backgrounding the
+app stops capture. Android microphone capture is not implemented.
+
+Sign-in uses Apple's custom-scheme authentication callback on iOS and reports safe
+failure stages without exposing codes, tokens, or provider error descriptions.
+PR cards retain their first observed assistant-message anchor. The peer supplies
+PR summaries without creation timestamps/message IDs, so an exact historical
+creation position cannot be reconstructed for previously unseen PRs; those remain
+accessible through the header PR menu instead of appearing at the chat tail.
+
 The app is a Skip Fuse package. Shared Swift is in `Sources/ZRemote`; pure
 domain code is in `Sources/ZRemoteCore`; the native Zeron client adapter is in
 `Sources/ZRemoteNative`. `Darwin/` and `Android/` contain the platform entry points.

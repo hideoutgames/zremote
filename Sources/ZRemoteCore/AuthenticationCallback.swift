@@ -12,10 +12,15 @@ public enum AuthenticationCallback {
         }
         let states = items.filter { $0.name == "state" }
         let codes = items.filter { $0.name == "code" }
-        guard !items.contains(where: { $0.name == "error" }),
-              states.count == 1, states[0].value == expectedState,
-              codes.count == 1, let code = codes[0].value, !code.isEmpty else {
+        guard states.count == 1, states[0].value == expectedState else {
             throw ClientFailure("Sign-in did not match this browser session.")
+        }
+        guard !items.contains(where: { $0.name == "error" }) else {
+            throw ClientFailure("The login provider declined sign-in. Please start again.")
+        }
+        guard
+              codes.count == 1, let code = codes[0].value, !code.isEmpty else {
+            throw ClientFailure("The login provider returned no usable login code. Please start again.")
         }
         return code
     }

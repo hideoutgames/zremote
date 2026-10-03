@@ -22,11 +22,10 @@ struct ConversationView: View {
     @State var backgroundFadeEndY: CGFloat?
     @State var projectContextHeight: CGFloat = 48
     @State var composerChromeHeight: CGFloat = 110
+    @State var recording = false
 
     private var wallpaper: Bool {
-        PresentationRules.showsBackground(enabled: model.preferences.backgroundEnabled, hasSession: model.selectedSessionID != nil,
-                                          sessionsVisible: model.sessionsVisible, secondaryVisible: model.route != nil,
-                                          usesSessionPanel: model.usesSessionPanel)
+        model.preferences.backgroundEnabled && model.selectedSessionID == nil
     }
     private var modelLabel: String {
         ModelPresentation.composerLabel(model: ModelPresentation.resolvedModel(in: model.catalog, selection: model.selection), selection: model.selection)
@@ -180,7 +179,6 @@ struct ConversationView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(session.title).font(.headline).lineLimit(1)
                     HStack(spacing: 6) {
-                        if model.working { ActivityGlyph(mini: true) }
                         Text(model.project?.name ?? (model.isDemo ? "Test mode" : "Zeron"))
                         if model.workspace.connection == .offline { Text("· Offline") }
                     }.font(.caption).foregroundStyle(Palette.secondary)
@@ -286,7 +284,7 @@ struct ConversationView: View {
                             }
                             ForEach(message.subagents) { agent in
                                 SessionEventCard(title: agent.title, subtitle: agent.status.capitalized,
-                                                 active: agent.status == "running")
+                                                 active: agent.active)
                             }
                             if let turn = model.changesAfterMessage[message.id] {
                                 VStack(alignment: .leading, spacing: 10) {
@@ -300,9 +298,11 @@ struct ConversationView: View {
                                 PullRequestCard(request: request) { model.route = .pullRequest(request) }
                             }
                         }
-                        if model.working { ActivityGlyph().padding(.leading, 4) }
-                        ForEach(model.unanchoredPullRequests) { request in
-                            PullRequestCard(request: request) { model.route = .pullRequest(request) }
+                        if model.working {
+                            HStack(spacing: 8) {
+                                ActivityGlyph()
+                                ShimmerText(text: "Working…").font(.subheadline)
+                            }.padding(.leading, 4)
                         }
                         #if os(Android)
                         // Skip resolves scroll IDs through its lazy item collector.
@@ -402,13 +402,29 @@ struct ConversationView: View {
             #if os(Android)
             completionPanel.padding(.bottom, 8)
             #endif
-            if let sessionID = model.selectedSessionID, !model.queuedMessages(sessionID: sessionID).isEmpty {
-                HStack {
-                    Button { inputFocused = false; model.route = .queue(sessionID) } label: {
-                        Text("\(model.queuedMessages(sessionID: sessionID).count) queued")
-                            .font(.subheadline.weight(.medium)).padding(.horizontal, 16).frame(minHeight: 44)
-                            .nativeGlassControl()
-                    }.buttonStyle(.plain).accessibilityLabel("Message queue")
+            if let sessionID = model.selectedSessionID {
+                HStack(spacing: 8) {
+                    if !model.queuedMessages(sessionID: sessionID).isEmpty {
+                        Button { inputFocused = false; model.route = .queue(sessionID) } label: {
+                            Text("\(model.queuedMessages(sessionID: sessionID).count) queued")
+                                .font(.subheadline.weight(.medium)).padding(.horizontal, 16).frame(minHeight: 44)
+                                .nativeGlassControl()
+                        }.buttonStyle(.plain).accessibilityLabel("Message queue")
+                    }
+                    if model.activeSubagentCount > 0 {
+                        Button { inputFocused = false; model.route = .subagents(sessionID) } label: {
+                            HStack(spacing: 6) {
+                                RobotIcon()
+                                Text("\(model.activeSubagentCount)")
+                            }.font(.subheadline.weight(.medium)).padding(.horizontal, 14).frame(minHeight: 44)
+                                .nativeGlassControl()
+                        }.buttonStyle(.plain).accessibilityLabel("\(model.activeSubagentCount) working sub-agents")
+                    }
+                    if model.sessionHostOffline {
+                        ShimmerText(text: "Reconnecting…").font(.subheadline)
+                            .padding(.horizontal, 14).frame(minHeight: 44).nativeGlassControl()
+                            .allowsHitTesting(false)
+                    }
                     Spacer()
                 }.frame(maxWidth: 700).padding(.horizontal, 16)
             }
@@ -425,41 +441,20 @@ struct ConversationView: View {
                     #if os(iOS)
                     .anchorPreference(key: ComposerEditorBounds.self, value: .bounds) { $0 }
                     #endif
-                HStack(spacing: 10) {
-                    AttachmentPicker(model: model)
-                    if model.working, model.canQueueDraft || model.canSteerDraft {
-                        Menu {
-                            if model.canQueueDraft {
-                                Button("Queue") { model.busyMessageMode = .queue }
-                            }
-                            if model.canSteerDraft {
-                                Button("Steer") { model.busyMessageMode = .steer }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(model.messageSendMode == .steer ? "Steer" : "Queue")
-                                Image(systemName: "chevron.down").font(.caption2)
-                            }.font(.subheadline).foregroundStyle(Palette.secondary).frame(minHeight: 44)
-                        }.accessibilityLabel("Send behavior")
+                #if os(iOS)
+                if recording {
+                    MicrophoneWaveformBar {
+                        recording = false
+                    } onError: { message in
+                        recording = false
+                        model.error = message
                     }
-                    Button { model.route = .models } label: {
-                        HStack(spacing: 7) {
-                            ProviderIcon(providerID: model.selection.providerID, size: 17)
-                            Text(modelLabel).lineLimit(1)
-                            Image(systemName: "chevron.down").font(.caption2)
-                        }.font(.subheadline).foregroundStyle(Palette.secondary)
-                            .padding(.horizontal, 6).frame(minHeight: 44)
-                    }.buttonStyle(.plain).accessibilityLabel("Choose model, \(modelLabel)")
-                    Spacer(minLength: 0)
-                    ComposerActionButton(stopping: model.composerStops, busy: model.busy,
-                                         enabled: model.canSend || model.composerStops,
-                                         label: model.composerStops ? "Stop agent" : "Send message") {
-                        Task { if model.composerStops { await model.stop() } else { following = true; await model.send() } }
-                    }
-                    #if !os(Android)
-                    .keyboardShortcut(.return, modifiers: [.command])
-                    #endif
+                } else {
+                    composerControls
                 }
+                #else
+                composerControls
+                #endif
             }
             .padding(14)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -468,6 +463,9 @@ struct ConversationView: View {
             .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 8)
             .frame(maxWidth: .infinity)
         }
+        .onChange(of: model.attachmentContext) { _, _ in recording = false }
+        .onChange(of: model.route?.id) { _, _ in recording = false }
+        .onChange(of: model.sessionsVisible) { _, _ in recording = false }
         #if os(iOS)
         .backgroundPreferenceValue(ComposerEditorBounds.self) { editor in
             GeometryReader { _ in
@@ -483,6 +481,41 @@ struct ConversationView: View {
             completionPanel.alignmentGuide(.top) { $0[.bottom] + 8 }
         }
         #endif
+    }
+
+    private var composerControls: some View {
+        HStack(spacing: 4) {
+            AttachmentPicker(model: model)
+            Button { model.route = .models } label: {
+                HStack(spacing: 7) {
+                    ProviderIcon(providerID: model.selection.providerID, size: 17)
+                    Text(modelLabel).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2)
+                }.font(.subheadline).foregroundStyle(Palette.secondary)
+                    .padding(.horizontal, 2).frame(minHeight: 44)
+            }.buttonStyle(.plain).accessibilityLabel("Choose model, \(modelLabel)")
+            Spacer(minLength: 0)
+            #if os(iOS)
+            Button {
+                inputFocused = false
+                recording = true
+            } label: {
+                Image(systemName: "mic").font(.system(size: 20))
+                    .foregroundStyle(Palette.secondary).frame(width: 44, height: 44)
+            }.buttonStyle(.plain).accessibilityLabel("Enable microphone")
+            #endif
+            ComposerActionButton(stopping: model.composerStops, busy: model.busy,
+                                 enabled: (model.canSend && (!model.working || model.canQueueDraft)) || model.composerStops,
+                                 label: model.composerStops ? "Stop agent" : "Send message") {
+                Task {
+                    if model.composerStops { await model.stop() }
+                    else { following = true; await model.send(busyMode: .queue) }
+                }
+            }
+            #if !os(Android)
+            .keyboardShortcut(.return, modifiers: [.command])
+            #endif
+        }
     }
 
     @ViewBuilder private var completionPanel: some View {

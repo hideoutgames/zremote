@@ -52,12 +52,22 @@ struct SignInView: View {
         let state = UUID().uuidString
         do {
             let url = try model.authorizeURL(state: state)
+            #if os(iOS)
+            let callback: URL
+            if #available(iOS 17.4, *) {
+                callback = try await authentication.authenticate(using: url, callback: .customScheme("zeron"),
+                                                                 preferredBrowserSession: .shared, additionalHeaderFields: [:])
+            } else {
+                callback = try await authentication.authenticate(using: url, callbackURLScheme: "zeron", preferredBrowserSession: .shared)
+            }
+            #else
             let callback = try await authentication.authenticate(using: url, callbackURLScheme: "zeron", preferredBrowserSession: .shared)
+            #endif
             let code = try AuthenticationCallback.code(from: callback, expectedState: state)
             await model.signIn(code: code)
         } catch {
             if let cancelled = error as? ASWebAuthenticationSessionError, cancelled.code == .canceledLogin { return }
-            model.error = "Sign-in didn't complete. Please try again."
+            model.error = (error as? ClientFailure)?.message ?? "The sign-in browser couldn't return to ZRemote. Please try again."
         }
     }
 }

@@ -82,10 +82,14 @@ import ZRemoteCore
         pendingAuth = nil
         pendingOrganizations = []
         guard !code.isEmpty else { throw NativeClientError.invalidAuthentication }
-        let result = try await authExchangeCode(edgeUrl: edgeURL, code: code)
-        let organizations = try await authListOrgs(edgeUrl: edgeURL, accessToken: result.tokens.accessToken)
+        let result: AuthExchange
+        do { result = try await authExchangeCode(edgeUrl: edgeURL, code: code) }
+        catch { throw ClientFailure("The login code couldn't be exchanged. Start sign-in again; login codes can only be used once.") }
+        let organizations: [AuthOrg]
+        do { organizations = try await authListOrgs(edgeUrl: edgeURL, accessToken: result.tokens.accessToken) }
+        catch { throw ClientFailure("Login succeeded, but your organizations couldn't be loaded. Check your connection and try again.") }
         guard generation == operation else { throw CancellationError() }
-        guard !organizations.isEmpty else { throw NativeClientError.noOrganization }
+        guard !organizations.isEmpty else { throw ClientFailure("This account does not belong to an organization.") }
         pendingAuth = result
         pendingOrganizations = organizations
         return organizations.map { Organization(id: $0.organizationId, name: $0.name) }
@@ -96,7 +100,9 @@ import ZRemoteCore
         guard let pendingAuth, pendingOrganizations.contains(where: { $0.organizationId == id }) else {
             throw NativeClientError.invalidAuthentication
         }
-        let tokens = try await authRefresh(edgeUrl: edgeURL, refreshToken: pendingAuth.tokens.refreshToken, organizationId: id)
+        let tokens: AuthTokens
+        do { tokens = try await authRefresh(edgeUrl: edgeURL, refreshToken: pendingAuth.tokens.refreshToken, organizationId: id) }
+        catch { throw ClientFailure("Your organization couldn't be authorized. Start sign-in again.") }
         guard generation == operation else { throw CancellationError() }
         let user = pendingAuth.user
         let name = [user.firstName, user.lastName].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)

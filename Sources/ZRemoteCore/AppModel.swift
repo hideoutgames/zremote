@@ -10,6 +10,7 @@ public enum SecondaryRoute: Identifiable {
     case models, projects, settings, checkouts
     case sessionDetails(String)
     case queue(String)
+    case subagents(String)
     case changes(CapturedTurnChanges)
     case diff(DiffDocument)
     case pullRequest(PullRequest)
@@ -21,6 +22,7 @@ public enum SecondaryRoute: Identifiable {
         case .checkouts: return "checkouts"
         case .sessionDetails(let id): return "session-details-" + id
         case .queue(let id): return "queue-" + id
+        case .subagents(let id): return "subagents-" + id
         case .changes(let turn): return "changes-" + turn.turnID
         case .diff(let document): return "diff-" + document.id
         case .pullRequest(let request): return "pull-request-" + request.id
@@ -171,6 +173,21 @@ public enum SecondaryRoute: Identifiable {
     public var attachmentContext: String { "\(generation):\(selectedSessionID ?? "new"):\(session?.hostID ?? selectedHostID):\(session?.projectID ?? selectedProjectID ?? "")" }
     public var transcriptText: String { (state?.messages ?? []).map { "\($0.role.capitalized):\n\($0.text)" }.joined(separator: "\n\n") }
     public var sessionPullRequests: [PullRequest] { preferences.pullRequests.filter { $0.sessionID == selectedSessionID }.map(\.request) }
+    public func subagents(sessionID: String) -> [SubagentStatus] {
+        let messages = state?.id == sessionID ? state?.messages : sessions[sessionID]?.messages
+        var latest: [String: SubagentStatus] = [:]
+        var order: [String] = []
+        for agent in (messages ?? []).flatMap(\.subagents) {
+            if latest[agent.id] == nil { order.append(agent.id) }
+            latest[agent.id] = agent
+        }
+        return order.compactMap { latest[$0] }
+    }
+    public var activeSubagentCount: Int { selectedSessionID.map { subagents(sessionID: $0).filter(\.active).count } ?? 0 }
+    public var sessionHostOffline: Bool {
+        guard let session else { return false }
+        return workspace.connection == .offline || workspace.hosts.first(where: { $0.id == session.hostID })?.online == false
+    }
     public var unanchoredPullRequests: [PullRequest] {
         let visible = Set(state?.messages.map(\.id) ?? [])
         return preferences.pullRequests.filter { $0.sessionID == selectedSessionID && ($0.afterMessageID == nil || !visible.contains($0.afterMessageID!)) }.map(\.request)
@@ -476,8 +493,8 @@ public enum SecondaryRoute: Identifiable {
         }
     }
 
-    public func send() async {
-        guard canSend else { return }
+    public func send(busyMode: MessageSendMode? = nil) async {
+        guard canSend, !working || busyMode != .queue || canQueueDraft else { return }
         busy = true
         let epoch = generation
         let selectionEpoch = selectionGeneration
@@ -485,7 +502,7 @@ public enum SecondaryRoute: Identifiable {
         defer { if epoch == generation { busy = false } }
         let text = draft
         let submittedAttachments = attachments
-        let submittedMode = messageSendMode
+        let submittedMode = busyMode ?? messageSendMode
         let oldDraftKey = selectedSessionID ?? "new"
         do {
             let id: String
@@ -899,7 +916,11 @@ public enum SecondaryRoute: Identifiable {
             guard epoch == generation else { return }
             organizations = values
             if organizations.count == 1 { await chooseOrganization(organizations[0].id) }
-        } catch { if epoch == generation { self.error = "Sign-in didn't finish. Please try again." } }
+        } catch {
+            if epoch == generation {
+                self.error = (error as? ClientFailure)?.message ?? "Sign-in couldn't finish on this device. Please try again."
+            }
+        }
     }
     public func chooseOrganization(_ id: String) async {
         let epoch = generation
@@ -907,7 +928,11 @@ public enum SecondaryRoute: Identifiable {
             try await client.selectOrganization(id)
             if epoch == generation { organizations = []; zeronAccounts = client.zeronAccounts }
         }
-        catch { if epoch == generation { self.error = "Couldn't open this organization." } }
+        catch {
+            if epoch == generation {
+                self.error = (error as? ClientFailure)?.message ?? "Couldn't save or open this account on this device."
+            }
+        }
     }
     @discardableResult
     public func answer(sessionID: String, input: InputRequest, answers: [String: [String]]) async -> Bool {
@@ -1030,7 +1055,8 @@ public enum SecondaryRoute: Identifiable {
         var changed = false
         for session in workspace.sessions {
             guard let request = session.pullRequest else { continue }
-            let anchor = session.id == selectedSessionID ? state?.messages.last?.id : nil
+            let messages = session.id == selectedSessionID ? state?.messages : sessions[session.id]?.messages
+            let anchor = messages?.last(where: { $0.role == "assistant" })?.id
             if let index = preferences.pullRequests.firstIndex(where: { $0.sessionID == session.id && $0.request.id == request.id }) {
                 if preferences.pullRequests[index].request != request { preferences.pullRequests[index].request = request; changed = true }
                 if preferences.pullRequests[index].afterMessageID == nil, let anchor {

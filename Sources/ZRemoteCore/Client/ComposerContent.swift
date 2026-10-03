@@ -50,6 +50,7 @@ public struct UserProfile: Equatable, Sendable, Codable {
 }
 
 public struct SubagentStatus: Identifiable, Equatable, Sendable {
+    public var active: Bool { ["running", "working", "pending", "starting"].contains(status.lowercased()) }
     public var id: String
     public var title: String
     public var status: String

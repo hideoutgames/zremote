@@ -55,7 +55,7 @@ struct ComposerBackground: View {
         GeometryReader { geometry in
             let local = geometry.frame(in: .global)
             let scene = sceneFrame ?? local
-            let endY = fadeEndY ?? (scene.minY + scene.height * 0.42)
+            let endY = fadeEndY ?? (scene.minY + scene.height * 0.52)
             let end = min(1, max(0, (endY - scene.minY) / max(1, scene.height)))
             Group {
                 if let image {
@@ -68,11 +68,16 @@ struct ComposerBackground: View {
                 }
             }
             .frame(width: scene.width, height: scene.height)
-            .mask(LinearGradient(stops: [.init(color: .black, location: 0),
-                                        .init(color: .black.opacity(0.8), location: 0.35),
-                                        .init(color: .clear, location: 1)],
-                                 startPoint: .top,
-                                 endPoint: UnitPoint(x: 0.5, y: fullHeight ? 1 : end)))
+            .mask(LinearGradient(stops: fullHeight ? [
+                .init(color: .black, location: 0),
+                .init(color: .black.opacity(0.8), location: 0.35),
+                .init(color: .clear, location: 1)
+            ] : [
+                .init(color: .black, location: 0),
+                .init(color: .black.opacity(0.55), location: 0.22),
+                .init(color: .black.opacity(0.15), location: 0.68),
+                .init(color: .clear, location: 1)
+            ], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: fullHeight ? 1 : end)))
             .position(x: scene.midX - local.minX, y: scene.midY - local.minY)
         }
         .clipped()

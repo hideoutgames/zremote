@@ -24,6 +24,9 @@ struct SessionListView: View {
     @State var choosingOrganization = false
     @State var refreshReveal: CGFloat = 0
     @State var searchFocusDismissal = 0
+    @State var renamingSession: Session?
+    @State var renameContext = ""
+    @State var renameTitle = ""
     @FocusState var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.webAuthenticationSession) var authentication
@@ -105,6 +108,34 @@ struct SessionListView: View {
         }
         .foregroundStyle(Palette.text).background(Palette.background)
         .accessibilityIdentifier("sessions-list")
+        #if os(iOS)
+        .background {
+            NativeSessionRenameAlert(session: $renamingSession) { session, title in
+                let context = renameContext
+                Task {
+                    do { try await model.renameSession(sessionID: session.id, title: title, context: context) }
+                    catch is CancellationError {}
+                    catch { model.error = "Couldn't rename this session. Please try again." }
+                }
+            }.frame(width: 0, height: 0)
+        }
+        #else
+        .alert("Rename session", isPresented: Binding(get: { renamingSession != nil }, set: { if !$0 { renamingSession = nil } })) {
+            TextField("Session title", text: $renameTitle)
+            Button("Cancel", role: .cancel) { renamingSession = nil }
+            Button("Save") {
+                guard let session = renamingSession else { return }
+                let title = renameTitle
+                let context = renameContext
+                renamingSession = nil
+                Task {
+                    do { try await model.renameSession(sessionID: session.id, title: title, context: context) }
+                    catch is CancellationError {}
+                    catch { model.error = "Couldn't rename this session. Please try again." }
+                }
+            }
+        }
+        #endif
         .task(id: compact) {
             guard !compact else { return }
             while !Task.isCancelled {
@@ -184,7 +215,7 @@ struct SessionListView: View {
                     .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 16).padding(.top, selectedProjectID == nil ? 0 : 14)
     }
 
     private var header: some View {
@@ -324,14 +355,24 @@ struct SessionListView: View {
             let state = UUID().uuidString
             do {
                 let url = try model.authorizeURL(state: state)
+                #if os(iOS)
+                let callback: URL
+                if #available(iOS 17.4, *) {
+                    callback = try await authentication.authenticate(using: url, callback: .customScheme("zeron"),
+                                                                     preferredBrowserSession: .shared, additionalHeaderFields: [:])
+                } else {
+                    callback = try await authentication.authenticate(using: url, callbackURLScheme: "zeron", preferredBrowserSession: .shared)
+                }
+                #else
                 let callback = try await authentication.authenticate(using: url, callbackURLScheme: "zeron",
                                                                       preferredBrowserSession: .shared)
+                #endif
                 let code = try AuthenticationCallback.code(from: callback, expectedState: state)
                 await model.signIn(code: code)
                 choosingOrganization = model.organizations.count > 1
             } catch {
                 if let cancelled = error as? ASWebAuthenticationSessionError, cancelled.code == .canceledLogin { return }
-                model.error = "Sign-in didn't complete. Please try again."
+                model.error = (error as? ClientFailure)?.message ?? "The sign-in browser couldn't return to ZRemote. Please try again."
             }
         }
     }
@@ -464,6 +505,11 @@ struct SessionListView: View {
                 Label(session.pinned ? "Unpin session" : "Pin session", systemImage: session.pinned ? "pin.slash" : "pin")
             }
             Button { NativeClipboard.copy(session.title) } label: { Label("Copy title", systemImage: "doc.on.doc") }
+            Button {
+                renameContext = model.sessionDetailsContext(session.id)
+                renameTitle = session.title
+                renamingSession = session
+            } label: { Label("Rename session", systemImage: "pencil") }
             if let request = session.pullRequest {
                 Button { model.route = .pullRequest(request) } label: { Label("Pull request", systemImage: "arrow.triangle.branch") }
             }
