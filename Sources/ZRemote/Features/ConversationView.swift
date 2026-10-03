@@ -173,7 +173,13 @@ struct ConversationView: View {
         HStack(spacing: 14) {
             CircleControl(symbol: "line.3.horizontal", label: model.sessionsVisible ? "Hide sessions" : "Show sessions") {
                 inputFocused = false
-                model.sessionsVisible.toggle()
+                if model.usesSessionPanel {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.92)) {
+                        model.sessionsVisible.toggle()
+                    }
+                } else {
+                    model.sessionsVisible.toggle()
+                }
             }
             if let session = model.session {
                 VStack(alignment: .leading, spacing: 3) {
