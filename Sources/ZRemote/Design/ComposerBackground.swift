@@ -33,8 +33,7 @@ struct ComposerSceneFrameKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// The whole window, including safe areas, in global coordinates. Both the
-    /// blank Composer and the refresh recess show the same stationary image.
+    /// The whole window, including safe areas, in global coordinates.
     var composerSceneFrame: CGRect? {
         get { self[ComposerSceneFrameKey.self] }
         set { self[ComposerSceneFrameKey.self] = newValue }
@@ -46,6 +45,7 @@ struct ComposerBackground: View {
     let effect: String
     let fullHeight: Bool
     let fadeEndY: CGFloat?
+    var followsPageHorizontally = false
     @State var image: Image?
     @State var opacity = 0.0
     @Environment(\.colorScheme) var colorScheme
@@ -78,7 +78,8 @@ struct ComposerBackground: View {
                 .init(color: .black.opacity(0.15), location: 0.68),
                 .init(color: .clear, location: 1)
             ], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: fullHeight ? 1 : end)))
-            .position(x: scene.midX - local.minX, y: scene.midY - local.minY)
+            .position(x: followsPageHorizontally ? geometry.size.width / 2 : scene.midX - local.minX,
+                      y: scene.midY - local.minY)
         }
         .clipped()
         .allowsHitTesting(false).accessibilityHidden(true)

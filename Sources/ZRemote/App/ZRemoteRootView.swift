@@ -153,15 +153,20 @@ public struct ZRemoteRootView: View {
 
     @ViewBuilder private func workspace(tablet: Bool, size: CGSize, safeAreaInsets: EdgeInsets) -> some View {
         if tablet {
+            let panelWidth = min(310, size.width * 0.38)
             HStack(spacing: 0) {
-                if model.sessionsVisible {
-                    SessionListView(model: model)
-                        .frame(width: min(310, size.width * 0.38))
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                    Rectangle().fill(Palette.line).frame(width: 1)
-                }
+                SessionListView(model: model)
+                    .frame(width: panelWidth)
+                    .frame(width: model.sessionsVisible ? panelWidth : 0, alignment: .trailing)
+                    .clipped()
+                    .allowsHitTesting(model.sessionsVisible)
+                    .accessibilityHidden(!model.sessionsVisible)
+                Rectangle().fill(Palette.line)
+                    .frame(width: model.sessionsVisible ? 1 : 0)
                 ConversationView(model: model)
             }
+            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.92),
+                       value: model.sessionsVisible)
             .onAppear { model.sessionsVisible = true }
             .accessibilityHidden(model.route != nil)
         } else {

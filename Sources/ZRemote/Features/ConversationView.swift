@@ -64,7 +64,8 @@ struct ConversationView: View {
                     ComposerBackground(data: model.preferences.backgroundImageData,
                                        effect: model.preferences.backgroundEffect,
                                        fullHeight: model.preferences.backgroundFullHeight,
-                                       fadeEndY: backgroundFadeEndY)
+                                       fadeEndY: backgroundFadeEndY,
+                                       followsPageHorizontally: !model.usesSessionPanel)
                 }
             }.ignoresSafeArea()
         }
@@ -86,6 +87,30 @@ struct ConversationView: View {
     }
 
     @ViewBuilder private func layout(questionHeight: CGFloat) -> some View {
+        if model.usesSessionPanel {
+            #if os(Android)
+            VStack(spacing: 0) {
+                content
+                bottomChrome(questionHeight: questionHeight)
+            }
+            .overlay(alignment: .top) { header }
+            #elseif os(iOS)
+            if #available(iOS 26.0, *) {
+                floatingHeaderLayout(questionHeight: questionHeight)
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    .scrollEdgeEffectHidden(true, for: .bottom)
+            } else {
+                floatingHeaderLayout(questionHeight: questionHeight)
+            }
+            #else
+            floatingHeaderLayout(questionHeight: questionHeight)
+            #endif
+        } else {
+            phoneLayout(questionHeight: questionHeight)
+        }
+    }
+
+    @ViewBuilder private func phoneLayout(questionHeight: CGFloat) -> some View {
         #if os(Android)
         // Skip's native ScrollView does not yet expose safeAreaInset or unclipped
         // scrolling. Retain native keyboard sizing on this platform.
@@ -110,6 +135,12 @@ struct ConversationView: View {
     }
 
     #if !os(Android)
+    private func floatingHeaderLayout(questionHeight: CGFloat) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome(questionHeight: questionHeight) }
+            .overlay(alignment: .top) { header }
+    }
+
     private func insetLayout(questionHeight: CGFloat) -> some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) { header }
@@ -175,7 +206,7 @@ struct ConversationView: View {
                 inputFocused = false
                 model.sessionsVisible.toggle()
             }
-            if let session = model.session {
+            if let session = model.session, !model.usesSessionPanel {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(session.title).font(.headline).lineLimit(1)
                     HStack(spacing: 6) {
@@ -211,7 +242,7 @@ struct ConversationView: View {
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
         .background {
-            if model.selectedSessionID != nil {
+            if model.selectedSessionID != nil, !model.usesSessionPanel {
                 headerBackground
             }
         }
@@ -317,7 +348,9 @@ struct ConversationView: View {
                     #endif
                     }
                     .frame(maxWidth: 760, alignment: .leading)
-                    .padding(.horizontal, 24).padding(.top, 18).padding(.bottom, 24)
+                    .padding(.horizontal, 24)
+                    .padding(.top, model.usesSessionPanel ? headerHeight + 18 : 18)
+                    .padding(.bottom, 24)
                     .frame(maxWidth: .infinity)
                 }
                 .coordinateSpace(name: "transcript")
@@ -392,7 +425,7 @@ struct ConversationView: View {
 
     @ViewBuilder private func workedFor(_ message: TranscriptMessage) -> some View {
         if let label = TranscriptMetadata.workLabel(duration: message.workedDuration) {
-            Text(label).font(.caption2.weight(.light)).foregroundStyle(Palette.secondary.opacity(0.85))
+            Text(label).font(.caption2).foregroundStyle(Palette.secondary.opacity(0.85))
                 .accessibilityIdentifier("turn-work-duration")
         }
     }

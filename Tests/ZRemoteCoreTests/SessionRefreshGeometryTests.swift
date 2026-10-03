@@ -2,6 +2,17 @@ import XCTest
 import ZRemoteCore
 
 final class SessionRefreshGeometryTests: XCTestCase {
+    func testSlowHeldPullRemainsContinuousWhenNativeRefreshInsetExpands() {
+        var geometry = SessionRefreshGeometry(restingTopInset: 20, systemTopInset: 20)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -100, adjustedTopInset: 20, systemTopInset: 20, dragging: true, refreshing: false), 80)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -100, adjustedTopInset: 40, systemTopInset: 20, dragging: true, refreshing: false), 80)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -100, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 80)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -140, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 120)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -70, adjustedTopInset: 80, systemTopInset: 20, dragging: true, refreshing: true), 50)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -80, adjustedTopInset: 80, systemTopInset: 20, dragging: false, refreshing: true), 60)
+        XCTAssertEqual(geometry.reveal(contentOffsetY: -20, adjustedTopInset: 20, systemTopInset: 20, dragging: false, refreshing: false), 0)
+    }
+
     func testSafeAreaChangesDuringRefreshDoNotLeaveARecessOrShiftTheNextPull() {
         var geometry = SessionRefreshGeometry(restingTopInset: 20, systemTopInset: 20)
         XCTAssertEqual(geometry.reveal(contentOffsetY: -80, adjustedTopInset: 80, systemTopInset: 20, dragging: false, refreshing: true), 60)
