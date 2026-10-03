@@ -2,6 +2,9 @@ import Foundation
 import SkipAuthenticationServices
 import SwiftUI
 import ZRemoteCore
+#if os(iOS)
+import UIKit
+#endif
 
 struct SessionListView: View {
     @Bindable var model: AppModel
@@ -394,7 +397,14 @@ struct SessionListView: View {
             else { Text(letters.uppercased()).font(.subheadline.weight(.semibold)) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity).foregroundStyle(Palette.text)
     }
-    private var organizationMenu: some View {
+    @ViewBuilder private var organizationMenu: some View {
+        #if os(iOS)
+        NativeGlassButton(image: UIImage(systemName: "slider.horizontal.3", withConfiguration: UIImage.SymbolConfiguration(pointSize: 19)),
+                          menu: nativeOrganizationMenu, menuRevision: organizationMenuRevision,
+                          accessibilityLabel: "Session display options", accessibilityValue: hasFilters ? "Filters active" : "",
+                          enabled: true, size: 46)
+            .frame(width: 46, height: 46)
+        #else
         Menu {
             Menu {
                 menuChoice("Show all", selected: selectedProjectID == nil) { shownProjectID = nil }
@@ -424,9 +434,7 @@ struct SessionListView: View {
                 } label: { Label("Updated date", systemImage: "calendar.badge.clock") }
                 menuChoice("Unread only", selected: unreadOnly) { unreadOnly.toggle() }
                 Divider()
-                Button {
-                    shownProjectID = nil; status = .all; pullRequest = .all; archived = .active; created = .any; updated = .any; unreadOnly = false
-                } label: { Label("Reset filters", systemImage: "arrow.counterclockwise") }.disabled(!hasFilters)
+                Button(action: resetFilters) { Label("Reset filters", systemImage: "arrow.counterclockwise") }.disabled(!hasFilters)
             } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
             Menu {
                 ForEach(SessionGrouping.allCases) { value in menuChoice(value.rawValue, selected: grouping == value) { grouping = value } }
@@ -439,7 +447,68 @@ struct SessionListView: View {
                 .foregroundStyle(Palette.text)
                 .nativeGlassControl()
         }.accessibilityLabel("Session display options").accessibilityValue(hasFilters ? "Filters active" : "")
+        #endif
     }
+
+    private func resetFilters() {
+        shownProjectID = nil; status = .all; pullRequest = .all; archived = .active; created = .any; updated = .any; unreadOnly = false
+    }
+
+    #if os(iOS)
+    /// Keep UIKit's presented menu tree intact across session activity, clock,
+    /// search and refresh updates. Only visible menu content changes its revision.
+    private var organizationMenuRevision: String {
+        let projects = model.workspace.projects.map { [$0.id, $0.name] }
+        let selections = [selectedProjectID ?? "", sort.rawValue, grouping.rawValue,
+                          status.rawValue, pullRequest.rawValue, archived.rawValue,
+                          created.rawValue, updated.rawValue, String(unreadOnly), String(compact)]
+        return String(describing: projects) + String(describing: selections)
+    }
+
+    private var nativeOrganizationMenu: UIMenu {
+        let show = UIMenu(title: "Show", image: UIImage(systemName: "folder"), identifier: .init("session-options.show"), children: [
+            nativeMenuChoice("Show all", id: "show.all", selected: selectedProjectID == nil) { shownProjectID = nil },
+            UIMenu(options: .displayInline, children: model.workspace.projects.map { project in
+                nativeMenuChoice(project.name, id: "show.project.\(project.id)", selected: selectedProjectID == project.id) { shownProjectID = project.id }
+            }),
+        ])
+        let filters = UIMenu(title: "Filter", image: UIImage(systemName: "line.3.horizontal.decrease"), identifier: .init("session-options.filter"), children: [
+            nativeChoiceMenu("Status", symbol: "circle.dotted", id: "status", values: SessionStatusFilter.allCases, selection: $status),
+            nativeChoiceMenu("Pull request", symbol: "arrow.triangle.branch", id: "pull-request", values: SessionPRFilter.allCases, selection: $pullRequest),
+            nativeChoiceMenu("Archived", symbol: "archivebox", id: "archived", values: SessionArchiveFilter.allCases, selection: $archived),
+            nativeChoiceMenu("Created date", symbol: "calendar", id: "created", values: SessionDateFilter.allCases, selection: $created),
+            nativeChoiceMenu("Updated date", symbol: "calendar.badge.clock", id: "updated", values: SessionDateFilter.allCases, selection: $updated),
+            nativeMenuChoice("Unread only", id: "unread", selected: unreadOnly) { unreadOnly.toggle() },
+            UIMenu(options: .displayInline, children: [
+                UIAction(title: "Reset filters", image: UIImage(systemName: "arrow.counterclockwise"), identifier: .init("session-options.reset"),
+                         attributes: hasFilters ? [] : [.disabled]) { _ in
+                    Task { @MainActor in resetFilters() }
+                },
+            ]),
+        ])
+        return UIMenu(identifier: .init("session-options"), children: [
+            show,
+            nativeChoiceMenu("Sort", symbol: "arrow.up.arrow.down", id: "sort", values: SessionSort.allCases, selection: $sort),
+            filters,
+            nativeChoiceMenu("Group", symbol: "square.grid.2x2", id: "group", values: SessionGrouping.allCases, selection: $grouping),
+            UIMenu(options: .displayInline, children: [nativeMenuChoice("Compact view", id: "compact", selected: compact) { compact.toggle() }]),
+        ])
+    }
+
+    private func nativeChoiceMenu<Value: RawRepresentable & Equatable>(_ title: String, symbol: String, id: String,
+                                                                      values: [Value], selection: Binding<Value>) -> UIMenu where Value.RawValue == String {
+        UIMenu(title: title, image: UIImage(systemName: symbol), identifier: .init("session-options.\(id)"), children: values.map { value in
+            nativeMenuChoice(value.rawValue, id: "\(id).\(value.rawValue)", selected: selection.wrappedValue == value) { selection.wrappedValue = value }
+        })
+    }
+
+    private func nativeMenuChoice(_ title: String, id: String, selected: Bool, action: @escaping @MainActor () -> Void) -> UIAction {
+        UIAction(title: title, identifier: .init("session-options.\(id)"), state: selected ? .on : .off) { _ in
+            Task { @MainActor in action() }
+        }
+    }
+    #endif
+
     private func menuChoice(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             if selected { Label(title, systemImage: "checkmark") }
