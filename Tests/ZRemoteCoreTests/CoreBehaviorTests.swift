@@ -112,7 +112,6 @@ final class CoreBehaviorTests: XCTestCase {
             "zeron://callback?state=expected&code=",
             "zeron://callback/elsewhere?state=expected&code=value",
             "zeron://user@callback?state=expected&code=value",
-            "zeron://callback?state=expected&code=value#error",
             "zeron://callback?state=expected&code=value&error=denied",
             "https://callback?state=expected&code=value"
         ]

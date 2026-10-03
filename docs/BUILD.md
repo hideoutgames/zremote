@@ -13,13 +13,29 @@ Motion applies the final width immediately. Phone drawer motion is independent.
 
 ## Session controls
 
+The tablet Sessions panel animates its width together with the conversation,
+retaining the list's layout and state while hidden. Reduce Motion disables the
+sidebar spring. Tablet thread controls float over scrolling content without a
+title or full-width glass header; phone threads retain their title and header.
+Completed-turn "Worked for" labels use regular text weight.
+
 The blank Composer keeps its wallpaper during Sessions and secondary presentations.
+On phones, the wallpaper moves horizontally with the Composer page during drawer
+gestures and settling. Image sizing and vertical masking retain full-window
+alignment; the Sessions refresh recess remains anchored to the window.
 The Composer always queues busy submissions; queued messages can still be steered
 from their queue drawer. Active sub-agents open a session-scoped status list.
 Offline hosts show a noninteractive Reconnecting indicator.
 Working and Reconnecting text use the official iOS client's 3.4-second triangular
 highlight sweep, drawn on a bounded 30 Hz timeline. Reduce Motion retains the
 static readable label.
+
+The iOS Sessions refresh recess measures overscroll from the resting inset
+throughout a held pull, including UIKit's refresh-inset expansion. Its baseline
+follows actual safe-area changes, excluding the refresh control's added inset.
+Continuing or reversing a slow drag keeps the recess aligned with the moving
+rows. After release, the native refresh settles at its loading height before
+collapsing.
 
 On iOS, the microphone control requests system permission and meters local input
 for the scrolling waveform. Cancel and Finish discard the recording; neither
@@ -28,6 +44,11 @@ app stops capture. Android microphone capture is not implemented.
 
 Sign-in uses Apple's custom-scheme authentication callback on iOS and reports safe
 failure stages without exposing codes, tokens, or provider error descriptions.
+Sign in and Add account validate the `zeron://callback` endpoint and a unique
+matching browser-session state, then exchange the unique nonempty query code.
+URL fragments are ignored, matching the official native Zeron client; they cannot
+supply or override query credentials. Browser launch and cancellation can be
+verified without an account, but successful login still requires provider access.
 PR cards retain their first observed assistant-message anchor. The peer supplies
 PR summaries without creation timestamps/message IDs, so an exact historical
 creation position cannot be reconstructed for previously unseen PRs; those remain
