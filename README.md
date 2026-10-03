@@ -70,6 +70,8 @@ above all synced archived chats, ordered by recent activity. Search matches chat
 titles independently of the Sessions drawer filters. Selecting a chat opens it
 without changing its archive status.
 The display-options button keeps its neutral slider icon when filters are active.
+On iPhone and iPad, its native menu retains the open submenu during session
+activity updates; only changes to menu choices or selections rebuild it.
 Project folders and switches also use adaptive grayscale colors. Merged PRs use
 the [official Zeron iOS purple palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
 (`#5B43E8` light / `#8B7CF6` dark).
@@ -124,6 +126,8 @@ checkout, another existing checkout, or
 New worktree. Worktree creation travels with the first message to the host;
 selecting it alone creates nothing. Session actions → Details shows the thread
 title (editable), project, checkout, model, host, and creation/update times.
+The pencil button sits at the top left, in the same row as Details and Done,
+and opens the title editor.
 
 Agent questions temporarily replace the Composer with a matching answer card.
 Each question has full-width choices, an optional multiline custom answer, and
