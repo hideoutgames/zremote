@@ -155,6 +155,18 @@ public struct ZRemoteRootView: View {
         if tablet {
             let panelWidth = min(310, size.width * 0.38)
             HStack(spacing: 0) {
+                #if os(iOS)
+                HStack(spacing: 0) {
+                    SessionListView(model: model)
+                        .frame(width: panelWidth)
+                    Rectangle().fill(Palette.line).frame(width: 1)
+                }
+                .modifier(TabletPanelReveal(width: model.sessionsVisible ? panelWidth + 1 : 0))
+                .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.92),
+                           value: model.sessionsVisible)
+                .allowsHitTesting(model.sessionsVisible)
+                .accessibilityHidden(!model.sessionsVisible)
+                #else
                 SessionListView(model: model)
                     .frame(width: panelWidth)
                     .frame(width: model.sessionsVisible ? panelWidth : 0, alignment: .trailing)
@@ -163,10 +175,16 @@ public struct ZRemoteRootView: View {
                     .accessibilityHidden(!model.sessionsVisible)
                 Rectangle().fill(Palette.line)
                     .frame(width: model.sessionsVisible ? 1 : 0)
+                #endif
                 ConversationView(model: model)
+                    #if os(iOS)
+                    .transaction { $0.animation = nil }
+                    #endif
             }
+            #if !os(iOS)
             .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.92),
                        value: model.sessionsVisible)
+            #endif
             .onAppear { model.sessionsVisible = true }
             .accessibilityHidden(model.route != nil)
         } else {
@@ -220,6 +238,24 @@ public struct ZRemoteRootView: View {
         .tint(Palette.text)
     }
 }
+
+#if os(iOS)
+nonisolated struct TabletPanelReveal: AnimatableModifier {
+    var width: CGFloat
+
+    var animatableData: CGFloat {
+        get { width }
+        set { width = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .frame(width: max(0, width), alignment: .trailing)
+            .clipped()
+            .transaction { $0.animation = nil }
+    }
+}
+#endif
 
 /* SKIP @bridge */
 public final class ZRemoteAppDelegate: Sendable {
