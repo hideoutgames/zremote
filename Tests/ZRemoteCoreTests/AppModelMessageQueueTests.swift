@@ -31,6 +31,22 @@ final class AppModelMessageQueueTests: XCTestCase {
         XCTAssertEqual(client.interrupts, 0)
     }
 
+    @MainActor func testExplicitQueueNeverFallsBackToSteering() async {
+        let client = QueueModelClient()
+        let model = AppModel(client: client, makeLiveClient: { QueueModelClient() })
+        configure(model)
+        model.busyMessageMode = .steer
+        model.draft = "Next turn"
+        await model.send(busyMode: .queue)
+        XCTAssertEqual(client.sentModes, [.queue])
+        model.state?.queueCapabilities.canQueue = false
+        model.draft = "Keep for later"
+        await model.send(busyMode: .queue)
+        XCTAssertEqual(client.sentModes, [.queue])
+        XCTAssertEqual(model.draft, "Keep for later")
+        XCTAssertEqual(client.interrupts, 0)
+    }
+
     @MainActor func testAttachmentsForceQueueAndRemainWhenHostCannotQueueFiles() async throws {
         let client = QueueModelClient()
         let model = AppModel(client: client, makeLiveClient: { QueueModelClient() })

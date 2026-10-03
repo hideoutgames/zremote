@@ -1,5 +1,18 @@
 import SwiftUI
 
+struct RobotIcon: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle().frame(width: 1.5, height: 3)
+            HStack(spacing: 4) {
+                Circle().frame(width: 2.5, height: 2.5)
+                Circle().frame(width: 2.5, height: 2.5)
+            }.frame(width: 14, height: 11)
+                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(lineWidth: 1.4))
+        }.frame(width: 18, height: 18).accessibilityHidden(true)
+    }
+}
+
 /// Preserve Apple's symbols while supplying the two marks missing from Skip's
 /// pinned system-symbol table. Android paths inherit the control's foreground.
 struct SessionFilterIcon: View {

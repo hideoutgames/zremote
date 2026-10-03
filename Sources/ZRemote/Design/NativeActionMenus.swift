@@ -12,6 +12,7 @@ struct PullRequestMenu: View {
     @ViewBuilder var body: some View {
         #if os(iOS)
         NativeGlassButton(image: PullRequestIcon.menuImage(for: requests.last, colorScheme: colorScheme), menu: nativeMenu,
+                          menuRevision: String(describing: requests) + String(describing: colorScheme),
                           accessibilityLabel: "Session pull requests", accessibilityValue: "", enabled: !requests.isEmpty, size: 44)
             .frame(width: 44, height: 44)
         #else
@@ -67,6 +68,7 @@ struct NativeProfileMenu: View {
         AsyncImage(url: avatarURL) { phase in
             let photo = phase.image.flatMap { avatarImage($0) }
             NativeGlassButton(image: photo ?? fallbackImage, title: photo == nil && !initials.isEmpty ? initials : nil, menu: menu,
+                              menuRevision: accounts.map { "\($0.id):\($0.profile.displayName):\($0.active)" }.joined(separator: "|") + ":\(canAddAccount):\(signingOut)",
                               accessibilityLabel: accessibilityLabel, accessibilityValue: name, enabled: true, size: 46)
         }
     }
@@ -121,6 +123,7 @@ struct NativeGlassButton: UIViewRepresentable {
     let image: UIImage?
     var title: String? = nil
     var menu: UIMenu? = nil
+    var menuRevision = ""
     let accessibilityLabel: String
     let accessibilityValue: String
     let enabled: Bool
@@ -164,7 +167,10 @@ struct NativeGlassButton: UIViewRepresentable {
     func updateUIView(_ button: UIButton, context: Context) {
         context.coordinator.action = action
         button.configuration = configuration
-        button.menu = menu
+        if context.coordinator.menuRevision != menuRevision || (button.menu == nil) != (menu == nil) {
+            button.menu = menu
+            context.coordinator.menuRevision = menuRevision
+        }
         button.showsMenuAsPrimaryAction = menu != nil
         button.tintColor = UIColor(Palette.text)
         button.isEnabled = enabled && context.environment.isEnabled
@@ -174,6 +180,7 @@ struct NativeGlassButton: UIViewRepresentable {
 
     @MainActor final class Coordinator {
         var action: (@MainActor () -> Void)?
+        var menuRevision: String?
     }
 }
 #endif

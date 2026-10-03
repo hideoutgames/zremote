@@ -27,6 +27,8 @@ public struct ZRemoteRootView: View {
         }
         #if os(iOS)
         .background { NativeKeyboardDismiss() }
+        .sensoryFeedback(.selection, trigger: model.selectedSessionID) { _, _ in model.preferences.hapticsEnabled }
+        .sensoryFeedback(.selection, trigger: model.route?.id) { _, _ in model.preferences.hapticsEnabled }
         #endif
         .preferredColorScheme(preferredColorScheme)
         #if os(Android)
@@ -188,6 +190,7 @@ public struct ZRemoteRootView: View {
                 case .projects: ProjectPickerView(model: model)
                 case .sessionDetails(let sessionID): SessionDetailsView(model: model, sessionID: sessionID)
                 case .queue(let sessionID): MessageQueueView(model: model, sessionID: sessionID)
+                case .subagents(let sessionID): SubagentListView(model: model, sessionID: sessionID)
                 case .checkouts: CheckoutPickerView(model: model)
                 case .settings: SettingsView(model: model)
                 case .pullRequest(let request):

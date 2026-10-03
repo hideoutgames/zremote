@@ -9,8 +9,10 @@ struct SessionEventCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text)
-                .multilineTextAlignment(.leading)
+            HStack(spacing: 8) {
+                RobotIcon()
+                Text(title).multilineTextAlignment(.leading)
+            }.font(.subheadline.weight(.medium)).foregroundStyle(Palette.text)
             if active { ShimmerText(text: "Working").font(.caption) }
             else { Text(subtitle).font(.caption).foregroundStyle(Palette.secondary) }
         }
@@ -19,6 +21,25 @@ struct SessionEventCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Palette.line))
+    }
+}
+
+struct SubagentListView: View {
+    @Bindable var model: AppModel
+    let sessionID: String
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(model.subagents(sessionID: sessionID)) { agent in
+                    SessionEventCard(title: agent.title, subtitle: agent.status.capitalized, active: agent.active)
+                }
+            }.padding(20)
+        }
+        .frame(maxWidth: 700).frame(maxWidth: .infinity)
+        .foregroundStyle(Palette.text)
+        .navigationTitle("Sub-agents")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
