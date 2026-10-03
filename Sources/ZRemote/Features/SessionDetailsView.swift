@@ -52,6 +52,22 @@ struct SessionDetailsView: View {
         .foregroundStyle(Palette.text)
         .navigationTitle("Details")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if let session, !editing {
+                    Button {
+                        title = session.title
+                        error = nil
+                        renameContext = model.sessionDetailsContext(sessionID)
+                        editing = true
+                    } label: {
+                        Image(systemName: "pencil").frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel("Edit session title")
+                    .accessibilityIdentifier("edit-session-title")
+                }
+            }
+        }
         .scrollDismissesKeyboard(.interactively)
         #if os(Android)
         .composeModifier { AndroidQuestionFocusModifier(dismissal: focusDismissal) }
@@ -98,21 +114,12 @@ struct SessionDetailsView: View {
                 }
             }
         } else {
-            ZStack(alignment: .trailing) {
-                Text(nonempty(session.title) ?? "Untitled session")
-                    .font(.title.weight(.semibold)).multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 52).frame(maxWidth: .infinity)
-                    .accessibilityAddTraits(.isHeader)
-                CircleControl(symbol: "pencil", label: "Edit session title") {
-                    title = session.title
-                    error = nil
-                    renameContext = model.sessionDetailsContext(sessionID)
-                    editing = true
-                }
-                .accessibilityIdentifier("edit-session-title")
-            }
-            .padding(.vertical, 12)
+            Text(nonempty(session.title) ?? "Untitled session")
+                .font(.title.weight(.semibold)).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.vertical, 12)
         }
     }
 

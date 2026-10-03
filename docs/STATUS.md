@@ -51,6 +51,19 @@ the refresh correction below and still requires native verification.
 
 ## Session controls, checkout selection and Details
 
+The iPhone/iPad display-options control uses the shared native menu button.
+Its menu revision includes only project choices and selected display options,
+so session activity, clock, search and refresh updates keep the presented menu
+tree intact. The Details rename pencil sits in the leading toolbar, in the same
+row as Details and Done; the title editor retains its Save/Cancel flow.
+
+Targeted checks on 2026-10-03 passed iOS-target Swift syntax parsing of
+`SessionListView.swift` and `SessionDetailsView.swift`, Windows-target parsing of
+`SessionListView.swift`, and `git diff --check`. These do not typecheck or build
+the application. Device verification remains pending: leave a nested filter
+open during live/demo activity, navigate back and select/reset filters, then
+exercise title editing from the Details toolbar on iPhone and iPad.
+
 Session rows now use provider marks in live and test modes. The active filter
 colors only its existing slider icon, preserving the common glass button.
 Android draws matching slider and checkout branch vectors where the pinned
