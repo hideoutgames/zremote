@@ -1,5 +1,16 @@
 # Native development
 
+## Tablet Sessions animation
+
+On iOS, a dedicated animatable reveal width owns the retained Sessions panel and
+its divider. The conversation receives the remaining width on each animation
+frame, while descendant animation transactions are cleared so model updates and
+native controls do not start competing layout animations. Tablet hamburger
+actions explicitly animate the visibility change, including when invoked through
+the native Liquid Glass button. Search and filter state survives hiding the
+panel; hidden controls cannot receive touches or accessibility focus. Reduce
+Motion applies the final width immediately. Phone drawer motion is independent.
+
 ## Session controls
 
 The tablet Sessions panel animates its width together with the conversation,
