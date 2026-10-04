@@ -22,6 +22,11 @@ Settings exposes these offline.
   the same revision under SIL OFL 1.1; both platform copies and the full font
   license are recorded in Settings → Acknowledgements. See docs/BUILD.md for
   source links, rendering constants and the font checksum.
+- FluidAudio 0.15.4 (`b9d43724cbdb5a980e441fd54180964e94d470f7`): Apache-2.0,
+  with separately retained fastcluster and VBx notices. Used for iOS audio only.
+- Optional NVIDIA Parakeet TDT 0.6B v2/v3 weights, converted to Core ML by
+  Fluid Inference: CC BY 4.0. Pinned source revisions, sizes and SHA-256 hashes
+  are in `AudioModels.json`; attribution and the full license are bundled offline.
 
 SwiftSideDrawer was an interaction reference only. No source was incorporated:
 the inspected repository did not publish a license. The phone sliding

@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Show a live input waveform in the composer. Audio is discarded when you finish or cancel.</string>
+    <string>Transcribe speech into your draft on this device. Audio is deleted when you finish or cancel.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Use on-device Dictation to transcribe speech into your draft.</string>
     <key>CFBundleURLTypes</key>
     <array><dict>
         <key>CFBundleURLName</key><string>no.hideout.zremote.auth</string>
