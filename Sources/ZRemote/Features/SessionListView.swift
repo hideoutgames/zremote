@@ -31,6 +31,7 @@ struct SessionListView: View {
     @State var renameContext = ""
     @State var renameTitle = ""
     @FocusState var searchFocused: Bool
+    @ScaledMetric(relativeTo: .body) var projectIconBodySize: CGFloat = 17
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.webAuthenticationSession) var authentication
 
@@ -94,6 +95,7 @@ struct SessionListView: View {
     private var hasFilters: Bool {
         selectedProjectID != nil || status != .all || pullRequest != .all || archived != .active || unreadOnly || created != .any || updated != .any
     }
+    private var projectIconSide: CGFloat { (14 * min(1.6, max(0.85, projectIconBodySize / 17))).rounded() }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -545,11 +547,14 @@ struct SessionListView: View {
         }
     }
     private func sessionRow(_ session: Session) -> some View {
-        Button { Task { await model.open(session.id) } } label: {
+        let monogram = SessionPresentationRules.projectMonogram(for: session, projects: model.workspace.projects,
+                                                                groupedByProject: grouping == .project, selectedProjectID: selectedProjectID)
+        return Button { Task { await model.open(session.id) } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     sessionIndicator(session).frame(width: 16).accessibilityHidden(true)
                     ProviderIcon(providerID: session.providerID, size: 14)
+                    if let monogram { ProjectIcon(monogram: monogram, side: projectIconSide) }
                     Text(session.title).font(.body.weight(session.unread ? .medium : .regular)).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if session.pinned {
@@ -560,7 +565,7 @@ struct SessionListView: View {
                 }
                 if !compact, let detail = SessionPresentationRules.detail(for: session, now: now) {
                     Text(detail).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
-                        .padding(.leading, 46)
+                        .padding(.leading, 46 + (monogram == nil ? 0 : projectIconSide + 8))
                 }
             }.multilineTextAlignment(.leading)
             .padding(.horizontal, 12).padding(.vertical, 10)
@@ -591,7 +596,7 @@ struct SessionListView: View {
             } label: { Label(session.archived ? "Unarchive session" : "Archive session", systemImage: "archivebox") }
         }
         .accessibilityValue([SessionPresentationRules.indicator(for: session).accessibilityLabel,
-                             session.pinned ? "Pinned" : nil, session.archived ? "Archived" : nil].compactMap { $0 }.joined(separator: ", "))
+                             monogram?.name, session.pinned ? "Pinned" : nil, session.archived ? "Archived" : nil].compactMap { $0 }.joined(separator: ", "))
     }
 
     @ViewBuilder private func sessionIndicator(_ session: Session) -> some View {

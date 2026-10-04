@@ -15,6 +15,14 @@ public enum SessionIndicator: String, Sendable {
 }
 
 public enum SessionPresentationRules {
+    /// A project heading or an explicit project filter already supplies this
+    /// context. Project-less sessions use the official client's Home tile.
+    public static func projectMonogram(for session: Session, projects: [Project],
+                                       groupedByProject: Bool, selectedProjectID: String?) -> ProjectMonogram? {
+        guard !groupedByProject, selectedProjectID == nil else { return nil }
+        return ProjectMonogram(project: projects.first { $0.id == session.projectID })
+    }
+
     /// Host metadata is authoritative while present. Retain the latest observed
     /// PR when a branch change removes it from the workspace projection.
     public static func pullRequest(for session: Session, observed: [ObservedPullRequest]) -> PullRequest? {
