@@ -4,7 +4,9 @@ import ZRemoteCore
 struct ConversationView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    #if !os(Android)
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
+    #endif
     @State var inputFocused = false
     @State var inputComposing = false
     @State var cursor = 0
@@ -343,7 +345,9 @@ struct ConversationView: View {
                         tailAnchor
                         #endif
                     }
+                    #if !os(Android)
                     .id(dynamicTypeSize)
+                    #endif
                     #if !os(Android)
                     // Outside the lazy stack: actual viewport geometry, not row mounting,
                     // determines when a reader has returned to the live edge.

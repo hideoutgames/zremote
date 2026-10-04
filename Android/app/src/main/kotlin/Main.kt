@@ -4,6 +4,7 @@ import skip.lib.*
 import skip.model.*
 import skip.foundation.*
 import skip.ui.*
+import zremote.module.*
 
 import android.Manifest
 import android.app.Application

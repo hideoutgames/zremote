@@ -29,6 +29,12 @@ struct AttachmentLauncher: ContentComposer {
     let request: String
     let completed: (String, String, String, String) -> Void
 
+    init(source: String, request: String, completed: @escaping (String, String, String, String) -> Void) {
+        self.source = source
+        self.request = request
+        self.completed = completed
+    }
+
     @Composable func Compose(context: ComposeContext) {
         let androidContext = LocalContext.current
         let scope = rememberCoroutineScope()
