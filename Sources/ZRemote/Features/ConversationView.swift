@@ -25,6 +25,8 @@ struct ConversationView: View {
     @State var projectContextHeight: CGFloat = 48
     @State var composerChromeHeight: CGFloat = 110
     @State var recording = false
+    @State var recordingContext = ""
+    @State var recordingPreferences = AudioInputPreferences()
 
     private var wallpaper: Bool {
         model.preferences.backgroundEnabled && model.selectedSessionID == nil
@@ -499,12 +501,20 @@ struct ConversationView: View {
                     #endif
                 #if os(iOS)
                 if recording {
-                    MicrophoneWaveformBar {
+                    let context = recordingContext
+                    MicrophoneWaveformBar(preferences: recordingPreferences) {
+                        recording = false
+                    } onTranscript: { text in
+                        guard recording, model.appendTranscription(text, context: context) else { return }
+                        cursor = model.draft.utf16.count
+                        selectionRequest += 1
                         recording = false
                     } onError: { message in
+                        guard recording, model.attachmentContext == context else { return }
                         recording = false
                         model.error = message
                     }
+                    .id(context)
                 } else {
                     composerControls
                 }
@@ -555,11 +565,13 @@ struct ConversationView: View {
             #if os(iOS)
             Button {
                 inputFocused = false
+                recordingContext = model.attachmentContext
+                recordingPreferences = model.preferences.audioInput
                 recording = true
             } label: {
                 Image(systemName: "mic").font(.system(size: 20))
                     .foregroundStyle(Palette.secondary).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).accessibilityLabel("Enable microphone")
+            }.buttonStyle(.plain).accessibilityLabel(model.preferences.audioInput.mode == .dictation ? "Start Dictation" : "Start Audio Model")
             #endif
             ComposerActionButton(stopping: model.composerStops, busy: model.busy,
                                  enabled: (model.canSend && (!model.working || model.canQueueDraft)) || model.composerStops,

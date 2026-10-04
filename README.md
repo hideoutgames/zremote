@@ -44,6 +44,12 @@ The picker follows Zeron's compact provider tabs, favorites and scoped search,
 using original provider marks in the picker and Composer. The Composer includes
 the effective reasoning level and Fast mode. Test mode includes Claude Code,
 Codex and the configurable Devin Fusion fixture.
+Picker animations preserve the layout and respect Reduce Motion. Each model,
+including favorites, remembers its own effort and options; new sessions restore
+the last used provider. On iOS, microphone input defaults to on-device Dictation.
+Settings offers optional Parakeet downloads under Audio Model, with minimal
+language rows and native long-press management. See
+[model and audio preferences](docs/MODEL_AND_AUDIO_PREFERENCES.md).
 
 Session rows show state (orange awaiting a response, blue finished/unread,
 gray read/idle, red error), a smaller working animation, and the latest observed

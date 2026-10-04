@@ -96,10 +96,13 @@ Continuing or reversing a slow drag keeps the recess aligned with the moving
 rows. After release, the native refresh settles at its loading height before
 collapsing.
 
-On iOS, the microphone control requests system permission and meters local input
-for the scrolling waveform. Cancel and Finish discard the recording; neither
-transcribes, attaches, nor sends audio. Leaving the Composer or backgrounding the
-app stops capture. Android microphone capture is not implemented.
+On iOS, microphone input defaults to on-device Dictation. Settings can instead
+install/select an optional Parakeet Audio Model. Finish transcribes into the
+draft; Cancel discards the recording. Audio stays local and is deleted when
+capture/transcription ends. Leaving the Composer or backgrounding the app cancels
+the operation. Android microphone capture is not implemented. See
+[model and audio preferences](MODEL_AND_AUDIO_PREFERENCES.md) for download
+provenance, permissions, storage and scoped validation.
 
 Sign-in uses Apple's custom-scheme authentication callback on iOS and reports safe
 failure stages without exposing codes, tokens, or provider error descriptions.

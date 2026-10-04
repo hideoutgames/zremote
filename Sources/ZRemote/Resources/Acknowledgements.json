@@ -98,5 +98,42 @@
     "licenseFiles": [
       "Zeron-MIT.txt"
     ]
+  },
+  {
+    "id": "swift:fluidaudio@0.15.4",
+    "name": "FluidAudio",
+    "version": "0.15.4",
+    "source": "https://github.com/FluidInference/FluidAudio/tree/b9d43724cbdb5a980e441fd54180964e94d470f7",
+    "licenseFiles": [
+      "FluidAudio-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "source:fluidaudio-fastcluster@0.15.4",
+    "name": "fastcluster (FluidAudio)",
+    "version": "FluidAudio 0.15.4",
+    "source": "https://github.com/FluidInference/FluidAudio/blob/b9d43724cbdb5a980e441fd54180964e94d470f7/ThirdPartyLicenses/fastcluster-LICENSE.md",
+    "licenseFiles": [
+      "FluidAudio-Fastcluster-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "source:fluidaudio-vbx@0.15.4",
+    "name": "VBx (FluidAudio)",
+    "version": "FluidAudio 0.15.4",
+    "source": "https://github.com/FluidInference/FluidAudio/blob/b9d43724cbdb5a980e441fd54180964e94d470f7/ThirdPartyLicenses/vbx-LICENSE.md",
+    "licenseFiles": [
+      "FluidAudio-VBx-LICENSE.txt"
+    ]
+  },
+  {
+    "id": "model:parakeet-tdt-0.6b",
+    "name": "NVIDIA Parakeet / Fluid Inference",
+    "version": "TDT 0.6B v2 / v3 (optional downloads)",
+    "source": "https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v3-coreml",
+    "licenseFiles": [
+      "Parakeet-NOTICE.txt",
+      "CC-BY-4.0.txt"
+    ]
   }
 ]

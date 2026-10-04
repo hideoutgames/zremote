@@ -270,6 +270,65 @@ final class CoreBehaviorTests: XCTestCase {
         XCTAssertEqual(model.preferences.favorites, saved.favorites)
         await model.disconnect()
     }
+
+    @MainActor
+    func testRestoringPreferencesPreservesEarlyModelEditsAndRemembersProviderAfterRestart() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let client = AppModelTestClient()
+        let first = AgentModel(providerID: "first", providerName: "First", modelID: "a", name: "A")
+        let second = AgentModel(providerID: "second", providerName: "Second", modelID: "b", name: "B", efforts: ["high"])
+        client.modelCatalog = [first, second]
+        let firstSelection = ModelSelection(providerID: "first", modelID: "a")
+        let secondSelection = ModelSelection(providerID: "second", modelID: "b", effort: "high")
+        var saved = LocalPreferences()
+        saved.drafts["new"] = "Restored preferences"
+        saved.modelSelections[first.id] = firstSelection
+        saved.lastModelSelection = firstSelection
+        let store = LocalStateStore(accountKey: client.accountKey!, root: root)
+        try await store.save(saved)
+        let model = AppModel(client: client, makeLiveClient: { client },
+                             makeStore: { LocalStateStore(accountKey: $0, root: root) })
+        await model.start()
+        await model.chooseModel(secondSelection)
+        let restore = DraftRestorationExpectation(model: model, draft: "Restored preferences", selection: secondSelection)
+        let result = await restore.wait()
+        XCTAssertEqual(result, .completed)
+        XCTAssertEqual(model.newSelection, secondSelection)
+        XCTAssertEqual(model.preferences.modelSelections[first.id], firstSelection)
+        XCTAssertEqual(model.preferences.modelSelections[second.id], secondSelection)
+        // Switching saves the account immediately. A fresh app then restores it.
+        await model.switchAccount("second-user/second-organization")
+        let restartedClient = AppModelTestClient()
+        restartedClient.modelCatalog = [first, second]
+        let restartedModel = AppModel(client: restartedClient, makeLiveClient: { restartedClient },
+                                      makeStore: { LocalStateStore(accountKey: $0, root: root) })
+        await restartedModel.start()
+        let restart = DraftRestorationExpectation(model: restartedModel, draft: "Restored preferences", selection: secondSelection)
+        let restarted = await restart.wait()
+        XCTAssertEqual(restarted, .completed)
+        XCTAssertEqual(restartedModel.newSelection, secondSelection)
+        restartedModel.newSession()
+        XCTAssertEqual(restartedModel.newSelection, secondSelection)
+        XCTAssertNil(model.preferences.lastModelSelection)
+        await restartedModel.disconnect()
+        await model.disconnect()
+    }
+
+    @MainActor
+    func testRejectedSessionModelChangeDoesNotReplaceRememberedSettings() async {
+        let client = AppModelTestClient()
+        let model = AppModel(client: client, makeLiveClient: { client })
+        let saved = ModelSelection(providerID: "provider", modelID: "model", effort: "medium")
+        await model.chooseModel(saved)
+        model.selectedSessionID = "session"
+        model.state = SessionState(id: "session", selection: saved)
+        let applied = await model.chooseModel(ModelSelection(providerID: "provider", modelID: "model", effort: "high"))
+        XCTAssertFalse(applied)
+        XCTAssertEqual(model.selection, saved)
+        XCTAssertEqual(model.preferences.lastModelSelection, saved)
+        XCTAssertNotNil(model.error)
+    }
     @MainActor
     func testAttachmentOnlySendPreservesBytesAndRejectsStalePickerContext() async throws {
         let client = DemoClient(intervalNanoseconds: 1_000_000_000)
@@ -515,18 +574,20 @@ extension CoreBehaviorTests {
     let expectation = XCTestExpectation(description: "Account draft is restored")
     private let model: AppModel
     private let draft: String
+    private let selection: ModelSelection?
     private var completed = false
-    init(model: AppModel, draft: String) {
+    init(model: AppModel, draft: String, selection: ModelSelection? = nil) {
         self.model = model
         self.draft = draft
+        self.selection = selection
         observe()
     }
     private func observe() {
         guard !completed else { return }
-        let current = withObservationTracking { model.draft } onChange: { [weak self] in
+        let current = withObservationTracking { (model.draft, model.newSelection) } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
         }
-        if current == draft { completed = true; expectation.fulfill() }
+        if current.0 == draft, selection == nil || current.1 == selection { completed = true; expectation.fulfill() }
     }
     func wait() async -> XCTWaiter.Result {
         let result = await XCTWaiter.fulfillment(of: [expectation], timeout: 3)
@@ -550,6 +611,7 @@ extension CoreBehaviorTests {
         ]
     }
     var submittedText: String?
+    var modelCatalog: [AgentModel] = []
     private enum Failure: Error { case unavailable }
     func restore() async throws { publishWorkspace() }
     func switchAccount(_ id: String) async throws { accountKey = id; publishWorkspace() }
@@ -557,7 +619,7 @@ extension CoreBehaviorTests {
     func openSession(_ id: String) async throws { onUpdate?(.session(SessionState(id: id))) }
     func send(sessionID: String, text: String) async throws { submittedText = text; throw Failure.unavailable }
     func retryDelivery(sessionID: String) async throws {}
-    func models(hostID: String) async throws -> [AgentModel] { [] }
+    func models(hostID: String) async throws -> [AgentModel] { modelCatalog }
     func signOut() async throws { onUpdate?(.workspace(WorkspaceState())) }
     func closeSession(_ id: String) {}
     func setForeground(_ foreground: Bool) {}

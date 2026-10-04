@@ -43,6 +43,9 @@ struct SettingsView: View {
             BackgroundSettings(model: model)
             ConnectionSettings(model: model)
             NotificationSettings(model: model)
+            #if os(iOS)
+            AudioInputSettings(model: model)
+            #endif
 
             Section {
                 NavigationLink {
