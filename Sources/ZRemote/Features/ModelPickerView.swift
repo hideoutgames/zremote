@@ -7,7 +7,9 @@ struct ModelPickerView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
     @Environment(\.sizeCategory) var sizeCategory
+    #endif
     @State var provider = ""
     @State var query = ""
     @State var applying = false

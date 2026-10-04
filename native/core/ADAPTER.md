@@ -33,8 +33,14 @@ live model catalog. A failed durable send exposes the core's explicit retry acti
 which reuses the user message identity so the host can deduplicate delivery.
 
 The adapter coalesces notifications and requests transcript bodies only for
-entries whose revision changed. The projection excludes reasoning and raw tool
-arguments. This portable projection is separate from the upstream analytic
+entries whose revision changed. The projection carries ordered prose, reasoning,
+tools and subagent markers, retaining each host part ID. Tool details include
+typed labels, paths, invocation, streamed output/diffs, resolution and failure.
+Reasoning and tool details stay out of the flattened answer/copy text. Each detail
+is bounded to 32,768 characters / 400 lines; oversized diffs and sidecar-backed
+results are explicitly previews (full sidecar retrieval is not implemented).
+Subagent prompts are not exported in generic tool details. This portable
+projection is separate from the upstream analytic
 layout engine, which remains available as `TranscriptView` for native painters.
 The shared view must retain stable row identities and avoid re-parsing settled
 Markdown when a streaming tail changes.
@@ -61,7 +67,11 @@ Local extensions use existing host methods:
   a running or changed turn before and after the request, returns the host's
   truncation flag, and never substitutes the working-tree or branch diff.
 - `transcript_update`: revision-based presentation projection; unchanged message
-  bodies remain in the platform cache.
+  bodies remain in the platform cache. `TranscriptMessageView.parts` extends the
+  generated native ABI; regenerate Swift/C declarations and rebuild the matching
+  native library together. The upstream host protocol and source pin are unchanged.
+  The existing `transcript_status.working_since_ms` supplies live elapsed time;
+  the shared model retains a per-turn local fallback only when host timing is absent.
 - `composer_completions`: existing `ListCommands` / `ListSkills` RPCs with the
   selected provider, session and project. Returned skills keep their canonical
   `zeron-invoke:` identity, including provider-specific command metadata. File
@@ -80,7 +90,7 @@ the core's attachment cache and only accepts refs present in the open transcript
 
 Subagent cards come from each tool part's actual `subagent_ref`, lifecycle and
 safe title. A resolved spawn tool does not imply its child has finished.
-Reasoning and raw tool arguments remain excluded from the projection.
+Reasoning is displayed only in its own disclosure; spawn prompts remain excluded.
 Pin/archive/restore actions use the official peer's replicated session methods;
 created/updated dates and archive/pin flags come from its workspace rows.
 Renaming uses `rename_session` and retains the session identity. Details reads
@@ -102,7 +112,7 @@ Message timestamps and durations come from the host's recorded entry metadata,
 including historical entries. Unknown timing stays absent. The UI presents a
 completed turn's duration once, after its changed-file summary when available;
 it does not time sync delays, infer runtime from session update dates, or expose
-private reasoning/tool arguments to obtain it.
+reasoning/tool arguments to obtain it.
 The bundled peer's continuation joins carry the latest segment's status, so an
 aborted or unknown ending cannot inherit an earlier segment's successful status.
 This corrects local transcript projection only; it changes no host service.
@@ -141,13 +151,16 @@ generate the API; they are not mobile application artifacts.
 Run `scripts/generate-cargo-notices.py` after resolving dependencies and before
 bundling app resources. Missing license texts fail the resource generation.
 
-The targeted projection regression is:
+The targeted projection regressions are:
 
 ```
 cargo test -p zeron-mobile --lib client_ffi::session::projection_regression_tests
+cargo test -p zeron-mobile --lib client_ffi::transcript_presentation::tests
 ```
 
 Run it through the repository resource admission runner, with one compiler job.
-The three cases protect reasoning exclusion, attachment trailer projection, and
-subagent lifecycle independence from spawn-tool completion.
+The original three cases protect reasoning exclusion from answer prose,
+attachment trailer projection, and subagent lifecycle independence from spawn
+completion. Four presentation cases protect ordered streaming identity, bounded
+Unicode/error output, separate subagent prompts, and edit diff/error precedence.
 Native application, renderer and device verification remain separate checks.

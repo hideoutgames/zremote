@@ -27,6 +27,14 @@ struct SessionRefreshComposer: ContentComposer {
     let hapticsEnabled: Bool
     let onRefresh: () -> Void
 
+    init(content: any View, recess: any View, refreshing: Bool, hapticsEnabled: Bool, onRefresh: @escaping () -> Void) {
+        self.content = content
+        self.recess = recess
+        self.refreshing = refreshing
+        self.hapticsEnabled = hapticsEnabled
+        self.onRefresh = onRefresh
+    }
+
     @Composable func Compose(context: ComposeContext) {
         let state = rememberPullToRefreshState()
         let threshold = PullToRefreshDefaults.PositionalThreshold

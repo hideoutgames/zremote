@@ -14,6 +14,7 @@ public struct TranscriptRenderRow: Identifiable, Equatable, Sendable {
         case prompt(TranscriptMessage)
         case text(String, markdown: Bool, secondary: Bool)
         case code(String, language: String?)
+        case activity(TranscriptSegment)
         case attachments([RemoteAttachment], timestamp: Date?)
         case subagent(SubagentStatus)
         case completion(CapturedTurnChanges?, duration: TimeInterval?)
@@ -33,7 +34,7 @@ public actor TranscriptRowBuilder {
         var text: String
         var rows: [MessageTextBlock]
     }
-    private var cache: [String: Parsed] = [:]
+    private var cache: [TranscriptRowID: Parsed] = [:]
 
     public init() {}
 
@@ -41,7 +42,7 @@ public actor TranscriptRowBuilder {
                      pullRequests: [String: [PullRequest]], unanchored: [PullRequest],
                      working: Bool) throws -> [TranscriptRenderRow] {
         var output: [TranscriptRenderRow] = []
-        var retained: [String: Parsed] = [:]
+        var retained: [TranscriptRowID: Parsed] = [:]
         for message in messages {
             try Task.checkCancellation()
             var first = true
@@ -50,31 +51,47 @@ public actor TranscriptRowBuilder {
                                     content: content, spacing: first ? 22 : 14))
                 first = false
             }
-            if !message.text.isEmpty {
-                if message.role == "user" {
-                    append("prompt", .prompt(message))
+            func appendText(_ text: String, streaming: Bool, kind: String = "body") {
+                let key = TranscriptRowID(messageID: message.id, kind: kind)
+                let parsed: Parsed
+                if let old = cache[key], old.text == text {
+                    parsed = old
                 } else {
-                    let parsed: Parsed
-                    if let old = cache[message.id], old.text == message.text {
-                        parsed = old
+                    parsed = Parsed(text: text, rows: Self.blocks(text))
+                }
+                retained[key] = parsed
+                for block in parsed.rows {
+                    if block.isCode {
+                        append(kind, .code(block.text, language: block.language), part: block.id)
                     } else {
-                        parsed = Parsed(text: message.text, rows: Self.blocks(message.text))
-                    }
-                    retained[message.id] = parsed
-                    for block in parsed.rows {
-                        if block.isCode {
-                            append("body", .code(block.text, language: block.language), part: block.id)
-                        } else {
-                            append("body", .text(block.text, markdown: !message.streaming,
-                                                secondary: message.role == "tool"), part: block.id)
-                        }
+                        append(kind, .text(block.text, markdown: !streaming,
+                                           secondary: message.role == "tool"), part: block.id)
                     }
                 }
+            }
+            var inlineSubagents = Set<String>()
+            if message.role == "user" {
+                if !message.text.isEmpty { append("prompt", .prompt(message)) }
+            } else if !message.parts.isEmpty {
+                for segment in TranscriptActivity.segments(messageID: message.id, parts: message.parts, streaming: message.streaming) {
+                    if segment.kind == "activity" {
+                        append(segment.id, .activity(segment))
+                    } else if segment.kind == "subagent" {
+                        if let agent = message.subagents.first(where: { $0.id == segment.parts.first?.id }) {
+                            append(segment.id, .subagent(agent))
+                            inlineSubagents.insert(agent.id)
+                        }
+                    } else if let part = segment.parts.first {
+                        appendText(part.text, streaming: segment.live, kind: segment.id)
+                    }
+                }
+            } else if !message.text.isEmpty {
+                appendText(message.text, streaming: message.streaming)
             }
             if !message.attachments.isEmpty {
                 append("attachments", .attachments(message.attachments, timestamp: message.role == "user" ? message.timestamp : nil))
             }
-            for (index, agent) in message.subagents.enumerated() {
+            for (index, agent) in message.subagents.enumerated() where !inlineSubagents.contains(agent.id) {
                 append("subagent", .subagent(agent), part: index)
             }
             if changes[message.id] != nil || message.workedDuration != nil {

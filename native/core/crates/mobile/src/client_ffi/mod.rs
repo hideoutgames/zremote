@@ -13,6 +13,7 @@
 
 mod session;
 mod transcript_metadata;
+mod transcript_presentation;
 mod types;
 
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use zeron_client as zc;
 
 pub use session::*;
+pub use transcript_presentation::TranscriptPartView;
 pub use types::*;
 
 /// Receives coalesced change events (at most one burst per display frame).

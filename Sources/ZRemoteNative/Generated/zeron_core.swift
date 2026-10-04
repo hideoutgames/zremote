@@ -7953,8 +7953,8 @@ public func FfiConverterTypeTranscriptAttachmentView_lower(_ value: TranscriptAt
 
 
 /**
- * Portable UI projection. Only changed entry bodies cross FFI; private
- * reasoning and raw tool arguments never enter this presentation surface.
+ * Portable UI projection. Only changed entry bodies cross FFI. Ordered tool
+ * and thought parts are separate from answer prose, with bounded details.
  */
 public struct TranscriptMessageView: Equatable, Hashable {
     public var id: String
@@ -7964,10 +7964,11 @@ public struct TranscriptMessageView: Equatable, Hashable {
     public var streaming: Bool
     public var attachments: [TranscriptAttachmentView]
     public var subagents: [SubagentView]
+    public var parts: [TranscriptPartView]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, revision: UInt64, role: String, text: String, streaming: Bool, attachments: [TranscriptAttachmentView], subagents: [SubagentView]) {
+    public init(id: String, revision: UInt64, role: String, text: String, streaming: Bool, attachments: [TranscriptAttachmentView], subagents: [SubagentView], parts: [TranscriptPartView]) {
         self.id = id
         self.revision = revision
         self.role = role
@@ -7975,6 +7976,7 @@ public struct TranscriptMessageView: Equatable, Hashable {
         self.streaming = streaming
         self.attachments = attachments
         self.subagents = subagents
+        self.parts = parts
     }
 
 
@@ -7999,7 +8001,8 @@ public struct FfiConverterTypeTranscriptMessageView: FfiConverterRustBuffer {
                 text: FfiConverterString.read(from: &buf),
                 streaming: FfiConverterBool.read(from: &buf),
                 attachments: FfiConverterSequenceTypeTranscriptAttachmentView.read(from: &buf),
-                subagents: FfiConverterSequenceTypeSubagentView.read(from: &buf)
+                subagents: FfiConverterSequenceTypeSubagentView.read(from: &buf),
+                parts: FfiConverterSequenceTypeTranscriptPartView.read(from: &buf)
         )
     }
 
@@ -8011,6 +8014,7 @@ public struct FfiConverterTypeTranscriptMessageView: FfiConverterRustBuffer {
         FfiConverterBool.write(value.streaming, into: &buf)
         FfiConverterSequenceTypeTranscriptAttachmentView.write(value.attachments, into: &buf)
         FfiConverterSequenceTypeSubagentView.write(value.subagents, into: &buf)
+        FfiConverterSequenceTypeTranscriptPartView.write(value.parts, into: &buf)
     }
 }
 
@@ -8027,6 +8031,72 @@ public func FfiConverterTypeTranscriptMessageView_lift(_ buf: RustBuffer) throws
 #endif
 public func FfiConverterTypeTranscriptMessageView_lower(_ value: TranscriptMessageView) -> RustBuffer {
     return FfiConverterTypeTranscriptMessageView.lower(value)
+}
+
+
+public struct TranscriptPartView: Equatable, Hashable {
+    public var id: String
+    public var kind: String
+    public var text: String
+    public var tool: TranscriptToolView?
+    public var truncated: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, kind: String, text: String, tool: TranscriptToolView?, truncated: Bool) {
+        self.id = id
+        self.kind = kind
+        self.text = text
+        self.tool = tool
+        self.truncated = truncated
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension TranscriptPartView: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscriptPartView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscriptPartView {
+        return
+            try TranscriptPartView(
+                id: FfiConverterString.read(from: &buf),
+                kind: FfiConverterString.read(from: &buf),
+                text: FfiConverterString.read(from: &buf),
+                tool: FfiConverterOptionTypeTranscriptToolView.read(from: &buf),
+                truncated: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TranscriptPartView, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterOptionTypeTranscriptToolView.write(value.tool, into: &buf)
+        FfiConverterBool.write(value.truncated, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscriptPartView_lift(_ buf: RustBuffer) throws -> TranscriptPartView {
+    return try FfiConverterTypeTranscriptPartView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscriptPartView_lower(_ value: TranscriptPartView) -> RustBuffer {
+    return FfiConverterTypeTranscriptPartView.lower(value)
 }
 
 
@@ -8127,6 +8197,92 @@ public func FfiConverterTypeTranscriptStatus_lift(_ buf: RustBuffer) throws -> T
 #endif
 public func FfiConverterTypeTranscriptStatus_lower(_ value: TranscriptStatus) -> RustBuffer {
     return FfiConverterTypeTranscriptStatus.lower(value)
+}
+
+
+public struct TranscriptToolView: Equatable, Hashable {
+    public var kind: String
+    public var label: String
+    public var detail: String
+    public var path: String?
+    public var invocation: String
+    public var output: String
+    public var outputKind: String
+    public var resolved: Bool
+    public var failed: Bool
+    public var truncated: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: String, label: String, detail: String, path: String?, invocation: String, output: String, outputKind: String, resolved: Bool, failed: Bool, truncated: Bool) {
+        self.kind = kind
+        self.label = label
+        self.detail = detail
+        self.path = path
+        self.invocation = invocation
+        self.output = output
+        self.outputKind = outputKind
+        self.resolved = resolved
+        self.failed = failed
+        self.truncated = truncated
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension TranscriptToolView: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscriptToolView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscriptToolView {
+        return
+            try TranscriptToolView(
+                kind: FfiConverterString.read(from: &buf),
+                label: FfiConverterString.read(from: &buf),
+                detail: FfiConverterString.read(from: &buf),
+                path: FfiConverterOptionString.read(from: &buf),
+                invocation: FfiConverterString.read(from: &buf),
+                output: FfiConverterString.read(from: &buf),
+                outputKind: FfiConverterString.read(from: &buf),
+                resolved: FfiConverterBool.read(from: &buf),
+                failed: FfiConverterBool.read(from: &buf),
+                truncated: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TranscriptToolView, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.detail, into: &buf)
+        FfiConverterOptionString.write(value.path, into: &buf)
+        FfiConverterString.write(value.invocation, into: &buf)
+        FfiConverterString.write(value.output, into: &buf)
+        FfiConverterString.write(value.outputKind, into: &buf)
+        FfiConverterBool.write(value.resolved, into: &buf)
+        FfiConverterBool.write(value.failed, into: &buf)
+        FfiConverterBool.write(value.truncated, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscriptToolView_lift(_ buf: RustBuffer) throws -> TranscriptToolView {
+    return try FfiConverterTypeTranscriptToolView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscriptToolView_lower(_ value: TranscriptToolView) -> RustBuffer {
+    return FfiConverterTypeTranscriptToolView.lower(value)
 }
 
 
@@ -12160,6 +12316,30 @@ fileprivate struct FfiConverterOptionTypeSessionRow: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeTranscriptToolView: FfiConverterRustBuffer {
+    typealias SwiftType = TranscriptToolView?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeTranscriptToolView.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeTranscriptToolView.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeWorktreeSpec: FfiConverterRustBuffer {
     typealias SwiftType = WorktreeSpec?
 
@@ -13023,6 +13203,31 @@ fileprivate struct FfiConverterSequenceTypeTranscriptMessageView: FfiConverterRu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeTranscriptMessageView.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTranscriptPartView: FfiConverterRustBuffer {
+    typealias SwiftType = [TranscriptPartView]
+
+    public static func write(_ value: [TranscriptPartView], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTranscriptPartView.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TranscriptPartView] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TranscriptPartView]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTranscriptPartView.read(from: &buf))
         }
         return seq
     }

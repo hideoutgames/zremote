@@ -188,6 +188,61 @@ final class AppModelMessageQueueTests: XCTestCase {
     }
 }
 
+final class ChangeCaptureTests: XCTestCase {
+    @MainActor func testCompletionShowsPendingFilesBeforeHostReplyThenCapturedFiles() async throws {
+        let client = QueueModelClient()
+        let model = AppModel(client: client, makeLiveClient: { QueueModelClient() })
+        model.selectedSessionID = "s"
+        client.suspendDiff = true
+        let requested = expectation(description: "Captured turn diff requested")
+        client.onStarted = { requested.fulfill() }
+        let messages = [TranscriptMessage(id: "turn", role: "user", text: "Edit"),
+                        TranscriptMessage(id: "answer", role: "assistant", text: "Done")]
+        client.onUpdate?(.session(SessionState(id: "s", messages: messages, working: true, turnID: "turn")))
+        XCTAssertTrue(model.pendingChangeMessageIDs.isEmpty)
+        client.onUpdate?(.session(SessionState(id: "s", messages: messages, working: false, turnID: "turn")))
+        XCTAssertEqual(model.pendingChangeMessageIDs, ["answer"])
+        XCTAssertTrue(model.changesAfterMessage.isEmpty)
+        await fulfillment(of: [requested], timeout: 3)
+        client.pendingDiff?.resume(returning: TurnDiff(patch: "", paths: ["file.swift"], additions: 0, deletions: 0))
+        client.pendingDiff = nil
+        let published = expectation(description: "Captured files published")
+        Task { @MainActor in
+            for _ in 0..<200 {
+                if model.changesAfterMessage["answer"] != nil { published.fulfill(); return }
+                try? await Task.sleep(nanoseconds: 10_000_000)
+            }
+        }
+        await fulfillment(of: [published], timeout: 3)
+        XCTAssertTrue(model.pendingChangeMessageIDs.isEmpty)
+        XCTAssertEqual(model.changesAfterMessage["answer"]?.files.map(\.path), ["file.swift"])
+    }
+
+    @MainActor func testUnavailableDiffRemovesPendingRowWithoutInventingChanges() async {
+        let client = QueueModelClient()
+        let model = AppModel(client: client, makeLiveClient: { QueueModelClient() })
+        model.selectedSessionID = "s"
+        client.suspendDiff = true
+        let requested = expectation(description: "Diff requested")
+        client.onStarted = { requested.fulfill() }
+        client.onUpdate?(.session(SessionState(id: "s", messages: [TranscriptMessage(id: "turn", role: "user", text: "Read")], turnID: "turn")))
+        XCTAssertEqual(model.pendingChangeMessageIDs, ["turn"])
+        await fulfillment(of: [requested], timeout: 3)
+        client.pendingDiff?.resume(throwing: ClientFailure("Unavailable"))
+        client.pendingDiff = nil
+        let cleared = expectation(description: "Pending row cleared")
+        Task { @MainActor in
+            for _ in 0..<200 {
+                if model.pendingChangeMessageIDs.isEmpty { cleared.fulfill(); return }
+                try? await Task.sleep(nanoseconds: 10_000_000)
+            }
+        }
+        await fulfillment(of: [cleared], timeout: 3)
+        XCTAssertTrue(model.changesAfterMessage.isEmpty)
+        XCTAssertTrue(model.preferences.changes.isEmpty)
+    }
+}
+
 @MainActor private final class QueueModelClient: ClientService {
     var onUpdate: (@MainActor (ClientUpdate) -> Void)?
     let isDemo = false
@@ -202,6 +257,8 @@ final class AppModelMessageQueueTests: XCTestCase {
     var pendingAction: CheckedContinuation<Void, Error>?
     var pendingBegin: CheckedContinuation<QueuedMessageEdit, Error>?
     var pendingFinish: CheckedContinuation<Void, Error>?
+    var suspendDiff = false
+    var pendingDiff: CheckedContinuation<TurnDiff, Error>?
     var onStarted: (() -> Void)?
     func lease(id: String) -> QueuedMessageEdit {
         .init(id: id, sessionID: "s", leaseID: "lease-" + id, text: "Original", baseTextHash: "hash", expiresAtMilliseconds: 60_000)
@@ -244,6 +301,9 @@ final class AppModelMessageQueueTests: XCTestCase {
     func listFolders(hostID: String, path: String?) async throws -> FolderPage { throw ClientFailure("Unsupported") }
     func addProject(hostID: String, path: String, isRepository: Bool) async throws -> String { "project" }
     func createRepository(hostID: String, name: String) async throws -> String { "project" }
-    func turnDiff(sessionID: String, turnID: String) async throws -> TurnDiff { throw ClientFailure("Unsupported") }
+    func turnDiff(sessionID: String, turnID: String) async throws -> TurnDiff {
+        if suspendDiff { return try await withCheckedThrowingContinuation { pendingDiff = $0; onStarted?() } }
+        throw ClientFailure("Unsupported")
+    }
     func setForeground(_ foreground: Bool) {}
 }

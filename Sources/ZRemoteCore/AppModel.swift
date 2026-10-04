@@ -62,6 +62,7 @@ public enum SecondaryRoute: Identifiable {
     public var notificationError: String?
     public var fetchingModels = false
     public var changesAfterMessage: [String: CapturedTurnChanges] = [:]
+    public var pendingChangeMessageIDs: Set<String> = []
     public var pullRequestsAfterMessage: [String: [PullRequest]] = [:]
     private var attachmentDrafts: [String: [LocalAttachment]] = [:]
     private var answerSubmissions: [String: AnswerSubmission] = [:]
@@ -304,7 +305,7 @@ public enum SecondaryRoute: Identifiable {
         changeSizes = [:]
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
-        preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; zeronAccounts = []; changesAfterMessage = [:]
+        preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; zeronAccounts = []; changesAfterMessage = [:]; pendingChangeMessageIDs = []
         attachmentDrafts = [:]; pullRequestsAfterMessage = [:]; answerSubmissions = [:]
         newSelection = ModelSelection()
         sessionsVisible = false; isDemo = false; busy = false; fetchingModels = false
@@ -351,6 +352,8 @@ public enum SecondaryRoute: Identifiable {
             openPendingNotification()
         case .session(let next):
             let previous = sessions[next.id]
+            var next = next
+            next.workingStartedAt = WorkingStatus.start(for: next, previous: previous, now: Date())
             sessions[next.id] = next
             if let submission = answerSubmissions[next.id], next.input != submission.input {
                 answerSubmissions[next.id] = nil
@@ -377,7 +380,7 @@ public enum SecondaryRoute: Identifiable {
         selectionGeneration += 1
         resetCheckoutSelection()
         if let id = selectedSessionID { client.closeSession(id) }
-        selectedSessionID = nil; state = nil; changesAfterMessage = [:]; pullRequestsAfterMessage = [:]
+        selectedSessionID = nil; state = nil; changesAfterMessage = [:]; pendingChangeMessageIDs = []; pullRequestsAfterMessage = [:]
         if !usesSessionPanel { sessionsVisible = false }
         loadModels()
     }
@@ -1007,6 +1010,7 @@ public enum SecondaryRoute: Identifiable {
         let key = session.id + ":" + turn
         guard !capturing.contains(key), !preferences.changes.contains(where: { $0.sessionID == session.id && $0.turnID == turn }) else { return }
         capturing.insert(key)
+        placeChangeCards()
         let currentGeneration = generation
         let source = client
         Task { [weak self] in
@@ -1014,6 +1018,7 @@ public enum SecondaryRoute: Identifiable {
             defer {
                 if currentGeneration == self.generation {
                     self.capturing.remove(key)
+                    self.placeChangeCards()
                     self.trimSessionCache()
                 }
             }
@@ -1027,10 +1032,13 @@ public enum SecondaryRoute: Identifiable {
                     CapturedFileChange(id: UUID().uuidString, path: $0, patch: nil, isPartial: true)
                 }
                 let snapshot = CapturedTurnChanges(sessionID: session.id, turnID: turn, files: captured.files + missing, capturedAt: captured.capturedAt)
-                let sizes = await Self.measureChanges([snapshot])
                 guard currentGeneration == self.generation, self.sessions[session.id]?.turnID == turn,
                       self.sessions[session.id]?.working == false, !snapshot.files.isEmpty else { return }
                 self.preferences.changes.append(snapshot)
+                // Publish the captured revision before persistence bookkeeping.
+                self.placeChangeCards()
+                let sizes = await Self.measureChanges([snapshot])
+                guard currentGeneration == self.generation else { return }
                 self.changeSizes.merge(sizes) { _, next in next }
                 self.trimChanges()
                 self.placeChangeCards()
@@ -1041,6 +1049,7 @@ public enum SecondaryRoute: Identifiable {
 
     private func placeChangeCards() {
         changesAfterMessage = [:]
+        pendingChangeMessageIDs = []
         guard let state else { return }
         let turns = changes
         for turn in turns {
@@ -1048,6 +1057,13 @@ public enum SecondaryRoute: Identifiable {
             let nextUser = state.messages.indices.first { $0 > start && state.messages[$0].role == "user" } ?? state.messages.endIndex
             let end = max(start, nextUser - 1)
             changesAfterMessage[state.messages[end].id] = turn
+        }
+        if !state.working, let turnID = state.turnID,
+           capturing.contains(state.id + ":" + turnID),
+           !turns.contains(where: { $0.turnID == turnID }),
+           let start = state.messages.firstIndex(where: { $0.id == turnID }) {
+            let nextUser = state.messages.indices.first { $0 > start && state.messages[$0].role == "user" } ?? state.messages.endIndex
+            pendingChangeMessageIDs.insert(state.messages[max(start, nextUser - 1)].id)
         }
     }
 

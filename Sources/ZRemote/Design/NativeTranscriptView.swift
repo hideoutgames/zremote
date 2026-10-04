@@ -343,6 +343,8 @@ private struct NativeTranscriptRow: View {
             AgentSelectableText(value: text, markdown: markdown, secondary: secondary, parsed: prepared.markdown)
         case let .code(code, language):
             CodeBlockView(code: code, language: language)
+        case .activity(let segment):
+            TranscriptActivityView(segment: segment)
         case let .attachments(attachments, timestamp):
             MessageAttachments(attachments: attachments, timestamp: timestamp) {
                 try await model.attachmentData(sessionID: sessionID, attachment: $0)
@@ -363,10 +365,9 @@ private struct NativeTranscriptRow: View {
         case .pullRequest(let request):
             PullRequestCard(request: request) { model.route = .pullRequest(request) }
         case .working:
-            HStack(spacing: 8) {
-                ActivityGlyph()
-                ShimmerText(text: "Working…").font(.subheadline)
-            }.padding(.leading, 4)
+            if let startedAt = model.state?.workingStartedAt {
+                WorkingStatusView(sessionID: sessionID, startedAt: startedAt)
+            }
         }
     }
 }

@@ -66,4 +66,47 @@ final class TranscriptRowsTests: XCTestCase {
         XCTAssertEqual(second[0].content, .text("Replacement", markdown: true, secondary: false))
         XCTAssertEqual(first[0].id, second[0].id)
     }
+
+    func testOrderedPartsKeepActivitiesAndSubagentsBetweenProseWithoutDuplicates() async throws {
+        let builder = TranscriptRowBuilder()
+        let agent = SubagentStatus(id: "agent", title: "Review", status: "working")
+        let message = TranscriptMessage(id: "response", role: "assistant", text: "Flattened fallback",
+            subagents: [agent], workedDuration: 42, parts: [
+                .init(id: "intro", kind: "text", text: "Checking."),
+                .init(id: "thought", kind: "reasoning", text: "Inspect the checks."),
+                .init(id: "read", kind: "tool", tool: .init(kind: "readFile", label: "Read")),
+                .init(id: agent.id, kind: "subagent"),
+                .init(id: "answer", kind: "text", text: "**Done**.")
+            ])
+        let rows = try await builder.rows(messages: [message], changes: [:], pullRequests: [:], unanchored: [], working: false)
+        XCTAssertEqual(rows.count, 5)
+        XCTAssertEqual(rows[0].content, .text("Checking.", markdown: true, secondary: false))
+        guard case .activity(let segment) = rows[1].content else { return XCTFail("Missing activity group") }
+        XCTAssertEqual(segment.parts.map(\.id), ["thought", "read"])
+        XCTAssertFalse(segment.live)
+        XCTAssertEqual(rows[2].content, .subagent(agent))
+        XCTAssertEqual(rows[3].content, .text("**Done**.", markdown: true, secondary: false))
+        XCTAssertEqual(rows[4].content, .completion(nil, duration: 42))
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+    }
+
+    func testToolOnlyStreamingRowsKeepIdentityAndCompletionWhenOutputSettles() async throws {
+        let builder = TranscriptRowBuilder()
+        var message = TranscriptMessage(id: "tool-only", role: "assistant", text: "", streaming: true,
+            parts: [.init(id: "run", kind: "tool", tool: .init(kind: "exec", label: "Run", output: "First"))])
+        let first = try await builder.rows(messages: [message], changes: [:], pullRequests: [:], unanchored: [], working: true)
+        guard case .activity(let live) = first[0].content else { return XCTFail("Missing live activity") }
+        XCTAssertTrue(live.live)
+        message.streaming = false
+        message.workedDuration = 12
+        message.parts[0].tool?.output = "First\nPassed"
+        message.parts[0].tool?.resolved = true
+        let settled = try await builder.rows(messages: [message], changes: [:], pullRequests: [:], unanchored: [], working: false)
+        XCTAssertEqual(settled[0].id, first[0].id)
+        guard case .activity(let complete) = settled[0].content else { return XCTFail("Missing completed activity") }
+        XCTAssertFalse(complete.live)
+        XCTAssertEqual(complete.parts[0].tool?.output, "First\nPassed")
+        XCTAssertEqual(settled[1].content, .completion(nil, duration: 12))
+        XCTAssertEqual(settled.count, 2)
+    }
 }

@@ -1,5 +1,35 @@
 # Implementation and verification status
 
+## Native session tool activity and working status
+
+The Swift/Skip client now renders ordered tool/thought groups with connected
+rails, summaries, file badges, nested details and streamed results. Stable host
+part IDs preserve disclosure choices. Tool-only messages remain visible, while
+answer text and subagent cards retain their separate presentations. The working
+row rotates Zeron's 21 phrases and shows elapsed time from host timing (or a
+retained per-turn fallback). Try mode exercises both live and completed activity.
+See [BUILD.md](BUILD.md#session-tool-activity-and-live-status) for references,
+preview limits and the native review steps. The UniFFI Swift records were
+regenerated from the rebuilt peer; the host protocol/source pin is unchanged.
+
+Targeted verification on 2026-10-04 used the shared runner with stable inputs:
+
+- Swift: all five `TranscriptActivityTests`, three `WorkingStatusTests`, eight
+  `TranscriptMetadataTests`, three `ChatTextBehaviorTests`, the single
+  `DemoRetainedChangesTests` case, and `CoreBehaviorTests.testLeavingDemoCancelsItsRunAndDropsOldSessionData`
+  passed. `CoreBehaviorTests.testDemoInterruptedNextTurnNeverReusesCompletedTurnsDiff`
+  timed out in that grouped run and passed in an isolated rerun (22 distinct cases).
+- Rust: four `client_ffi::transcript_presentation::tests` and three
+  `client_ffi::session::projection_regression_tests` passed. The host peer build
+  and binding generation also passed.
+- The real generated bindings and native adapter passed Windows host typechecking.
+  `ConversationView`, `MessageContentView`, `TranscriptActivityView` and
+  `WorkingStatusView` passed iOS-target syntax parsing; `git diff --check` passed.
+
+These checks do not establish SwiftUI/Skip application compilation, linking,
+device appearance, accessibility, or live-host behavior. Platform/device review
+remains pending. No application packaging, signing or distribution was performed.
+
 ## Message queue and steering
 
 The native Composer supports Queue and Steer while a turn is running. A queued
@@ -428,12 +458,23 @@ are recorded separately from the completed domain checks below.
 - Completed-turn file cards, six-file preview, saved per-file native diffs, and
   PR metadata with browser links supplied by Zeron.
 - Optional blank-Composer background, Settings/Acknowledgements, offline demo.
+  The standard background fades gradually to clear 64 points above the provider
+  logo; the full-height option retains its window-length fade.
 - Native expanding session search, profile/account menu, nested sorting/filtering,
   haptic session/message menus, and full-page phone Settings.
 - Native file/photo/camera import, removable composer attachments and inline chat
   previews; host-backed command/skill/file suggestions with highlighted references.
 - Right-aligned user messages, selectable agent text and copyable code blocks;
   inline sub-agent status and observed PR cards with a PR information drawer.
+  The Composer sub-agent button appears only while agents are working and shows
+  their active count. Its phone bottom sheet or tablet modal lists all session
+  agents, including finished and failed agents. Queue and sub-agent buttons use
+  subtle opacity press feedback.
+  Expanded tool commands and output scroll horizontally with their full visible
+  height; Show all expands longer previews without a nested vertical scroller.
+  Completed turns immediately show a changed-files loading row while the host's
+  captured turn diff is fetched and parsed. Empty or unavailable diffs remove the
+  row; captured revisions remain the source of file counts and native diffs.
 - Native iOS/Android entry points, pinned Rust subset, license inventory tools,
   a shared local build runner, and adapted manual TestFlight workflow.
 

@@ -444,8 +444,8 @@ pub struct SessionHandle {
     pub(crate) inner: zc::SessionHandle,
 }
 
-/// Portable UI projection. Only changed entry bodies cross FFI; private
-/// reasoning and raw tool arguments never enter this presentation surface.
+/// Portable UI projection. Only changed entry bodies cross FFI. Ordered tool
+/// and thought parts are separate from answer prose, with bounded details.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct TranscriptMessageView {
     pub id: String,
@@ -455,6 +455,7 @@ pub struct TranscriptMessageView {
     pub streaming: bool,
     pub attachments: Vec<TranscriptAttachmentView>,
     pub subagents: Vec<SubagentView>,
+    pub parts: Vec<super::TranscriptPartView>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -486,8 +487,7 @@ fn visible_parts(parts: &[zeron_doc::MessagePart]) -> String {
     parts.iter().filter_map(|part| match part {
         MessagePart::Text { text, .. } => Some(text.clone()),
         MessagePart::Tool { subagent_ref: Some(_), .. } => None,
-        MessagePart::Tool { is_error, resolved, .. } => Some(
-            if *is_error { "Tool failed" } else if *resolved { "Tool completed" } else { "Running tool" }.to_owned()),
+        MessagePart::Tool { .. } => None,
         MessagePart::Error { message, .. } => Some(message.clone()),
         MessagePart::Image { .. } => None,
         // Questions have a typed composer presentation. Reasoning is never
@@ -563,18 +563,17 @@ impl SessionHandle {
             .map(|entry| TranscriptMessageView {
                 id: entry.id.clone(),
                 revision: entry.rev,
-                role: if entry.parts().iter().any(|p| matches!(p, zeron_doc::MessagePart::Tool { .. }))
-                    && !entry.parts().iter().any(|p| matches!(p, zeron_doc::MessagePart::Text { text, .. } if !text.trim().is_empty())) {
-                    "tool"
-                } else { match entry.role() {
+                role: match entry.role() {
                     zeron_doc::MessageRole::User => "user",
                     zeron_doc::MessageRole::Assistant => "assistant",
                     zeron_doc::MessageRole::System => "system",
-                }}.to_owned(),
+                }.to_owned(),
                 text: visible_message(entry.parts(), entry.role() == zeron_doc::MessageRole::User),
                 streaming: entry.is_streaming(),
                 attachments: attachment_views(entry.parts(), entry.role() == zeron_doc::MessageRole::User),
                 subagents: subagent_views(entry.parts()),
+                parts: if entry.role() == zeron_doc::MessageRole::User { Vec::new() }
+                    else { super::transcript_presentation::presentation_parts(entry.parts()) },
             }).collect();
         TranscriptUpdate {
             revision: snapshot.revision,

@@ -14,7 +14,9 @@ struct AgentSelectableText: View {
     var parsed: AttributedString? = nil
     #endif
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
     @Environment(\.sizeCategory) var sizeCategory
+    #endif
 
     var body: some View {
         #if os(iOS)

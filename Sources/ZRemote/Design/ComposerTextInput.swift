@@ -250,6 +250,18 @@ struct ComposerTokenModifier: ContentModifier {
     let onSelection: (Int) -> Void
     let onComposition: (Bool) -> Void
 
+    init(ranges: [Int], labels: [String], kinds: [Int], colors: [Color], cursor: Int, selectionRequest: Int, normalize: @escaping (String, String, [Int], Bool) -> [String], onSelection: @escaping (Int) -> Void, onComposition: @escaping (Bool) -> Void) {
+        self.ranges = ranges
+        self.labels = labels
+        self.kinds = kinds
+        self.colors = colors
+        self.cursor = cursor
+        self.selectionRequest = selectionRequest
+        self.normalize = normalize
+        self.onSelection = onSelection
+        self.onComposition = onComposition
+    }
+
     func modify(view: any View) -> any View {
         view.material3TextField { options in
             let lastRequest = remember { mutableStateOf(-1) }

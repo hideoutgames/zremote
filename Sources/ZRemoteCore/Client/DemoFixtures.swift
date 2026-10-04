@@ -23,6 +23,19 @@ struct DemoFixtures {
         "Reviewing the touch targets…\nThe next simulated review pass is starting."
     ]
 
+    static func progressParts(_ phase: Int) -> [TranscriptPart] {
+        [
+            .init(id: "demo-progress-prose", kind: "text", text: progress[phase]),
+            .init(id: "demo-layout-agent", kind: "subagent"),
+            .init(id: "demo-a11y-agent", kind: "subagent"),
+            .init(id: "demo-progress-thought", kind: "reasoning", text: "Compare spacing, keyboard clearance, and accessibility before the next review pass."),
+            .init(id: "demo-progress-read", kind: "tool", tool: .init(kind: "readFile", label: "Read", path: "Sources/ConversationView.swift",
+                invocation: "Sources/ConversationView.swift", output: "// Offline sample\nlet spacing = 12", resolved: true)),
+            .init(id: "demo-progress-check", kind: "tool", tool: .init(kind: "exec", label: "Run", detail: "layout review (simulated)",
+                invocation: "layout review (simulated)", output: progress.prefix(phase + 1).joined(separator: "\n")))
+        ]
+    }
+
     @MainActor static func make(now: Date = Date()) -> DemoFixtures {
         let personal = Project(id: "demo-project", name: "Personal project", path: "/Users/demo/Projects/personal", hostID: "demo-mac", isRepository: true)
         let app = Project(id: "demo-app", name: "Mobile app", path: "/Users/demo/Projects/mobile", hostID: "demo-mac", isRepository: true)
@@ -60,13 +73,14 @@ struct DemoFixtures {
             TranscriptMessage(id: progressID, role: "assistant", text: progress[0], streaming: true, subagents: [
                 SubagentStatus(id: "demo-layout-agent", title: "Layout review", status: "running", detail: activities[0]),
                 SubagentStatus(id: "demo-a11y-agent", title: "Accessibility review", status: "done", detail: "Labels and touch targets checked in this offline sample.")
-            ], timestamp: now.addingTimeInterval(-30))
+            ], timestamp: now.addingTimeInterval(-30), parts: progressParts(0))
         ])
         rows[0].working = true
         rows[0].activity = activities[0]
         rows[0].lastFinishedAt = nil
         rows[0].completedTurnID = nil
         states[runningID]?.working = true
+        states[runningID]?.workingStartedAt = now.addingTimeInterval(-90)
         states[runningID]?.queue = [
             QueuedMessage(id: "demo-queue-layout", text: "Then review the tablet sidebar."),
             QueuedMessage(id: "demo-queue-notes", text: "Use the attached review checklist.", attachments: ["demo://" + runningID + "/review-notes"]),
@@ -76,7 +90,10 @@ struct DemoFixtures {
         add("demo-welcome", "A quieter workspace", project: personal, preview: "Seven changed files ready to review", age: 720, pinned: true,
             pr: PullRequest(number: 42, title: "Sample interface changes", url: "", state: "open", provider: "Test mode", baseRef: "main", headRef: "demo/interface"), messages: [
                 TranscriptMessage(id: "demo-history-turn", role: "user", text: "Make this workspace feel calmer.", timestamp: now.addingTimeInterval(-780)),
-                TranscriptMessage(id: "demo-message-tool", role: "tool", text: "Sample review: 7 files, 14 additions, 7 deletions. No files were changed.", timestamp: now.addingTimeInterval(-750)),
+                TranscriptMessage(id: "demo-message-tool", role: "assistant", text: "", timestamp: now.addingTimeInterval(-750), parts: [
+                    .init(id: "demo-history-edit", kind: "tool", tool: .init(kind: "editFile", label: "Edit", path: "Sources/Spacing.swift",
+                        invocation: "Sources/Spacing.swift (offline sample)", output: "@@ -1 +1 @@\n-let spacing = 8\n+let spacing = 12", outputKind: "diff", resolved: true))
+                ]),
                 TranscriptMessage(id: "demo-message-2", role: "assistant", text: """
                     ## A calmer workspace
 
