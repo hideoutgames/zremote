@@ -76,7 +76,11 @@ Project folders and switches also use adaptive grayscale colors. Merged PRs use
 the [official Zeron iOS purple palette](https://github.com/zeronsh/zeron/blob/main/apps/ios/Zeron/Design/Palette.swift)
 (`#5B43E8` light / `#8B7CF6` dark).
 Session rows use their provider's icon, including in test mode. Search expands
-as one continuous control before focusing its editor.
+as one continuous control before focusing its editor. Between the provider and
+title, Zeron's translucent project tile shows the project's initial and stable
+path-based color. It is hidden when grouped by Project or when a specific project
+is selected in Show. Sessions without a project use Zeron's Home tile. Expanded
+activity text stays aligned with the title as the tile appears or disappears.
 
 Pull down at the top of Sessions to refresh, including short or empty lists.
 On phones and tablets, the recessed strip tracks native scrolling directly

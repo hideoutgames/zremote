@@ -16,6 +16,12 @@ Settings exposes these offline.
 - Native patch parser adapts Swift-Diffs at
   7005d406fa362f1bbcc5c76551a9bf222c9a8eb6, Apache-2.0, with Pierre notices.
 - Skip components retain their licenses in the bundled inventory.
+- Session project tiles adapt Zeron iOS ProjectTile.swift and Palette.swift at
+  9e1a11158b0626237c814f4bd36f5948483ed797 under MIT. Path-color assignment follows
+  its client workspace projection. GeistMono-Medium.ttf is copied unchanged from
+  the same revision under SIL OFL 1.1; both platform copies and the full font
+  license are recorded in Settings → Acknowledgements. See docs/BUILD.md for
+  source links, rendering constants and the font checksum.
 
 SwiftSideDrawer was an interaction reference only. No source was incorporated:
 the inspected repository did not publish a license. The phone sliding
