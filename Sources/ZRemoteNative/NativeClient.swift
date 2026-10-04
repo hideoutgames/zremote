@@ -733,7 +733,14 @@ import ZRemoteCore
             cache.revisions[row.id] = row.revision
             cache.messages[row.id] = TranscriptMessage(id: row.id, role: row.role, text: row.text, streaming: row.streaming,
                 attachments: row.attachments.map { RemoteAttachment(path: $0.path, name: $0.name, mimeType: $0.mimeType) },
-                subagents: row.subagents.map { ZRemoteCore.SubagentStatus(id: $0.id, status: $0.status, detail: $0.tail) })
+                subagents: row.subagents.map { ZRemoteCore.SubagentStatus(id: $0.id, status: $0.status, detail: $0.tail) },
+                parts: row.parts.map { part in
+                    TranscriptPart(id: part.id, kind: part.kind, text: part.text, tool: part.tool.map { tool in
+                        TranscriptTool(kind: tool.kind, label: tool.label, detail: tool.detail, path: tool.path,
+                            invocation: tool.invocation, output: tool.output, outputKind: tool.outputKind,
+                            resolved: tool.resolved, failed: tool.failed, truncated: tool.truncated)
+                    }, truncated: part.truncated)
+                })
         }
         let present = Set(update.orderedIds)
         cache.revisions = cache.revisions.filter { present.contains($0.key) }
@@ -768,7 +775,11 @@ import ZRemoteCore
                   canQueueAttachments: composer.host.capabilities.messageQueue && composer.host.capabilities.queueAttachments && composer.host.capabilities.queuedAttachments,
                   canSteer: composer.host.capabilities.midTurnSteering == true,
                   canEdit: composer.host.capabilities.queueEditLease, canAct: composer.host.capabilities.queueActions),
-              queueError: composer.queueError)))
+              queueError: composer.queueError,
+              workingStartedAt: handle.transcriptStatus().workingSinceMs.flatMap { milliseconds in
+                  milliseconds > 0 && milliseconds <= 253_402_300_799_999
+                    ? Date(timeIntervalSince1970: Double(milliseconds) / 1000) : nil
+              })))
         for changedID in otherMetadataChanges where changedID != id { publishSession(changedID, refreshMetadata: false) }
     }
 

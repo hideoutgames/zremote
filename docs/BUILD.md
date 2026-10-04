@@ -1,5 +1,39 @@
 # Native development
 
+## Session tool activity and live status
+
+The Swift/Skip transcript preserves host part order: prose, consecutive tool and
+thought groups, and subagent cards. Groups use the official iOS connected rail,
+summary, tool icons, file badges and nested disclosures. Only the streaming tail
+opens automatically; explicit disclosure choices survive updates and completion.
+Expanded details show the invocation and streamed output, file diff or diff stats;
+failed calls retain their error output. Tool-only messages remain visible and can
+anchor the completed-turn footer. Auto-follow respects the reader's scroll state.
+
+Details initially show 24 lines in a bounded viewport, with Show all for the
+available preview. The peer bounds each detail to 32,768 characters / 400 lines;
+larger or sidecar-backed results are marked as previews. This adapter does not
+fetch full tool sidecar blobs. Reasoning stays separate from answer/copy prose.
+
+The live status cycles through Zeron's 21 phrases every seven seconds using its
+session seed, beside elapsed time such as `3m 12s`. Host `working_since_ms` supplies
+the start; if absent, AppModel retains a per-turn fallback across updates and
+session switches. Foregrounding recomputes wall-clock elapsed time, and idle turns
+remove the indicator. The existing shimmer respects Reduce Motion.
+
+Presentation references: official iOS `ToolViews.swift` and mobile `layout/tools.rs`
+at `9e1a11158b0626237c814f4bd36f5948483ed797`; the phrase vocabulary/seed is from
+iOS `Theme/Motion.swift` at `853872d3660047b28e81f80df7744a7f6f3b4beb` and remains in
+the current desktop transcript. The newer UIKit working row uses fixed labels;
+the requested rotating vocabulary is retained here.
+
+For device review, open Try mode's Live agent playground, expand the running tool,
+watch output update, close/reopen groups, scroll away from the tail, and Stop.
+Open A quieter workspace for a settled file-edit preview. Also check live host
+errors, long output, session switching/backgrounding, Reduce Motion, and both
+phone/tablet layouts. Windows parsing and domain tests do not establish native
+layout or Skip bridge compatibility.
+
 ## Tablet Sessions animation
 
 On iOS, a dedicated animatable reveal width owns the retained Sessions panel and

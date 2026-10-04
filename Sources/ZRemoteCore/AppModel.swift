@@ -351,6 +351,8 @@ public enum SecondaryRoute: Identifiable {
             openPendingNotification()
         case .session(let next):
             let previous = sessions[next.id]
+            var next = next
+            next.workingStartedAt = WorkingStatus.start(for: next, previous: previous, now: Date())
             sessions[next.id] = next
             if let submission = answerSubmissions[next.id], next.input != submission.input {
                 answerSubmissions[next.id] = nil

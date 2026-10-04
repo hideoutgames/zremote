@@ -313,13 +313,13 @@ struct ConversationView: View {
                     VStack(spacing: 0) {
                     LazyVStack(alignment: .leading, spacing: 22) {
                         ForEach(model.state?.messages ?? []) { message in
-                            if !message.text.isEmpty { TranscriptRow(message: message).equatable() }
+                            if !message.text.isEmpty || !message.parts.isEmpty { TranscriptRow(message: message).equatable() }
                             if !message.attachments.isEmpty, let sessionID = model.selectedSessionID {
                                 MessageAttachments(attachments: message.attachments, timestamp: message.role == "user" ? message.timestamp : nil) {
                                     try await model.attachmentData(sessionID: sessionID, attachment: $0)
                                 }
                             }
-                            ForEach(message.subagents) { agent in
+                            ForEach(message.subagents.filter { agent in !message.parts.contains { $0.kind == "subagent" && $0.id == agent.id } }) { agent in
                                 SessionEventCard(title: agent.title, subtitle: agent.status.capitalized,
                                                  active: agent.active)
                             }
@@ -335,11 +335,8 @@ struct ConversationView: View {
                                 PullRequestCard(request: request) { model.route = .pullRequest(request) }
                             }
                         }
-                        if model.working {
-                            HStack(spacing: 8) {
-                                ActivityGlyph()
-                                ShimmerText(text: "Working…").font(.subheadline)
-                            }.padding(.leading, 4)
+                        if model.working, let sessionID = model.selectedSessionID, let startedAt = model.state?.workingStartedAt {
+                            WorkingStatusView(sessionID: sessionID, startedAt: startedAt)
                         }
                         #if os(Android)
                         // Skip resolves scroll IDs through its lazy item collector.
@@ -390,6 +387,9 @@ struct ConversationView: View {
                 .defaultScrollAnchor(.bottom)
                 #endif
                 .onChange(of: model.state?.messages.last?.text) { _, _ in
+                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                }
+                .onChange(of: model.state?.messages.last?.parts) { _, _ in
                     if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
                 }
                 .onChange(of: model.state?.messages.count) { _, _ in

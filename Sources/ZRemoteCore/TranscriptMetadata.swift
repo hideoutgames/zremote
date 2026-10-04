@@ -130,6 +130,7 @@ public enum TranscriptMetadata {
 
     private static func hasContent(_ message: TranscriptMessage) -> Bool {
         !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || message.parts.contains { $0.kind == "tool" || ($0.kind == "reasoning" && !$0.text.isEmpty) }
             || !message.attachments.isEmpty || !message.subagents.isEmpty
     }
 

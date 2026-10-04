@@ -1,5 +1,35 @@
 # Implementation and verification status
 
+## Native session tool activity and working status
+
+The Swift/Skip client now renders ordered tool/thought groups with connected
+rails, summaries, file badges, nested details and streamed results. Stable host
+part IDs preserve disclosure choices. Tool-only messages remain visible, while
+answer text and subagent cards retain their separate presentations. The working
+row rotates Zeron's 21 phrases and shows elapsed time from host timing (or a
+retained per-turn fallback). Try mode exercises both live and completed activity.
+See [BUILD.md](BUILD.md#session-tool-activity-and-live-status) for references,
+preview limits and the native review steps. The UniFFI Swift records were
+regenerated from the rebuilt peer; the host protocol/source pin is unchanged.
+
+Targeted verification on 2026-10-04 used the shared runner with stable inputs:
+
+- Swift: all five `TranscriptActivityTests`, three `WorkingStatusTests`, eight
+  `TranscriptMetadataTests`, three `ChatTextBehaviorTests`, the single
+  `DemoRetainedChangesTests` case, and `CoreBehaviorTests.testLeavingDemoCancelsItsRunAndDropsOldSessionData`
+  passed. `CoreBehaviorTests.testDemoInterruptedNextTurnNeverReusesCompletedTurnsDiff`
+  timed out in that grouped run and passed in an isolated rerun (22 distinct cases).
+- Rust: four `client_ffi::transcript_presentation::tests` and three
+  `client_ffi::session::projection_regression_tests` passed. The host peer build
+  and binding generation also passed.
+- The real generated bindings and native adapter passed Windows host typechecking.
+  `ConversationView`, `MessageContentView`, `TranscriptActivityView` and
+  `WorkingStatusView` passed iOS-target syntax parsing; `git diff --check` passed.
+
+These checks do not establish SwiftUI/Skip application compilation, linking,
+device appearance, accessibility, or live-host behavior. Platform/device review
+remains pending. No application packaging, signing or distribution was performed.
+
 ## Message queue and steering
 
 The native Composer supports Queue and Steer while a turn is running. A queued
