@@ -31,10 +31,11 @@ final class NativeSessionControlsTests: XCTestCase {
                 SubagentStatus(id: "test", status: "working")
             ]),
             TranscriptMessage(id: "two", role: "assistant", text: "", subagents: [
-                SubagentStatus(id: "review", status: "done")
+                SubagentStatus(id: "review", status: "done"),
+                SubagentStatus(id: "failed", status: "failed")
             ])
         ])
-        XCTAssertEqual(model.subagents(sessionID: "chat").count, 2)
+        XCTAssertEqual(model.subagents(sessionID: "chat").map(\.status), ["done", "working", "failed"])
         XCTAssertEqual(model.activeSubagentCount, 1)
         XCTAssertTrue(model.subagents(sessionID: "other").isEmpty)
         model.workspace = WorkspaceState(connection: .online, hosts: [Host(id: "host", name: "Desktop", online: false)],

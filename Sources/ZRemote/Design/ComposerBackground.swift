@@ -74,8 +74,10 @@ struct ComposerBackground: View {
                 .init(color: .clear, location: 1)
             ] : [
                 .init(color: .black, location: 0),
-                .init(color: .black.opacity(0.55), location: 0.22),
-                .init(color: .black.opacity(0.15), location: 0.68),
+                .init(color: .black.opacity(0.85), location: 0.12),
+                .init(color: .black.opacity(0.55), location: 0.32),
+                .init(color: .black.opacity(0.25), location: 0.55),
+                .init(color: .black.opacity(0.06), location: 0.78),
                 .init(color: .clear, location: 1)
             ], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: fullHeight ? 1 : end)))
             .position(x: followsPageHorizontally ? geometry.size.width / 2 : scene.midX - local.minX,
