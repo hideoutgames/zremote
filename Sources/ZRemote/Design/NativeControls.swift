@@ -25,10 +25,10 @@ extension View {
         contextMenu(menuItems: items)
     }
 
-    @ViewBuilder func nativeGlassControl() -> some View {
+    @ViewBuilder func nativeGlassControl(interactive: Bool = true) -> some View {
         #if os(iOS)
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.interactive(), in: Capsule())
+            glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
         } else {
             background(.ultraThinMaterial, in: Capsule())
                 .overlay(Capsule().strokeBorder(Palette.line))
@@ -37,5 +37,11 @@ extension View {
         background(Palette.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.line))
         #endif
+    }
+}
+
+struct ComposerStatusButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.75 : 1)
     }
 }

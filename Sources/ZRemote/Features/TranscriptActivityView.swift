@@ -153,15 +153,15 @@ struct TranscriptDetailText: View {
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { thoughtHeight = $0 }
                 }.frame(height: min(240, max(18, thoughtHeight)))
             } else {
-                ScrollView([.horizontal, .vertical]) {
+                ScrollView(.horizontal) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(visibleLines.enumerated()), id: \.offset) { _, line in
                             SelectableText(line.isEmpty ? " " : line)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(color(line)).frame(minHeight: 18, alignment: .leading)
                         }
-                    }.fixedSize(horizontal: true, vertical: false)
-                }.frame(height: min(240, CGFloat(visibleLines.count) * 18))
+                    }.fixedSize(horizontal: true, vertical: true)
+                }.fixedSize(horizontal: false, vertical: true)
             }
             if lines.count > 24 {
                 Button(showAll ? "Show less" : "Show all \(lines.count) lines") { showAll.toggle() }

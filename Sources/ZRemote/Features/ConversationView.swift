@@ -157,7 +157,7 @@ struct ConversationView: View {
                 ProviderIcon(providerID: model.selection.providerID, size: 40, tint: Palette.raised)
                     .padding(.horizontal, 32)
                     .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).minY }) {
-                        backgroundFadeEndY = $0 - 16
+                        backgroundFadeEndY = $0 - 64
                     }
                 Spacer(minLength: model.usesSessionPanel ? 0 : 20)
                 projectContext
@@ -330,6 +330,17 @@ struct ConversationView: View {
                                     ChangedFilesCard(turn: turn, openFile: { model.route = .diff($0.document) }, showAll: { model.route = .changes(turn) })
                                     workedFor(message)
                                 }
+                            } else if model.pendingChangeMessageIDs.contains(message.id) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 10) {
+                                        ProgressView().tint(Palette.secondary)
+                                        Text("Checking changed files…").font(.subheadline)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(16)
+                                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
+                                    workedFor(message)
+                                }
                             } else {
                                 workedFor(message)
                             }
@@ -451,8 +462,9 @@ struct ConversationView: View {
                         Button { inputFocused = false; model.route = .queue(sessionID) } label: {
                             Text("\(model.queuedMessages(sessionID: sessionID).count) queued")
                                 .font(.subheadline.weight(.medium)).padding(.horizontal, 16).frame(minHeight: 44)
-                                .nativeGlassControl()
-                        }.buttonStyle(.plain).accessibilityLabel("Message queue")
+                                .nativeGlassControl(interactive: false)
+                                .contentShape(Capsule())
+                        }.buttonStyle(ComposerStatusButtonStyle()).accessibilityLabel("Message queue")
                     }
                     if model.activeSubagentCount > 0 {
                         Button { inputFocused = false; model.route = .subagents(sessionID) } label: {
@@ -460,8 +472,9 @@ struct ConversationView: View {
                                 RobotIcon()
                                 Text("\(model.activeSubagentCount)")
                             }.font(.subheadline.weight(.medium)).padding(.horizontal, 14).frame(minHeight: 44)
-                                .nativeGlassControl()
-                        }.buttonStyle(.plain).accessibilityLabel("\(model.activeSubagentCount) working sub-agents")
+                                .nativeGlassControl(interactive: false)
+                                .contentShape(Capsule())
+                        }.buttonStyle(ComposerStatusButtonStyle()).accessibilityLabel("\(model.activeSubagentCount) working sub-agents")
                     }
                     if model.sessionHostOffline {
                         ShimmerText(text: "Reconnecting…").font(.subheadline)
@@ -517,6 +530,7 @@ struct ConversationView: View {
                         editor.map { max(0, geometry.size.height - geometry[$0].height) } ?? 0
                     }) { composerChromeHeight = $0 }
             }
+            .allowsHitTesting(false)
         }
         #endif
         #if !os(Android)

@@ -458,12 +458,23 @@ are recorded separately from the completed domain checks below.
 - Completed-turn file cards, six-file preview, saved per-file native diffs, and
   PR metadata with browser links supplied by Zeron.
 - Optional blank-Composer background, Settings/Acknowledgements, offline demo.
+  The standard background fades gradually to clear 64 points above the provider
+  logo; the full-height option retains its window-length fade.
 - Native expanding session search, profile/account menu, nested sorting/filtering,
   haptic session/message menus, and full-page phone Settings.
 - Native file/photo/camera import, removable composer attachments and inline chat
   previews; host-backed command/skill/file suggestions with highlighted references.
 - Right-aligned user messages, selectable agent text and copyable code blocks;
   inline sub-agent status and observed PR cards with a PR information drawer.
+  The Composer sub-agent button appears only while agents are working and shows
+  their active count. Its phone bottom sheet or tablet modal lists all session
+  agents, including finished and failed agents. Queue and sub-agent buttons use
+  subtle opacity press feedback.
+  Expanded tool commands and output scroll horizontally with their full visible
+  height; Show all expands longer previews without a nested vertical scroller.
+  Completed turns immediately show a changed-files loading row while the host's
+  captured turn diff is fetched and parsed. Empty or unavailable diffs remove the
+  row; captured revisions remain the source of file counts and native diffs.
 - Native iOS/Android entry points, pinned Rust subset, license inventory tools,
   a shared local build runner, and adapted manual TestFlight workflow.
 
