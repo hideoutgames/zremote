@@ -47,14 +47,17 @@ smoothly and waveform samples scroll continuously. Foreground haptics and five
 original short sound cues cover send, voice start/finish, refresh and completion;
 Sounds and Haptics have separate saved settings.
 
-Targeted Windows verification for this change, repeated after integrating current
-`main` on 2026-10-05 (25 selected Swift cases):
+Targeted Windows verification for this change, repeated after integrating the
+Composer/transcript changes from `main` on 2026-10-05 (25 selected Swift cases):
 
 - `ChatTextBehaviorTests`: 4 passed, including boundary spacing and exact code-copy bytes.
 - `SessionExperienceTests`: 6 passed, covering grouping, exclusive completion
   targets/retry, preference restoration/isolation, checkout validation and feedback.
 - `SessionConfigurationTests`: 4 passed, including retained checkout intent.
-- `SessionPresentationTests`: 5 passed.
+- `SessionPresentationTests`: 5 passed initially. After integrating the subsequent
+  Project-icon update from `main`, all 9 cases passed; `SessionListView` and
+  `Palette` syntax checks also passed again (29 distinct Swift cases across the
+  scoped runs).
 - `TranscriptActivityTests`: 5 passed, including whitespace-only streamed prose
   boundaries, stable tool groups and tool-only completed-turn footers.
 - `SessionsRefreshTests/testImmediatePeerKeepsRefreshFeedbackVisibleAndCoalescesRepeatedPulls`:
