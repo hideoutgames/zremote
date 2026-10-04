@@ -31,24 +31,7 @@ struct ComposerSuggestions: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(items) { item in
-                            Button { choose(item) } label: {
-                                HStack(spacing: 6) {
-                                    if let symbol = item.fileSymbol {
-                                        Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Palette.secondary)
-                                            .frame(width: 14).accessibilityHidden(true)
-                                    }
-                                    HStack(spacing: 0) {
-                                        Text(item.displayTitle).foregroundStyle(Palette.text).fontWeight(.medium).layoutPriority(1)
-                                        if !item.displayDetail.isEmpty { Text(" ≈ " + item.displayDetail).foregroundStyle(Palette.secondary) }
-                                    }
-                                        .font(.subheadline).lineLimit(1).truncationMode(.tail)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 32, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .contentShape(Rectangle())
-                            }.buttonStyle(.plain).accessibilityLabel(item.displayTitle + ", " + item.displayDetail)
-                                .accessibilityHint(item.kind == .file ? item.title : "Insert \(item.displayTitle)")
+                            SuggestionRow(item: item, choose: choose)
                         }
                     }
                 }
@@ -79,5 +62,35 @@ struct ComposerSuggestions: View {
             .background(Palette.raised, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.line))
         #endif
+    }
+}
+
+struct SuggestionRow: View {
+    let item: ComposerCompletion
+    let choose: (ComposerCompletion) -> Void
+
+    var body: some View {
+        Button { choose(item) } label: {
+            HStack(spacing: 6) {
+                if let symbol = item.fileSymbol {
+                    Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                        .frame(width: 14).accessibilityHidden(true)
+                }
+                HStack(spacing: 0) {
+                    Text(item.displayTitle).foregroundStyle(Palette.text).fontWeight(.medium).layoutPriority(1)
+                    if !item.displayDetail.isEmpty {
+                        Text(" ≈ " + item.displayDetail).foregroundStyle(Palette.secondary)
+                    }
+                }
+                .font(.subheadline).lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 32, alignment: .leading)
+            .padding(.horizontal, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.displayTitle + ", " + item.displayDetail)
+        .accessibilityHint(item.kind == .file ? item.title : "Insert \(item.displayTitle)")
     }
 }

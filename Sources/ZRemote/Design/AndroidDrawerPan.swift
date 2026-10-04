@@ -17,6 +17,14 @@ struct DrawerPanModifier: ContentModifier {
     let onEnd: (Double, Double) -> Void
     let onCancel: () -> Void
 
+    init(enabled: Bool, onBegin: @escaping (Double, Double, Double) -> Bool, onChange: @escaping (Double) -> Void, onEnd: @escaping (Double, Double) -> Void, onCancel: @escaping () -> Void) {
+        self.enabled = enabled
+        self.onBegin = onBegin
+        self.onChange = onChange
+        self.onEnd = onEnd
+        self.onCancel = onCancel
+    }
+
     func modify(view: any View) -> any View {
         ComposeView { context in
             let latestEnabled = rememberUpdatedState(enabled)

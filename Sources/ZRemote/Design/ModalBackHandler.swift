@@ -27,6 +27,10 @@ import androidx.activity.compose.BackHandler
 struct ModalBackComposer: ContentComposer {
     let onDismiss: () -> Void
 
+    init(onDismiss: @escaping () -> Void) {
+        self.onDismiss = onDismiss
+    }
+
     @Composable func Compose(context: ComposeContext) {
         BackHandler(enabled: true, onBack: onDismiss)
     }
