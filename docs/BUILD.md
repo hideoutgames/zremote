@@ -68,6 +68,31 @@ Motion applies the final width immediately. Phone drawer motion is independent.
 
 ## Session controls
 
+Session rows reuse the official iOS project monogram between the provider mark
+and title, in both compact and expanded layouts. Project grouping and an explicit
+Show project selection suppress the tile and its spacing; other filters do not.
+The color uses the project path's 32-bit FNV-1a palette slot, so project renames,
+list order and session worktrees cannot change it. Missing projects use `Home`
+and the `home` path seed, matching the official client.
+
+The source reference is Zeron's [ProjectTile.swift](https://github.com/zeronsh/zeron/blob/9e1a11158b0626237c814f4bd36f5948483ed797/apps/ios/Zeron/Design/ProjectTile.swift)
+and its Palette.swift, SessionCell.swift and Core/Fonts.swift at the same revision.
+The tile uses a 14-point side scaled with body Dynamic Type (0.85–1.6), a
+`3 * side / 13` radius, 8% fill, and an 85% initial at `9 * side / 13` points.
+iOS retains the native rasterizer's capital-height centering. Eight named
+light/dark color assets follow the official palette. Geist Mono Medium is copied
+unchanged from that revision, loaded from the Swift resource bundle on iOS and
+from Android's `res/font/geistmono_medium.ttf` through Skip's custom-font lookup.
+The font SHA-256 is `90b15711dc3779b2e64e8aff5228154dd019a90bce4947549c4a8a8a43f2ac25`.
+Its SIL OFL notice and the source's MIT notice are bundled in Acknowledgements.
+
+For device review, compare None/Host/Status grouping with Project grouping,
+select and clear Show → project, and toggle Compact View in light/dark appearance
+and larger text sizes. Confirm title/activity alignment, project-name accessibility
+and stable tones after filtering, renaming and switching sessions. The targeted
+domain regressions are in `SessionPresentationTests`; source parsing cannot
+establish the iOS raster result, Android font loading or Skip bridge compatibility.
+
 The tablet Sessions panel animates its width together with the conversation,
 retaining the list's layout and state while hidden. Reduce Motion disables the
 sidebar spring. Tablet thread controls float over scrolling content without a

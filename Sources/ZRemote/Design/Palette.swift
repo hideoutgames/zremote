@@ -18,6 +18,13 @@ enum Palette {
     static let merged = accent
     static let usageFill = Color("PaletteUsageFill", bundle: .module)
     static let usageTrack = Color("PaletteUsageTrack", bundle: .module)
+    // Stable path-hash order from Zeron iOS Design/Palette.swift.
+    static let projectTones: [Color] = [
+        Color("ProjectSlate", bundle: .module), Color("ProjectBlue", bundle: .module),
+        Color("ProjectViolet", bundle: .module), Color("ProjectRose", bundle: .module),
+        Color("ProjectAmber", bundle: .module), Color("ProjectEmerald", bundle: .module),
+        Color("ProjectTeal", bundle: .module), Color("ProjectOrange", bundle: .module),
+    ]
 }
 
 extension View {

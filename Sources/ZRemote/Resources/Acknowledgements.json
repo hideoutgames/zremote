@@ -73,6 +73,24 @@
     ]
   },
   {
+    "id": "source:zeron-project-tile@9e1a11158b0626237c814f4bd36f5948483ed797",
+    "name": "Zeron iOS project tile",
+    "version": "9e1a1115",
+    "source": "https://github.com/zeronsh/zeron/blob/9e1a11158b0626237c814f4bd36f5948483ed797/apps/ios/Zeron/Design/ProjectTile.swift",
+    "licenseFiles": [
+      "Zeron-MIT.txt"
+    ]
+  },
+  {
+    "id": "font:geist-mono-medium@9e1a11158b0626237c814f4bd36f5948483ed797",
+    "name": "Geist Mono Medium",
+    "version": "1.700 (Zeron asset 9e1a1115)",
+    "source": "https://github.com/zeronsh/zeron/blob/9e1a11158b0626237c814f4bd36f5948483ed797/apps/ios/Zeron/Fonts/GeistMono-Medium.ttf",
+    "licenseFiles": [
+      "Geist-OFL.txt"
+    ]
+  },
+  {
     "id": "source:zeron-status-glyph@9782693b8561ff2764c8e38c16644d65a1b5bb31",
     "name": "Zeron iOS working throbbers",
     "version": "9782693b",
