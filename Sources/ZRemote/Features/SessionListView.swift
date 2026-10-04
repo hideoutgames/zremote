@@ -162,12 +162,16 @@ struct SessionListView: View {
 
     @ViewBuilder private var refreshingList: some View {
         #if os(Android)
+        // The refresh container fills whatever height it is offered. In this
+        // column it has to be the flexible child so the filter and New session
+        // controls are measured first and stay above the navigation bar.
         ComposeView {
             SessionRefreshComposer(content: sessionScroll, recess: SessionRefreshRecess(model: model),
                                    refreshing: model.refreshingSessions, hapticsEnabled: model.preferences.hapticsEnabled) {
                 Task { await model.refreshSessions() }
             }
         }
+        .frame(maxHeight: .infinity)
         #else
         sessionScroll
             .overlay(alignment: .top) {
