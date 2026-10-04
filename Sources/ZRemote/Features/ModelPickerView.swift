@@ -6,6 +6,8 @@ import ZRemoteCore
 struct ModelPickerView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.sizeCategory) var sizeCategory
     @State var provider = ""
     @State var query = ""
     @State var applying = false
@@ -149,8 +151,14 @@ struct ModelPickerView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 8)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
             rule
-            configuration(choice).padding(.vertical, 6)
+            ScrollView {
+                configuration(choice).padding(.vertical, 6)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(minHeight: 0, idealHeight: trayHeight(choice), maxHeight: trayHeight(choice))
         }
         .foregroundStyle(Palette.text)
     }
@@ -291,9 +299,18 @@ struct ModelPickerView: View {
             .disabled(applying || row.unavailable)
             .accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityHint(configurable ? "Shows model settings" : "")
-            #if !os(Android)
+            #if os(iOS)
+            .background {
+                AnchoredModelPopover(isPresented: configurationPresented(choice), height: trayHeight(choice) + 56) {
+                    configurationCard(choice)
+                        .environment(\.colorScheme, colorScheme)
+                        .environment(\.sizeCategory, sizeCategory)
+                }
+            }
+            #elseif !os(Android)
             .popover(isPresented: configurationPresented(choice), attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-                configurationCard(choice).frame(idealWidth: 320)
+                configurationCard(choice)
+                    .frame(width: 320)
                     .presentationCompactAdaptation(.popover)
             }
             #endif

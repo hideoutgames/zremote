@@ -151,8 +151,8 @@ struct DemoFixtures {
             add(id, title, project: project, selection: selection, preview: preview, age: age, pinned: pinned, pr: pr)
             patches[id] = DemoClient.sampleDiff
         }
-        add("demo-long-chat", "A longer planning conversation", project: notes, selection: claude, preview: "Scroll a multi-turn transcript with code and lists", age: 6600,
-            messages: (0..<8).flatMap { index in
+        add("demo-long-chat", "A longer planning conversation", project: notes, selection: claude, preview: "500 review passes with Markdown and code", age: 6600,
+            messages: (0..<500).flatMap { index in
                 let timestamp = now.addingTimeInterval(-7200 + Double(index) * 60)
                 return [
                     TranscriptMessage(id: "demo-long-user-\(index)", role: "user", text: "Review pass \(index + 1): what should we check next?", timestamp: timestamp),

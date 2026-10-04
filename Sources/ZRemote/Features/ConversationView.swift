@@ -5,6 +5,8 @@ struct ConversationView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.sizeCategory) var sizeCategory
     @State var inputFocused = false
     @State var inputComposing = false
     @State var cursor = 0
@@ -13,9 +15,9 @@ struct ConversationView: View {
     @State var suggestionToken: ComposerToken?
     @State var loadingSuggestions = false
     @State var viewportHeight: CGFloat = 600
-    @State var following = true
-    @State var userScrolling = false
-    @State var tailPosition: CGFloat = .infinity
+    @State var transcriptScroll = TranscriptScrollState()
+    @State var scrollRequest = 0
+    @State var animatedScrollRequest = false
     @State var headerHeight: CGFloat = 72
     @State var statusHeight: CGFloat = 0
     @State var dismissQuestionFocus = 0
@@ -72,7 +74,7 @@ struct ConversationView: View {
         .foregroundStyle(Palette.text)
         .onAppear { cursor = (model.draft as NSString).length; selectionRequest += 1 }
         .onChange(of: model.selectedSessionID) { _, _ in
-            following = true; userScrolling = false
+            transcriptScroll = TranscriptScrollState()
             cursor = (model.draft as NSString).length; selectionRequest += 1
             suggestions = []; suggestionToken = nil
         }
@@ -305,7 +307,38 @@ struct ConversationView: View {
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { projectContextHeight = $0 }
     }
 
-    private var transcript: some View {
+    @ViewBuilder private var transcript: some View {
+        #if os(iOS)
+        ZStack(alignment: .bottomTrailing) {
+            NativeTranscriptView(model: model, scroll: $transcriptScroll, request: scrollRequest,
+                                 animated: animatedScrollRequest,
+                                 topPadding: model.usesSessionPanel ? headerHeight + 18 : 18,
+                                 colorScheme: colorScheme, sizeCategory: sizeCategory, reduceMotion: reduceMotion)
+            if transcriptScroll.showsJump {
+                Button {
+                    transcriptScroll.requestJump()
+                    animatedScrollRequest = true
+                    scrollRequest += 1
+                } label: {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(Palette.text)
+                        .frame(width: 46, height: 46)
+                        .nativeGlassControl()
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Jump to latest")
+                .padding(18)
+            }
+        }
+        .id(model.selectedSessionID)
+        #else
+        legacyTranscript
+        #endif
+    }
+
+    private var legacyTranscript: some View {
         GeometryReader { viewport in
         ScrollViewReader { proxy in
             ZStack(alignment: .bottomTrailing) {
@@ -347,77 +380,92 @@ struct ConversationView: View {
                         #endif
                     }
                     .id(dynamicTypeSize)
-                    #if !os(Android)
-                    // Outside the lazy stack: actual viewport geometry, not row mounting,
-                    // determines when a reader has returned to the live edge.
-                    tailAnchor
-                    #endif
-                    }
                     .frame(maxWidth: 760, alignment: .leading)
                     .padding(.horizontal, 24)
                     .padding(.top, model.usesSessionPanel ? headerHeight + 18 : 18)
                     .padding(.bottom, 24)
                     .frame(maxWidth: .infinity)
+                    #if !os(Android)
+                    tailAnchor
+                    #endif
+                    }
                 }
                 .coordinateSpace(name: "transcript")
                 #if !os(Android)
                 .scrollClipDisabled()
                 #endif
-                .onPreferenceChange(TranscriptTailPosition.self) { position in
-                    tailPosition = position ?? .infinity
-                    guard let position else { return }
-                    if !following, !userScrolling { following = position <= viewport.size.height + 64 }
-                }
-                .simultaneousGesture(DragGesture(minimumDistance: 4)
-                    .onChanged { value in
-                        if abs(value.translation.height) > abs(value.translation.width) {
-                            userScrolling = true
-                            following = false
-                        }
-                    }
-                    .onEnded { _ in
-                        userScrolling = false
-                        following = tailPosition <= viewport.size.height + 64
-                    })
                 .scrollDismissesKeyboard(.interactively)
+                .modifier(TranscriptScrollTracking(state: $transcriptScroll, viewportHeight: viewport.size.height,
+                                                  request: scrollRequest, animated: animatedScrollRequest,
+                                                  reduceMotion: reduceMotion))
                 #if os(Android)
                 .task(id: model.selectedSessionID) {
                     await Task.yield()
                     guard !Task.isCancelled else { return }
                     proxy.scrollTo("tail", anchor: .bottom)
                 }
-                #else
-                .defaultScrollAnchor(.bottom)
                 #endif
                 .onChange(of: model.state?.messages.last?.text) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
                 .onChange(of: model.state?.messages.count) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
                 .onChange(of: model.changesAfterMessage) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
                 .onChange(of: model.pullRequestsAfterMessage) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
                 .onChange(of: model.unanchoredPullRequests) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
                 .onChange(of: model.state?.messages.flatMap(\.subagents)) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
                 .onChange(of: model.state?.messages.flatMap(\.attachments)) { _, _ in
-                    if following, !userScrolling { proxy.scrollTo("tail", anchor: .bottom) }
+                    if transcriptScroll.shouldFollow { scrollToLatest(proxy) }
                 }
-                if !following {
-                    CircleControl(symbol: "arrow.down", label: "Jump to latest") {
-                        following = true
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("tail", anchor: .bottom) }
-                    }.padding(18)
+                if transcriptScroll.showsJump {
+                    Button {
+                        transcriptScroll.requestJump()
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                            proxy.scrollTo("tail", anchor: .bottom)
+                        }
+                        scrollToLatest(proxy, animated: true)
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 19, weight: .regular))
+                            .foregroundStyle(Palette.text)
+                            .frame(width: 46, height: 46)
+                            .nativeGlassControl()
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Jump to latest")
+                    .padding(18)
                 }
             }
         }
+        }
+        .id(model.selectedSessionID)
+    }
+
+    private var nativeScrollTracking: Bool {
+        #if os(iOS)
+        if #available(iOS 18.0, *) { return true }
+        #endif
+        return false
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool = false) {
+        if nativeScrollTracking {
+            animatedScrollRequest = animated
+            scrollRequest += 1
+        } else {
+            withAnimation(animated && !reduceMotion ? .easeOut(duration: 0.2) : nil) {
+                proxy.scrollTo("tail", anchor: .bottom)
+            }
         }
     }
 
@@ -548,7 +596,7 @@ struct ConversationView: View {
                                  label: model.composerStops ? "Stop agent" : "Send message") {
                 Task {
                     if model.composerStops { await model.stop() }
-                    else { following = true; await model.send(busyMode: .queue) }
+                    else { transcriptScroll.requestJump(); await model.send(busyMode: .queue) }
                 }
             }
             #if !os(Android)
@@ -600,23 +648,39 @@ struct UsageLimitBanner: View {
     let dismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 7) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
-                Text("Usage limits approaching.").lineLimit(1).minimumScaleFactor(0.85)
-                Spacer(minLength: 4)
-                Button("Dismiss", action: dismiss).fontWeight(.semibold)
-                    .foregroundStyle(Palette.text).frame(minHeight: 44)
-            }.font(.caption)
-            HStack(spacing: 10) {
+        HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("Usage limit approaching")
+                        .font(.caption)
+                        .foregroundStyle(Palette.secondary)
+                    Spacer(minLength: 0)
+                    Text("\(warning.percentRemaining)% left")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.text)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
                 UsageProgressBar(remaining: warning.remainingFraction, warning: true)
-                Text("\(warning.percentRemaining)%").font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Palette.secondary).accessibilityHidden(true)
             }
-            .padding(.bottom, 12)
+            .padding(.vertical, 14)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Usage limit approaching")
+            .accessibilityValue("\(warning.percentRemaining) percent remaining")
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss usage warning")
         }
-        .padding(.horizontal, 14)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
+        .padding(.leading, 16)
+        .padding(.trailing, 4)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.line, lineWidth: 0.5))
     }
 }
 

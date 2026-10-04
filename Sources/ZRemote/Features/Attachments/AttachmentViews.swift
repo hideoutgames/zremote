@@ -121,7 +121,16 @@ struct AttachmentTile: View {
         }
         #if os(iOS)
         .sheet(item: $preview, onDismiss: clearPreview) { file in
-            AttachmentQuickLook(url: file.url).ignoresSafeArea(edges: .bottom)
+            NavigationStack {
+                AttachmentQuickLook(url: file.url).ignoresSafeArea(edges: .bottom)
+                    .navigationTitle(name)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done", action: clearPreview)
+                        }
+                    }
+            }
         }
         #endif
         .alert("Attachment", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
