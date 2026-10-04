@@ -8,8 +8,8 @@ public enum SessionIndicator: String, Sendable {
         case .working: return "Agent working"
         case .awaitingInput: return "Waiting for response"
         case .failed: return "Error"
-        case .unread: return "Finished, unread"
-        case .idle: return "Read, not running"
+        case .unread: return "Needs attention"
+        case .idle: return "Finished"
         }
     }
 }

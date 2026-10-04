@@ -100,26 +100,27 @@ struct EmptyState: View {
 
 struct ActivityGlyph: View {
     var mini = false
+    var animating = true
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State var illuminated = false
 
     var body: some View {
         #if os(iOS)
-        NativeActivityGlyph(mini: mini, reduceMotion: reduceMotion)
+        NativeActivityGlyph(mini: mini, reduceMotion: reduceMotion || !animating)
             .frame(width: mini ? 12 : 14, height: mini ? 12 : 14)
             .accessibilityLabel("Agent working")
         #else
         HStack(spacing: 2.5) {
             ForEach(0..<3) { index in
                 Capsule().frame(width: 2, height: 11)
-                    .scaleEffect(x: 1, y: reduceMotion ? CGFloat(0.55 + Double(index) * 0.18) : illuminated ? 1 : 0.4)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.8)
+                    .scaleEffect(x: 1, y: reduceMotion || !animating ? CGFloat(0.55 + Double(index) * 0.18) : illuminated ? 1 : 0.4)
+                    .animation(reduceMotion || !animating ? nil : .easeInOut(duration: 0.8)
                         .repeatForever(autoreverses: true).delay(Double(index) * 0.14), value: illuminated)
             }
         }
         .foregroundStyle(Palette.secondary)
         .frame(width: 14, height: 16)
-        .task(id: reduceMotion) { illuminated = !reduceMotion }
+        .task(id: reduceMotion || !animating) { illuminated = !reduceMotion && animating }
         .accessibilityLabel("Agent working")
         #endif
     }

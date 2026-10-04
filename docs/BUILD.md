@@ -34,6 +34,27 @@ errors, long output, session switching/backgrounding, Reduce Motion, and both
 phone/tablet layouts. Windows parsing and domain tests do not establish native
 layout or Skip bridge compatibility.
 
+## Session preferences and feedback
+
+`LocalPreferences` adds `sessionList`, `composerDestination` and `soundsEnabled`
+with defaults for older account files. List choices and the last destination use
+the existing account-local store and preserve edits made while restoration is in
+flight. Backgrounding flushes pending changes. Restored existing checkouts cannot
+be sent to until host validation succeeds. Demo keeps these preferences in memory.
+
+Autocomplete sends exactly one workspace target: chat ID for an open session,
+project ID for a new composer. Both AppModel and the native adapter enforce this;
+lookup failures remain retryable and are distinct from empty results. See the
+[pinned host target validator](https://github.com/zeronsh/zeron/blob/b42fc2b8fbf247dd92796c2917f277535cea91ac/crates/engine/src/workspace_files.rs).
+
+Foreground feedback events originate after successful sends, once per committed
+refresh, and on observed completed turns. iOS retains prepared UIKit generators
+and uses System Sound Services for the short bundled cues; Android uses native
+view haptics and SoundPool, respecting the app toggles and ringer mode. Foreground
+completion banners omit the duplicate system notification sound. No raw
+message content enters these events. The optional local microphone continues to
+meter input only; it does not add transcription or Android recording support.
+
 ## Tablet Sessions animation
 
 On iOS, a dedicated animatable reveal width owns the retained Sessions panel and
@@ -51,7 +72,9 @@ The tablet Sessions panel animates its width together with the conversation,
 retaining the list's layout and state while hidden. Reduce Motion disables the
 sidebar spring. Tablet thread controls float over scrolling content without a
 title or full-width glass header; phone threads retain their title and header.
-Completed-turn "Worked for" labels use regular text weight.
+Completed-turn "Worked for" labels use regular subheadline text with the message's
+10-point internal gap. The transcript uses one lazy row per visible message,
+including its attachments, subagents and footer; hidden/empty parts add no gaps.
 
 The blank Composer keeps its wallpaper during Sessions and secondary presentations.
 On phones, the wallpaper moves horizontally with the Composer page during drawer
@@ -69,10 +92,16 @@ throughout a held pull, including UIKit's refresh-inset expansion. Its baseline
 follows actual safe-area changes, excluding the refresh control's added inset.
 Continuing or reversing a slow drag keeps the recess aligned with the moving
 rows. After release, the native refresh settles at its loading height before
-collapsing.
+collapsing. Native threshold arming does not start work or animate the glyph
+while the finger remains down. The released refresh stays visible for at least
+900 ms; the shared Android refresh keeps its existing 500 ms minimum.
 
 On iOS, the microphone control requests system permission and meters local input
-for the scrolling waveform. Cancel and Finish discard the recording; neither
+for the scrolling waveform. Voice controls crossfade with a small spring;
+timestamped meter samples move on a 60 Hz timeline without resetting their phase
+at each meter update. Reduce Motion skips movement. Capture explicitly allows
+system sounds and haptics, so voice feedback is not suppressed by the audio
+session. Cancel and Finish discard the recording; neither
 transcribes, attaches, nor sends audio. Leaving the Composer or backgrounding the
 app stops capture. Android microphone capture is not implemented.
 

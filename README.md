@@ -53,9 +53,17 @@ On iOS, working indicators use Zeron's native animated dots: the 2×3 violet
 grid in Sessions and the chat header, and the 3×3 pastel grid in the transcript
 and refresh recess. The 750 ms Core Animation cycle becomes static with Reduce
 Motion enabled. Source and license details are in [Provider marks](docs/PROVIDER_MARKS.md).
+Sessions defaults to Group: None, with no list title or visible scroll indicator.
 The Show menu can restrict the list to one project without category headers;
-in Show all, project headers expand and collapse their sessions, with the animated
-chevron immediately after the project name, separated by an 8-point gap. Sidebar PR
+in Show all, project and status headers expand and collapse their sessions, with
+the animated chevron immediately after the category name, separated by an 8-point gap.
+Project and Host groups follow their most recently updated visible session,
+independent of pinned rows and the chosen within-group sort. Status groups use
+Needs attention and Finished. Opening an unread session clears its blue dot
+immediately, holds it in Needs attention for one second, then fades it into
+Finished. New work, questions and errors take precedence over that hold.
+Filters, sorting, grouping, collapsed categories and Compact View persist per
+account; search text stays transient. Sidebar PR
 badges contain the state-colored icon and number. Native iOS PR menus retain
 those icon colors, and the account menu uses the same control size as its peers.
 On iOS 26, the project-list button uses a native Liquid Glass button. Account
@@ -81,8 +89,11 @@ as one continuous control before focusing its editor.
 Pull down at the top of Sessions to refresh, including short or empty lists.
 On phones and tablets, the recessed strip tracks native scrolling directly
 without an additional SwiftUI animation.
-The gesture reveals a recessed strip with the agent's working throbber and
-inset edge shadows. A selected Composer image keeps its filter, full-window
+The gesture reveals a recessed strip with inset edge shadows. Its dots stay
+still and grow with the pull. A qualifying release commits the refresh, settles
+the glyph with a small spring, then starts its animation and one quiet sound/haptic.
+Reduce Motion keeps the glyph still and skips the spring.
+A selected Composer image keeps its filter, full-window
 scale and position, with a darker overlay; otherwise the strip uses a slightly
 darker page background. Refresh asks the existing peer to resync, and further
 remote updates can arrive after the gesture finishes. The indicator stays visible
@@ -100,6 +111,9 @@ messages also fit their content. On iOS 26 it uses native Liquid Glass, with a
 material fallback on earlier iOS versions. Commands and skills
 show `name ≈ description` with their `/` or `$` prefix and no icons; files show
 a small type icon and `filename ≈ TYPE file`. Long rows truncate with an ellipsis.
+Failed host suggestion requests expose Retry instead of claiming no matches.
+Existing chats supply only their chat target; new composers supply only their
+selected project target, as required by the host workspace API.
 User messages align right. Agent text and code use
 native iOS range selection handles (Compose selection on Android); fenced code
 blocks also have a Copy action. PR and sub-agent cards use only Zeron's metadata.
@@ -110,8 +124,10 @@ Tapping noninteractive areas dismisses the iOS keyboard and clears editor focus.
 Buttons, links, and native text selection retain their own gestures.
 Sub-agent cards show only a title and state; Working uses a quiet shimmer that
 stops with Reduce Motion. User-message context menus include the recorded send
-time, and completed turns show their recorded work duration beneath changed
-files when timing is available. No receive-time estimate replaces missing data.
+time, and completed turns show their recorded work duration in subheadline text,
+10 points beneath their reply or changed files when timing is available.
+Empty streaming parts and outer prose line breaks do not reserve transcript
+space; fenced code retains its original bytes. No receive-time estimate replaces missing data.
 
 The blank Composer shows a compact provider icon with a subtle tint, lighter
 than the background in dark mode and darker in light mode, and offers both
@@ -121,6 +137,11 @@ a session title or subtitle.
 Tablet editor height adapts to the visible viewport, reserving space for the
 complete Composer card and its attachment, model, and send controls above the
 keyboard. Longer drafts scroll inside the editor in short windows or landscape.
+iOS measures text independently of its scrolling mode and decorates only changed
+content, so typing across the height cap does not repeatedly resize or reset selection.
+The last host, project and checkout are restored per account. Existing checkouts
+are revalidated with the host before sending; a missing checkout requires a new
+choice. New Session retains the last destination.
 Choose the current
 checkout, another existing checkout, or
 New worktree. Worktree creation travels with the first message to the host;
@@ -223,8 +244,13 @@ height background restores the extended treatment and is off by default.
 Settings lists connected devices and host-reported agent accounts/plan usage.
 Theme offers System, Light and Dark with adaptive surfaces and grayscale usage
 bars. Background effects and their text contrast guard follow the chosen theme.
-Haptics enables app-triggered feedback, including one light response when a
-refresh is committed. It defaults on and persists with account preferences.
+Haptics enables light responses for navigation, list options, accepted sends,
+voice start/finish, committed refreshes and newly observed agent completion.
+Sounds adds distinct quiet dot cues for sends, voice start/finish, refresh and
+completion. Both switches default on and persist with account preferences.
+Foreground interaction cues do not replay old completions or duplicate a refresh
+already in progress. Sounds are original bundled PCM assets generated by
+`scripts/generate-feedback-sounds.py`, without downloaded samples.
 All switches share the native switch style and an adaptive grayscale tint.
 On iOS, refresh stays active for at least 900 ms after release, including held
 pulls, so the native

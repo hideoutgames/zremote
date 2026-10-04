@@ -26,6 +26,14 @@ final class ChatTextBehaviorTests: XCTestCase {
         XCTAssertNil(ChatText.activeToken(in: result.text, cursorUTF16: (result.text as NSString).length))
     }
 
+    func testProseBoundariesDoNotStackBlankLinesAroundCodeOrCreateEmptyBlocks() {
+        let text = "\n\n Before\n\n\n```swift\n  let x = 1\n\n```\n\n  \nAfter\n\n"
+        let blocks = ChatText.blocks(in: text)
+        XCTAssertEqual(blocks.map(\.text), ["Before", "  let x = 1\n\n", "After"])
+        XCTAssertEqual(blocks.map(\.isCode), [false, true, false])
+        XCTAssertTrue(ChatText.blocks(in: " \n\r\n ").isEmpty)
+    }
+
     func testCopyableCodePreservesBytesAndHandlesLongAndUnfinishedFences() {
         let text = "Before\n````swift\nlet x = \"```\"\r\n  print(x)\n````\nBetween\n~~~sh\necho ready\n~~~\nAfter"
         let blocks = ChatText.blocks(in: text)

@@ -27,13 +27,22 @@ public struct ZRemoteRootView: View {
         }
         #if os(iOS)
         .background { NativeKeyboardDismiss() }
-        .sensoryFeedback(.selection, trigger: model.selectedSessionID) { _, _ in model.preferences.hapticsEnabled }
-        .sensoryFeedback(.selection, trigger: model.route?.id) { _, _ in model.preferences.hapticsEnabled }
+        .onAppear { AppHaptics.prepare() }
+        .onChange(of: model.feedbackSerial) { [event = model.feedback] _, _ in
+            AppHaptics.play(event, haptics: model.preferences.hapticsEnabled, sounds: model.preferences.soundsEnabled)
+        }
         #endif
         .preferredColorScheme(preferredColorScheme)
         #if os(Android)
-        .composeModifier { AndroidHapticsModifier(enabled: model.preferences.hapticsEnabled) }
+        .composeModifier {
+            AndroidHapticsModifier(enabled: model.preferences.hapticsEnabled, soundsEnabled: model.preferences.soundsEnabled,
+                                   serial: model.feedbackSerial, event: model.feedback.rawValue, soundPaths: AppFeedbackSounds.paths)
+        }
         #endif
+        .onChange(of: model.selectedSessionID) { _, _ in model.emitFeedback(.selection) }
+        .onChange(of: model.route?.id) { _, _ in model.emitFeedback(.selection) }
+        .onChange(of: model.sessionList) { _, _ in model.emitFeedback(.selection) }
+        .onChange(of: model.sessionsVisible) { _, _ in model.emitFeedback(.selection) }
         .tint(Palette.text)
         .task { await model.start() }
         .onChange(of: scenePhase) { _, phase in model.setForeground(phase == .active) }

@@ -448,14 +448,14 @@ import ZRemoteCore
         let operation = generation
         let core = try requireClient()
         if kind == .file {
-            let files = try await core.searchFiles(deviceId: hostID, chatId: sessionID, spaceId: projectID, query: query)
+            let files = try await core.searchFiles(deviceId: hostID, chatId: sessionID, spaceId: sessionID == nil ? projectID : nil, query: query)
             try ensureCurrent(operation)
             return files.filter { !$0.path.replacingOccurrences(of: "\\", with: "/").split(separator: "/").contains(where: { $0.lowercased() == ".git" }) }.prefix(60).map {
                 ComposerCompletion(id: "file:" + $0.path, kind: .file, title: $0.path, detail: $0.isDir ? "Folder" : "File",
                     insertion: fileMentionLink(path: $0.path, isDir: $0.isDir))
             }
         }
-        let json = try await core.composerCompletionsJson(deviceId: hostID, chatId: sessionID, spaceId: projectID,
+        let json = try await core.composerCompletionsJson(deviceId: hostID, chatId: sessionID, spaceId: sessionID == nil ? projectID : nil,
             harness: providerID, kind: kind.rawValue, query: query)
         try ensureCurrent(operation)
         return try JSONDecoder().decode([ComposerCompletion].self, from: Data(json.utf8))

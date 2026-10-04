@@ -1,5 +1,21 @@
 # Native peer integration
 
+## Transcript boundaries and completion targets
+
+The portable projection omits whitespace-only text parts and normalizes prose
+boundary line breaks before joining visible answer text. Fenced code
+retains its line endings; the shared Swift block renderer trims surrounding prose.
+Ordered presentation parts retain host boundaries, while the shared segment
+renderer omits whitespace-only prose rows. This avoids phantom gaps around tool
+events without changing reasoning privacy, code-copy contents or the native ABI.
+
+The Swift adapter sends chat ID or project ID exclusively for all composer
+completion kinds. The existing host workspace resolver rejects both together;
+the client surfaces lookup failures separately from successful empty catalogs.
+No host or edge changes are required.
+
+## Client boundary
+
 The source pin and included crates are recorded in [UPSTREAM.md](UPSTREAM.md).
 This workspace contains no execution engine. Sessions run on a selected host;
 the mobile client writes durable commands and renders synchronized state.

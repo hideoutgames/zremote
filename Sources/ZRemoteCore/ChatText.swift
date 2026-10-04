@@ -85,9 +85,10 @@ public enum ChatText {
         var language: String?
         var offset = text.startIndex
         func append(code: Bool) {
-            guard !buffer.isEmpty else { return }
-            output.append(MessageTextBlock(id: output.count, text: buffer, language: code ? language : nil, isCode: code))
+            let content = code ? buffer : buffer.trimmingCharacters(in: .whitespacesAndNewlines)
             buffer = ""
+            guard !content.isEmpty else { return }
+            output.append(MessageTextBlock(id: output.count, text: content, language: code ? language : nil, isCode: code))
         }
         while offset < text.endIndex {
             let next = text[offset...].firstIndex(where: \.isNewline).map { text.index(after: $0) } ?? text.endIndex

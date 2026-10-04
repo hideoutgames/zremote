@@ -10,22 +10,14 @@ struct SessionListView: View {
     @Bindable var model: AppModel
     @State var search = ""
     @State var searching = false
-    @State var sort: SessionSort = .recent
-    @State var grouping: SessionGrouping = .project
-    @State var shownProjectID: String?
-    @State var collapsedProjects: Set<String> = []
-    @State var status: SessionStatusFilter = .all
-    @State var pullRequest: SessionPRFilter = .all
-    @State var archived: SessionArchiveFilter = .active
-    @State var created: SessionDateFilter = .any
-    @State var updated: SessionDateFilter = .any
-    @State var unreadOnly = false
-    @State var compact = true
+    @State var heldUnreadIDs: Set<String> = []
+    @State var fadingReadIDs: Set<String> = []
     @State var now = Date()
     @State var signingOut = false
     @State var authorizingAccount = false
     @State var choosingOrganization = false
     @State var refreshReveal: CGFloat = 0
+    @State var refreshCommitted = false
     @State var searchFocusDismissal = 0
     @State var renamingSession: Session?
     @State var renameContext = ""
@@ -35,7 +27,7 @@ struct SessionListView: View {
     @Environment(\.webAuthenticationSession) var authentication
 
     private var selectedProjectID: String? {
-        shownProjectID.flatMap { selected in model.workspace.projects.contains(where: { $0.id == selected }) ? selected : nil }
+        model.sessionList.shownProjectID.flatMap { selected in model.workspace.projects.contains(where: { $0.id == selected }) ? selected : nil }
     }
     private var filtered: [Session] {
         model.workspace.sessions.map { value in
@@ -43,14 +35,16 @@ struct SessionListView: View {
             session.pullRequest = SessionPresentationRules.pullRequest(for: session, observed: model.preferences.pullRequests)
             return session
         }.filter { session in
-            (search.isEmpty || session.title.localizedCaseInsensitiveContains(search))
+            var filterRow = session
+            if heldUnreadIDs.contains(session.id), SessionPresentationRules.indicator(for: session) == .idle { filterRow.unread = true }
+            return (search.isEmpty || session.title.localizedCaseInsensitiveContains(search))
                 && (selectedProjectID == nil || session.projectID == selectedProjectID)
-                && status.includes(session) && pullRequest.includes(session) && archived.includes(session)
-                && (!unreadOnly || session.unread)
-                && created.includes(session.createdAt) && updated.includes(session.updatedAt)
+                && model.sessionList.status.includes(filterRow) && model.sessionList.pullRequest.includes(session) && model.sessionList.archived.includes(session)
+                && (!model.sessionList.unreadOnly || filterRow.unread)
+                && model.sessionList.created.includes(session.createdAt) && model.sessionList.updated.includes(session.updatedAt)
         }.sorted { lhs, rhs in
             if lhs.pinned != rhs.pinned { return lhs.pinned }
-            switch sort {
+            switch model.sessionList.sort {
             case .recent:
                 if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
             case .created:
@@ -63,36 +57,11 @@ struct SessionListView: View {
         }
     }
     private var groups: [SessionSection] {
-        let rows = filtered
-        if let projectID = selectedProjectID {
-            return [SessionSection(id: "selected-" + projectID, title: "", symbol: "", sessions: rows, showsHeader: false)]
-        }
-        switch grouping {
-        case .none: return [SessionSection(id: "all", title: "Sessions", symbol: "clock", sessions: rows)]
-        case .project:
-            var sections = model.workspace.projects.map { project in
-                SessionSection(id: "project-" + project.id, title: project.name, symbol: "folder", sessions: rows.filter { $0.projectID == project.id }, collapsible: true)
-            }
-            let known = Set(model.workspace.projects.map(\.id))
-            sections.append(SessionSection(id: "unassigned", title: "Other sessions", symbol: "bubble.left",
-                                           sessions: rows.filter { $0.projectID.map { !known.contains($0) } ?? true }, collapsible: true))
-            return sections.filter { !$0.sessions.isEmpty }
-        case .host:
-            var sections = model.workspace.hosts.map { host in
-                SessionSection(id: host.id, title: host.name, symbol: "desktopcomputer", sessions: rows.filter { $0.hostID == host.id })
-            }
-            let known = Set(model.workspace.hosts.map(\.id))
-            sections.append(SessionSection(id: "other-hosts", title: "Other hosts", symbol: "desktopcomputer", sessions: rows.filter { !known.contains($0.hostID) }))
-            return sections.filter { !$0.sessions.isEmpty }
-        case .status:
-            return SessionStatusFilter.allCases.filter { $0 != .all }.map { state in
-                SessionSection(id: state.id, title: state.rawValue, symbol: state.symbol, sessions: rows.filter { state.includes($0) })
-            }
-                .filter { !$0.sessions.isEmpty }
-        }
+        SessionListPresentation.sections(filtered, projects: model.workspace.projects, hosts: model.workspace.hosts,
+            grouping: model.sessionList.grouping, projectID: selectedProjectID, heldUnreadIDs: heldUnreadIDs)
     }
     private var hasFilters: Bool {
-        selectedProjectID != nil || status != .all || pullRequest != .all || archived != .active || unreadOnly || created != .any || updated != .any
+        selectedProjectID != nil || model.sessionList.status != .all || model.sessionList.pullRequest != .all || model.sessionList.archived != .active || model.sessionList.unreadOnly || model.sessionList.created != .any || model.sessionList.updated != .any
     }
 
     var body: some View {
@@ -110,6 +79,7 @@ struct SessionListView: View {
             }.padding(.bottom, 12).padding(.horizontal, 16)
         }
         .foregroundStyle(Palette.text).background(Palette.background)
+        .onChange(of: model.sessionDetailsContext("")) { _, _ in heldUnreadIDs = []; fadingReadIDs = [] }
         .accessibilityIdentifier("sessions-list")
         #if os(iOS)
         .background {
@@ -139,8 +109,8 @@ struct SessionListView: View {
             }
         }
         #endif
-        .task(id: compact) {
-            guard !compact else { return }
+        .task(id: model.sessionList.compact) {
+            guard !model.sessionList.compact else { return }
             while !Task.isCancelled {
                 now = Date()
                 do { try await Task.sleep(nanoseconds: 60_000_000_000) }
@@ -163,15 +133,15 @@ struct SessionListView: View {
     @ViewBuilder private var refreshingList: some View {
         #if os(Android)
         ComposeView {
-            SessionRefreshComposer(content: sessionScroll, recess: SessionRefreshRecess(model: model),
-                                   refreshing: model.refreshingSessions, hapticsEnabled: model.preferences.hapticsEnabled) {
+            SessionRefreshComposer(content: sessionScroll, recess: SessionRefreshRecess(model: model, refreshing: model.refreshingSessions),
+                                   refreshing: model.refreshingSessions) {
                 Task { await model.refreshSessions() }
             }
         }
         #else
         sessionScroll
             .overlay(alignment: .top) {
-                SessionRefreshRecess(model: model)
+                SessionRefreshRecess(model: model, refreshing: refreshCommitted)
                     .frame(height: refreshReveal)
             }
             .clipped()
@@ -179,12 +149,12 @@ struct SessionListView: View {
     }
 
     private var sessionScroll: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             #if os(iOS)
             // Keep the UIKit attachment outside lazy content so filtering and
             // offscreen row recycling cannot remove the refresh owner.
             VStack(spacing: 0) {
-                NativeSessionRefresh(hapticsEnabled: model.preferences.hapticsEnabled,
+                NativeSessionRefresh(onRefreshingChange: { refreshCommitted = $0 },
                                      onRevealChange: { height in
                                          withTransaction(Transaction(animation: nil)) { refreshReveal = height }
                                      }) {
@@ -209,8 +179,8 @@ struct SessionListView: View {
         LazyVStack(alignment: .leading, spacing: 4) {
             ForEach(groups) { section in
                 if section.showsHeader { sectionHeader(section) }
-                if !section.collapsible || !collapsedProjects.contains(section.id) {
-                    ForEach(section.sessions) { session in sessionRow(session).transition(.opacity) }
+                if !section.collapsible || !model.sessionList.collapsedSections.contains(section.id) {
+                    ForEach(section.sessions) { session in sessionRow(session).opacity(fadingReadIDs.contains(session.id) ? 0 : 1).transition(.opacity) }
                 }
             }
             if filtered.isEmpty {
@@ -218,6 +188,8 @@ struct SessionListView: View {
                     .font(.subheadline).foregroundStyle(Palette.secondary).padding(.vertical, 24)
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: heldUnreadIDs)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: fadingReadIDs)
         .padding(.horizontal, 16).padding(.top, selectedProjectID == nil ? 0 : 14)
     }
 
@@ -407,40 +379,40 @@ struct SessionListView: View {
         #else
         Menu {
             Menu {
-                menuChoice("Show all", selected: selectedProjectID == nil) { shownProjectID = nil }
+                menuChoice("Show all", selected: selectedProjectID == nil) { model.sessionList.shownProjectID = nil }
                 Divider()
                 ForEach(model.workspace.projects) { project in
-                    menuChoice(project.name, selected: selectedProjectID == project.id) { shownProjectID = project.id }
+                    menuChoice(project.name, selected: selectedProjectID == project.id) { model.sessionList.shownProjectID = project.id }
                 }
             } label: { Label("Show", systemImage: "folder") }
             Menu {
-                ForEach(SessionSort.allCases) { value in menuChoice(value.rawValue, selected: sort == value) { sort = value } }
+                ForEach(SessionSort.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.sort == value) { model.sessionList.sort = value } }
             } label: { Label("Sort", systemImage: "arrow.up.arrow.down") }
             Menu {
                 Menu {
-                    ForEach(SessionStatusFilter.allCases) { value in menuChoice(value.rawValue, selected: status == value) { status = value } }
+                    ForEach(SessionStatusFilter.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.status == value) { model.sessionList.status = value } }
                 } label: { Label("Status", systemImage: "circle.dotted") }
                 Menu {
-                    ForEach(SessionPRFilter.allCases) { value in menuChoice(value.rawValue, selected: pullRequest == value) { pullRequest = value } }
+                    ForEach(SessionPRFilter.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.pullRequest == value) { model.sessionList.pullRequest = value } }
                 } label: { Label("Pull request", systemImage: "arrow.triangle.branch") }
                 Menu {
-                    ForEach(SessionArchiveFilter.allCases) { value in menuChoice(value.rawValue, selected: archived == value) { archived = value } }
+                    ForEach(SessionArchiveFilter.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.archived == value) { model.sessionList.archived = value } }
                 } label: { Label("Archived", systemImage: "archivebox") }
                 Menu {
-                    ForEach(SessionDateFilter.allCases) { value in menuChoice(value.rawValue, selected: created == value) { created = value } }
+                    ForEach(SessionDateFilter.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.created == value) { model.sessionList.created = value } }
                 } label: { Label("Created date", systemImage: "calendar") }
                 Menu {
-                    ForEach(SessionDateFilter.allCases) { value in menuChoice(value.rawValue, selected: updated == value) { updated = value } }
+                    ForEach(SessionDateFilter.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.updated == value) { model.sessionList.updated = value } }
                 } label: { Label("Updated date", systemImage: "calendar.badge.clock") }
-                menuChoice("Unread only", selected: unreadOnly) { unreadOnly.toggle() }
+                menuChoice("Unread only", selected: model.sessionList.unreadOnly) { model.sessionList.unreadOnly.toggle() }
                 Divider()
                 Button(action: resetFilters) { Label("Reset filters", systemImage: "arrow.counterclockwise") }.disabled(!hasFilters)
             } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
             Menu {
-                ForEach(SessionGrouping.allCases) { value in menuChoice(value.rawValue, selected: grouping == value) { grouping = value } }
+                ForEach(SessionGrouping.allCases) { value in menuChoice(value.rawValue, selected: model.sessionList.grouping == value) { model.sessionList.grouping = value } }
             } label: { Label("Group", systemImage: "square.grid.2x2") }
             Divider()
-            menuChoice("Compact view", selected: compact) { compact.toggle() }
+            menuChoice("Compact view", selected: model.sessionList.compact) { model.sessionList.compact.toggle() }
         } label: {
             SessionFilterIcon()
                 .font(.system(size: 19)).frame(width: 46, height: 46)
@@ -451,7 +423,7 @@ struct SessionListView: View {
     }
 
     private func resetFilters() {
-        shownProjectID = nil; status = .all; pullRequest = .all; archived = .active; created = .any; updated = .any; unreadOnly = false
+        model.sessionList.shownProjectID = nil; model.sessionList.status = .all; model.sessionList.pullRequest = .all; model.sessionList.archived = .active; model.sessionList.created = .any; model.sessionList.updated = .any; model.sessionList.unreadOnly = false
     }
 
     #if os(iOS)
@@ -459,26 +431,26 @@ struct SessionListView: View {
     /// search and refresh updates. Only visible menu content changes its revision.
     private var organizationMenuRevision: String {
         let projects = model.workspace.projects.map { [$0.id, $0.name] }
-        let selections = [selectedProjectID ?? "", sort.rawValue, grouping.rawValue,
-                          status.rawValue, pullRequest.rawValue, archived.rawValue,
-                          created.rawValue, updated.rawValue, String(unreadOnly), String(compact)]
+        let selections = [selectedProjectID ?? "", model.sessionList.sort.rawValue, model.sessionList.grouping.rawValue,
+                          model.sessionList.status.rawValue, model.sessionList.pullRequest.rawValue, model.sessionList.archived.rawValue,
+                          model.sessionList.created.rawValue, model.sessionList.updated.rawValue, String(model.sessionList.unreadOnly), String(model.sessionList.compact)]
         return String(describing: projects) + String(describing: selections)
     }
 
     private var nativeOrganizationMenu: UIMenu {
         let show = UIMenu(title: "Show", image: UIImage(systemName: "folder"), identifier: .init("session-options.show"), children: [
-            nativeMenuChoice("Show all", id: "show.all", selected: selectedProjectID == nil) { shownProjectID = nil },
+            nativeMenuChoice("Show all", id: "show.all", selected: selectedProjectID == nil) { model.sessionList.shownProjectID = nil },
             UIMenu(options: .displayInline, children: model.workspace.projects.map { project in
-                nativeMenuChoice(project.name, id: "show.project.\(project.id)", selected: selectedProjectID == project.id) { shownProjectID = project.id }
+                nativeMenuChoice(project.name, id: "show.project.\(project.id)", selected: selectedProjectID == project.id) { model.sessionList.shownProjectID = project.id }
             }),
         ])
         let filters = UIMenu(title: "Filter", image: UIImage(systemName: "line.3.horizontal.decrease"), identifier: .init("session-options.filter"), children: [
-            nativeChoiceMenu("Status", symbol: "circle.dotted", id: "status", values: SessionStatusFilter.allCases, selection: $status),
-            nativeChoiceMenu("Pull request", symbol: "arrow.triangle.branch", id: "pull-request", values: SessionPRFilter.allCases, selection: $pullRequest),
-            nativeChoiceMenu("Archived", symbol: "archivebox", id: "archived", values: SessionArchiveFilter.allCases, selection: $archived),
-            nativeChoiceMenu("Created date", symbol: "calendar", id: "created", values: SessionDateFilter.allCases, selection: $created),
-            nativeChoiceMenu("Updated date", symbol: "calendar.badge.clock", id: "updated", values: SessionDateFilter.allCases, selection: $updated),
-            nativeMenuChoice("Unread only", id: "unread", selected: unreadOnly) { unreadOnly.toggle() },
+            nativeChoiceMenu("Status", symbol: "circle.dotted", id: "status", values: SessionStatusFilter.allCases, selection: $model.sessionList.status),
+            nativeChoiceMenu("Pull request", symbol: "arrow.triangle.branch", id: "pull-request", values: SessionPRFilter.allCases, selection: $model.sessionList.pullRequest),
+            nativeChoiceMenu("Archived", symbol: "archivebox", id: "archived", values: SessionArchiveFilter.allCases, selection: $model.sessionList.archived),
+            nativeChoiceMenu("Created date", symbol: "calendar", id: "created", values: SessionDateFilter.allCases, selection: $model.sessionList.created),
+            nativeChoiceMenu("Updated date", symbol: "calendar.badge.clock", id: "updated", values: SessionDateFilter.allCases, selection: $model.sessionList.updated),
+            nativeMenuChoice("Unread only", id: "unread", selected: model.sessionList.unreadOnly) { model.sessionList.unreadOnly.toggle() },
             UIMenu(options: .displayInline, children: [
                 UIAction(title: "Reset filters", image: UIImage(systemName: "arrow.counterclockwise"), identifier: .init("session-options.reset"),
                          attributes: hasFilters ? [] : [.disabled]) { _ in
@@ -488,10 +460,10 @@ struct SessionListView: View {
         ])
         return UIMenu(identifier: .init("session-options"), children: [
             show,
-            nativeChoiceMenu("Sort", symbol: "arrow.up.arrow.down", id: "sort", values: SessionSort.allCases, selection: $sort),
+            nativeChoiceMenu("Sort", symbol: "arrow.up.arrow.down", id: "sort", values: SessionSort.allCases, selection: $model.sessionList.sort),
             filters,
-            nativeChoiceMenu("Group", symbol: "square.grid.2x2", id: "group", values: SessionGrouping.allCases, selection: $grouping),
-            UIMenu(options: .displayInline, children: [nativeMenuChoice("Compact view", id: "compact", selected: compact) { compact.toggle() }]),
+            nativeChoiceMenu("Group", symbol: "square.grid.2x2", id: "group", values: SessionGrouping.allCases, selection: $model.sessionList.grouping),
+            UIMenu(options: .displayInline, children: [nativeMenuChoice("Compact view", id: "compact", selected: model.sessionList.compact) { model.sessionList.compact.toggle() }]),
         ])
     }
 
@@ -517,11 +489,11 @@ struct SessionListView: View {
     }
     @ViewBuilder private func sectionHeader(_ section: SessionSection) -> some View {
         if section.collapsible {
-            let collapsed = collapsedProjects.contains(section.id)
+            let collapsed = model.sessionList.collapsedSections.contains(section.id)
             Button {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.88)) {
-                    if collapsed { collapsedProjects.remove(section.id) }
-                    else { collapsedProjects.insert(section.id) }
+                    if collapsed { model.sessionList.collapsedSections.remove(section.id) }
+                    else { model.sessionList.collapsedSections.insert(section.id) }
                 }
             } label: {
                 HStack(spacing: 8) {
@@ -544,8 +516,31 @@ struct SessionListView: View {
                 .padding(.top, 14).padding(.bottom, 4).padding(.horizontal, 10)
         }
     }
+    private func openSession(_ session: Session) {
+        let hold = model.sessionList.grouping == .status && SessionPresentationRules.indicator(for: session) == .unread
+        if hold { heldUnreadIDs.insert(session.id) }
+        let context = model.sessionDetailsContext(session.id)
+        Task { await model.open(session.id) }
+        guard hold else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            guard model.sessionDetailsContext(session.id) == context else {
+                heldUnreadIDs.remove(session.id); fadingReadIDs.remove(session.id); return
+            }
+            guard let row = model.workspace.sessions.first(where: { $0.id == session.id }),
+                  SessionPresentationRules.indicator(for: row) == .idle else { heldUnreadIDs.remove(session.id); return }
+            withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.22)) { _ = fadingReadIDs.insert(session.id) }
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 220))
+            guard model.sessionDetailsContext(session.id) == context else { return }
+            withAnimation(.easeInOut(duration: reduceMotion ? 0 : 0.28)) {
+                heldUnreadIDs.remove(session.id)
+                fadingReadIDs.remove(session.id)
+            }
+        }
+    }
+
     private func sessionRow(_ session: Session) -> some View {
-        Button { Task { await model.open(session.id) } } label: {
+        Button { openSession(session) } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     sessionIndicator(session).frame(width: 16).accessibilityHidden(true)
@@ -558,7 +553,7 @@ struct SessionListView: View {
                     }
                     if let request = session.pullRequest { PullRequestBadge(request: request, compact: true) }
                 }
-                if !compact, let detail = SessionPresentationRules.detail(for: session, now: now) {
+                if !model.sessionList.compact, let detail = SessionPresentationRules.detail(for: session, now: now) {
                     Text(detail).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
                         .padding(.leading, 46)
                 }
@@ -599,6 +594,7 @@ struct SessionListView: View {
         if indicator == .working { ActivityGlyph(mini: true) }
         else {
             Circle().fill(indicatorColor(indicator)).frame(width: 6, height: 6)
+                .transaction { $0.animation = nil }
         }
     }
 
@@ -609,76 +605,5 @@ struct SessionListView: View {
         case .unread: return .blue
         case .idle, .working: return Palette.secondary.opacity(0.5)
         }
-    }
-}
-
-struct SessionSection: Identifiable {
-    var id: String
-    var title: String
-    var symbol: String
-    var sessions: [Session]
-    var showsHeader = true
-    var collapsible = false
-}
-enum SessionSort: String, CaseIterable, Identifiable {
-    case recent = "Recently updated", created = "Recently created", title = "Title"
-    var id: String { rawValue }
-}
-enum SessionGrouping: String, CaseIterable, Identifiable {
-    case project = "Project", host = "Host", status = "Status", none = "None"
-    var id: String { rawValue }
-}
-enum SessionStatusFilter: String, CaseIterable, Identifiable {
-    case all = "All statuses", working = "Working", awaitingInput = "Waiting for response"
-    case unread = "Finished, unread", failed = "Error", idle = "Read, not running"
-    var id: String { rawValue }
-    var symbol: String {
-        switch self {
-        case .all, .idle: return "circle"
-        case .working: return "circle.dotted"
-        case .awaitingInput: return "questionmark.bubble"
-        case .unread: return "circle.fill"
-        case .failed: return "exclamationmark.circle"
-        }
-    }
-    func includes(_ session: Session) -> Bool {
-        guard self != .all else { return true }
-        switch SessionPresentationRules.indicator(for: session) {
-        case .working: return self == .working
-        case .awaitingInput: return self == .awaitingInput
-        case .unread: return self == .unread
-        case .failed: return self == .failed
-        case .idle: return self == .idle
-        }
-    }
-}
-enum SessionArchiveFilter: String, CaseIterable, Identifiable {
-    case active = "Active", archived = "Archived", all = "All sessions"
-    var id: String { rawValue }
-    func includes(_ session: Session) -> Bool { self == .all || (self == .archived ? session.archived : !session.archived) }
-}
-enum SessionPRFilter: String, CaseIterable, Identifiable {
-    case all = "Any", withPR = "With pull request", withoutPR = "Without pull request"
-    case draft = "Draft", open = "Open", merged = "Merged", closed = "Closed"
-    var id: String { rawValue }
-    func includes(_ session: Session) -> Bool {
-        switch self {
-        case .all: return true
-        case .withPR: return session.pullRequest != nil
-        case .withoutPR: return session.pullRequest == nil
-        case .draft, .open, .merged, .closed:
-            return session.pullRequest.map { PullRequestPresentationState($0).rawValue == rawValue.lowercased() } ?? false
-        }
-    }
-}
-enum SessionDateFilter: String, CaseIterable, Identifiable {
-    case any = "Any time", today = "Today", week = "Last 7 days", month = "Last 30 days"
-    var id: String { rawValue }
-    func includes(_ date: Date) -> Bool {
-        guard self != .any else { return true }
-        let days = self == .today ? 0 : self == .week ? 6 : 29
-        let start = Calendar.current.startOfDay(for: Date())
-        let lower = Calendar.current.date(byAdding: .day, value: -days, to: start) ?? start
-        return date >= lower
     }
 }
