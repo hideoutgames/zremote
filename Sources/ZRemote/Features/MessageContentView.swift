@@ -3,8 +3,6 @@ import ZRemoteCore
 
 struct MessageContentView: View {
     let message: TranscriptMessage
-    @State var blocks: [MessageTextBlock] = []
-    @State var renderedText = ""
 
     var body: some View {
         Group {
@@ -22,36 +20,29 @@ struct MessageContentView: View {
                         }
                     }
                     .padding(.leading, 36)
-            } else if renderedText == message.text, !blocks.isEmpty {
+            } else if !message.parts.isEmpty {
                 VStack(alignment: .leading, spacing: 14) {
-                    ForEach(blocks) { block in
-                        if block.isCode {
-                            CodeBlockView(code: block.text, language: block.language)
-                        } else {
-                            AgentSelectableText(value: block.text, markdown: !message.streaming, secondary: message.role == "tool")
+                    ForEach(TranscriptActivity.segments(messageID: message.id, parts: message.parts, streaming: message.streaming)) { segment in
+                        if segment.kind == "activity" {
+                            TranscriptActivityView(segment: segment)
+                        } else if segment.kind == "subagent" {
+                            if let agent = message.subagents.first(where: { $0.id == segment.parts.first?.id }) {
+                                SessionEventCard(title: agent.title, subtitle: agent.status.capitalized, active: agent.active)
+                            }
+                        } else if let part = segment.parts.first {
+                            // Reuse the existing markdown/code renderer per prose part.
+                            MessageTextContentView(text: part.text, streaming: segment.live, secondary: message.role == "tool")
                         }
                     }
                 }
             } else {
-                AgentSelectableText(value: message.text, markdown: !message.streaming, secondary: message.role == "tool")
+                MessageTextContentView(text: message.text, streaming: message.streaming, secondary: message.role == "tool")
             }
         }
         .font(message.role == "tool" ? .subheadline : .body)
         .lineSpacing(5)
         .foregroundStyle(message.role == "tool" ? Palette.secondary : Palette.text)
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
-        .task(id: message.text) {
-            guard message.role != "user" else { return }
-            let text = message.text
-            // Keep parsing off the UI thread and avoid scheduling work for every
-            // individual token while the host is streaming.
-            if message.streaming { try? await Task.sleep(nanoseconds: 120_000_000) }
-            guard !Task.isCancelled else { return }
-            let parsed = await Task.detached(priority: .userInitiated) { ChatText.blocks(in: text) }.value
-            guard !Task.isCancelled else { return }
-            blocks = parsed
-            renderedText = text
-        }
     }
 
     private func messageDate(_ date: Date) -> String {
@@ -60,6 +51,41 @@ struct MessageContentView: View {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+}
+
+/// Shared renderer for a plain message or one prose part between tool groups.
+struct MessageTextContentView: View {
+    let text: String
+    let streaming: Bool
+    let secondary: Bool
+    @State var blocks: [MessageTextBlock] = []
+    @State var renderedText = ""
+
+    var body: some View {
+        Group {
+            if renderedText == text, !blocks.isEmpty {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(blocks) { block in
+                        if block.isCode { CodeBlockView(code: block.text, language: block.language) }
+                        else { AgentSelectableText(value: block.text, markdown: !streaming, secondary: secondary) }
+                    }
+                }
+            } else {
+                AgentSelectableText(value: text, markdown: !streaming, secondary: secondary)
+            }
+        }
+        .task(id: text) {
+            // Keep parsing off the UI thread and avoid scheduling work for every
+            // individual token while the host is streaming.
+            if streaming { try? await Task.sleep(nanoseconds: 120_000_000) }
+            guard !Task.isCancelled else { return }
+            let parsed = await Task.detached(priority: .userInitiated) { ChatText.blocks(in: text) }.value
+            guard !Task.isCancelled else { return }
+            blocks = parsed
+            renderedText = text
+        }
+    }
+
 }
 
 struct HighlightedPrompt: View {

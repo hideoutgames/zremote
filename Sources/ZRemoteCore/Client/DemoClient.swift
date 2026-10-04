@@ -45,7 +45,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         attachmentBytes = fixtures.attachments
         queuedAttachments = fixtures.queuedAttachments
         patches = fixtures.patches
-        turnStarted[DemoFixtures.runningID] = Date()
+        turnStarted[DemoFixtures.runningID] = sessions[DemoFixtures.runningID]?.workingStartedAt
         for id in sessions.keys { sessions[id]?.queueCapabilities = Self.queueCapabilities }
         onUpdate?(.workspace(workspace))
         startShowcase()
@@ -66,6 +66,7 @@ public struct ClientFailure: LocalizedError, Sendable {
                       let index = state.messages.firstIndex(where: { $0.id == DemoFixtures.progressID }) else { return }
                 phase = (phase + 1) % DemoFixtures.progress.count
                 state.messages[index].text = DemoFixtures.progress[phase]
+                state.messages[index].parts = DemoFixtures.progressParts(phase)
                 state.messages[index].subagents = [
                     SubagentStatus(id: "demo-layout-agent", title: "Layout review", status: "running", detail: DemoFixtures.activities[phase % DemoFixtures.activities.count]),
                     SubagentStatus(id: "demo-a11y-agent", title: "Accessibility review", status: "done", detail: "Labels and touch targets checked in this offline sample.")
@@ -216,6 +217,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         state.messages.append(TranscriptMessage(id: replyID, role: "assistant", text: "", streaming: true,
             subagents: [SubagentStatus(id: "demo-agent-" + replyID, title: "Accessibility review", status: "running", detail: "Checking spacing and accessibility in test mode.")], timestamp: started))
         state.working = true
+        state.workingStartedAt = started
         state.turnID = userID
         state.delivery = ""
         state.deliveryFailed = false
@@ -316,6 +318,7 @@ public struct ClientFailure: LocalizedError, Sendable {
         guard var state = sessions[id] else { return }
         let started = turnStarted.removeValue(forKey: id)
         state.working = false
+        state.workingStartedAt = nil
         state.delivery = interrupted ? "Stopped" : ""
         if let reply = state.messages.lastIndex(where: { $0.role == "assistant" && $0.streaming }) {
             state.messages[reply].streaming = false

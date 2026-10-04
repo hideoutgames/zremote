@@ -183,7 +183,8 @@ public struct TranscriptMessage: Identifiable, Equatable, Sendable {
     public var subagents: [SubagentStatus]
     public var timestamp: Date?
     public var workedDuration: TimeInterval?
-    public init(id: String, role: String, text: String, streaming: Bool = false, attachments: [RemoteAttachment] = [], subagents: [SubagentStatus] = [], timestamp: Date? = nil, workedDuration: TimeInterval? = nil) { self.id = id; self.role = role; self.text = text; self.streaming = streaming; self.attachments = attachments; self.subagents = subagents; self.timestamp = timestamp; self.workedDuration = workedDuration }
+    public var parts: [TranscriptPart]
+    public init(id: String, role: String, text: String, streaming: Bool = false, attachments: [RemoteAttachment] = [], subagents: [SubagentStatus] = [], timestamp: Date? = nil, workedDuration: TimeInterval? = nil, parts: [TranscriptPart] = []) { self.id = id; self.role = role; self.text = text; self.streaming = streaming; self.attachments = attachments; self.subagents = subagents; self.timestamp = timestamp; self.workedDuration = workedDuration; self.parts = parts }
 }
 
 public struct SessionState: Equatable, Sendable {
@@ -198,7 +199,8 @@ public struct SessionState: Equatable, Sendable {
     public var queue: [QueuedMessage]
     public var queueCapabilities: MessageQueueCapabilities
     public var queueError: String?
-    public init(id: String, messages: [TranscriptMessage] = [], selection: ModelSelection = .init(), working: Bool = false, delivery: String = "", deliveryFailed: Bool = false, turnID: String? = nil, input: InputRequest? = nil, queue: [QueuedMessage] = [], queueCapabilities: MessageQueueCapabilities = .init(), queueError: String? = nil) { self.id = id; self.messages = messages; self.selection = selection; self.working = working; self.delivery = delivery; self.deliveryFailed = deliveryFailed; self.turnID = turnID; self.input = input; self.queue = queue; self.queueCapabilities = queueCapabilities; self.queueError = queueError }
+    public var workingStartedAt: Date?
+    public init(id: String, messages: [TranscriptMessage] = [], selection: ModelSelection = .init(), working: Bool = false, delivery: String = "", deliveryFailed: Bool = false, turnID: String? = nil, input: InputRequest? = nil, queue: [QueuedMessage] = [], queueCapabilities: MessageQueueCapabilities = .init(), queueError: String? = nil, workingStartedAt: Date? = nil) { self.id = id; self.messages = messages; self.selection = selection; self.working = working; self.delivery = delivery; self.deliveryFailed = deliveryFailed; self.turnID = turnID; self.input = input; self.queue = queue; self.queueCapabilities = queueCapabilities; self.queueError = queueError; self.workingStartedAt = workingStartedAt }
 }
 
 public struct InputQuestion: Identifiable, Equatable, Sendable {
