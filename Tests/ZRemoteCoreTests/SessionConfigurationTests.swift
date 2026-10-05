@@ -71,7 +71,7 @@ final class SessionConfigurationTests: XCTestCase {
         try await model.renameSession(sessionID: existingSession.id, title: "  Updated title  ", context: model.sessionDetailsContext(existingSession.id))
         XCTAssertEqual(model.session?.title, "Updated title")
         model.newSession()
-        XCTAssertEqual(model.checkoutSelection, .current)
+        XCTAssertEqual(model.checkoutSelection, .existing(existing))
         XCTAssertTrue(model.selectCheckout(.newWorktree, context: model.checkoutContext))
         model.newSelection = ModelSelection(providerID: "codex", modelID: "gpt-6-astra")
         model.draft = "Use an isolated worktree"
@@ -155,10 +155,15 @@ final class SessionConfigurationTests: XCTestCase {
     }
 }
 
-@MainActor private final class ConfigurationClient: ClientService {
+@MainActor final class ConfigurationClient: ClientService {
     var onUpdate: (@MainActor (ClientUpdate) -> Void)?
     let isDemo = false
-    let accountKey: String? = nil
+    var accountKey: String? = nil
+    var completionRequests: [(kind: ComposerTokenKind, sessionID: String?, projectID: String?)] = []
+    var failCompletions = false
+    var failSend = false
+    var automaticCheckouts: [ProjectCheckout]?
+
     let projects = [
         Project(id: "first", name: "First", path: "/projects/first", hostID: "host", isRepository: true),
         Project(id: "second", name: "Second", path: "/projects/second", hostID: "host", isRepository: true)
@@ -178,6 +183,7 @@ final class SessionConfigurationTests: XCTestCase {
     func checkouts(projectID: String, hostID: String) async throws -> [ProjectCheckout] {
         let index = checkoutRequests.count
         checkoutRequests.append(projectID)
+        if let automaticCheckouts { return automaticCheckouts }
         return try await withCheckedThrowingContinuation { continuation in
             pendingCheckouts[index] = continuation
             onCheckoutStarted?()
@@ -200,7 +206,12 @@ final class SessionConfigurationTests: XCTestCase {
     func openSession(_ id: String) async throws {}
     func closeSession(_ id: String) {}
     func createSession(projectID: String?, hostID: String, selection: ModelSelection) async throws -> String { "new" }
-    func send(sessionID: String, text: String) async throws {}
+    func send(sessionID: String, text: String) async throws { if failSend { throw ClientFailure("Offline") } }
+    func complete(kind: ComposerTokenKind, query: String, hostID: String, sessionID: String?, projectID: String?, providerID: String) async throws -> [ComposerCompletion] {
+        completionRequests.append((kind, sessionID, projectID))
+        if failCompletions { throw ClientFailure("Unavailable") }
+        return [ComposerCompletion(id: kind.rawValue, kind: kind, title: "Match", insertion: "Match")]
+    }
     func interrupt(sessionID: String) async throws {}
     func retryDelivery(sessionID: String) async throws {}
     func respondInput(sessionID: String, requestID: String, answers: [String: [String]]) async throws {}

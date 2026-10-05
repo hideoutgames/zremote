@@ -62,7 +62,9 @@ import ZRemoteCore
 
     nonisolated public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                                    withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .list, .sound])
+        // Foreground completion already has the app's optional dot cue. Keep
+        // the banner without playing a second, unrelated notification sound.
+        completionHandler(notification.request.identifier.hasPrefix("finished:") ? [.banner, .list] : [.banner, .list, .sound])
     }
 
     nonisolated public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,

@@ -7,6 +7,7 @@ struct ComposerSuggestions: View {
     let loading: Bool
     var maximumHeight: CGFloat = 168
     var unavailableMessage: String? = nil
+    var retry: (() -> Void)? = nil
     let choose: (ComposerCompletion) -> Void
 
     private var title: String {
@@ -22,6 +23,10 @@ struct ComposerSuggestions: View {
                     Text(unavailableMessage ?? (loading ? "Finding \(title.lowercased())…" : "No matching \(title.lowercased())."))
                         .font(.caption).foregroundStyle(Palette.secondary).lineLimit(2)
                     Spacer(minLength: 0)
+                    if let retry, !loading {
+                        Button(action: retry) { Image(systemName: "arrow.clockwise").frame(width: 32, height: 32) }
+                            .buttonStyle(.plain).accessibilityLabel("Retry suggestions")
+                    }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)

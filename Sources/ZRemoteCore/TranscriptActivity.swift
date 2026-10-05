@@ -74,7 +74,7 @@ public enum TranscriptActivity {
             } else {
                 // An empty text part still marks the host moving on to prose.
                 flush()
-                if part.kind != "boundary" && (!part.text.isEmpty || part.kind == "subagent") {
+                if part.kind != "boundary" && (!part.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || part.kind == "subagent") {
                     result.append(TranscriptSegment(id: messageID + ":part:" + part.id, kind: part.kind, parts: [part], live: streaming && part.id == parts.last?.id))
                 }
             }

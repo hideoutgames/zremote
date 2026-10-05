@@ -13,8 +13,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 
 /// Native nested scrolling consumes only the downward drag left over once the
@@ -24,23 +22,19 @@ struct SessionRefreshComposer: ContentComposer {
     let content: any View
     let recess: any View
     let refreshing: Bool
-    let hapticsEnabled: Bool
     let onRefresh: () -> Void
 
-    init(content: any View, recess: any View, refreshing: Bool, hapticsEnabled: Bool, onRefresh: @escaping () -> Void) {
+    init(content: any View, recess: any View, refreshing: Bool, onRefresh: @escaping () -> Void) {
         self.content = content
         self.recess = recess
         self.refreshing = refreshing
-        self.hapticsEnabled = hapticsEnabled
         self.onRefresh = onRefresh
     }
 
     @Composable func Compose(context: ComposeContext) {
         let state = rememberPullToRefreshState()
         let threshold = PullToRefreshDefaults.PositionalThreshold
-        let haptic = LocalHapticFeedback.current
         let latestRefreshing = rememberUpdatedState(refreshing)
-        let latestHapticsEnabled = rememberUpdatedState(hapticsEnabled)
         let latestRefresh = rememberUpdatedState(onRefresh)
         let displacement = max(Float(0), state.distanceFraction) * threshold.value
 
@@ -53,9 +47,6 @@ struct SessionRefreshComposer: ContentComposer {
                     if !latestRefreshing.value {
                         // Commit feedback happens once after a qualifying release,
                         // never on animation frames or programmatic refreshes.
-                        if latestHapticsEnabled.value {
-                            haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                        }
                         latestRefresh.value()
                     }
                 }

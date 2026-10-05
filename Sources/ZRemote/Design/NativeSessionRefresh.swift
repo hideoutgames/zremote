@@ -6,11 +6,11 @@ import ZRemoteCore
 /// Attach from stable ScrollView content so UIKit keeps ownership of
 /// scrolling and refresh gestures. The session strip supplies the visible glyph.
 struct NativeSessionRefresh: UIViewRepresentable {
-    let hapticsEnabled: Bool
+    let onRefreshingChange: @MainActor (Bool) -> Void
     let onRevealChange: @MainActor (CGFloat) -> Void
     let action: @MainActor () async -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(hapticsEnabled: hapticsEnabled, onRevealChange: onRevealChange, action: action) }
+    func makeCoordinator() -> Coordinator { Coordinator(onRefreshingChange: onRefreshingChange, onRevealChange: onRevealChange, action: action) }
 
     func makeUIView(context: Context) -> AttachmentView {
         let view = AttachmentView()
@@ -21,7 +21,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
     }
 
     func updateUIView(_ view: AttachmentView, context: Context) {
-        context.coordinator.hapticsEnabled = hapticsEnabled
+        context.coordinator.onRefreshingChange = onRefreshingChange
         context.coordinator.onRevealChange = onRevealChange
         context.coordinator.action = action
         context.coordinator.attach(from: view)
@@ -52,7 +52,7 @@ struct NativeSessionRefresh: UIViewRepresentable {
     }
 
     @MainActor final class Coordinator: NSObject {
-        var hapticsEnabled: Bool
+        var onRefreshingChange: @MainActor (Bool) -> Void
         var onRevealChange: @MainActor (CGFloat) -> Void
         var action: @MainActor () async -> Void
         private weak var scrollView: UIScrollView?
@@ -68,11 +68,10 @@ struct NativeSessionRefresh: UIViewRepresentable {
         private var pendingReveal: CGFloat = 0
         private var lastReveal: CGFloat = -1
         private var generation = 0
-        private let feedback = UIImpactFeedbackGenerator(style: .light)
 
-        init(hapticsEnabled: Bool, onRevealChange: @escaping @MainActor (CGFloat) -> Void,
+        init(onRefreshingChange: @escaping @MainActor (Bool) -> Void, onRevealChange: @escaping @MainActor (CGFloat) -> Void,
              action: @escaping @MainActor () async -> Void) {
-            self.hapticsEnabled = hapticsEnabled
+            self.onRefreshingChange = onRefreshingChange
             self.onRevealChange = onRevealChange
             self.action = action
         }
@@ -154,6 +153,8 @@ struct NativeSessionRefresh: UIViewRepresentable {
             control = nil
             scrollView = nil
             publishReveal(0)
+            let report = onRefreshingChange
+            Task { @MainActor in report(false) }
         }
 
         private func safeAreaTopInset(_ scroll: UIScrollView) -> Double {
@@ -191,7 +192,6 @@ struct NativeSessionRefresh: UIViewRepresentable {
 
         @objc private func refresh(_ sender: UIRefreshControl) {
             guard sender === control, scrollView?.refreshControl === sender, refreshTask == nil else { return }
-            AppHaptics.refreshTriggered(enabled: hapticsEnabled, feedback: feedback)
             let epoch = generation
             let perform = action
             let gestureState = scrollView?.panGestureRecognizer.state
@@ -199,11 +199,21 @@ struct NativeSessionRefresh: UIViewRepresentable {
                 ? nil : ContinuousClock.now.advanced(by: .milliseconds(900))
             sender.accessibilityValue = "Refreshing"
             refreshTask = Task { @MainActor [weak self, weak sender] in
-                guard !Task.isCancelled else { return }
+                // UIRefreshControl may arm while the finger is still down.
+                // Start the work, haptic/sound and animated dots only on release.
+                do {
+                    while let self, self.generation == epoch,
+                          self.scrollView?.isDragging == true {
+                        try await Task.sleep(for: .milliseconds(16))
+                    }
+                } catch { return }
+                guard !Task.isCancelled, let self, self.generation == epoch else { return }
+                self.feedbackDeadline = ContinuousClock.now.advanced(by: .milliseconds(900))
+                self.onRefreshingChange(true)
                 await perform()
                 do {
                     while !Task.isCancelled {
-                        guard let self, self.generation == epoch else { return }
+                        guard self.generation == epoch else { return }
                         if let deadline = self.feedbackDeadline {
                             if ContinuousClock.now >= deadline { break }
                             try await Task.sleep(until: deadline, clock: .continuous)
@@ -213,10 +223,11 @@ struct NativeSessionRefresh: UIViewRepresentable {
                     }
                 }
                 catch { return }
-                guard !Task.isCancelled, let self, let sender,
+                guard !Task.isCancelled, let sender,
                       self.generation == epoch, self.control === sender else { return }
                 self.refreshTask = nil
                 self.feedbackDeadline = nil
+                self.onRefreshingChange(false)
                 sender.accessibilityValue = nil
                 if self.scrollView?.refreshControl === sender { sender.endRefreshing() }
                 self.sampleReveal()
@@ -225,7 +236,6 @@ struct NativeSessionRefresh: UIViewRepresentable {
         }
 
         @objc private func dragChanged(_ gesture: UIPanGestureRecognizer) {
-            if gesture.state == .began, hapticsEnabled { feedback.prepare() }
             guard refreshTask != nil else { return }
             switch gesture.state {
             case .began, .changed: feedbackDeadline = nil
