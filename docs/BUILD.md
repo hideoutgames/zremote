@@ -121,14 +121,18 @@ collapsing. Native threshold arming does not start work or animate the glyph
 while the finger remains down. The released refresh stays visible for at least
 900 ms; the shared Android refresh keeps its existing 500 ms minimum.
 
-On iOS, the microphone control requests system permission and meters local input
-for the scrolling waveform. Voice controls crossfade with a small spring;
+On iOS, microphone input defaults to on-device Dictation. Settings can instead
+install/select an optional Parakeet Audio Model. Voice controls crossfade with a
+small spring;
 timestamped meter samples move on a 60 Hz timeline without resetting their phase
 at each meter update. Reduce Motion skips movement. Capture explicitly allows
 system sounds and haptics, so voice feedback is not suppressed by the audio
-session. Cancel and Finish discard the recording; neither
-transcribes, attaches, nor sends audio. Leaving the Composer or backgrounding the
-app stops capture. Android microphone capture is not implemented.
+session. Finish transcribes into the draft; Cancel discards the recording.
+Audio stays local and is deleted when
+capture/transcription ends. Leaving the Composer or backgrounding the app cancels
+the operation. Android microphone capture is not implemented. See
+[model and audio preferences](MODEL_AND_AUDIO_PREFERENCES.md) for download
+provenance, permissions, storage and scoped validation.
 
 Sign-in uses Apple's custom-scheme authentication callback on iOS and reports safe
 failure stages without exposing codes, tokens, or provider error descriptions.

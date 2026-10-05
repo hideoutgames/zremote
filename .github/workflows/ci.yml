@@ -38,6 +38,10 @@ jobs:
         run: |
           python3 scripts/run-local.py --phase swift -- \
             swift test --jobs 1 --filter 'CoreBehaviorTests|UnifiedDiffParserTests|ChatTextBehaviorTests'
+      - name: Protect model, audio and adjacent preference behavior
+        run: |
+          python3 scripts/run-local.py --phase swift -- \
+            swift test --jobs 1 --filter 'ModelPreferenceTests|AudioInputTests|SessionConfigurationTests/testDemoCreatesSessionsInSelectedCheckoutOrNewWorktreeAndRenamesThem|SessionExperienceTests/(testPreferencesAndValidatedDestinationRestoreWithoutLeakingAcrossAccounts|testPreferenceEditsDuringRestoreWinAndMissingCheckoutCannotSilentlySendElsewhere|testFeedbackFollowsSuccessfulSendAndObservedCompletionOnlyWhileForeground)'
 
   native-projection:
     name: Native transcript projection

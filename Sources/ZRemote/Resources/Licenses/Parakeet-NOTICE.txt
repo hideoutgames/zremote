@@ -1,0 +1,19 @@
+Optional Parakeet audio models
+
+Original models: NVIDIA
+https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+
+Core ML conversion: Fluid Inference
+https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml/tree/ee09c569f73759e6d44c9bd16766f477b2b36d39
+https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v3-coreml/tree/7dd20fe6b1797d35f5e3307e8b1732d9a178edfe
+
+License: Creative Commons Attribution 4.0 International (CC BY 4.0).
+The full license is included as CC-BY-4.0.txt.
+https://creativecommons.org/licenses/by/4.0/
+
+ZRemote downloads the pinned Core ML model files without modifying them.
+Fluid Inference converted the original NVIDIA models to Core ML and quantized
+the encoder. ZRemote uses the int8 encoder with the v2 English or v3 multilingual
+decoder and vocabulary. Model weights are optional downloads, not bundled assets.
+No endorsement by NVIDIA or Fluid Inference is implied.

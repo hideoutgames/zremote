@@ -60,6 +60,10 @@ bundle separately licensed source or assets must retain those notices as well.
 
 The initial inventory covers the pinned direct Skip packages, vendored Zeron
 source, Hideout Games' model-picker reference, and narrow Swift-Diffs adaptation.
+It also includes the iOS-only FluidAudio 0.15.4 runtime, its separately licensed
+fastcluster and VBx sources, and the optional NVIDIA/Fluid Inference Parakeet
+weights under CC BY 4.0. The model manifest pins both download revisions and
+every file hash. See [model and audio preferences](MODEL_AND_AUDIO_PREFERENCES.md).
 The generated Cargo inventory currently covers 339 resolved runtime/build
 packages. Swift and Gradle transitive inventories still require real platform
 resolution. Do not claim release readiness until the generated inventories and
