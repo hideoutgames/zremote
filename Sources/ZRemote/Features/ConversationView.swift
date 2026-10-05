@@ -386,9 +386,15 @@ struct ConversationView: View {
                 .scrollDismissesKeyboard(.interactively)
                 #if os(Android)
                 .task(id: model.selectedSessionID) {
-                    await Task.yield()
-                    guard !Task.isCancelled else { return }
-                    proxy.scrollTo("tail", anchor: .bottom)
+                    // The lazy list publishes its scroll action after the first
+                    // frame. Keep asking until the tail is in place so the reply,
+                    // changed files and pull request open in view.
+                    for _ in 0..<6 {
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        proxy.scrollTo("tail", anchor: .bottom)
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                    }
                 }
                 #else
                 .defaultScrollAnchor(.bottom)
