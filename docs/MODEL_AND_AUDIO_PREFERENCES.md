@@ -80,6 +80,13 @@ cases in `CoreBehaviorTests`. Run through `scripts/run-local.py` with
 `ZREMOTE_CORE_ONLY=1` and the shared profile. Windows syntax parsing is separate
 from iOS typechecking, Skip bridge generation and device testing.
 
+CI retains its existing regression checks and adds an explicit step for
+`ModelPreferenceTests`, `AudioInputTests`, the named demo session-creation case
+above, and these directly affected consumers in `SessionExperienceTests`:
+`testPreferencesAndValidatedDestinationRestoreWithoutLeakingAcrossAccounts`,
+`testPreferenceEditsDuringRestoreWinAndMissingCheckoutCannotSilentlySendElsewhere`,
+and `testFeedbackFollowsSuccessfulSendAndObservedCompletionOnlyWhileForeground`.
+
 Local verification on 2026-10-05 passed 17 distinct Swift tests with one worker
 and stable source/environment/toolchain fingerprints. Exact scope:
 
