@@ -145,7 +145,11 @@ struct HighlightedPromptModifier: ContentModifier {
     let colors: [Color]
     func modify(view: any View) -> any View {
         view.material3Text { options in
-            let annotated = AnnotatedString(text)
+            var resolved: [androidx.compose.ui.graphics.Color] = []
+            for color in colors {
+                resolved.append(color.asComposeColor())
+            }
+            let annotated = referenceAnnotatedString(source: text, ranges: ranges, labels: labels, kinds: kinds, colors: resolved)
             return options.copy(text: nil, annotatedText: annotated)
         }
     }

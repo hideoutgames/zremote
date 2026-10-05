@@ -273,6 +273,13 @@ struct ComposerTokenModifier: ContentModifier {
                     onComposition(options.value.composition != nil)
                 }
             }
+            var resolved: [androidx.compose.ui.graphics.Color] = []
+            for color in colors {
+                resolved.append(color.asComposeColor())
+            }
+            let transformation = labels.isEmpty || ranges.count < 2
+                ? VisualTransformation.None
+                : referenceVisualTransformation(ranges: ranges, labels: labels, kinds: kinds, colors: resolved)
             return options.copy(onValueChange: { value in
                 let corrected = normalize(options.value.text, value.text, [value.selection.start, value.selection.end,
                                           options.value.selection.start, options.value.selection.end], value.composition != nil)
@@ -283,8 +290,103 @@ struct ComposerTokenModifier: ContentModifier {
                 options.onValueChange(next)
                 onSelection(end)
                 onComposition(next.composition != nil)
-            }, visualTransformation: VisualTransformation.None, maxLines: options.maxLines)
+            }, visualTransformation: transformation, maxLines: options.maxLines)
         }
+    }
+}
+
+struct ReferenceSpan {
+    let sourceStart: Int
+    let sourceEnd: Int
+    let displayStart: Int
+    let displayEnd: Int
+}
+
+func referenceAnnotatedString(source: String, ranges: [Int], labels: [String], kinds: [Int], colors: [androidx.compose.ui.graphics.Color]) -> AnnotatedString {
+    let builder = AnnotatedString.Builder()
+    let count = min(labels.count, ranges.count / 2)
+    var cursor = 0
+    for index in 0..<count {
+        let start = ranges[index * 2]
+        let end = ranges[index * 2 + 1]
+        if start < cursor || end > source.length || end < start { continue }
+        if start > cursor { builder.append(source.substring(cursor, start)) }
+        let label = labels[index]
+        let color = index < kinds.count && kinds[index] >= 0 && kinds[index] < colors.count ? colors[kinds[index]] : nil
+        if let color {
+            builder.pushStyle(SpanStyle(color: color, fontWeight: FontWeight.Medium, background: color.copy(alpha: 0.10)))
+            builder.append(label)
+            builder.pop()
+        } else {
+            builder.append(label)
+        }
+        cursor = end
+    }
+    if cursor < source.length { builder.append(source.substring(cursor)) }
+    return builder.toAnnotatedString()
+}
+
+final class ReferenceOffsetMapping: OffsetMapping {
+    let spans: [ReferenceSpan]
+    let displayLength: Int
+    let sourceLength: Int
+    init(spans: [ReferenceSpan], displayLength: Int, sourceLength: Int) {
+        self.spans = spans
+        self.displayLength = displayLength
+        self.sourceLength = sourceLength
+    }
+    func originalToTransformed(offset: Int) -> Int {
+        let clamped = min(max(0, offset), sourceLength)
+        var delta = 0
+        for span in spans {
+            if clamped <= span.sourceStart { break }
+            if clamped < span.sourceEnd { return span.displayEnd }
+            delta += (span.sourceEnd - span.sourceStart) - (span.displayEnd - span.displayStart)
+        }
+        return min(max(0, clamped - delta), displayLength)
+    }
+    func transformedToOriginal(offset: Int) -> Int {
+        let clamped = min(max(0, offset), displayLength)
+        var delta = 0
+        for span in spans {
+            if clamped <= span.displayStart { break }
+            if clamped < span.displayEnd {
+                let mid = span.displayStart + (span.displayEnd - span.displayStart) / 2
+                return clamped < mid ? span.sourceStart : span.sourceEnd
+            }
+            delta += (span.sourceEnd - span.sourceStart) - (span.displayEnd - span.displayStart)
+        }
+        return min(max(0, clamped + delta), sourceLength)
+    }
+}
+
+func referenceVisualTransformation(ranges: [Int], labels: [String], kinds: [Int], colors: [androidx.compose.ui.graphics.Color]) -> VisualTransformation {
+    VisualTransformation { text in
+        let builder = AnnotatedString.Builder()
+        var spans: [ReferenceSpan] = []
+        let count = min(labels.count, ranges.count / 2)
+        var cursor = 0
+        for index in 0..<count {
+            let start = ranges[index * 2]
+            let end = ranges[index * 2 + 1]
+            if start < cursor || end > text.length || end < start { continue }
+            if start > cursor { builder.append(text.subSequence(cursor, start)) }
+            let displayStart = builder.length
+            let label = labels[index]
+            let color = index < kinds.count && kinds[index] >= 0 && kinds[index] < colors.count ? colors[kinds[index]] : nil
+            if let color {
+                builder.pushStyle(SpanStyle(color: color, fontWeight: FontWeight.Medium, background: color.copy(alpha: 0.10)))
+                builder.append(label)
+                builder.pop()
+            } else {
+                builder.append(label)
+            }
+            spans.append(ReferenceSpan(sourceStart: start, sourceEnd: end, displayStart: displayStart, displayEnd: builder.length))
+            cursor = end
+        }
+        if cursor < text.length { builder.append(text.subSequence(cursor, text.length)) }
+        let mapping = ReferenceOffsetMapping(spans: spans, displayLength: builder.length, sourceLength: text.length)
+        return TransformedText(builder.toAnnotatedString(), mapping)
     }
 }
 
