@@ -27,9 +27,11 @@ Settings has one **Microphone** choice: **Dictation** (default) or **Audio Model
 Only the selected mode's options appear. Dictation offers a language picker;
 Audio Model offers **Multilingual** (Parakeet v3) and **English** (Parakeet v2).
 Tapping an uninstalled model installs and selects it. Installed rows select it
-immediately. Long press offers Details and Install, Details and Delete, or
-Details and disabled download progress. Deleting the selected model returns
-the current account to Dictation. Downloads and deletes are disabled in Try mode.
+immediately. The download percentage appears next to the row's progress ring.
+Long press offers Details and Install, Details and Delete, or Details and
+Cancel Download while a download runs. Deleting or canceling the selected
+model returns the current account to Dictation. Downloads and deletes are
+disabled in Try mode.
 
 Dictation uses Apple's Speech framework with `requiresOnDeviceRecognition` and
 checks `supportsOnDeviceRecognition`. It never falls back to server recognition.
@@ -55,11 +57,15 @@ The multilingual download is 483,105,645 bytes; English is 464,413,247 bytes.
 The installer uses an ephemeral URL session without credential/cookie storage,
 reports byte progress, validates each file with bounded-memory hashing, and loads
 the local model before marking it installed. Completed files remain in staging
-after interruption so retrying can reuse them. Downloads continue when leaving
-Settings while the app runs. Restarting the app requires tapping Install again
-to resume an interrupted installation. No background transfer entitlement is used.
+after interruption or cancellation so retrying can reuse them. Downloads
+continue when leaving Settings while the app runs. Restarting the app requires
+tapping Install again to resume an interrupted installation. No background
+transfer entitlement is used.
 
-Model weights live in Application Support/ZRemote/AudioModels, excluded from
+Each model installs to a directory named after FluidAudio's `Repo.folderName`
+(the repository slug without "-coreml"), which `AsrModels.load` requires when
+resolving the model path and vocabulary. Model weights live in Application
+Support/ZRemote/AudioModels, excluded from
 backup. These public assets are shared on the device; mode, language and selected
 model remain account-scoped. Inference runs off the main actor, releases its
 model after transcription, and enforces FluidAudio's offline mode, including

@@ -77,14 +77,19 @@ struct AudioInputSettings: View {
                 Text(id.label).foregroundStyle(Palette.text)
                 Spacer()
                 if let progress = state.progress {
-                    ZStack {
-                        Circle().stroke(Palette.line, lineWidth: 2)
-                        Circle().trim(from: 0, to: max(0.02, progress))
-                            .stroke(Palette.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
+                    HStack(spacing: 6) {
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(Palette.secondary)
+                        ZStack {
+                            Circle().stroke(Palette.line, lineWidth: 2)
+                            Circle().trim(from: 0, to: max(0.02, progress))
+                                .stroke(Palette.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                        }
+                        .frame(width: 18, height: 18)
+                        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: progress)
                     }
-                    .frame(width: 18, height: 18)
-                    .animation(reduceMotion ? nil : .linear(duration: 0.2), value: progress)
                 } else if state == .deleting {
                     ProgressView().controlSize(.small)
                 } else {
@@ -103,8 +108,14 @@ struct AudioInputSettings: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .nativeContextMenu {
             Button { details = id } label: { Label("Details", systemImage: "info.circle") }
-            if let progress = state.progress {
-                Button("Downloading \(Int(progress * 100))%") {}.disabled(true)
+            if state.progress != nil {
+                Button(role: .destructive) {
+                    library.cancel(id)
+                    if model.preferences.audioInput.model == id {
+                        var next = model.preferences.audioInput; next.mode = .dictation
+                        withAnimation(motion) { model.setAudioInput(next) }
+                    }
+                } label: { Label("Cancel Download", systemImage: "xmark.circle") }
             } else if state.installed {
                 Button(role: .destructive) {
                     let context = model.attachmentContext
