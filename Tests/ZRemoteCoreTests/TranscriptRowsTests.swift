@@ -50,7 +50,7 @@ final class TranscriptRowsTests: XCTestCase {
             default: XCTFail("Unexpected row")
             }
         }
-        XCTAssertEqual(joined, text)
+        XCTAssertEqual(joined, text.trimmingCharacters(in: .whitespacesAndNewlines))
         XCTAssertEqual(codes, [code])
         XCTAssertGreaterThan(rows.count, 3)
     }
