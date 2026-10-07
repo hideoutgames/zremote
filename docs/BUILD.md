@@ -266,6 +266,9 @@ future automatic caller cannot start it through `workflow_call`. The reusable
 workflow sees the [original caller's GitHub context](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context).
 The automatic CI workflow runs domain/projection regressions and source syntax
 checks; it does not invoke app compilation or TestFlight.
+Swift domain regressions use the standard 14 GB `macos-26-intel` runner: the
+7 GB ARM runner can fall below the unchanged 3 GB admission floor between test
+commands. The regression filters, worker limit, and provenance checks are unchanged.
 
 The SDK installation command and matching NDK are verified against
 [Skip 1.9.12's installer implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AndroidCommand.swift#L334)
