@@ -50,9 +50,17 @@ enum AudioModelState: Equatable {
                 states[id] = .installed
             } catch {
                 states[id] = .available
-                self.error = "Couldn't install \(id.label). Check your connection and free storage, then try again."
+                if !Task.isCancelled {
+                    self.error = "Couldn't install \(id.label). Check your connection and free storage, then try again."
+                }
             }
         }
+    }
+
+    /// Cancels an in-flight install. Verified files stay staged so a retry resumes.
+    func cancel(_ id: AudioModelID) {
+        guard states[id]?.progress != nil else { return }
+        operation?.cancel()
     }
 
     func delete(_ id: AudioModelID, isDemo: Bool) async -> Bool {

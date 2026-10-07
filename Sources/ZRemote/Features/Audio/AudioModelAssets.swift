@@ -14,7 +14,9 @@ struct AudioModelManifest: Decodable, Sendable {
     let revision: String
     let files: [Asset]
     var bytes: Int64 { files.reduce(0) { $0 + $1.bytes } }
-    var folder: String { String(repository.split(separator: "/").last ?? "") }
+    /// Must match FluidAudio's `Repo.folderName` (the repository slug without
+    /// "-coreml") for `AsrModels.load` and its vocabulary lookup to resolve it.
+    var folder: String { String(repository.split(separator: "/").last ?? "").replacingOccurrences(of: "-coreml", with: "") }
 
     static let catalog: [AudioModelManifest] = {
         guard let url = Bundle.module.url(forResource: "AudioModels", withExtension: "json"),
@@ -60,6 +62,12 @@ actor AudioModelAssets {
         // Retain verified files after interruption; a retry only fetches missing assets.
         let staging = root.appendingPathComponent(".install-" + model.id.rawValue, isDirectory: true)
         let destination = staging.appendingPathComponent(model.folder, isDirectory: true)
+        // Early builds staged under the repository slug ("…-coreml"); move any
+        // verified files under the loader's folder name so they still resume.
+        let legacy = staging.appendingPathComponent(model.folder + "-coreml", isDirectory: true)
+        if manager.fileExists(atPath: legacy.path), !manager.fileExists(atPath: destination.path) {
+            try? manager.moveItem(at: legacy, to: destination)
+        }
         try manager.createDirectory(at: destination, withIntermediateDirectories: true)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
@@ -99,7 +107,7 @@ actor AudioModelAssets {
     }
 
     func delete(_ model: AudioModelManifest) throws {
-        for location in [directory(model), root.appendingPathComponent(".install-" + model.id.rawValue)] {
+        for location in [directory(model), root.appendingPathComponent(model.folder + "-coreml", isDirectory: true), root.appendingPathComponent(".install-" + model.id.rawValue)] {
             if FileManager.default.fileExists(atPath: location.path) { try FileManager.default.removeItem(at: location) }
         }
     }
