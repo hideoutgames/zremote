@@ -10,6 +10,9 @@ struct AgentSelectableText: View {
     var markdown = false
     var code = false
     var secondary = false
+    #if os(iOS)
+    var parsed: AttributedString? = nil
+    #endif
     @Environment(\.colorScheme) var colorScheme
     #if os(iOS)
     @Environment(\.sizeCategory) var sizeCategory
@@ -18,7 +21,7 @@ struct AgentSelectableText: View {
     var body: some View {
         #if os(iOS)
         AgentTextView(value: value, markdown: markdown, code: code, secondary: secondary,
-                      colorScheme: colorScheme, sizeCategory: sizeCategory)
+                      colorScheme: colorScheme, sizeCategory: sizeCategory, parsed: parsed)
         #else
         SelectableText(value, markdown: markdown)
         #endif
@@ -33,6 +36,7 @@ struct AgentTextView: UIViewRepresentable {
     let secondary: Bool
     let colorScheme: ColorScheme
     let sizeCategory: ContentSizeCategory
+    var parsed: AttributedString? = nil
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
@@ -87,8 +91,8 @@ struct AgentTextView: UIViewRepresentable {
         let color = UIColor(secondary ? Palette.secondary : Palette.text)
         let font = code ? UIFont.monospacedSystemFont(ofSize: base.pointSize, weight: .regular) : base
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
-        guard markdown, let parsed = try? AttributedString(markdown: value,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) else {
+        guard markdown, let parsed = self.parsed ?? (try? AttributedString(markdown: value,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) else {
             return NSAttributedString(string: value, attributes: attributes)
         }
         let output = NSMutableAttributedString(string: "")

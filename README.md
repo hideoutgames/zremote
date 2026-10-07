@@ -44,6 +44,10 @@ The picker follows Zeron's compact provider tabs, favorites and scoped search,
 using original provider marks in the picker and Composer. The Composer includes
 the effective reasoning level and Fast mode. Test mode includes Claude Code,
 Codex and the configurable Devin Fusion fixture.
+On iOS, model configuration popovers stay anchored to their model row and can
+move above, below or beside it to fit the screen. Hosted content respects the
+native popover safe area, including its arrow. The title and Close remain fixed;
+only the options scroll when the keyboard or available height constrains the panel.
 Picker animations preserve the layout and respect Reduce Motion. Each model,
 including favorites, remembers its own effort and options; new sessions restore
 the last used provider. On iOS, microphone input defaults to on-device Dictation.
@@ -132,6 +136,16 @@ the Sessions button, title, PR menu, and session actions while the transcript
 scrolls underneath. Earlier iOS versions and other platforms retain the top blur.
 Tapping noninteractive areas dismisses the iOS keyboard and clears editor focus.
 Buttons, links, and native text selection retain their own gestures.
+Jump to latest stays visible while the transcript is away from the bottom and
+hides only after reaching it. The iOS transcript uses reusable native collection
+cells with stable message/block identities, asynchronous cached Markdown preparation,
+and visible-row sizing, adapting Zeron iOS's viewport reuse and reading-anchor
+approach to ZRemote's existing cards. The collection starts at the tail without
+laying out every historical message. Composer and keyboard insets are included;
+user scrolling pauses following through deceleration. Updates preserve the visible
+row while reading history. Jump targets the tail and resumes following. Switching
+sessions cancels preparation and resets the position. Try mode's longer planning
+conversation contains 500 review passes for exercising this path.
 Sub-agent cards show only a title and state; Working uses a quiet shimmer that
 stops with Reduce Motion. User-message context menus include the recorded send
 time, and completed turns show their recorded work duration in subheadline text,
@@ -275,7 +289,10 @@ at 10% remaining for an unambiguous active account. Once raised, it stays visibl
 across project/provider changes until dismissed for its original session, even
 if a later sample recovers or is unavailable. Usage comes from the host's existing account API through this app's
 bundled peer bridge; no upstream Zeron or server changes are required.
-Its warning icon and progress fill are orange; the warning has no orange outline.
+The warning uses a compact neutral card with a subtle border, a remaining
+percentage, a thin amber meter, and a 44-point icon-only dismiss control.
+Settings usage meters use adaptive gray fills and quiet tracks. Agent providers
+lists host-connected accounts; connecting an agent remains a host operation.
 
 Notifications currently use a **temporary, mobile-only** implementation: iOS
 alerts for a new question, a finished turn, and a quota crossing below 10% are

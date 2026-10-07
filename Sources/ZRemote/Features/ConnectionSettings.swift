@@ -43,7 +43,6 @@ struct AgentProviderSettings: View {
     @State var snapshot = AgentAccountsSnapshot(available: false)
     @State var loading = false
     @State var failed = false
-    @State var adding = false
     @State var revision = 0
 
     private var selectedHost: String { hostID.isEmpty ? model.session?.hostID ?? model.selectedHostID : hostID }
@@ -89,25 +88,31 @@ struct AgentProviderSettings: View {
                         } else {
                             ForEach(Array(account.usageWindows.enumerated()), id: \.offset) { _, window in
                                 if let remaining = window.remainingFraction {
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        HStack {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack(alignment: .firstTextBaseline, spacing: 12) {
                                             Text(window.label)
+                                                .font(.subheadline)
+                                                .foregroundStyle(Palette.secondary)
                                             Spacer()
-                                            Text("\(Int((remaining * 100).rounded()))% left").font(.system(.caption, design: .monospaced))
-                                        }.font(.caption).foregroundStyle(Palette.secondary)
+                                            Text("\(Int((remaining * 100).rounded()))% left")
+                                                .font(.subheadline.weight(.medium))
+                                                .monospacedDigit()
+                                                .foregroundStyle(Palette.text)
+                                                .fixedSize(horizontal: true, vertical: false)
+                                        }
                                         UsageProgressBar(remaining: remaining)
-                                    }.padding(.vertical, 4)
+                                            .accessibilityHidden(true)
+                                    }
+                                    .padding(.vertical, 6)
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(window.label)
+                                    .accessibilityValue("\(Int((remaining * 100).rounded())) percent remaining")
                                 }
                             }
                         }
                     } else {
                         Text(account.active ? "Active account" : "Connected account").font(.caption).foregroundStyle(Palette.secondary)
                     }
-                }.listRowBackground(Palette.surface)
-            }
-            if !showUsage {
-                Section {
-                    Button { adding = true } label: { Label("Add agent", systemImage: "plus") }
                 }.listRowBackground(Palette.surface)
             }
         }
@@ -122,11 +127,6 @@ struct AgentProviderSettings: View {
                 guard !Task.isCancelled else { return }
                 snapshot = result
             } catch { if !Task.isCancelled { failed = true } }
-        }
-        .alert("Add an agent", isPresented: $adding) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Open Zeron on \(model.workspace.hosts.first(where: { $0.id == selectedHost })?.name ?? "your host"), then connect an account in Agent Accounts. Return here and refresh to see it.")
         }
     }
 
