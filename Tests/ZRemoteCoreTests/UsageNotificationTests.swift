@@ -4,6 +4,23 @@ import XCTest
 import ZRemoteCore
 
 final class UsageNotificationTests: XCTestCase {
+    func testWarningScopeRequiresSessionHostHarnessAndUpstreamProvider() {
+        let source = UsageWarningSource(sessionID: "chat", hostID: "mac", providerID: "opencode", accountID: "account",
+            upstreamProviderID: "anthropic", modelID: "anthropic/claude", observedAt: Date())
+        XCTAssertTrue(UsageLimitRules.matches(source, sessionID: "chat", hostID: "mac",
+            selection: ModelSelection(providerID: "opencode", modelID: "anthropic/other")))
+        XCTAssertFalse(UsageLimitRules.matches(source, sessionID: nil, hostID: "mac",
+            selection: ModelSelection(providerID: "opencode", modelID: "anthropic/claude")))
+        XCTAssertFalse(UsageLimitRules.matches(source, sessionID: "another", hostID: "mac",
+            selection: ModelSelection(providerID: "opencode", modelID: "anthropic/claude")))
+        XCTAssertFalse(UsageLimitRules.matches(source, sessionID: "chat", hostID: "other",
+            selection: ModelSelection(providerID: "opencode", modelID: "anthropic/claude")))
+        XCTAssertFalse(UsageLimitRules.matches(source, sessionID: "chat", hostID: "mac",
+            selection: ModelSelection(providerID: "codex", modelID: "anthropic/claude")))
+        XCTAssertFalse(UsageLimitRules.matches(source, sessionID: "chat", hostID: "mac",
+            selection: ModelSelection(providerID: "opencode", modelID: "openai/gpt")))
+    }
+
     func testPlanQuotaUsesMostRestrictiveWindowAndNeverContextTokenUsage() throws {
         let now = Date(timeIntervalSince1970: 2_000)
         let account = AgentAccount(id: "a", harness: "codex", usageWindows: [
@@ -215,14 +232,14 @@ final class UsageNotificationTests: XCTestCase {
         client.usedFractionsByHost["other"] = 0.95
         model.setForeground(true); await settle()
         XCTAssertEqual(notifications.events.filter { $0.kind == .usageLimit }.map(\.sessionID), ["elsewhere"])
-        XCTAssertEqual(model.usageWarning?.source?.sessionID, "elsewhere")
-        XCTAssertEqual(model.usageWarning?.source?.hostID, "other")
+        XCTAssertNil(model.usageWarning, "A background session must not put its provider warning over the visible chat")
+        XCTAssertEqual(model.preferences.usageWarnings.first?.source?.sessionID, "elsewhere")
         XCTAssertEqual(model.agentAccounts.accounts.first?.remainingFraction ?? 0, 0.6, accuracy: 0.000_001)
         XCTAssertEqual(model.selectedSessionID, "visible")
         model.setForeground(false)
     }
 
-    @MainActor func testUsageWarningSurvivesNavigationRecoveryAndUnavailableDataUntilSourceDismissed() async {
+    @MainActor func testUsageWarningIsRetainedButOnlyVisibleInOriginalSessionAndProvider() async {
         let client = NotificationTestClient()
         client.rows = [
             Session(id: "source", title: "Source", hostID: "host", working: true, providerID: "codex"),
@@ -234,18 +251,21 @@ final class UsageNotificationTests: XCTestCase {
         XCTAssertEqual(model.usageWarning?.source?.providerID, "codex")
         XCTAssertEqual(model.usageWarning?.percentRemaining, 5)
         await model.open("other-session"); await settle()
-        XCTAssertEqual(model.usageWarning?.source?.sessionID, "source")
+        XCTAssertNil(model.usageWarning)
         model.newSession(); model.setHost("host")
         client.usedFraction = 0.4; await model.refreshAgentAccounts()
-        XCTAssertEqual(model.usageWarning?.percentRemaining, 5, "Quota recovery must not dismiss an unresolved observation")
+        XCTAssertNil(model.usageWarning, "New composers must not show another session's retained warning")
+        XCTAssertEqual(model.preferences.usageWarnings.first?.percentRemaining, 5)
         client.snapshotsByHost["host"] = .init(available: false)
         await model.refreshAgentAccounts()
+        XCTAssertNil(model.usageWarning)
+        await model.open("source"); await settle()
         XCTAssertEqual(model.usageWarning?.source?.sessionID, "source")
-        await model.open("other-session"); await settle()
         model.dismissUsageWarning()
         XCTAssertNil(model.usageWarning)
         XCTAssertTrue(model.preferences.dismissedUsageSessions.contains("source"))
         XCTAssertFalse(model.preferences.dismissedUsageSessions.contains("other-session"))
+        await model.open("other-session"); await settle()
         client.snapshotsByHost["other"] = .init(accounts: [AgentAccount(id: "claude-account", harness: "claude-code",
             usageWindows: [.init(label: "Plan", usedFraction: 0.93)], usageFetchedAt: Int64(Date().timeIntervalSince1970 * 1000))])
         await model.refreshAgentAccounts()
@@ -273,8 +293,9 @@ final class UsageNotificationTests: XCTestCase {
         XCTAssertEqual(model.usageWarning?.source?.accountID, "account-a")
         account.id = "account-b"; account.usageWindows[0].usedFraction = 0.99
         client.snapshotsByHost["host"] = .init(accounts: [account]); await model.refreshAgentAccounts()
-        XCTAssertEqual(model.usageWarning?.source?.accountID, "account-a")
-        XCTAssertEqual(model.usageWarning?.percentRemaining, 5)
+        XCTAssertEqual(model.usageWarning?.source?.accountID, "account-b")
+        XCTAssertEqual(model.usageWarning?.percentRemaining, 1, "Show the current agent account's quota, not the original account's")
+        XCTAssertEqual(model.preferences.usageWarnings.first?.source?.accountID, "account-a")
         model.setForeground(false)
     }
 
@@ -289,8 +310,12 @@ final class UsageNotificationTests: XCTestCase {
         try await store.save(saved)
         let model = AppModel(client: client, makeLiveClient: { NotificationTestClient() },
             makeStore: { LocalStateStore(accountKey: $0, root: root) })
+        model.selectedSessionID = "source"
+        model.selectedHostID = "host"
+        model.newSelection = ModelSelection(providerID: "codex")
         model.preferences.usageWarnings = saved.usageWarnings
         model.dismissUsageWarning()
+        model.newSession()
         model.setTheme(.light)
         await model.start()
         let restored = UsagePreferenceRestorationExpectation(model: model)

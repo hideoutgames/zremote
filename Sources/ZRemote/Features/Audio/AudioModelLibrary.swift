@@ -35,6 +35,7 @@ enum AudioModelState: Equatable {
             return
         }
         revision += 1
+        let operationRevision = revision
         busy = true
         states[id] = .downloading(0)
         error = nil
@@ -43,16 +44,26 @@ enum AudioModelState: Equatable {
             do {
                 try await AudioModelAssets.shared.install(model) { [weak self] value in
                     Task { @MainActor in
-                        guard let self, let current = self.states[id]?.progress else { return }
+                        guard let self, self.revision == operationRevision, !Task.isCancelled,
+                              let current = self.states[id]?.progress else { return }
                         self.states[id] = .downloading(max(current, value))
                     }
                 }
                 states[id] = .installed
             } catch {
                 states[id] = .available
-                self.error = "Couldn't install \(id.label). Check your connection and free storage, then try again."
+                if !Task.isCancelled {
+                    self.error = "Couldn't install \(id.label). Check your connection and free storage, then try again."
+                }
             }
         }
+    }
+
+    func cancel(_ id: AudioModelID) {
+        guard state(id).progress != nil, let operation else { return }
+        revision += 1
+        operation.cancel()
+        states[id] = .available
     }
 
     func delete(_ id: AudioModelID, isDemo: Bool) async -> Bool {

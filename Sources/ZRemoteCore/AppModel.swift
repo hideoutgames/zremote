@@ -42,6 +42,7 @@ public enum SecondaryRoute: Identifiable {
     public var newSelection = ModelSelection()
     public var catalog: [AgentModel] = []
     public var state: SessionState?
+    public private(set) var loadingSession = false
     public var sessionsVisible = false
     public var usesSessionPanel = false
     public var route: SecondaryRoute?
@@ -182,7 +183,13 @@ public enum SecondaryRoute: Identifiable {
     public var usageWarning: UsageWarning? {
         preferences.usageWarnings.first {
             guard let source = $0.source else { return false }
-            return !preferences.dismissedUsageSessions.contains(source.sessionID)
+            guard !preferences.dismissedUsageSessions.contains(source.sessionID),
+                  UsageLimitRules.matches(source, sessionID: selectedSessionID,
+                                          hostID: session?.hostID ?? selectedHostID, selection: selection) else { return false }
+            if accountHostID == source.hostID, agentAccounts.available {
+                return UsageLimitRules.account(accounts: agentAccounts.accounts, selection: selection)?.id == source.accountID
+            }
+            return true
         }
     }
     public var changes: [CapturedTurnChanges] { preferences.changes.filter { $0.sessionID == selectedSessionID } }
@@ -324,7 +331,7 @@ public enum SecondaryRoute: Identifiable {
         editedModelSelections = []; editedLastModelSelection = false
         editedAudioInput = false
         changeSizes = [:]
-        workspace = WorkspaceState(); sessions = [:]; state = nil
+        workspace = WorkspaceState(); sessions = [:]; state = nil; loadingSession = false
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
         preferences = LocalPreferences(); catalog = []; route = nil; organizations = []; zeronAccounts = []; changesAfterMessage = [:]; pendingChangeMessageIDs = []
         attachmentDrafts = [:]; pullRequestsAfterMessage = [:]; answerSubmissions = [:]
@@ -377,10 +384,14 @@ public enum SecondaryRoute: Identifiable {
             var next = next
             next.workingStartedAt = WorkingStatus.start(for: next, previous: previous, now: Date())
             sessions[next.id] = next
+            if let index = workspace.sessions.firstIndex(where: { $0.id == next.id }) {
+                workspace.sessions[index] = SessionListState.applying(next, to: workspace.sessions[index])
+            }
             if let submission = answerSubmissions[next.id], next.input != submission.input {
                 answerSubmissions[next.id] = nil
             }
             if selectedSessionID == next.id {
+                loadingSession = false
                 state = next
                 if previous?.selection != next.selection { rememberModelSelection(next.selection) }
                 observePullRequests()
@@ -403,7 +414,7 @@ public enum SecondaryRoute: Identifiable {
         selectionGeneration += 1
         resetCheckoutSelection()
         if let id = selectedSessionID { client.closeSession(id) }
-        selectedSessionID = nil; state = nil; changesAfterMessage = [:]; pendingChangeMessageIDs = []; pullRequestsAfterMessage = [:]
+        selectedSessionID = nil; state = nil; loadingSession = false; changesAfterMessage = [:]; pendingChangeMessageIDs = []; pullRequestsAfterMessage = [:]
         restoreNewModelSelection()
         if !usesSessionPanel { sessionsVisible = false }
         restoreComposerDestination()
@@ -421,7 +432,7 @@ public enum SecondaryRoute: Identifiable {
             workspace.sessions[index].unread = false
             rememberDestination(workspace.sessions[index])
         }
-        selectedSessionID = id; state = sessions[id]
+        selectedSessionID = id; state = sessions[id]; loadingSession = state == nil
         if !usesSessionPanel { sessionsVisible = false }
         placeChangeCards()
         placePullRequestCards()
@@ -432,6 +443,7 @@ public enum SecondaryRoute: Identifiable {
             loadModels()
         } catch {
             if epoch == generation, selectionEpoch == selectionGeneration {
+                loadingSession = false
                 if unread, let index = workspace.sessions.firstIndex(where: { $0.id == id }) { workspace.sessions[index].unread = true }
                 self.error = "Couldn't open this session. Try again when the host is online."
             }
@@ -770,6 +782,14 @@ public enum SecondaryRoute: Identifiable {
         preferences.usageWarnings.removeAll { $0.source?.sessionID == id }
         scheduleSave()
     }
+    public func cancelTranscription(_ insertion: TranscriptionInsertion, context: String, sessionID: String?) -> ComposerTextEdit? {
+        guard context.hasPrefix("\(generation):") else { return nil }
+        let key = sessionID ?? "new"
+        guard let edit = insertion.cancel(in: preferences.drafts[key] ?? "") else { return nil }
+        preferences.drafts[key] = edit.text
+        scheduleSave()
+        return selectedSessionID == sessionID ? edit : nil
+    }
     public func setNotifications(_ value: NotificationPreferences) {
         editedNotifications = true; preferences.notifications = value; scheduleSave()
         for (id, event) in notificationDeliveryEvents where !notificationEnabled(event.kind) {
@@ -875,13 +895,15 @@ public enum SecondaryRoute: Identifiable {
             let existing = preferences.usageWarnings.first { $0.source?.sessionID == row.id }
             guard row.working || row.id == selectedSessionID || existing != nil else { continue }
             let currentSelection = row.providerID.isEmpty ? (sessions[row.id]?.selection ?? ModelSelection()) : ModelSelection(providerID: row.providerID, modelID: row.modelID)
-            // Refresh the warning's original provider if the session model changed.
-            let selection = existing?.source.map { ModelSelection(providerID: $0.providerID, modelID: $0.modelID) } ?? currentSelection
+            let selection = currentSelection
             guard let account = UsageLimitRules.account(accounts: snapshot.accounts, selection: selection),
                   var warning = UsageLimitRules.warning(remaining: account.remainingFraction),
                   let fetchedAt = account.usageFetchedAt else { continue }
             warning.source = UsageWarningSource(sessionID: row.id, hostID: hostID, providerID: selection.providerID,
                 accountID: account.id, upstreamProviderID: account.provider, modelID: selection.modelID,
+                usageLabel: account.usageWindows.filter { $0.remainingFraction != nil }.min {
+                    ($0.remainingFraction ?? 1) < ($1.remainingFraction ?? 1)
+                }?.label,
                 observedAt: Date(timeIntervalSince1970: Double(fetchedAt) / 1000))
             observations.append(warning)
         }

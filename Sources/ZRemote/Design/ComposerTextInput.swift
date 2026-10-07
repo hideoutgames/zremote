@@ -9,6 +9,7 @@ import UIKit
 struct ComposerTextInput: View {
     @Binding var text: String
     @Binding var cursor: Int
+    @Binding var selectionLength: Int
     @Binding var isFocused: Bool
     @Binding var isComposing: Bool
     let selectionRequest: Int
@@ -17,7 +18,7 @@ struct ComposerTextInput: View {
 
     var body: some View {
         #if os(iOS)
-        NativeComposerEditor(text: $text, cursor: $cursor, isFocused: $isFocused, isComposing: $isComposing,
+        NativeComposerEditor(text: $text, cursor: $cursor, selectionLength: $selectionLength, isFocused: $isFocused, isComposing: $isComposing,
                              selectionRequest: selectionRequest, maximumHeight: maximumHeight)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -67,6 +68,7 @@ struct ComposerTextInput: View {
 struct NativeComposerEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var cursor: Int
+    @Binding var selectionLength: Int
     @Binding var isFocused: Bool
     @Binding var isComposing: Bool
     let selectionRequest: Int
@@ -159,7 +161,7 @@ struct NativeComposerEditor: UIViewRepresentable {
                 view.selectedRange = NSRange(location: document.displayOffset(edit.cursorUTF16), length: 0)
             }
             parent.text = document.source
-            parent.cursor = document.sourceOffset(NSMaxRange(view.selectedRange))
+            reportSelection(view)
             parent.isComposing = view.markedTextRange != nil
             if view.markedTextRange == nil { decorate(view) }
             previousSelection = view.selectedRange
@@ -176,11 +178,17 @@ struct NativeComposerEditor: UIViewRepresentable {
                 }
             }
             previousSelection = view.selectedRange
-            parent.cursor = document.sourceOffset(NSMaxRange(view.selectedRange))
+            reportSelection(view)
             parent.isComposing = view.markedTextRange != nil
         }
         func textViewDidBeginEditing(_ view: UITextView) { if !updating { parent.isFocused = true } }
         func textViewDidEndEditing(_ view: UITextView) { if !updating { parent.isFocused = false } }
+
+        private func reportSelection(_ view: UITextView) {
+            let end = document.sourceOffset(NSMaxRange(view.selectedRange))
+            parent.cursor = end
+            parent.selectionLength = end - document.sourceOffset(view.selectedRange.location)
+        }
 
         func textView(_ view: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
             guard !updating, view.markedTextRange == nil else { return true }
@@ -208,7 +216,7 @@ struct NativeComposerEditor: UIViewRepresentable {
             view.selectedRange = NSRange(location: start, length: document.displayOffset(NSMaxRange(selection)) - start)
             decorate(view)
             previousSelection = view.selectedRange
-            parent.text = source; parent.cursor = NSMaxRange(selection); parent.isComposing = false
+            parent.text = source; parent.cursor = NSMaxRange(selection); parent.selectionLength = selection.length; parent.isComposing = false
             updating = false
             view.invalidateIntrinsicContentSize()
         }

@@ -4,6 +4,37 @@ public enum AudioInputMode: String, Codable, CaseIterable, Sendable {
     case dictation, audioModel
 }
 
+/// Partial recognition revises one insertion, never appends the whole hypothesis.
+public struct TranscriptionInsertion: Sendable {
+    private let original: String
+    private let selection: NSRange
+    private var expected: String
+
+    public init(draft: String, selection: NSRange) {
+        original = draft
+        expected = draft
+        self.selection = ComposerReferenceText(draft).selection(selection, inSource: true)
+    }
+
+    public mutating func update(_ transcription: String, in draft: String) -> ComposerTextEdit? {
+        let speech = transcription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard draft == expected, !speech.isEmpty else { return nil }
+        let source = original as NSString
+        let prefix = source.substring(to: selection.location)
+        let suffix = source.substring(from: NSMaxRange(selection))
+        let leading = prefix.last.map { !$0.isWhitespace } == true ? " " : ""
+        let trailing = suffix.first.map { !$0.isWhitespace && !$0.isPunctuation } == true ? " " : ""
+        let inserted = leading + speech + trailing
+        expected = prefix + inserted + suffix
+        return ComposerTextEdit(text: expected, cursorUTF16: prefix.utf16.count + leading.utf16.count + speech.utf16.count)
+    }
+
+    public func cancel(in draft: String) -> ComposerTextEdit? {
+        guard draft == expected else { return nil }
+        return ComposerTextEdit(text: original, cursorUTF16: NSMaxRange(selection))
+    }
+}
+
 public enum AudioModelID: String, Codable, CaseIterable, Identifiable, Sendable {
     case multilingual, english
     public var id: String { rawValue }

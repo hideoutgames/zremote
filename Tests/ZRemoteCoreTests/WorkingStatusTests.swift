@@ -51,4 +51,23 @@ final class WorkingStatusTests: XCTestCase {
         client.onUpdate?(.session(SessionState(id: "s", turnID: "turn-2")))
         XCTAssertNil(model.state?.workingStartedAt)
     }
+
+    @MainActor func testSessionUpdatesRefreshListStateWithoutAWorkspaceEvent() {
+        let client = DemoClient()
+        let model = AppModel(client: client, makeLiveClient: { DemoClient() })
+        client.onUpdate?(.workspace(WorkspaceState(sessions: [Session(id: "s", title: "Chat", hostID: "host")])))
+
+        client.onUpdate?(.session(SessionState(id: "s", working: true)))
+        XCTAssertEqual(model.workspace.sessions.first?.activity, "Working")
+        XCTAssertEqual(model.workspace.sessions.first?.working, true)
+
+        let input = InputRequest(id: "input", questions: [InputQuestion(id: "q", title: "Choose")])
+        client.onUpdate?(.session(SessionState(id: "s", working: true, input: input)))
+        XCTAssertEqual(model.workspace.sessions.first?.activity, "Waiting for response")
+        XCTAssertEqual(model.workspace.sessions.first?.awaitingInput, true)
+
+        client.onUpdate?(.session(SessionState(id: "s")))
+        XCTAssertEqual(model.workspace.sessions.first?.activity, "")
+        XCTAssertEqual(model.workspace.sessions.first?.working, false)
+    }
 }

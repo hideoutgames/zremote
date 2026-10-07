@@ -5,8 +5,8 @@ import ZRemoteCore
 
 struct AudioInputSettings: View {
     @Bindable var model: AppModel
+    let showDetails: (AudioModelID) -> Void
     @State var library = AudioModelLibrary.shared
-    @State var details: AudioModelID?
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     private var preferences: AudioInputPreferences { model.preferences.audioInput }
@@ -45,15 +45,6 @@ struct AudioInputSettings: View {
         .listRowBackground(Palette.surface)
         .animation(motion, value: preferences.mode)
         .task { await library.refresh() }
-        .sheet(item: $details) { id in
-            NavigationStack {
-                AudioModelDetails(id: id)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { details = nil } } }
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(Palette.background)
-        }
         .alert("Audio Model", isPresented: Binding(get: { library.error != nil }, set: { if !$0 { library.error = nil } })) {
             Button("OK", role: .cancel) { library.error = nil }
         } message: { Text(library.error ?? "") }
@@ -102,9 +93,10 @@ struct AudioInputSettings: View {
         .accessibilityHint("Touch and hold for details and download options")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .nativeContextMenu {
-            Button { details = id } label: { Label("Details", systemImage: "info.circle") }
+            Button { showDetails(id) } label: { Label("Details", systemImage: "info.circle") }
             if let progress = state.progress {
                 Button("Downloading \(Int(progress * 100))%") {}.disabled(true)
+                Button(role: .cancel) { library.cancel(id) } label: { Label("Cancel", systemImage: "xmark.circle") }
             } else if state.installed {
                 Button(role: .destructive) {
                     let context = model.attachmentContext

@@ -28,7 +28,10 @@ Only the selected mode's options appear. Dictation offers a language picker;
 Audio Model offers **Multilingual** (Parakeet v3) and **English** (Parakeet v2).
 Tapping an uninstalled model installs and selects it. Installed rows select it
 immediately. Long press offers Details and Install, Details and Delete, or
-Details and disabled download progress. Deleting the selected model returns
+Details, download progress and Cancel. Details pushes a page within Settings;
+Back returns to the same Settings page. Cancel stops the active transfer without
+an installation-error alert; verified staged files remain reusable on retry.
+Deleting the selected model returns
 the current account to Dictation. Downloads and deletes are disabled in Try mode.
 
 Dictation uses Apple's Speech framework with `requiresOnDeviceRecognition` and
@@ -36,11 +39,17 @@ checks `supportsOnDeviceRecognition`. It never falls back to server recognition.
 Missing permissions or unavailable on-device languages produce actionable
 errors. Speech and microphone permissions are requested only when recording.
 
-Finishing transcribes the temporary recording into the current draft. It never
-sends the draft. Canceling, leaving the composer or changing accounts/sessions
-discards the recording and rejects late results. Recording is capped at one
-minute and automatically finishes at that limit. The waveform stays in the
-existing control layout and the finish button shows transcription progress.
+Dictation streams on-device partial results into the draft while recording,
+replacing its previous hypothesis instead of duplicating it. Audio Model inserts
+its result only after Finish. Both capture the editor's UTF-16 caret/selection at
+start, replace selected text, and retain text on either side (including references).
+The editor is read-only during capture. Neither mode sends the draft. Canceling
+restores the original text unless it has been independently edited; leaving a
+session restores its provisional insertion without changing the new session.
+Account changes reject late results. Recording is capped at one minute and
+automatically finishes at that limit. The microphone row crossfades in place,
+and the waveform uses a uniformly spaced grid even before the first meter sample.
+Reduce Motion freezes waveform scrolling. The finish button shows transcription progress.
 Audio files are removed when the recording task exits. Android retains its
 existing composer; this change does not introduce an Android microphone control.
 

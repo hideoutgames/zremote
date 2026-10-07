@@ -10,6 +10,7 @@ struct ConversationView: View {
     @State var inputFocused = false
     @State var inputComposing = false
     @State var cursor = 0
+    @State var selectionLength = 0
     @State var selectionRequest = 0
     @State var suggestions: [ComposerCompletion] = []
     @State var suggestionToken: ComposerToken?
@@ -19,6 +20,7 @@ struct ConversationView: View {
     @State var following = true
     @State var userScrolling = false
     @State var tailPosition: CGFloat = .infinity
+    @State var jumpToLatestRequest = 0
     @State var headerHeight: CGFloat = 72
     @State var statusHeight: CGFloat = 0
     @State var dismissQuestionFocus = 0
@@ -28,12 +30,12 @@ struct ConversationView: View {
     @State var recording = false
     @State var recordingContext = ""
     @State var recordingPreferences = AudioInputPreferences()
+    @State var transcriptionInsertion: TranscriptionInsertion?
+    @State var recordingSessionID: String?
 
     private var transcriptMessages: [TranscriptMessage] {
         (model.state?.messages ?? []).filter {
-            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !TranscriptActivity.segments(messageID: $0.id, parts: $0.parts, streaming: $0.streaming).isEmpty
-                || !$0.attachments.isEmpty || !$0.subagents.isEmpty
+            TranscriptMetadata.hasContent($0)
                 || TranscriptMetadata.workLabel(duration: $0.workedDuration) != nil
                 || model.changesAfterMessage[$0.id] != nil || model.pendingChangeMessageIDs.contains($0.id)
                 || !(model.pullRequestsAfterMessage[$0.id] ?? []).isEmpty
@@ -90,7 +92,7 @@ struct ConversationView: View {
         .onAppear { cursor = (model.draft as NSString).length; selectionRequest += 1 }
         .onChange(of: model.selectedSessionID) { _, _ in
             following = true; userScrolling = false
-            cursor = (model.draft as NSString).length; selectionRequest += 1
+            cursor = (model.draft as NSString).length; selectionLength = 0; selectionRequest += 1
             suggestions = []; suggestionToken = nil
         }
         .onChange(of: model.sessionsVisible) { _, open in
@@ -195,7 +197,9 @@ struct ConversationView: View {
                     }.padding(.bottom, 8)
                 }
                 if let warning = model.usageWarning {
-                    UsageLimitBanner(warning: warning, dismiss: model.dismissUsageWarning)
+                    UsageLimitBanner(warning: warning,
+                                     providerName: model.catalog.first { $0.providerID == warning.source?.providerID }?.providerName,
+                                     dismiss: model.dismissUsageWarning)
                         .frame(maxWidth: 700).padding(.horizontal, 16)
                 }
             }
@@ -328,6 +332,9 @@ struct ConversationView: View {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
                     VStack(spacing: 0) {
+                    if model.loadingSession {
+                        ProgressView().tint(Palette.secondary).padding(.top, 48)
+                    }
                     LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(transcriptMessages) { message in
                             VStack(alignment: .leading, spacing: 10) {
@@ -376,6 +383,10 @@ struct ConversationView: View {
                     // Outside the lazy stack: actual viewport geometry, not row mounting,
                     // determines when a reader has returned to the live edge.
                     tailAnchor
+                        #if os(iOS)
+                        .background(TranscriptScrollAnchor(request: jumpToLatestRequest,
+                                                           following: following && !userScrolling))
+                        #endif
                     #endif
                     }
                     .frame(maxWidth: 760, alignment: .leading)
@@ -440,8 +451,14 @@ struct ConversationView: View {
                 }
                 if !following {
                     CircleControl(symbol: "arrow.down", label: "Jump to latest") {
+                        userScrolling = false
                         following = true
+                        jumpToLatestRequest += 1
+                        #if os(iOS)
+                        proxy.scrollTo("tail", anchor: .bottom)
+                        #else
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("tail", anchor: .bottom) }
+                        #endif
                     }.padding(18)
                 }
             }
@@ -501,12 +518,12 @@ struct ConversationView: View {
                 if !model.attachments.isEmpty {
                     ComposerAttachments(attachments: model.attachments, remove: model.removeAttachment)
                 }
-                ComposerTextInput(text: $model.draft, cursor: $cursor, isFocused: $inputFocused,
+                ComposerTextInput(text: $model.draft, cursor: $cursor, selectionLength: $selectionLength, isFocused: $inputFocused,
                                   isComposing: $inputComposing, selectionRequest: selectionRequest,
                                   maximumHeight: editorMaximumHeight)
                     .id(model.selectedSessionID ?? "new")
                     .transaction { $0.animation = nil }
-                    .disabled((model.sessionsVisible && !model.usesSessionPanel) || model.route != nil)
+                    .disabled(recording || (model.sessionsVisible && !model.usesSessionPanel) || model.route != nil)
                     .padding(.horizontal, 6)
                     #if os(iOS)
                     .anchorPreference(key: ComposerEditorBounds.self, value: .bounds) { $0 }
@@ -519,24 +536,26 @@ struct ConversationView: View {
                                               onStarted: { model.emitFeedback(.voiceStart) },
                                               onFinished: { model.emitFeedback(.voiceFinish) }) {
                             model.emitFeedback(.voiceFinish)
-                            recording = false
+                            cancelTranscription()
+                        } onPartialTranscript: { text in
+                            updateTranscription(text, context: context)
                         } onTranscript: { text in
-                            guard recording, model.appendTranscription(text, context: context) else { return }
-                            cursor = model.draft.utf16.count
-                            selectionRequest += 1
+                            guard recording, model.attachmentContext == context else { return }
+                            updateTranscription(text, context: context)
                             recording = false
+                            transcriptionInsertion = nil
                         } onError: { message in
                             guard recording, model.attachmentContext == context else { return }
-                            recording = false
+                            cancelTranscription()
                             model.error = message
                         }
                         .id(context)
-                        .transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.96)))
+                        .transition(.opacity)
                     } else {
                         composerControls.transition(.opacity)
                     }
                 }
-                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.86), value: recording)
+                .animation(.easeInOut(duration: reduceMotion ? 0.15 : 0.24), value: recording)
                 #else
                 composerControls
                 #endif
@@ -548,9 +567,9 @@ struct ConversationView: View {
             .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 8)
             .frame(maxWidth: .infinity)
         }
-        .onChange(of: model.attachmentContext) { _, _ in recording = false }
-        .onChange(of: model.route?.id) { _, _ in recording = false }
-        .onChange(of: model.sessionsVisible) { _, _ in recording = false }
+        .onChange(of: model.attachmentContext) { _, _ in cancelTranscription() }
+        .onChange(of: model.route?.id) { _, _ in cancelTranscription() }
+        .onChange(of: model.sessionsVisible) { _, _ in cancelTranscription() }
         #if os(iOS)
         .backgroundPreferenceValue(ComposerEditorBounds.self) { editor in
             GeometryReader { _ in
@@ -583,6 +602,9 @@ struct ConversationView: View {
             Spacer(minLength: 0)
             #if os(iOS)
             Button {
+                transcriptionInsertion = TranscriptionInsertion(draft: model.draft,
+                    selection: NSRange(location: max(0, cursor - selectionLength), length: selectionLength))
+                recordingSessionID = model.selectedSessionID
                 inputFocused = false
                 recordingContext = model.attachmentContext
                 recordingPreferences = model.preferences.audioInput
@@ -638,22 +660,55 @@ struct ConversationView: View {
               let next = ChatText.inserting(item.insertion, for: token, in: model.draft) else { return }
         model.draft = next.text
         cursor = next.cursorUTF16
+        selectionLength = 0
         selectionRequest += 1
         suggestions = []; suggestionToken = nil
         inputFocused = true
+    }
+
+    private func updateTranscription(_ text: String, context: String) {
+        guard recording, model.attachmentContext == context,
+              let edit = transcriptionInsertion?.update(text, in: model.draft) else { return }
+        model.draft = edit.text
+        cursor = edit.cursorUTF16
+        selectionLength = 0
+        selectionRequest += 1
+    }
+
+    private func cancelTranscription() {
+        if recording, let insertion = transcriptionInsertion,
+           let edit = model.cancelTranscription(insertion, context: recordingContext, sessionID: recordingSessionID) {
+            cursor = edit.cursorUTF16
+            selectionLength = 0
+            selectionRequest += 1
+        }
+        recording = false
+        transcriptionInsertion = nil
     }
 
 }
 
 struct UsageLimitBanner: View {
     let warning: UsageWarning
+    let providerName: String?
     let dismiss: () -> Void
+
+    private var provider: String {
+        let id = warning.source?.providerID ?? "Agent"
+        let name = providerName ?? ["claude-code": "Claude Code", "codex": "Codex", "opencode": "OpenCode", "devin": "Devin"][id] ?? id.capitalized
+        return warning.source?.upstreamProviderID.map { name + " · " + $0.capitalized } ?? name
+    }
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 7) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
-                Text("Usage limits approaching.").lineLimit(1).minimumScaleFactor(0.85)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(provider) usage is low.")
+                    if let label = warning.source?.usageLabel, !label.isEmpty {
+                        Text(label).foregroundStyle(Palette.secondary)
+                    }
+                }
                 Spacer(minLength: 4)
                 Button("Dismiss", action: dismiss).fontWeight(.semibold)
                     .foregroundStyle(Palette.text).frame(minHeight: 44)
