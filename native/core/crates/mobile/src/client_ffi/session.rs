@@ -493,6 +493,14 @@ fn visible_parts(parts: &[zeron_doc::MessagePart]) -> String {
         // Questions have a typed composer presentation. Reasoning is never
         // an assistant answer and must not be folded into visible prose.
         MessagePart::Reasoning { .. } | MessagePart::Input { .. } | MessagePart::Fork { .. } => None,
+    }).filter_map(|text| {
+        // Layout owns the space between visible parts. Empty streaming text
+        // and boundary line breaks must not add phantom transcript rows.
+        if text.trim().is_empty() { None }
+        // Fenced/streaming code keeps its exact line endings for Copy. The
+        // Swift block renderer trims only the prose around those fences.
+        else if text.contains("```") || text.contains("~~~") { Some(text) }
+        else { Some(text.trim_matches(['\r', '\n']).to_owned()) }
     }).collect::<Vec<_>>().join("\n\n")
 }
 
@@ -765,6 +773,16 @@ impl SessionHandle {
 mod projection_regression_tests {
     use super::{visible_parts, visible_message, attachment_views, subagent_views};
     use zeron_doc::MessagePart;
+
+    #[test]
+    fn visible_boundaries_skip_empty_streaming_parts_and_keep_code_indentation() {
+        let parts = vec![
+            MessagePart::Text { id: "a".into(), text: "\n\nFirst\n\n".into() },
+            MessagePart::Text { id: "empty".into(), text: " \n\n".into() },
+            MessagePart::Text { id: "b".into(), text: "\n```swift\n  let x = 1\n\n```\n\n".into() },
+        ];
+        assert_eq!(visible_parts(&parts), "First\n\n\n```swift\n  let x = 1\n\n```\n\n");
+    }
 
     #[test]
     fn reasoning_does_not_leak_into_visible_answer() {

@@ -15,6 +15,8 @@ final class SessionsRefreshTests: XCTestCase {
         let first = Task { await model.refreshSessions() }
         await fulfillment(of: [started], timeout: 3)
 
+        let feedbackSerial = model.feedbackSerial
+        XCTAssertEqual(model.feedback, .refresh)
         XCTAssertTrue(model.refreshingSessions, "A synchronous resync must not hide the indicator before it is visible")
         let second = Task { await model.refreshSessions() }
         await first.value
@@ -23,6 +25,7 @@ final class SessionsRefreshTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(beginning.duration(to: .now), .milliseconds(500))
         XCTAssertEqual(client.refreshCount, 1, "Repeated pulls during the feedback hold share the request")
         XCTAssertFalse(model.refreshingSessions)
+        XCTAssertEqual(model.feedbackSerial, feedbackSerial, "Joining a refresh must not repeat its sound or haptic")
         XCTAssertNil(model.error)
         await model.disconnect()
     }

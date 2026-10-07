@@ -6,6 +6,9 @@ import ZRemoteCore
 /// without stretching it to fit this small strip.
 struct SessionRefreshRecess: View {
     @Bindable var model: AppModel
+    var refreshing: Bool
+    @State var animateDots = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -31,11 +34,20 @@ struct SessionRefreshRecess: View {
                         .frame(height: min(8, geometry.size.height / 2))
                 }
                 if geometry.size.height > 16 {
-                    ActivityGlyph()
+                    ActivityGlyph(animating: refreshing && animateDots)
+                        .scaleEffect(reduceMotion ? 1 : refreshing ? 1 : min(1.8, max(0.45, geometry.size.height / 60)))
+                        .opacity(min(1, geometry.size.height / 36))
+                        .animation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.68), value: refreshing)
                 }
             }
         }
         .clipped()
+        .task(id: refreshing) {
+            animateDots = false
+            guard refreshing else { return }
+            if !reduceMotion { try? await Task.sleep(for: .milliseconds(160)) }
+            if !Task.isCancelled { animateDots = true }
+        }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

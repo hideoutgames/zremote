@@ -55,6 +55,14 @@ public enum SecondaryRoute: Identifiable {
     public var zeronAccounts: [ZeronAccount] = []
     public var isDemo = false
     public var preferences = LocalPreferences()
+    public var sessionList: SessionListPreferences {
+        get { preferences.sessionList }
+        set { editedSessionList = true; preferences.sessionList = newValue; scheduleSave() }
+    }
+    public private(set) var feedbackSerial = 0
+    public private(set) var feedback = InteractionFeedback.selection
+    public private(set) var completionError: String?
+
     public var agentAccounts = AgentAccountsSnapshot(available: false)
     public var loadingAccounts = false
     public var accountsError: String?
@@ -115,9 +123,17 @@ public enum SecondaryRoute: Identifiable {
     @ObservationIgnored private var saveAfterRestore = false
     @ObservationIgnored private var editedDrafts: Set<String> = []
     @ObservationIgnored private var editedFavorites = false
+    @ObservationIgnored private var editedModelSelections: Set<String> = []
+    @ObservationIgnored private var editedLastModelSelection = false
+    @ObservationIgnored private var editedAudioInput = false
     @ObservationIgnored private var editedBackground = false
     @ObservationIgnored private var editedTheme = false
     @ObservationIgnored private var editedHaptics = false
+    @ObservationIgnored private var editedSounds = false
+    @ObservationIgnored private var editedSessionList = false
+    @ObservationIgnored private var editedDestination = false
+    @ObservationIgnored private var destinationRestored = false
+    @ObservationIgnored private var completionRequest = 0
     @ObservationIgnored private var changeSizes: [String: Int] = [:]
 
     public init(client: any ClientService, makeLiveClient: @escaping @MainActor () -> any ClientService,
@@ -227,6 +243,7 @@ public enum SecondaryRoute: Identifiable {
         if let task = sessionsRefreshTask { await task.value; return }
         let epoch = generation, source = client
         refreshingSessions = true
+        emitFeedback(.refresh)
         // Resync can return before the next frame. Keep native refresh feedback
         // visible briefly without delaying a slower peer a second time.
         let feedbackDeadline = ContinuousClock.now.advanced(by: .milliseconds(500))
@@ -302,6 +319,10 @@ public enum SecondaryRoute: Identifiable {
         store = nil; restoredAccount = nil; capturing = []
         loadingPreferences = false; saveAfterRestore = false
         editedDrafts = []; editedFavorites = false; editedBackground = false; editedTheme = false; editedHaptics = false; editedNotifications = false
+        editedSounds = false; editedSessionList = false; editedDestination = false; destinationRestored = false
+        completionRequest += 1; completionError = nil
+        editedModelSelections = []; editedLastModelSelection = false
+        editedAudioInput = false
         changeSizes = [:]
         workspace = WorkspaceState(); sessions = [:]; state = nil
         selectedSessionID = nil; selectedProjectID = nil; selectedHostID = ""
@@ -346,6 +367,7 @@ public enum SecondaryRoute: Identifiable {
             if selectedHostID.isEmpty { selectedHostID = next.hosts.first(where: { $0.online })?.id ?? next.hosts.first?.id ?? "" }
             if catalog.isEmpty && !fetchingModels { loadModels() }
             restorePreferencesIfNeeded()
+            if !destinationRestored && !loadingPreferences { restoreComposerDestination() }
             let oldActiveHosts = Set(previousWorkspace.sessions.filter(\.working).map(\.hostID))
             let activeHosts = Set(next.sessions.filter(\.working).map(\.hostID))
             if oldActiveHosts != activeHosts { restartUsageMonitoring() }
@@ -360,6 +382,7 @@ public enum SecondaryRoute: Identifiable {
             }
             if selectedSessionID == next.id {
                 state = next
+                if previous?.selection != next.selection { rememberModelSelection(next.selection) }
                 observePullRequests()
                 if previous?.messages.count != next.messages.count || previous?.working != next.working { placeChangeCards() }
             }
@@ -381,7 +404,9 @@ public enum SecondaryRoute: Identifiable {
         resetCheckoutSelection()
         if let id = selectedSessionID { client.closeSession(id) }
         selectedSessionID = nil; state = nil; changesAfterMessage = [:]; pendingChangeMessageIDs = []; pullRequestsAfterMessage = [:]
+        restoreNewModelSelection()
         if !usesSessionPanel { sessionsVisible = false }
+        restoreComposerDestination()
         loadModels()
     }
 
@@ -391,6 +416,11 @@ public enum SecondaryRoute: Identifiable {
         let epoch = generation
         let selectionEpoch = selectionGeneration
         if let old = selectedSessionID, old != id { client.closeSession(old) }
+        let unread = workspace.sessions.first(where: { $0.id == id })?.unread ?? false
+        if let index = workspace.sessions.firstIndex(where: { $0.id == id }) {
+            workspace.sessions[index].unread = false
+            rememberDestination(workspace.sessions[index])
+        }
         selectedSessionID = id; state = sessions[id]
         if !usesSessionPanel { sessionsVisible = false }
         placeChangeCards()
@@ -398,9 +428,13 @@ public enum SecondaryRoute: Identifiable {
         do {
             try await client.openSession(id)
             guard epoch == generation, selectionEpoch == selectionGeneration else { return }
+            if let selection = state?.selection { rememberModelSelection(selection) }
             loadModels()
         } catch {
-            if epoch == generation, selectionEpoch == selectionGeneration { self.error = "Couldn't open this session. Try again when the host is online." }
+            if epoch == generation, selectionEpoch == selectionGeneration {
+                if unread, let index = workspace.sessions.firstIndex(where: { $0.id == id }) { workspace.sessions[index].unread = true }
+                self.error = "Couldn't open this session. Try again when the host is online."
+            }
         }
     }
 
@@ -503,6 +537,7 @@ public enum SecondaryRoute: Identifiable {
         let selectionEpoch = selectionGeneration
         let source = client
         defer { if epoch == generation { busy = false } }
+        let submittedSelection = selection
         let text = draft
         let submittedAttachments = attachments
         let submittedMode = busyMode ?? messageSendMode
@@ -534,6 +569,8 @@ public enum SecondaryRoute: Identifiable {
             guard epoch == generation else { return }
             try await source.send(sessionID: id, text: text, attachments: submittedAttachments, busy: submittedMode)
             guard epoch == generation else { return }
+            emitFeedback(.send)
+            if selectionEpoch == selectionGeneration { rememberModelSelection(submittedSelection) }
             // Clear only the exact draft submitted; a later edit must survive.
             if preferences.drafts[id] == text { setDraft(nil, for: id) }
             removeSubmittedAttachments(submittedAttachments, from: id)
@@ -561,19 +598,29 @@ public enum SecondaryRoute: Identifiable {
         return data
     }
     public func complete(kind: ComposerTokenKind, query: String) async -> [ComposerCompletion] {
-        let epoch = generation, selected = selectionGeneration
+        completionRequest += 1
+        let request = completionRequest, epoch = generation, selected = selectionGeneration
         let host = session?.hostID ?? selectedHostID
         let provider = selection.providerID
         let project = session?.projectID ?? selectedProjectID
+        completionError = nil
         guard !host.isEmpty else { return [] }
         do {
+            // Host workspace targets are exclusive: a chat already identifies
+            // its project and checkout. Sending both IDs rejects every lookup.
             let result = try await client.complete(kind: kind, query: query, hostID: host,
-                sessionID: selectedSessionID, projectID: project, providerID: provider)
+                sessionID: selectedSessionID, projectID: selectedSessionID == nil ? project : nil, providerID: provider)
             guard !Task.isCancelled, epoch == generation, selected == selectionGeneration,
-                  host == (session?.hostID ?? selectedHostID), provider == selection.providerID,
+                  request == completionRequest, host == (session?.hostID ?? selectedHostID), provider == selection.providerID,
                   project == (session?.projectID ?? selectedProjectID) else { return [] }
             return result
-        } catch { return [] }
+        } catch {
+            if !Task.isCancelled, !(error is CancellationError), epoch == generation,
+               selected == selectionGeneration, request == completionRequest {
+                completionError = "Couldn't load suggestions from your desktop. Try again."
+            }
+            return []
+        }
     }
     public func setPinned(_ session: Session, pinned: Bool) async {
         let epoch = generation
@@ -639,25 +686,54 @@ public enum SecondaryRoute: Identifiable {
                 let values = try await source.models(hostID: host)
                 guard !Task.isCancelled, currentGeneration == self.generation, (self.session?.hostID ?? self.selectedHostID) == host else { return }
                 self.catalog = values
-                if self.selectedSessionID == nil {
-                    let current = values.first { $0.providerID == self.newSelection.providerID && $0.modelID == self.newSelection.modelID }
-                    if let selected = current ?? values.first {
-                        self.newSelection = ModelCatalogRules.selecting(selected, previous: self.newSelection)
-                    } else { self.newSelection = ModelSelection() }
-                }
+                self.restoreNewModelSelection()
             } catch {
                 if !Task.isCancelled, currentGeneration == self.generation, request == self.modelRequest { self.error = "Models aren't available from this host yet." }
             }
         }
     }
 
-    public func chooseModel(_ value: ModelSelection) async {
+    public func selection(for model: AgentModel) -> ModelSelection {
+        let current = selection
+        let saved = current.providerID == model.providerID && current.modelID == model.modelID
+            ? current : preferences.modelSelections[model.id] ?? ModelSelection(providerID: model.providerID, modelID: model.modelID)
+        return ModelCatalogRules.selecting(model, previous: saved)
+    }
+
+    private func restoreNewModelSelection() {
+        guard selectedSessionID == nil else { return }
+        newSelection = ModelCatalogRules.newSessionSelection(in: catalog,
+            preferred: preferences.lastModelSelection ?? newSelection, remembered: preferences.modelSelections)
+    }
+
+    private func rememberModelSelection(_ value: ModelSelection) {
+        guard let modelID = value.modelID, !value.providerID.isEmpty else { return }
+        let id = value.providerID + "\u{1F}" + modelID
+        editedModelSelections.insert(id)
+        editedLastModelSelection = true
+        preferences.modelSelections[id] = value
+        preferences.lastModelSelection = value
+        scheduleSave()
+    }
+
+    @discardableResult public func chooseModel(_ value: ModelSelection) async -> Bool {
         let epoch = generation
+        let selectionEpoch = selectionGeneration
         if let id = selectedSessionID {
-            guard value.providerID == state?.selection.providerID else { return }
+            guard value.providerID == state?.selection.providerID else { return false }
             do { try await client.setModel(sessionID: id, selection: value) }
-            catch { if epoch == generation { self.error = "Couldn't change this session's model." } }
+            catch {
+                if epoch == generation, selectionEpoch == selectionGeneration { self.error = "Couldn't change this session's model." }
+                return false
+            }
         } else { newSelection = value }
+        guard epoch == generation, selectionEpoch == selectionGeneration else { return false }
+        if let id = selectedSessionID {
+            state?.selection = value
+            sessions[id]?.selection = value
+        }
+        rememberModelSelection(value)
+        return true
     }
     public func toggleFavorite(_ id: String) {
         editedFavorites = true
@@ -667,6 +743,12 @@ public enum SecondaryRoute: Identifiable {
     }
     public func setTheme(_ theme: AppTheme) { editedTheme = true; preferences.theme = theme; scheduleSave() }
     public func setHapticsEnabled(_ enabled: Bool) { editedHaptics = true; preferences.hapticsEnabled = enabled; scheduleSave() }
+    public func setSoundsEnabled(_ enabled: Bool) { editedSounds = true; preferences.soundsEnabled = enabled; scheduleSave() }
+    public func emitFeedback(_ event: InteractionFeedback) {
+        guard foreground else { return }
+        feedback = event; feedbackSerial &+= 1
+    }
+    public func setAudioInput(_ value: AudioInputPreferences) { editedAudioInput = true; preferences.audioInput = value; scheduleSave() }
     public func setBackgroundImage(data: Data?, name: String?) {
         guard (data?.count ?? 0) <= 2_000_000 else { error = "Choose a background image smaller than 2 MB."; return }
         editedBackground = true
@@ -730,6 +812,7 @@ public enum SecondaryRoute: Identifiable {
                 queueNotification(SessionNotification(id: "question:" + row.id + ":" + request, sessionID: row.id, kind: .question))
             }
             if let turn = row.completedTurnID, turn != old.completedTurnID, observedRunningSessions.contains(row.id) {
+                if !row.failed { emitFeedback(.finished) }
                 queueNotification(SessionNotification(id: "finished:" + row.id + ":" + turn, sessionID: row.id, kind: .finished))
                 if !row.working && !row.awaitingInput { observedRunningSessions.remove(row.id) }
             }
@@ -846,8 +929,8 @@ public enum SecondaryRoute: Identifiable {
         }
     }
     public func setBackground(_ enabled: Bool) { editedBackground = true; preferences.backgroundEnabled = enabled; scheduleSave() }
-    public func setHost(_ id: String) { selectionGeneration += 1; resetCheckoutSelection(); updateHost(id); selectedProjectID = nil; loadModels() }
-    public func selectProject(_ project: Project) { selectionGeneration += 1; resetCheckoutSelection(); updateHost(project.hostID); selectedProjectID = project.id; loadModels(); route = nil }
+    public func setHost(_ id: String) { selectionGeneration += 1; resetCheckoutSelection(); updateHost(id); selectedProjectID = nil; saveComposerDestination(); loadModels() }
+    public func selectProject(_ project: Project) { selectionGeneration += 1; resetCheckoutSelection(); updateHost(project.hostID); selectedProjectID = project.id; saveComposerDestination(); loadModels(); route = nil }
     public func loadCheckouts() async {
         guard canChooseCheckout, let project else { return }
         let context = checkoutContext
@@ -881,9 +964,45 @@ public enum SecondaryRoute: Identifiable {
         }
         checkoutSelection = selection
         selectedCheckoutContext = context
+        saveComposerDestination()
         route = nil
         return true
     }
+    private func saveComposerDestination() {
+        editedDestination = true; destinationRestored = true
+        preferences.composerDestination.hostID = selectedHostID
+        preferences.composerDestination.projectID = selectedProjectID
+        preferences.composerDestination.checkout = checkoutSelection
+        scheduleSave()
+    }
+
+    private func rememberDestination(_ session: Session) {
+        guard let project = workspace.projects.first(where: { $0.id == session.projectID && $0.hostID == session.hostID }) else { return }
+        editedDestination = true
+        preferences.composerDestination.hostID = session.hostID
+        preferences.composerDestination.projectID = project.id
+        if project.isRepository, !session.path.isEmpty, session.path != project.path {
+            preferences.composerDestination.checkout = .existing(ProjectCheckout(branch: session.branch ?? "", path: session.path))
+        } else { preferences.composerDestination.checkout = .current }
+        scheduleSave()
+    }
+
+    private func restoreComposerDestination() {
+        guard selectedSessionID == nil, !busy else { return }
+        let saved = preferences.composerDestination
+        guard workspace.hosts.contains(where: { $0.id == saved.hostID }) else { return }
+        if let id = saved.projectID, !workspace.projects.contains(where: { $0.id == id && $0.hostID == saved.hostID }) { return }
+        updateHost(saved.hostID)
+        selectedProjectID = saved.projectID
+        checkoutSelection = project?.isRepository == true ? saved.checkout : .current
+        selectedCheckoutContext = checkoutContext
+        destinationRestored = true
+        loadModels()
+        if case .existing = checkoutSelection {
+            Task { await loadCheckouts() }
+        }
+    }
+
     private func resetCheckoutSelection() {
         checkoutRequest += 1
         checkoutSelection = .current; checkouts = []; checkoutError = nil; loadingCheckouts = false
@@ -900,14 +1019,14 @@ public enum SecondaryRoute: Identifiable {
         let id = try await client.addProject(hostID: hostID, path: folder.path, isRepository: folder.isRepository)
         guard epoch == generation else { throw CancellationError() }
         selectionGeneration += 1; resetCheckoutSelection()
-        updateHost(hostID); selectedProjectID = id; loadModels(); route = nil
+        updateHost(hostID); selectedProjectID = id; saveComposerDestination(); loadModels(); route = nil
     }
     public func createProject(hostID: String, name: String) async throws {
         let epoch = generation
         let id = try await client.createRepository(hostID: hostID, name: name)
         guard epoch == generation else { throw CancellationError() }
         selectionGeneration += 1; resetCheckoutSelection()
-        updateHost(hostID); selectedProjectID = id; loadModels(); route = nil
+        updateHost(hostID); selectedProjectID = id; saveComposerDestination(); loadModels(); route = nil
     }
     public func authorizeURL(state: String) throws -> URL { try client.authorizationURL(state: state) }
     public func signIn(code: String) async {
@@ -966,7 +1085,15 @@ public enum SecondaryRoute: Identifiable {
         self.foreground = foreground
         client.setForeground(foreground)
         if foreground { syncNotifications(); restartUsageMonitoring() }
-        else { accountsTask?.cancel() }
+        else {
+            accountsTask?.cancel()
+            // Do not leave the last edit waiting on the debounce at suspension.
+            if let store, !isDemo, !loadingPreferences {
+                saveTask?.cancel()
+                let value = preferences
+                saveTask = Task { try? await store.save(value) }
+            }
+        }
     }
 
     private func restartUsageMonitoring() {
@@ -1132,7 +1259,14 @@ public enum SecondaryRoute: Identifiable {
                 // Preserve edits, including draft deletion, made during the disk read.
                 var merged = restored
                 for id in self.editedDrafts { merged.drafts[id] = self.preferences.drafts[id] }
+                if self.editedSessionList { merged.sessionList = self.preferences.sessionList; self.saveAfterRestore = true }
+                if self.editedDestination { merged.composerDestination = self.preferences.composerDestination; self.saveAfterRestore = true }
+                if self.editedSounds { merged.soundsEnabled = self.preferences.soundsEnabled; self.saveAfterRestore = true }
                 if self.editedFavorites { merged.favorites = self.preferences.favorites }
+                for id in self.editedModelSelections { merged.modelSelections[id] = self.preferences.modelSelections[id] }
+                if self.editedLastModelSelection { merged.lastModelSelection = self.preferences.lastModelSelection }
+                if self.editedAudioInput { merged.audioInput = self.preferences.audioInput }
+                if self.editedLastModelSelection || self.editedAudioInput { self.saveAfterRestore = true }
                 if self.editedTheme { merged.theme = self.preferences.theme }
                 if self.editedHaptics {
                     merged.hapticsEnabled = self.preferences.hapticsEnabled
@@ -1163,11 +1297,13 @@ public enum SecondaryRoute: Identifiable {
                 }
                 if !self.preferences.pullRequests.isEmpty || !self.preferences.sessionFinishedAt.isEmpty || !self.preferences.usageWarnings.isEmpty { self.saveAfterRestore = true }
                 self.preferences = merged
+                self.restoreNewModelSelection()
                 for index in self.workspace.sessions.indices where self.workspace.sessions[index].lastFinishedAt == nil {
                     self.workspace.sessions[index].lastFinishedAt = merged.sessionFinishedAt[self.workspace.sessions[index].id]
                 }
                 self.changeSizes.merge(sizes) { current, _ in current }
                 self.loadingPreferences = false
+                self.restoreComposerDestination()
                 self.syncNotifications()
                 self.trimChanges()
                 self.placeChangeCards()

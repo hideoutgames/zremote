@@ -10,8 +10,14 @@ public struct ObservedPullRequest: Codable, Sendable {
 public struct LocalPreferences: Codable, Sendable {
     public var drafts: [String: String] = [:]
     public var favorites: Set<String> = []
+    public var modelSelections: [String: ModelSelection] = [:]
+    public var lastModelSelection: ModelSelection?
+    public var audioInput = AudioInputPreferences()
     public var theme = AppTheme.system
     public var hapticsEnabled = true
+    public var soundsEnabled = true
+    public var sessionList = SessionListPreferences()
+    public var composerDestination = ComposerDestination()
     public var backgroundEnabled = false
     public var backgroundImageData: Data?
     public var backgroundImageName: String?
@@ -26,13 +32,19 @@ public struct LocalPreferences: Codable, Sendable {
     public var changes: [CapturedTurnChanges] = []
     public var pullRequests: [ObservedPullRequest] = []
     public init() {}
-    private enum CodingKeys: String, CodingKey { case drafts, favorites, theme, hapticsEnabled, backgroundEnabled, backgroundImageData, backgroundImageName, backgroundEffect, backgroundFullHeight, notifications, dismissedUsageSessions, usageWarnings, usageNotifiedSessions, notificationEvents, sessionFinishedAt, changes, pullRequests }
+    private enum CodingKeys: String, CodingKey { case drafts, favorites, modelSelections, lastModelSelection, audioInput, theme, hapticsEnabled, soundsEnabled, sessionList, composerDestination, backgroundEnabled, backgroundImageData, backgroundImageName, backgroundEffect, backgroundFullHeight, notifications, dismissedUsageSessions, usageWarnings, usageNotifiedSessions, notificationEvents, sessionFinishedAt, changes, pullRequests }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         drafts = try values.decodeIfPresent([String: String].self, forKey: .drafts) ?? [:]
         favorites = try values.decodeIfPresent(Set<String>.self, forKey: .favorites) ?? []
+        modelSelections = try values.decodeIfPresent([String: ModelSelection].self, forKey: .modelSelections) ?? [:]
+        lastModelSelection = try values.decodeIfPresent(ModelSelection.self, forKey: .lastModelSelection)
+        audioInput = try values.decodeIfPresent(AudioInputPreferences.self, forKey: .audioInput) ?? AudioInputPreferences()
         theme = AppTheme(rawValue: try values.decodeIfPresent(String.self, forKey: .theme) ?? "system") ?? .system
         hapticsEnabled = try values.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
+        soundsEnabled = try values.decodeIfPresent(Bool.self, forKey: .soundsEnabled) ?? true
+        sessionList = try values.decodeIfPresent(SessionListPreferences.self, forKey: .sessionList) ?? SessionListPreferences()
+        composerDestination = try values.decodeIfPresent(ComposerDestination.self, forKey: .composerDestination) ?? ComposerDestination()
         backgroundEnabled = try values.decodeIfPresent(Bool.self, forKey: .backgroundEnabled) ?? false
         let image = try values.decodeIfPresent(Data.self, forKey: .backgroundImageData)
         backgroundImageData = image.flatMap { $0.count <= 2_000_000 ? $0 : nil }

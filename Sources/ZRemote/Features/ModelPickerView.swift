@@ -10,6 +10,7 @@ struct ModelPickerView: View {
     #if os(iOS)
     @Environment(\.sizeCategory) var sizeCategory
     #endif
+    @Environment(\.layoutDirection) var layoutDirection
     @State var provider = ""
     @State var query = ""
     @State var applying = false
@@ -18,6 +19,8 @@ struct ModelPickerView: View {
     @ScaledMetric(relativeTo: .body) var rowHeight = 44.0
 
     private let favoritesTab = "__favorites__"
+    private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.88) }
+    private var tabIndex: Int { ([favoritesTab] + providers.map(\.providerID)).firstIndex(of: provider) ?? 0 }
     private var edgePadding: CGFloat { model.usesSessionPanel ? 0 : 20 }
     private var lockedProvider: String? {
         model.selectedSessionID == nil ? nil : (model.state?.selection.providerID ?? "")
@@ -68,6 +71,7 @@ struct ModelPickerView: View {
                     .frame(height: min(trayHeight(choice), max(rowHeight, geometry.size.height * 0.4)))
                 }
             }
+            .animation(motion, value: selectedModel?.id)
             #if os(iOS)
             .padding(.bottom, edgePadding)
             #endif
@@ -77,6 +81,9 @@ struct ModelPickerView: View {
         #endif
         .foregroundStyle(Palette.text)
         .background(Palette.background)
+        #if os(iOS)
+        .sensoryFeedback(.selection, trigger: model.selection) { _, _ in model.preferences.hapticsEnabled }
+        #endif
         .navigationTitle("Model")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -95,7 +102,8 @@ struct ModelPickerView: View {
         }
         .onChange(of: model.catalog) { _, _ in
             if provider != favoritesTab && !providers.contains(where: { $0.providerID == provider }) {
-                provider = providers.first?.providerID ?? ""
+                let preferred = lockedProvider ?? model.selection.providerID
+                provider = providers.contains(where: { $0.providerID == preferred }) ? preferred : (providers.first?.providerID ?? preferred)
             }
             if let current = configurationModel {
                 configurationModel = model.catalog.first { $0.id == current.id }
@@ -175,13 +183,19 @@ struct ModelPickerView: View {
                     tab(choice.providerName, id: choice.providerID)
                 }
             }
+            .overlay(alignment: .bottomLeading) {
+                Capsule().fill(Palette.text).frame(width: 22, height: 2)
+                    .offset(x: (11 + CGFloat(tabIndex) * 44) * (layoutDirection == .rightToLeft ? -1 : 1))
+                    .animation(motion, value: provider)
+                    .allowsHitTesting(false)
+            }
             .padding(.horizontal, 6)
         }
     }
 
     private func tab(_ title: String, id: String) -> some View {
         Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { provider = id }
+            withAnimation(motion) { provider = id }
         } label: {
             VStack(spacing: 0) {
                 Group {
@@ -193,11 +207,11 @@ struct ModelPickerView: View {
                     }
                 }
                 .frame(width: 44, height: 42)
-                Capsule().fill(provider == id ? Palette.text : .clear).frame(width: 22, height: 2)
+                Color.clear.frame(width: 22, height: 2)
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .modelPickerPressFeedback()
         .accessibilityLabel(title)
         .accessibilityAddTraits(provider == id ? .isSelected : [])
         .accessibilityIdentifier("model-tab-" + (id == favoritesTab ? "favorites" : id))
@@ -271,7 +285,7 @@ struct ModelPickerView: View {
         let configurable = ModelPresentation.configuredInPlace(choice)
         return HStack(spacing: 0) {
             Button {
-                apply(ModelCatalogRules.selecting(choice, previous: model.selection), configure: configurable ? choice : nil)
+                apply(model.selection(for: choice), configure: configurable ? choice : nil)
             } label: {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -297,7 +311,7 @@ struct ModelPickerView: View {
                 .padding(.leading, 12)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .modelPickerPressFeedback()
             .disabled(applying || row.unavailable)
             .accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityHint(configurable ? "Shows model settings" : "")
@@ -317,14 +331,17 @@ struct ModelPickerView: View {
             }
             #endif
             if !row.unavailable {
-                Button { model.toggleFavorite(choice.id) } label: {
+                Button { withAnimation(motion) { model.toggleFavorite(choice.id) } } label: {
                     Image(systemName: favorite ? "star.fill" : "star")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(favorite ? Color.orange : Palette.secondary.opacity(0.8))
+                        #if os(iOS)
+                        .symbolEffect(.bounce, value: !reduceMotion && favorite)
+                        #endif
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .modelPickerPressFeedback()
                 .accessibilityLabel("\(favorite ? "Remove" : "Add") \(choice.name) \(favorite ? "from" : "to") favorites")
             } else {
                 Image(systemName: "checkmark").font(.caption.weight(.semibold)).frame(width: 44)
@@ -332,6 +349,8 @@ struct ModelPickerView: View {
         }
         .background(selected ? Palette.surface : .clear, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Palette.line : .clear, lineWidth: 1))
+        .animation(motion, value: selected)
+        .transition(.opacity)
     }
 
     private func trayHeight(_ choice: AgentModel) -> CGFloat {
@@ -346,7 +365,7 @@ struct ModelPickerView: View {
                     ModelChoice(id: $0, label: ModelPresentation.effortLabel($0))
                 }, selected: model.selection.effort ?? "",
                 value: ModelPresentation.effectiveEffort(model: choice, selection: model.selection).map(ModelPresentation.effortLabel) ?? "Default") { value in
-                    var selection = ModelCatalogRules.selecting(choice, previous: model.selection)
+                    var selection = model.selection(for: choice)
                     selection.effort = value.isEmpty ? nil : value
                     apply(selection)
                 }
@@ -366,7 +385,7 @@ struct ModelPickerView: View {
            option.choices.contains(where: { $0.id == defaultChoice }) {
             Toggle(option.label, isOn: Binding(get: { selected != defaultChoice }, set: { enabled in
                 let value = enabled ? option.choices.first(where: { $0.id != defaultChoice })?.id : nil
-                var selection = ModelCatalogRules.selecting(choice, previous: model.selection)
+                var selection = model.selection(for: choice)
                 selection.options[option.id] = value
                 apply(selection)
             }))
@@ -377,7 +396,7 @@ struct ModelPickerView: View {
         } else {
             choiceMenu(option.label, choices: option.choices, selected: selected,
                        value: option.choices.first(where: { $0.id == selected })?.label ?? "Default") { value in
-                var selection = ModelCatalogRules.selecting(choice, previous: model.selection)
+                var selection = model.selection(for: choice)
                 selection.options[option.id] = value == option.defaultChoice ? nil : value
                 apply(selection)
             }
@@ -419,10 +438,35 @@ struct ModelPickerView: View {
         guard !applying else { return }
         applying = true
         Task {
-            await model.chooseModel(selection)
+            let applied = await model.chooseModel(selection)
             applying = false
-            if let choice, model.selection.providerID == choice.providerID,
-               model.selection.modelID == choice.modelID { configurationModel = choice }
+            if applied, let choice, model.selection.providerID == choice.providerID,
+               model.selection.modelID == choice.modelID {
+                withAnimation(motion) { configurationModel = choice }
+            }
         }
     }
 }
+
+extension View {
+    @ViewBuilder func modelPickerPressFeedback() -> some View {
+        #if os(iOS)
+        buttonStyle(ModelPickerPressStyle())
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+}
+
+#if os(iOS)
+struct ModelPickerPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85), value: configuration.isPressed)
+    }
+}
+#endif

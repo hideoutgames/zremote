@@ -18,6 +18,7 @@ struct ConversationView: View {
     @State var suggestions: [ComposerCompletion] = []
     @State var suggestionToken: ComposerToken?
     @State var loadingSuggestions = false
+    @State var completionRetry = 0
     @State var viewportHeight: CGFloat = 600
     @State var transcriptScroll = TranscriptScrollState()
     @State var scrollRequest = 0
@@ -29,7 +30,19 @@ struct ConversationView: View {
     @State var projectContextHeight: CGFloat = 48
     @State var composerChromeHeight: CGFloat = 110
     @State var recording = false
+    @State var recordingContext = ""
+    @State var recordingPreferences = AudioInputPreferences()
 
+    private var transcriptMessages: [TranscriptMessage] {
+        (model.state?.messages ?? []).filter {
+            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !TranscriptActivity.segments(messageID: $0.id, parts: $0.parts, streaming: $0.streaming).isEmpty
+                || !$0.attachments.isEmpty || !$0.subagents.isEmpty
+                || TranscriptMetadata.workLabel(duration: $0.workedDuration) != nil
+                || model.changesAfterMessage[$0.id] != nil || model.pendingChangeMessageIDs.contains($0.id)
+                || !(model.pullRequestsAfterMessage[$0.id] ?? []).isEmpty
+        }
+    }
     private var wallpaper: Bool {
         model.preferences.backgroundEnabled && model.selectedSessionID == nil
     }
@@ -38,9 +51,11 @@ struct ConversationView: View {
     }
     private var completionRequest: String {
         [model.selectedSessionID ?? "new", model.selectedHostID, model.selectedProjectID ?? "",
-         model.selection.providerID, model.draft, String(cursor), String(inputFocused), String(inputComposing)].joined(separator: "\u{1F}")
+         model.selection.providerID, model.draft, String(cursor), String(inputFocused), String(inputComposing),
+         model.workspace.connection.rawValue, String(model.sessionHostOffline), String(completionRetry)].joined(separator: "\u{1F}")
     }
     private var completionUnavailableMessage: String? {
+        if let error = model.completionError { return error }
         guard !model.isDemo else { return nil }
         let host = model.session?.hostID ?? model.selectedHostID
         if host.isEmpty { return "Choose a project to see suggestions." }
@@ -348,25 +363,25 @@ struct ConversationView: View {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
                     VStack(spacing: 0) {
-                    LazyVStack(alignment: .leading, spacing: 22) {
-                        ForEach(model.state?.messages ?? []) { message in
-                            if !message.text.isEmpty || !message.parts.isEmpty { TranscriptRow(message: message).equatable() }
-                            if !message.attachments.isEmpty, let sessionID = model.selectedSessionID {
-                                MessageAttachments(attachments: message.attachments, timestamp: message.role == "user" ? message.timestamp : nil) {
-                                    try await model.attachmentData(sessionID: sessionID, attachment: $0)
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(transcriptMessages) { message in
+                            VStack(alignment: .leading, spacing: 10) {
+                                if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || !TranscriptActivity.segments(messageID: message.id, parts: message.parts, streaming: message.streaming).isEmpty {
+                                    TranscriptRow(message: message).equatable()
                                 }
-                            }
-                            ForEach(message.subagents.filter { agent in !message.parts.contains { $0.kind == "subagent" && $0.id == agent.id } }) { agent in
-                                SessionEventCard(title: agent.title, subtitle: agent.status.capitalized,
-                                                 active: agent.active)
-                            }
-                            if let turn = model.changesAfterMessage[message.id] {
-                                VStack(alignment: .leading, spacing: 10) {
+                                if !message.attachments.isEmpty, let sessionID = model.selectedSessionID {
+                                    MessageAttachments(attachments: message.attachments, timestamp: message.role == "user" ? message.timestamp : nil) {
+                                        try await model.attachmentData(sessionID: sessionID, attachment: $0)
+                                    }
+                                }
+                                ForEach(message.subagents.filter { agent in !message.parts.contains { $0.kind == "subagent" && $0.id == agent.id } }) { agent in
+                                    SessionEventCard(title: agent.title, subtitle: agent.status.capitalized,
+                                                     active: agent.active)
+                                }
+                                if let turn = model.changesAfterMessage[message.id] {
                                     ChangedFilesCard(turn: turn, openFile: { model.route = .diff($0.document) }, showAll: { model.route = .changes(turn) })
-                                    workedFor(message)
-                                }
-                            } else if model.pendingChangeMessageIDs.contains(message.id) {
-                                VStack(alignment: .leading, spacing: 10) {
+                                } else if model.pendingChangeMessageIDs.contains(message.id) {
                                     HStack(spacing: 10) {
                                         ProgressView().tint(Palette.secondary)
                                         Text("Checking changed files…").font(.subheadline)
@@ -374,13 +389,11 @@ struct ConversationView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(16)
                                     .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
-                                    workedFor(message)
                                 }
-                            } else {
                                 workedFor(message)
-                            }
-                            ForEach(model.pullRequestsAfterMessage[message.id] ?? []) { request in
-                                PullRequestCard(request: request) { model.route = .pullRequest(request) }
+                                ForEach(model.pullRequestsAfterMessage[message.id] ?? []) { request in
+                                    PullRequestCard(request: request) { model.route = .pullRequest(request) }
+                                }
                             }
                         }
                         if model.working, let sessionID = model.selectedSessionID, let startedAt = model.state?.workingStartedAt {
@@ -496,7 +509,7 @@ struct ConversationView: View {
 
     @ViewBuilder private func workedFor(_ message: TranscriptMessage) -> some View {
         if let label = TranscriptMetadata.workLabel(duration: message.workedDuration) {
-            Text(label).font(.caption2).foregroundStyle(Palette.secondary.opacity(0.85))
+            Text(label).font(.subheadline).foregroundStyle(Palette.secondary)
                 .accessibilityIdentifier("turn-work-duration")
         }
     }
@@ -542,22 +555,38 @@ struct ConversationView: View {
                                   isComposing: $inputComposing, selectionRequest: selectionRequest,
                                   maximumHeight: editorMaximumHeight)
                     .id(model.selectedSessionID ?? "new")
+                    .transaction { $0.animation = nil }
                     .disabled((model.sessionsVisible && !model.usesSessionPanel) || model.route != nil)
                     .padding(.horizontal, 6)
                     #if os(iOS)
                     .anchorPreference(key: ComposerEditorBounds.self, value: .bounds) { $0 }
                     #endif
                 #if os(iOS)
-                if recording {
-                    MicrophoneWaveformBar {
-                        recording = false
-                    } onError: { message in
-                        recording = false
-                        model.error = message
+                ZStack {
+                    if recording {
+                        let context = recordingContext
+                        MicrophoneWaveformBar(preferences: recordingPreferences,
+                                              onStarted: { model.emitFeedback(.voiceStart) },
+                                              onFinished: { model.emitFeedback(.voiceFinish) }) {
+                            model.emitFeedback(.voiceFinish)
+                            recording = false
+                        } onTranscript: { text in
+                            guard recording, model.appendTranscription(text, context: context) else { return }
+                            cursor = model.draft.utf16.count
+                            selectionRequest += 1
+                            recording = false
+                        } onError: { message in
+                            guard recording, model.attachmentContext == context else { return }
+                            recording = false
+                            model.error = message
+                        }
+                        .id(context)
+                        .transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.96)))
+                    } else {
+                        composerControls.transition(.opacity)
                     }
-                } else {
-                    composerControls
                 }
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.86), value: recording)
                 #else
                 composerControls
                 #endif
@@ -605,11 +634,13 @@ struct ConversationView: View {
             #if os(iOS)
             Button {
                 inputFocused = false
+                recordingContext = model.attachmentContext
+                recordingPreferences = model.preferences.audioInput
                 recording = true
             } label: {
                 Image(systemName: "mic").font(.system(size: 20))
                     .foregroundStyle(Palette.secondary).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).accessibilityLabel("Enable microphone")
+            }.buttonStyle(.plain).accessibilityLabel(model.preferences.audioInput.mode == .dictation ? "Start Dictation" : "Start Audio Model")
             #endif
             ComposerActionButton(stopping: model.composerStops, busy: model.busy,
                                  enabled: (model.canSend && (!model.working || model.canQueueDraft)) || model.composerStops,
@@ -629,7 +660,8 @@ struct ConversationView: View {
         if inputFocused, !inputComposing, let token = ChatText.activeToken(in: model.draft, cursorUTF16: cursor) {
             ComposerSuggestions(kind: token.kind, items: ComposerCompletionPresentation.filter(suggestions, kind: token.kind, query: token.query),
                                 loading: loadingSuggestions, maximumHeight: viewportHeight * 0.3,
-                                unavailableMessage: completionUnavailableMessage, choose: insertSuggestion)
+                                unavailableMessage: completionUnavailableMessage,
+                                retry: model.completionError == nil ? nil : { completionRetry += 1 }, choose: insertSuggestion)
                 .frame(maxWidth: 700)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)

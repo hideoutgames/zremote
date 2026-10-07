@@ -25,6 +25,7 @@ if !coreOnly {
         .package(url: "https://github.com/skiptools/skip-fuse.git", exact: "1.0.3"),
         .package(url: "https://github.com/skiptools/skip-keychain.git", exact: "0.3.4"),
         .package(url: "https://github.com/skiptools/skip-authentication-services.git", exact: "0.1.0"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.15.4"),
     ]
     if let abi = ProcessInfo.processInfo.environment["SKIP_ZREMOTE_ANDROID_ABI"] {
         precondition(["arm64-v8a", "x86_64"].contains(abi), "Unsupported Android architecture")
@@ -50,7 +51,8 @@ if !coreOnly {
         ]),
         .target(
             name: "ZRemote",
-            dependencies: ["ZRemoteCore", "ZRemoteNative", .product(name: "SkipFuseUI", package: "skip-fuse-ui"), .product(name: "SkipAuthenticationServices", package: "skip-authentication-services")],
+            dependencies: ["ZRemoteCore", "ZRemoteNative", .product(name: "SkipFuseUI", package: "skip-fuse-ui"), .product(name: "SkipAuthenticationServices", package: "skip-authentication-services"),
+                           .product(name: "FluidAudio", package: "FluidAudio", condition: .when(platforms: [.iOS]))],
             resources: [.process("Resources")],
             plugins: [.plugin(name: "skipstone", package: "skip")]
         ),

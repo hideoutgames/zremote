@@ -358,7 +358,7 @@ private struct NativeTranscriptRow: View {
                                      showAll: { model.route = .changes(turn) })
                 }
                 if let label = TranscriptMetadata.workLabel(duration: duration) {
-                    Text(label).font(.caption2).foregroundStyle(Palette.secondary.opacity(0.85))
+                    Text(label).font(.subheadline).foregroundStyle(Palette.secondary)
                         .accessibilityIdentifier("turn-work-duration")
                 }
             }

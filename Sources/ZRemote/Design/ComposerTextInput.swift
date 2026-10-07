@@ -123,9 +123,19 @@ struct NativeComposerEditor: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width > 0 else { return nil }
         let line = UIFont.preferredFont(forTextStyle: .body).lineHeight
-        let desired = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        // Measure independently of the editor's scrolling mode: sizeThatFits
+        // changes behavior when scrolling is enabled at the height cap.
+        let storage = NSTextStorage(attributedString: uiView.attributedText ?? NSAttributedString(string: uiView.text ?? ""))
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+        let desired = ceil(max(line, layout.usedRect(for: container).height + layout.extraLineFragmentRect.height) + 8)
         let maximum = min(line * 8 + 8, max(line + 8, maximumHeight ?? .greatestFiniteMagnitude))
-        uiView.isScrollEnabled = desired > maximum
+        let scrolls = desired > maximum + 0.5
+        if uiView.isScrollEnabled != scrolls { uiView.isScrollEnabled = scrolls }
         return CGSize(width: width, height: min(max(line + 8, desired), maximum))
     }
 
@@ -133,6 +143,8 @@ struct NativeComposerEditor: UIViewRepresentable {
         var parent: NativeComposerEditor
         var updating = false
         var lastSelectionRequest = -1
+        var decoratedSource: String?
+        var decoratedFont: UIFont?
         var document = ComposerReferenceText("")
         var previousSelection = NSRange(location: 0, length: 0)
         init(_ parent: NativeComposerEditor) { self.parent = parent }
@@ -210,6 +222,10 @@ struct NativeComposerEditor: UIViewRepresentable {
         }
 
         func decorate(_ view: UITextView) {
+            let font = UIFont.preferredFont(forTextStyle: .body)
+            guard decoratedSource != document.source || decoratedFont != font else { return }
+            decoratedSource = document.source; decoratedFont = font
+            let offset = view.contentOffset
             let whole = NSRange(location: 0, length: (view.text as NSString).length)
             let selection = view.selectedRange
             let storage = view.textStorage
@@ -220,7 +236,8 @@ struct NativeComposerEditor: UIViewRepresentable {
                 storage.addAttributes([.foregroundColor: color, .backgroundColor: color.withAlphaComponent(0.10)], range: reference.displayRange)
             }
             storage.endEditing()
-            view.selectedRange = selection
+            if view.selectedRange != selection { view.selectedRange = selection }
+            if view.isScrollEnabled, view.contentOffset != offset { view.setContentOffset(offset, animated: false) }
             view.typingAttributes = [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.label]
         }
     }

@@ -38,11 +38,15 @@ struct SettingsView: View {
                     Text("Dark").tag(AppTheme.dark)
                 }
                 Toggle("Haptics", isOn: Binding(get: { model.preferences.hapticsEnabled }, set: { model.setHapticsEnabled($0) }))
+                Toggle("Sounds", isOn: Binding(get: { model.preferences.soundsEnabled }, set: { model.setSoundsEnabled($0) }))
                     .appSwitch()
             }.listRowBackground(Palette.surface)
             BackgroundSettings(model: model)
             ConnectionSettings(model: model)
             NotificationSettings(model: model)
+            #if os(iOS)
+            AudioInputSettings(model: model)
+            #endif
 
             Section {
                 NavigationLink {

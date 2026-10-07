@@ -42,6 +42,9 @@ public enum ModelCatalogRules {
     }
 
     public static func selecting(_ model: AgentModel, previous: ModelSelection) -> ModelSelection {
+        // Compatible option names do not imply shared preferences across models.
+        let previous = previous.providerID == model.providerID && previous.modelID == model.modelID
+            ? previous : ModelSelection(providerID: model.providerID, modelID: model.modelID)
         var options: [String: String] = [:]
         for option in model.options {
             if let old = previous.options[option.id], option.choices.contains(where: { $0.id == old }) {
@@ -52,5 +55,15 @@ public enum ModelCatalogRules {
         }
         let effort = previous.effort.flatMap { model.efforts.contains($0) ? $0 : nil }
         return ModelSelection(providerID: model.providerID, modelID: model.modelID, effort: effort, options: options)
+    }
+
+    public static func newSessionSelection(in catalog: [AgentModel], preferred: ModelSelection,
+                                           remembered: [String: ModelSelection]) -> ModelSelection {
+        guard let model = catalog.first(where: { $0.providerID == preferred.providerID && $0.modelID == preferred.modelID })
+                ?? catalog.first(where: { $0.providerID == preferred.providerID }) ?? catalog.first else {
+            return ModelSelection(providerID: preferred.providerID)
+        }
+        let saved = remembered[model.id] ?? preferred
+        return selecting(model, previous: saved)
     }
 }

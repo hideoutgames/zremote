@@ -71,7 +71,7 @@ struct MessageTextContentView: View {
                     }
                 }
             } else {
-                AgentSelectableText(value: text, markdown: !streaming, secondary: secondary)
+                AgentSelectableText(value: text.trimmingCharacters(in: .whitespacesAndNewlines), markdown: !streaming, secondary: secondary)
             }
         }
         .task(id: text) {

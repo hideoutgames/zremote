@@ -3,6 +3,59 @@ import XCTest
 import ZRemoteCore
 
 final class SessionPresentationTests: XCTestCase {
+    func testProjectMonogramMatchesOfficialInitialAndPathColors() {
+        let samples: [(String, String, String, Int)] = [
+            ("  zremote\t", "/work/zremote", "Z", 0),
+            ("ZRemote", "C:\\Projects\\ZRemote", "Z", 2),
+            ("ångström", "/Users/demo/ångström", "Å", 3),
+            (" \t ", "", "?", 5),
+        ]
+        for (name, path, letter, index) in samples {
+            let icon = ProjectMonogram(project: Project(id: "project", name: name, path: path, hostID: "host"))
+            XCTAssertEqual(icon.letter, letter)
+            XCTAssertEqual(icon.colorIndex, index)
+        }
+    }
+
+    func testProjectMonogramUsesProjectPathAcrossWorktreesRenamesAndListChanges() throws {
+        var project = Project(id: "project", name: "ZRemote", path: "/work/zremote", hostID: "host")
+        let unrelated = Project(id: "other", name: "Another", path: "/work/other", hostID: "host")
+        let session = Session(id: "session", title: "Example", projectID: project.id, hostID: "host", path: "/work/zremote-worktree")
+        let original = try XCTUnwrap(SessionPresentationRules.projectMonogram(for: session, projects: [unrelated, project],
+                                                                             groupedByProject: false, selectedProjectID: nil))
+        XCTAssertEqual(original.colorIndex, 0)
+        project.name = "Renamed project"
+        let renamed = try XCTUnwrap(SessionPresentationRules.projectMonogram(for: session, projects: [project],
+                                                                            groupedByProject: false, selectedProjectID: nil))
+        XCTAssertEqual(renamed.colorIndex, original.colorIndex)
+        XCTAssertEqual(renamed.letter, "R")
+        XCTAssertEqual(renamed.name, "Renamed project")
+    }
+
+    func testProjectMonogramHidesForProjectGroupingOrExplicitProjectFilter() {
+        let project = Project(id: "project", name: "ZRemote", path: "/work/zremote", hostID: "host")
+        let session = Session(id: "session", title: "Example", projectID: project.id, hostID: "host")
+        for groupedByProject in [false, true] {
+            for selectedProjectID: String? in [nil, project.id] {
+                let icon = SessionPresentationRules.projectMonogram(for: session, projects: [project],
+                                                                    groupedByProject: groupedByProject, selectedProjectID: selectedProjectID)
+                // A one-project result still needs its badge until explicitly scoped.
+                if !groupedByProject && selectedProjectID == nil { XCTAssertEqual(icon?.letter, "Z") }
+                else { XCTAssertNil(icon) }
+            }
+        }
+    }
+
+    func testProjectlessAndMissingProjectsUseOfficialHomeMonogram() {
+        for projectID: String? in [nil, "removed-project"] {
+            let session = Session(id: "session", title: "Example", projectID: projectID, hostID: "host", path: "/some/checkout")
+            let icon = SessionPresentationRules.projectMonogram(for: session, projects: [], groupedByProject: false, selectedProjectID: nil)
+            XCTAssertEqual(icon?.name, "Home")
+            XCTAssertEqual(icon?.letter, "H")
+            XCTAssertEqual(icon?.colorIndex, 6)
+        }
+    }
+
     func testLatestObservedPullRequestSurvivesMissingBranchMetadataWhileHostRemainsAuthoritative() {
         var session = Session(id: "session", title: "Example", hostID: "host")
         let first = PullRequest(number: 41, title: "First", url: "", state: "merged")

@@ -27,7 +27,7 @@ final class TranscriptActivityTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(updated.first).live)
         XCTAssertNotEqual(TranscriptMessage(id: "m", role: "assistant", text: "", parts: initial[0].parts),
                           TranscriptMessage(id: "m", role: "assistant", text: "", parts: updated[0].parts))
-        for end in [TranscriptPart(id: "empty-prose", kind: "text"), .init(id: "image", kind: "boundary")] {
+        for end in [TranscriptPart(id: "empty-prose", kind: "text"), .init(id: "blank-prose", kind: "text", text: " \n\n"), .init(id: "image", kind: "boundary")] {
             let rows = TranscriptActivity.segments(messageID: "m", parts: updated[0].parts + [end], streaming: true)
             XCTAssertEqual(rows.map(\.id), initial.map(\.id))
             XCTAssertFalse(try XCTUnwrap(rows.first).live)

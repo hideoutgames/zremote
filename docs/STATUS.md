@@ -30,6 +30,53 @@ These checks do not establish SwiftUI/Skip application compilation, linking,
 device appearance, accessibility, or live-host behavior. Platform/device review
 remains pending. No application packaging, signing or distribution was performed.
 
+## Sessions and Composer interaction polish
+
+Implemented Group: None as the default without a list heading or scrollbar;
+Project/Host ordering by latest session activity; collapsible Status groups named
+Needs attention and Finished; immediate read indicators followed by a one-second
+hold and a fade between groups. List choices and the last validated Composer
+destination now persist per account, including edits made during restoration.
+
+Autocomplete now supplies an exclusive chat/project target and exposes retryable
+lookup failures. Transcript prose boundaries and message/footer grouping avoid
+extra gaps; work-duration labels use subheadline text. The iOS editor measures
+independently of scrolling and avoids redundant decoration. Refresh stays still
+through the drag, then settles and animates on release. Voice controls transition
+smoothly and waveform samples scroll continuously. Foreground haptics and five
+original short sound cues cover send, voice start/finish, refresh and completion;
+Sounds and Haptics have separate saved settings.
+
+Targeted Windows verification for this change, repeated after integrating the
+Composer/transcript changes from `main` on 2026-10-05 (25 selected Swift cases):
+
+- `ChatTextBehaviorTests`: 4 passed, including boundary spacing and exact code-copy bytes.
+- `SessionExperienceTests`: 6 passed, covering grouping, exclusive completion
+  targets/retry, preference restoration/isolation, checkout validation and feedback.
+- `SessionConfigurationTests`: 4 passed, including retained checkout intent.
+- `SessionPresentationTests`: 5 passed initially. After integrating the subsequent
+  Project-icon update from `main`, all 9 cases passed; `SessionListView` and
+  `Palette` syntax checks also passed again (29 distinct Swift cases across the
+  scoped runs).
+- `TranscriptActivityTests`: 5 passed, including whitespace-only streamed prose
+  boundaries, stable tool groups and tool-only completed-turn footers.
+- `SessionsRefreshTests/testImmediatePeerKeepsRefreshFeedbackVisibleAndCoalescesRepeatedPulls`:
+  passed, including one feedback event for a coalesced refresh.
+- Rust `client_ffi::session::projection_regression_tests`: 4 passed, 28 filtered out.
+- Changed Swift files syntax-parsed. `typecheck-native-windows.ps1` passed against
+  the real generated C ABI and pinned Keychain API. This excludes UIKit/Compose
+  typechecking, linking and device behavior.
+- All five WAVs verified as distinct 44.1 kHz mono PCM, 0.235–0.460 seconds, with
+  silent endpoints and peaks below 0.18 full scale. This does not assess how they
+  sound through device speakers/headphones.
+
+The shared runner used one worker with stable inputs. No full suite, platform
+app build, device run, signing or distribution was performed. iPhone/iPad/Android
+visual checks, actual haptics/audio, held refresh drags, Reduce Motion, long-draft
+typing/IME/caret scrolling and a live host completion lookup still need platform
+validation. Android microphone capture remains outside the existing
+implementation; voice changes apply to the existing iOS microphone UI.
+
 ## Message queue and steering
 
 The native Composer supports Queue and Steer while a turn is running. A queued
