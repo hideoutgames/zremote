@@ -203,6 +203,18 @@ public struct SessionState: Equatable, Sendable {
     public init(id: String, messages: [TranscriptMessage] = [], selection: ModelSelection = .init(), working: Bool = false, delivery: String = "", deliveryFailed: Bool = false, turnID: String? = nil, input: InputRequest? = nil, queue: [QueuedMessage] = [], queueCapabilities: MessageQueueCapabilities = .init(), queueError: String? = nil, workingStartedAt: Date? = nil) { self.id = id; self.messages = messages; self.selection = selection; self.working = working; self.delivery = delivery; self.deliveryFailed = deliveryFailed; self.turnID = turnID; self.input = input; self.queue = queue; self.queueCapabilities = queueCapabilities; self.queueError = queueError; self.workingStartedAt = workingStartedAt }
 }
 
+public enum SessionListState {
+    public static func applying(_ state: SessionState, to session: Session) -> Session {
+        var session = session
+        session.awaitingInput = state.input != nil
+        session.working = state.working && !session.awaitingInput
+        if state.working { session.failed = false }
+        if state.deliveryFailed { session.failed = true }
+        session.activity = session.awaitingInput ? "Waiting for response" : session.working ? "Working" : ""
+        return session
+    }
+}
+
 public struct InputQuestion: Identifiable, Equatable, Sendable {
     public var id: String
     public var title: String

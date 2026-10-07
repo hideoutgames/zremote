@@ -272,8 +272,11 @@ System-owned feedback, such as iOS Haptic Touch or the system keyboard, remains
 controlled by the operating system.
 Agent sign-in remains on the host. A quota warning above the Composer appears
 at 10% remaining for an unambiguous active account. Once raised, it stays visible
-across project/provider changes until dismissed for its original session, even
-if a later sample recovers or is unavailable. Usage comes from the host's existing account API through this app's
+for its original session until dismissed, even if a later sample recovers or is
+unavailable. It is only displayed in that session with its matching host, provider,
+upstream model provider and active agent account; unrelated chats and new-session
+composers do not inherit it. The banner names the provider and limiting usage window.
+Usage comes from the host's existing account API through this app's
 bundled peer bridge; no upstream Zeron or server changes are required.
 Its warning icon and progress fill are orange; the warning has no orange outline.
 

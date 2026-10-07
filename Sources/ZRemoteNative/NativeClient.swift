@@ -23,6 +23,9 @@ import ZRemoteCore
     private var pendingOrganizations: [AuthOrg] = []
     private var generation = UUID()
     private var handles: [String: SessionHandle] = [:]
+    private var openRequests: [String: UUID] = [:]
+    private var projectionTasks: [String: Task<Void, Never>] = [:]
+    private var projectionRequests: [String: UInt64] = [:]
     private var queueEdits: [String: (sessionID: String, handle: SessionHandle, lease: QueueEditLease)] = [:]
     private var pendingQueueEdits: Set<String> = []
     private var pendingWorktrees: [String: PendingWorktreeIntent] = [:]
@@ -174,13 +177,31 @@ import ZRemoteCore
 
     public func openSession(_ id: String) async throws {
         let core = try requireClient()
-        if handles[id] == nil { handles[id] = try core.openSession(chatId: id) }
+        let operation = generation
+        if handles[id] == nil {
+            let request = UUID()
+            openRequests[id] = request
+            let handle = try await Task.detached(priority: .userInitiated) {
+                try core.openSession(chatId: id)
+            }.value
+            guard operation == generation, openRequests[id] == request else {
+                if operation != generation || (openRequests[id] == nil && handles[id] == nil) {
+                    core.closeSession(chatId: id)
+                }
+                throw CancellationError()
+            }
+            handles[id] = handle
+            openRequests[id] = nil
+        }
         handles[id]?.setViewAttached(attached: true)
         core.markSeen(chatId: id)
         publishSession(id)
     }
 
     public func closeSession(_ id: String) {
+        openRequests[id] = nil
+        projectionTasks.removeValue(forKey: id)?.cancel()
+        projectionRequests[id] = nil
         let edits = queueEdits.filter { $0.value.sessionID == id }
         for (key, edit) in edits {
             queueEdits[key] = nil
@@ -597,6 +618,7 @@ import ZRemoteCore
         guard generation == currentGeneration else { core.shutdown(); throw CancellationError() }
         client = core
         publishWorkspace(core)
+        core.preloadSessions()
     }
 
     private func shutdown() {
@@ -605,6 +627,8 @@ import ZRemoteCore
         refreshTask = nil
         dirtySessions.removeAll()
         workspaceDirty = false
+        for task in projectionTasks.values { task.cancel() }
+        projectionTasks.removeAll(); projectionRequests.removeAll(); openRequests.removeAll()
         client?.shutdown()
         client = nil
         listener = nil
@@ -632,6 +656,7 @@ import ZRemoteCore
             workspaceDirty = true
         case .sessionChanged(let id, _):
             dirtySessions.insert(id)
+            workspaceDirty = true
         case .composerChanged(let id, _):
             dirtySessions.insert(id)
             workspaceDirty = true
@@ -722,34 +747,43 @@ import ZRemoteCore
 
     private func publishSession(_ id: String, refreshMetadata: Bool = true) {
         guard let handle = handles[id], let core = client else { return }
+        let request = (projectionRequests[id] ?? 0) &+ 1
+        projectionRequests[id] = request
+        guard projectionTasks[id] == nil else { return }
+        let operation = generation
+        let known = projections[id]?.revisions ?? [:]
+        projectionTasks[id] = Task { [weak self] in
+            let read = await Task.detached(priority: .userInitiated) {
+                NativeSessionRead(handle: handle, core: core, sessionID: id, known: known)
+            }.value
+            guard let self, !Task.isCancelled, operation == self.generation,
+                  self.handles[id] === handle else { return }
+            await self.apply(read, refreshMetadata: refreshMetadata, operation: operation, handle: handle)
+            guard !Task.isCancelled, operation == self.generation, self.handles[id] === handle else { return }
+            self.projectionTasks[id] = nil
+            if self.projectionRequests[id] != request { self.publishSession(id) }
+        }
+    }
+
+    private func apply(_ read: NativeSessionRead, refreshMetadata: Bool, operation: UUID, handle: SessionHandle) async {
+        let id = read.id
         var cache = projections[id] ?? MessageCache()
-        let update = handle.transcriptUpdate(known: cache.revisions)
-        let needsMetadata = transcriptMetadata[id] == nil || update.changed.contains { row in
-            row.role == "user" || !row.streaming || cache.messages[row.id] == nil
-                || row.subagents.map(\.id) != (cache.messages[row.id]?.subagents.map(\.id) ?? [])
+        let needsMetadata = transcriptMetadata[id] == nil || read.changed.contains { _, message in
+            message.role == "user" || !message.streaming || cache.messages[message.id] == nil
+                || message.subagents.map(\.id) != (cache.messages[message.id]?.subagents.map(\.id) ?? [])
         }
-        let otherMetadataChanges = refreshMetadata && needsMetadata ? readSessionSignals(core).1 : []
-        for row in update.changed {
-            cache.revisions[row.id] = row.revision
-            cache.messages[row.id] = TranscriptMessage(id: row.id, role: row.role, text: row.text, streaming: row.streaming,
-                attachments: row.attachments.map { RemoteAttachment(path: $0.path, name: $0.name, mimeType: $0.mimeType) },
-                subagents: row.subagents.map { ZRemoteCore.SubagentStatus(id: $0.id, status: $0.status, detail: $0.tail) },
-                parts: row.parts.map { part in
-                    TranscriptPart(id: part.id, kind: part.kind, text: part.text, tool: part.tool.map { tool in
-                        TranscriptTool(kind: tool.kind, label: tool.label, detail: tool.detail, path: tool.path,
-                            invocation: tool.invocation, output: tool.output, outputKind: tool.outputKind,
-                            resolved: tool.resolved, failed: tool.failed, truncated: tool.truncated)
-                    }, truncated: part.truncated)
-                })
+        let otherMetadataChanges: [String]
+        if refreshMetadata, needsMetadata, let client { otherMetadataChanges = readSessionSignals(client).1 }
+        else { otherMetadataChanges = [] }
+        for (revision, message) in read.changed {
+            cache.revisions[message.id] = revision
+            cache.messages[message.id] = message
         }
-        let present = Set(update.orderedIds)
+        let present = Set(read.orderedIDs)
         cache.revisions = cache.revisions.filter { present.contains($0.key) }
         cache.messages = cache.messages.filter { present.contains($0.key) }
-        // Metadata's explicit removedIDs/reset deltas own its retention. A
-        // concurrently newer metadata row must survive this transcript order.
         projections[id] = cache
-        let composer = handle.composer()
-        let config = core.sessionConfig(chatId: id)
+        let composer = read.composer
         let input = composer.openInput.map { input in
             ZRemoteCore.InputRequest(id: input.requestId, questions: input.questions.map {
                 InputQuestion(id: $0.id, title: $0.question, options: $0.options, multiple: $0.multiSelect)
@@ -762,13 +796,17 @@ import ZRemoteCore
         case .failed: delivery = "Not delivered"
         case nil: delivery = ""
         }
-        let visibleMessages = TranscriptMetadata.applying(transcriptMetadata[id] ?? .init(),
-            to: update.orderedIds.compactMap { cache.messages[$0] }, latestTurnRunning: composer.live.turnRunning)
+        let metadata = transcriptMetadata[id] ?? .init()
+        let orderedMessages = read.orderedIDs.compactMap { cache.messages[$0] }
+        let visibleMessages = await Task.detached(priority: .userInitiated) {
+            TranscriptMetadata.applying(metadata, to: orderedMessages, latestTurnRunning: composer.live.turnRunning)
+        }.value
+        guard !Task.isCancelled, operation == generation, handles[id] === handle else { return }
         onUpdate?(.session(SessionState(id: id, messages: visibleMessages,
-            selection: ModelSelection(providerID: config?.harness ?? "claude-code", modelID: config?.model,
-                effort: config?.reasoning, options: config?.modelOptions ?? [:]),
+            selection: ModelSelection(providerID: read.config?.harness ?? "claude-code", modelID: read.config?.model,
+                effort: read.config?.reasoning, options: read.config?.modelOptions ?? [:]),
             working: composer.live.turnRunning, delivery: delivery, deliveryFailed: composer.sendState == .failed,
-              turnID: update.turnId, input: input,
+              turnID: read.turnID, input: input,
               queue: composer.queue.map { QueuedMessage(id: $0.id, text: $0.visibleText, attachments: $0.attachments,
                   holdForTurnEnd: $0.holdForTurnEnd, deliveryBlocked: $0.gate != nil, actionPending: $0.actionPending) },
               queueCapabilities: MessageQueueCapabilities(canQueue: composer.host.capabilities.messageQueue,
@@ -776,7 +814,7 @@ import ZRemoteCore
                   canSteer: composer.host.capabilities.midTurnSteering == true,
                   canEdit: composer.host.capabilities.queueEditLease, canAct: composer.host.capabilities.queueActions),
               queueError: composer.queueError,
-              workingStartedAt: handle.transcriptStatus().workingSinceMs.flatMap { milliseconds in
+              workingStartedAt: read.status.workingSinceMs.flatMap { milliseconds in
                   milliseconds > 0 && milliseconds <= 253_402_300_799_999
                     ? Date(timeIntervalSince1970: Double(milliseconds) / 1000) : nil
               })))
@@ -840,6 +878,38 @@ private struct StoredAccounts: Codable {
 private struct MessageCache {
     var revisions: [String: UInt64] = [:]
     var messages: [String: TranscriptMessage] = [:]
+}
+
+private struct NativeSessionRead: Sendable {
+    var id: String
+    var orderedIDs: [String]
+    var changed: [(UInt64, TranscriptMessage)]
+    var turnID: String?
+    var composer: ComposerState
+    var config: ChatConfig?
+    var status: TranscriptStatus
+
+    init(handle: SessionHandle, core: CoreClient, sessionID: String, known: [String: UInt64]) {
+        let update = handle.transcriptUpdate(known: known)
+        id = sessionID
+        orderedIDs = update.orderedIds
+        changed = update.changed.map { row in
+            (row.revision, TranscriptMessage(id: row.id, role: row.role, text: row.text, streaming: row.streaming,
+                attachments: row.attachments.map { RemoteAttachment(path: $0.path, name: $0.name, mimeType: $0.mimeType) },
+                subagents: row.subagents.map { ZRemoteCore.SubagentStatus(id: $0.id, status: $0.status, detail: $0.tail) },
+                parts: row.parts.map { part in
+                    TranscriptPart(id: part.id, kind: part.kind, text: part.text, tool: part.tool.map { tool in
+                        TranscriptTool(kind: tool.kind, label: tool.label, detail: tool.detail, path: tool.path,
+                            invocation: tool.invocation, output: tool.output, outputKind: tool.outputKind,
+                            resolved: tool.resolved, failed: tool.failed, truncated: tool.truncated)
+                    }, truncated: part.truncated)
+                }))
+        }
+        turnID = update.turnId
+        composer = handle.composer()
+        config = core.sessionConfig(chatId: sessionID)
+        status = handle.transcriptStatus()
+    }
 }
 
 private struct DiffEnvelope: Decodable {

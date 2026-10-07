@@ -52,8 +52,10 @@ refresh, and on observed completed turns. iOS retains prepared UIKit generators
 and uses System Sound Services for the short bundled cues; Android uses native
 view haptics and SoundPool, respecting the app toggles and ringer mode. Foreground
 completion banners omit the duplicate system notification sound. No raw
-message content enters these events. The optional local microphone continues to
-meter input only; it does not add transcription or Android recording support.
+message content enters these events. The iOS microphone supports live on-device
+Dictation and optional post-recording Audio Model transcription; see
+[model and microphone preferences](MODEL_AND_AUDIO_PREFERENCES.md). Android does
+not add a recording control.
 
 ## Tablet Sessions animation
 
@@ -100,6 +102,15 @@ title or full-width glass header; phone threads retain their title and header.
 Completed-turn "Worked for" labels use regular subheadline text with the message's
 10-point internal gap. The transcript uses one lazy row per visible message,
 including its attachments, subagents and footer; hidden/empty parts add no gaps.
+Initial positioning and Jump to latest follow the native iOS scroll view's content size while lazy
+rows settle, so later height estimates cannot leave the jump short of the bottom.
+An intentional vertical drag suspends that correction and automatic following.
+Opening a session follows the official client's two-stage path: relevant sessions
+are preloaded, cached document hydration and transcript projection run away from
+the UI actor, and a loading indicator remains until the first projection arrives.
+Bursts coalesce behind the active projection without starving streamed updates.
+Session transcript events also refresh list-row state, rather than waiting for a
+separate workspace event before showing working or awaiting-input changes.
 
 The blank Composer keeps its wallpaper during Sessions and secondary presentations.
 On phones, the wallpaper moves horizontally with the Composer page during drawer
@@ -127,7 +138,9 @@ small spring;
 timestamped meter samples move on a 60 Hz timeline without resetting their phase
 at each meter update. Reduce Motion skips movement. Capture explicitly allows
 system sounds and haptics, so voice feedback is not suppressed by the audio
-session. Finish transcribes into the draft; Cancel discards the recording.
+session. Dictation updates the captured editor selection as recognition changes;
+Audio Model inserts its result only after Finish. Cancel discards the recording
+and safely restores any Dictation insertion without overwriting an edited draft.
 Audio stays local and is deleted when
 capture/transcription ends. Leaving the Composer or backgrounding the app cancels
 the operation. Android microphone capture is not implemented. See
@@ -253,6 +266,9 @@ future automatic caller cannot start it through `workflow_call`. The reusable
 workflow sees the [original caller's GitHub context](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context).
 The automatic CI workflow runs domain/projection regressions and source syntax
 checks; it does not invoke app compilation or TestFlight.
+Swift domain regressions use the standard 14 GB `macos-26-intel` runner: the
+7 GB ARM runner can fall below the unchanged 3 GB admission floor between test
+commands. The regression filters, worker limit, and provenance checks are unchanged.
 
 The SDK installation command and matching NDK are verified against
 [Skip 1.9.12's installer implementation](https://github.com/skiptools/skipstone/blob/584e579ea2e73cdcb51f61cef853b6d6b16291a6/Sources/SkipBuild/Commands/AndroidCommand.swift#L334)

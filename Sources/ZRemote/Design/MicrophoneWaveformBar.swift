@@ -3,23 +3,19 @@ import AVFoundation
 import SwiftUI
 import ZRemoteCore
 
-struct MicrophoneSample {
-    let date: Date
-    let amplitude: Float
-}
-
 struct MicrophoneWaveformBar: View {
     let preferences: AudioInputPreferences
     let onStarted: @MainActor () -> Void
     let onFinished: @MainActor () -> Void
     let close: @MainActor () -> Void
+    let onPartialTranscript: @MainActor (String) -> Void
     let onTranscript: @MainActor (String) -> Void
     let onError: @MainActor (String) -> Void
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.scenePhase) var scenePhase
-    @State var samples: [MicrophoneSample] = (0..<100).map {
-        MicrophoneSample(date: Date(timeIntervalSinceNow: -Double(100 - $0) * 0.08), amplitude: 0)
-    }
+    @State var samples: [Float] = Array(repeating: 0, count: 100)
+    @State var waveformStartedAt = Date()
+    @State var inputLevel: Float = 0
     @State var recorder: AVAudioRecorder?
     @State var ready = false
     @State var finishing = false
@@ -33,14 +29,11 @@ struct MicrophoneWaveformBar: View {
             }.buttonStyle(.plain).accessibilityLabel("Cancel microphone")
             TimelineView(.animation(minimumInterval: 1.0 / 60, paused: reduceMotion || finishing)) { timeline in
                 Canvas { context, size in
-                    let speed: CGFloat = 100
-                    // Each sample has an absolute position on the time axis.
-                    // A meter update never resets the scrolling phase.
-                    for (index, sample) in samples.enumerated() {
-                        let x = reduceMotion ? size.width - CGFloat(samples.count - index) * 8
-                            : size.width - CGFloat(timeline.date.timeIntervalSince(sample.date)) * speed
-                        if x >= -3 && x <= size.width {
-                            let height = max(3, CGFloat(sample.amplitude) * 30)
+                    let phase = reduceMotion || !ready ? 0 : CGFloat(max(0, timeline.date.timeIntervalSince(waveformStartedAt)).truncatingRemainder(dividingBy: 0.08)) * 100
+                    for (index, amplitude) in samples.reversed().enumerated() {
+                        let x = size.width - 3 - CGFloat(index) * 8 - phase
+                        if x >= -3 {
+                            let height = max(3, CGFloat(amplitude) * 30)
                             let rect = CGRect(x: x, y: (size.height - height) / 2, width: 3, height: height)
                             context.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(Palette.secondary))
                         }
@@ -71,16 +64,17 @@ struct MicrophoneWaveformBar: View {
         guard !Task.isCancelled else { return }
         let audio = AVAudioSession.sharedInstance()
         var ownsAudioSession = false
+        let dictation = NativeDictation()
         let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("zremote-microphone-" + UUID().uuidString + ".caf")
         defer {
+            dictation.cancel()
             recorder?.stop()
             recorder = nil
             try? FileManager.default.removeItem(at: url)
             if ownsAudioSession { try? audio.setActive(false, options: .notifyOthersOnDeactivation) }
         }
         do {
-            let dictation = NativeDictation()
             if preferences.mode == .dictation {
                 try await dictation.prepare(locale: preferences.dictationLocale)
             } else {
@@ -95,39 +89,42 @@ struct MicrophoneWaveformBar: View {
             try audio.setAllowHapticsAndSystemSoundsDuringRecording(true)
             try audio.setActive(true)
             ownsAudioSession = true
-            let input = try AVAudioRecorder(url: url, settings: [
-                AVFormatIDKey: kAudioFormatLinearPCM,
-                AVSampleRateKey: 16_000,
-                AVNumberOfChannelsKey: 1,
-                AVLinearPCMBitDepthKey: 16
-            ])
-            input.isMeteringEnabled = true
-            guard input.record() else {
-                onError("The microphone couldn't start on this device.")
-                return
+            if preferences.mode == .dictation {
+                try dictation.start(onPartial: onPartialTranscript, onLevel: { inputLevel = $0 })
+            } else {
+                let input = try AVAudioRecorder(url: url, settings: [
+                    AVFormatIDKey: kAudioFormatLinearPCM,
+                    AVSampleRateKey: 16_000,
+                    AVNumberOfChannelsKey: 1,
+                    AVLinearPCMBitDepthKey: 16
+                ])
+                input.isMeteringEnabled = true
+                guard input.record() else {
+                    onError("The microphone couldn't start on this device.")
+                    return
+                }
+                recorder = input
             }
-            recorder = input
+            waveformStartedAt = Date()
             ready = true
             onStarted()
             while !Task.isCancelled && !finishing {
-                guard input.isRecording else { throw ClientFailure("Recording was interrupted. Please try again.") }
-                input.updateMeters()
-                let power = input.averagePower(forChannel: 0)
-                let level = max(0, min(1, (power + 60) / 60))
-                let amplitude = (samples.last?.amplitude ?? level) * 0.35 + level * 0.65
-                samples.append(MicrophoneSample(date: Date(), amplitude: amplitude))
+                if let recorder {
+                    guard recorder.isRecording else { throw ClientFailure("Recording was interrupted. Please try again.") }
+                    recorder.updateMeters()
+                    inputLevel = max(0, min(1, (recorder.averagePower(forChannel: 0) + 60) / 60))
+                }
+                let amplitude = (samples.last ?? inputLevel) * 0.35 + inputLevel * 0.65
+                samples.append(amplitude)
                 if samples.count > 100 { samples.removeFirst(samples.count - 100) }
-                // Native Dictation accepts bounded utterances; keep audio temporary and small.
-                if input.currentTime >= 60 { finishing = true }
+                if Date().timeIntervalSince(waveformStartedAt) >= 60 || dictation.hasResult { finishing = true }
                 try await Task.sleep(for: .milliseconds(80))
             }
-            input.stop()
+            recorder?.stop()
             try Task.checkCancellation()
-            try audio.setActive(false, options: .notifyOthersOnDeactivation)
-            ownsAudioSession = false
             onFinished()
             let text: String
-            if preferences.mode == .dictation { text = try await dictation.transcribe(url) }
+            if preferences.mode == .dictation { text = try await dictation.transcribe() }
             else { text = try await ParakeetTranscriber.shared.transcribe(url, model: preferences.model) }
             try Task.checkCancellation()
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

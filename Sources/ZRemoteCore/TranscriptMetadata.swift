@@ -128,9 +128,9 @@ public enum TranscriptMetadata {
         return result.filter { hasContent($0) || $0.workedDuration != nil }
     }
 
-    private static func hasContent(_ message: TranscriptMessage) -> Bool {
-        !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || message.parts.contains { $0.kind == "tool" || ($0.kind == "reasoning" && !$0.text.isEmpty) }
+    public static func hasContent(_ message: TranscriptMessage) -> Bool {
+        message.text.contains { !$0.isWhitespace }
+            || message.parts.contains { $0.kind == "tool" || $0.kind == "subagent" || ($0.kind != "boundary" && $0.text.contains { !$0.isWhitespace }) }
             || !message.attachments.isEmpty || !message.subagents.isEmpty
     }
 

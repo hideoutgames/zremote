@@ -112,6 +112,18 @@ final class TranscriptMetadataTests: XCTestCase {
         XCTAssertTrue(TranscriptMetadata.applying(cache, to: base).allSatisfy { $0.workedDuration == nil })
     }
 
+    func testLongTranscriptPreservesEveryTurnAndStructuredOnlyRows() {
+        let messages = (0..<3_000).map { index in
+            TranscriptMessage(id: "message-\(index)", role: index.isMultiple(of: 2) ? "user" : "assistant", text: "Turn \(index)")
+        } + [TranscriptMessage(id: "structured", role: "assistant", text: "", parts: [
+            TranscriptPart(id: "answer", kind: "text", text: "Latest answer")
+        ])]
+        let projected = TranscriptMetadata.applying(.init(), to: messages)
+        XCTAssertEqual(projected.map(\.id), messages.map(\.id))
+        XCTAssertEqual(projected.last?.parts.first?.text, "Latest answer")
+        XCTAssertFalse(TranscriptMetadata.hasContent(.init(id: "blank", role: "assistant", text: " \n\t ")))
+    }
+
     private func decode(_ payload: String) throws -> TranscriptMetadata.Update {
         try XCTUnwrap(TranscriptMetadata.decode("[{\"sessionID\":\"s\",\"messageMetadata\":\(payload)}]")["s"])
     }

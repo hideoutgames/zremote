@@ -5,6 +5,9 @@ import ZRemoteCore
 struct SettingsView: View {
     @Bindable var model: AppModel
     @State var signingOut = false
+    #if os(iOS)
+    @State var audioDetails: AudioModelID?
+    #endif
 
     private var version: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
@@ -45,7 +48,7 @@ struct SettingsView: View {
             ConnectionSettings(model: model)
             NotificationSettings(model: model)
             #if os(iOS)
-            AudioInputSettings(model: model)
+            AudioInputSettings(model: model, showDetails: { audioDetails = $0 })
             #endif
 
             Section {
@@ -89,6 +92,9 @@ struct SettingsView: View {
         .background(Palette.background)
         .foregroundStyle(Palette.text)
         .navigationTitle("Settings")
+        #if os(iOS)
+        .navigationDestination(item: $audioDetails) { AudioModelDetails(id: $0) }
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

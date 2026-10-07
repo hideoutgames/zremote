@@ -71,11 +71,13 @@ public struct UsageWarningSource: Codable, Equatable, Sendable {
     public var accountID: String
     public var upstreamProviderID: String?
     public var modelID: String?
+    public var usageLabel: String?
     public var observedAt: Date
     public init(sessionID: String, hostID: String, providerID: String, accountID: String,
-                upstreamProviderID: String? = nil, modelID: String? = nil, observedAt: Date) {
+                upstreamProviderID: String? = nil, modelID: String? = nil, usageLabel: String? = nil, observedAt: Date) {
         self.sessionID = sessionID; self.hostID = hostID; self.providerID = providerID; self.accountID = accountID
         self.upstreamProviderID = upstreamProviderID; self.modelID = modelID; self.observedAt = observedAt
+        self.usageLabel = usageLabel
     }
 }
 
@@ -89,6 +91,13 @@ public struct UsageWarning: Codable, Equatable, Sendable {
 }
 
 public enum UsageLimitRules {
+    public static func matches(_ source: UsageWarningSource, sessionID: String?, hostID: String, selection: ModelSelection) -> Bool {
+        guard source.sessionID == sessionID, source.hostID == hostID, source.providerID == selection.providerID else { return false }
+        if let upstream = source.upstreamProviderID {
+            return selection.modelID?.split(separator: "/", maxSplits: 1).first.map(String.init) == upstream
+        }
+        return true
+    }
     /// Only an unambiguous active account can be attributed to this provider.
     /// Multiprovider harnesses must select the upstream model provider first.
     public static func account(accounts: [AgentAccount], selection: ModelSelection, now: Date = Date()) -> AgentAccount? {
@@ -122,7 +131,11 @@ public enum UsageLimitRules {
             guard let source = notice.source, !source.sessionID.isEmpty, !source.hostID.isEmpty,
                   !source.providerID.isEmpty, !source.accountID.isEmpty,
                   !dismissed.contains(source.sessionID), warning(remaining: notice.remainingFraction) != nil else { continue }
-            if let index = result.firstIndex(where: { $0.source?.sessionID == source.sessionID }) {
+            if let index = result.firstIndex(where: {
+                $0.source?.sessionID == source.sessionID && $0.source?.hostID == source.hostID &&
+                $0.source?.providerID == source.providerID && $0.source?.accountID == source.accountID &&
+                $0.source?.upstreamProviderID == source.upstreamProviderID
+            }) {
                 guard let existing = result[index].source,
                       existing.hostID == source.hostID, existing.accountID == source.accountID,
                       existing.providerID == source.providerID, existing.upstreamProviderID == source.upstreamProviderID,
